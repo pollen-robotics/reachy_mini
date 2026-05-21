@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+import tempfile
 import threading
 import time
 import typing
@@ -85,6 +86,22 @@ from reachy_mini.utils.interpolation import (
     distance_between_poses,
     time_trajectory,
 )
+
+
+class _PlaybackCancelToken:
+    """Per-run cancellation handle for ``Backend.play_move``.
+
+    Created by ``_async_play_uploaded_move`` and stored on the backend
+    under ``_active_move_token`` while the run is live. ``cancel_move``
+    only flips the token whose ``upload_id`` matches the incoming
+    command, so two back-to-back plays can't cross-cancel each other.
+    """
+
+    __slots__ = ("upload_id", "cancelled")
+
+    def __init__(self, upload_id: str) -> None:
+        self.upload_id = upload_id
+        self.cancelled = False
 
 
 class Backend:
@@ -216,9 +233,20 @@ class Backend:
             0  # Tracks nested acquisitions within the owning thread
         )
 
-        # Flag flipped by CancelMoveCmd; checked by Backend.play_move
-        # at every tick.  Reset back to False by play_move on entry.
-        self._move_cancelled: bool = False
+        # Per-run cancellation handle for the active play_uploaded_move.
+        # Set by ``_async_play_uploaded_move`` before each play, cleared
+        # in its finally. ``CancelMoveCmd`` only flips this token if its
+        # upload_id matches — see _PlaybackCancelToken.
+        # Mutated under ``_play_move_lock`` to close the race where a
+        # cancel arrives between the play task being scheduled and the
+        # token being installed.
+        self._active_move_token: Optional[_PlaybackCancelToken] = None
+        # upload_id of the standalone audio currently playing via
+        # ``play_uploaded_audio``. None when no standalone audio is
+        # playing. ``CancelAudioCmd`` only stops if its upload_id
+        # matches — keeps cancel_audio from killing the audio
+        # attached to a play_uploaded_move that's also running.
+        self._active_audio_upload_id: Optional[str] = None
 
         # In-progress uploads keyed by client-supplied upload_id.
         # ``_chunks`` is a list of received fragments (string parts of
@@ -235,10 +263,11 @@ class Backend:
         # finished/cancelled, or TTL expiry).
         self._uploaded_moves: Dict[str, Any] = {}
         # Audio upload slots, parallel to the move ones.  The audio
-        # bytes are base64-encoded WAV fragments; on finish we
-        # decode + write to /tmp/marionette-audio/{upload_id}.wav so
-        # GStreamer playbin can consume them by path.  ``_uploaded_audios``
-        # maps upload_id -> on-disk path; cleared after play.
+        # bytes are base64-encoded WAV fragments; on finish we decode
+        # and write to ``<tempdir>/reachy-mini-uploads/audio/{upload_id}.wav``
+        # so GStreamer playbin can consume them by path.
+        # ``_uploaded_audios`` maps upload_id -> on-disk path; cleared
+        # after play.
         self._audio_chunks: Dict[str, list[str]] = {}
         self._audio_meta: Dict[str, dict[str, Any]] = {}
         self._audio_ts: Dict[str, float] = {}
@@ -249,8 +278,13 @@ class Backend:
         self._upload_ttl_s: float = 300.0  # evict half-finished slots
         self._upload_max_active_slots: int = 4
         # Where uploaded audio files are written before GStreamer
-        # plays them.  Created lazily on first upload.
-        self._audio_temp_dir: str = "/tmp/marionette-audio"
+        # plays them. Created lazily on first upload. Uses the
+        # platform-native tempdir (``/tmp`` on Linux/macOS,
+        # ``%TEMP%`` on Windows) so the daemon works whether it's
+        # bundled inside the desktop app or running on the CM4.
+        self._audio_temp_dir: str = os.path.join(
+            tempfile.gettempdir(), "reachy-mini-uploads", "audio"
+        )
 
         # WebRTC support
         self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
@@ -487,6 +521,7 @@ class Backend:
         play_frequency: float = 100.0,
         initial_goto_duration: float = 0.0,
         audio_lead_s: float = 0.0,
+        cancel_token: Optional[_PlaybackCancelToken] = None,
     ) -> None:
         """Asynchronously play a Move.
 
@@ -495,15 +530,12 @@ class Backend:
             play_frequency (float): The frequency at which to evaluate the move (in Hz).
             initial_goto_duration (float): Duration for an initial goto to the move's starting position. If 0.0, no initial goto is performed.
             audio_lead_s (float): How many seconds the audio (if any) starts BEFORE the motion. Positive values compensate for the constant GStreamer playbin latency on the robot so the audio reaches the speaker at the same moment the actuator starts moving. Negative values delay audio relative to motion. No-op when the move has no sound_path. Default 0.
+            cancel_token (_PlaybackCancelToken, optional): If provided, the inner loop polls ``cancel_token.cancelled`` every tick and exits when flipped. Used by ``_async_play_uploaded_move`` to wire ``cancel_move`` to a specific upload_id; direct callers (goto_target, etc.) pass None and stay non-cancellable.
 
         """
         if not self._try_start_move():
             self.logger.warning("Ignoring play_move request: another move is running.")
             return
-
-        # Reset the cancel flag whenever a new move starts.  Any
-        # stale `cancel_move` from before this point is dropped.
-        self._move_cancelled = False
 
         try:
             if initial_goto_duration > 0.0:
@@ -531,33 +563,52 @@ class Backend:
 
             t0 = time.time()
             # Negative audio_lead_s: schedule sound to fire mid-loop,
-            # |audio_lead_s| seconds after t0.  Use a background task
-            # so the main motion loop stays tight.
+            # |audio_lead_s| seconds after t0. We hold a reference to
+            # the background task so the finally block can cancel it
+            # if the motion loop exits before the sleep elapses (short
+            # move + big negative lead would otherwise leak a task that
+            # plays audio after the move has ended).
+            delayed_sound_task: Optional["asyncio.Task[None]"] = None
             if move.sound_path is not None and audio_lead_s < 0:
+                sound_path_str = str(move.sound_path)
+
                 async def _delayed_sound() -> None:
-                    await asyncio.sleep(-audio_lead_s)
-                    if not self._move_cancelled and move.sound_path is not None:
-                        self.play_sound(str(move.sound_path))
-                asyncio.create_task(_delayed_sound())
-            while time.time() - t0 < move.duration:
-                if self._move_cancelled:
-                    self.logger.info("play_move cancelled, exiting playback loop")
-                    break
-                t = time.time() - t0
+                    try:
+                        await asyncio.sleep(-audio_lead_s)
+                    except asyncio.CancelledError:
+                        return
+                    if cancel_token is not None and cancel_token.cancelled:
+                        return
+                    self.play_sound(sound_path_str)
 
-                head, antennas, body_yaw = move.evaluate(t)
-                if head is not None:
-                    self.set_target_head_pose(head)
-                if body_yaw is not None:
-                    self.set_target_body_yaw(body_yaw)
-                if antennas is not None:
-                    self.set_target_antenna_joint_positions(antennas)
+                delayed_sound_task = asyncio.create_task(_delayed_sound())
+            try:
+                while time.time() - t0 < move.duration:
+                    if cancel_token is not None and cancel_token.cancelled:
+                        self.logger.info("play_move cancelled, exiting playback loop")
+                        break
+                    t = time.time() - t0
 
-                elapsed = time.time() - t0 - t
-                if elapsed < sleep_period:
-                    await asyncio.sleep(sleep_period - elapsed)
-                else:
-                    await asyncio.sleep(0.001)
+                    head, antennas, body_yaw = move.evaluate(t)
+                    if head is not None:
+                        self.set_target_head_pose(head)
+                    if body_yaw is not None:
+                        self.set_target_body_yaw(body_yaw)
+                    if antennas is not None:
+                        self.set_target_antenna_joint_positions(antennas)
+
+                    elapsed = time.time() - t0 - t
+                    if elapsed < sleep_period:
+                        await asyncio.sleep(sleep_period - elapsed)
+                    else:
+                        await asyncio.sleep(0.001)
+            finally:
+                # Don't leak the delayed-sound task past the loop. Two
+                # cases this matters: the move duration was shorter
+                # than |audio_lead_s|, or the loop was cancelled before
+                # the sleep elapsed.
+                if delayed_sound_task is not None and not delayed_sound_task.done():
+                    delayed_sound_task.cancel()
         finally:
             self._end_move()
 
@@ -1223,14 +1274,11 @@ class Backend:
         elif isinstance(cmd, PlayUploadedMoveCmd):
             asyncio.create_task(self._async_play_uploaded_move(cmd))
         elif isinstance(cmd, CancelMoveCmd):
-            # Idempotent: sets the flag regardless of whether anything
-            # is actually running. play_move resets it on entry, so no
-            # stale-flag risk.
-            self._move_cancelled = True
+            self._handle_cancel_move(cmd)
         elif isinstance(cmd, PlayUploadedAudioCmd):
             self._handle_play_uploaded_audio(cmd)
         elif isinstance(cmd, CancelAudioCmd):
-            self._handle_cancel_audio()
+            self._handle_cancel_audio(cmd)
 
     # ------------------------------------------------------------------
     # Inline-move upload + daemon-side playback
@@ -1450,6 +1498,9 @@ class Backend:
         delta is identical in record and play, so the user's slider
         becomes a single per-robot constant (system latency, network
         RTT) rather than something that drifts between code paths.
+
+        Records the upload_id on ``_active_audio_upload_id`` so the
+        next ``cancel_audio`` knows which (if any) audio is live.
         """
         upload_id = cmd.upload_id
         audio_path = self._uploaded_audios.get(upload_id)
@@ -1466,10 +1517,18 @@ class Backend:
             "upload_id": upload_id,
             "started": True,
         }))
+        # Claim the active-audio slot before kicking off playback so a
+        # cancel_audio arriving immediately after the start broadcast
+        # finds the right id. Best-effort: GStreamer doesn't notify on
+        # natural end, so this id may linger until either the next
+        # play_uploaded_audio overwrites it or a cancel arrives.
+        self._active_audio_upload_id = upload_id
         try:
             self.play_sound(audio_path)
         except Exception as e:
             self.logger.warning(f"play_uploaded_audio: play_sound failed: {e}")
+            if self._active_audio_upload_id == upload_id:
+                self._active_audio_upload_id = None
             # Broadcast a follow-up error so the client knows the
             # started event isn't actionable.
             self.broadcast_to_all_clients(json.dumps({
@@ -1478,12 +1537,35 @@ class Backend:
                 "error": str(e),
             }))
 
-    def _handle_cancel_audio(self) -> None:
-        """Stop a running play_uploaded_audio. Idempotent."""
+    def _handle_cancel_audio(self, cmd: CancelAudioCmd) -> None:
+        """Stop play_uploaded_audio iff its upload_id matches.
+
+        Scoped so a stale cancel_audio against an already-finished id
+        doesn't kill the audio attached to a play_uploaded_move that
+        happens to be running. Idempotent.
+        """
+        active = self._active_audio_upload_id
+        if active is None or active != cmd.upload_id:
+            return
+        self._active_audio_upload_id = None
         try:
             self.stop_sound()
         except Exception as e:
             self.logger.warning(f"cancel_audio: stop_sound failed: {e}")
+
+    def _handle_cancel_move(self, cmd: CancelMoveCmd) -> None:
+        """Cancel the active play_uploaded_move iff upload_id matches.
+
+        Idempotent: a stale cancel against a no-longer-active id is a
+        no-op, so two back-to-back plays can't cross-cancel each other.
+        Acquires ``_play_move_lock`` so we never read a half-installed
+        token from ``_async_play_uploaded_move``.
+        """
+        with self._play_move_lock:
+            token = self._active_move_token
+            if token is None or token.upload_id != cmd.upload_id:
+                return
+            token.cancelled = True
 
     def _handle_upload_finish(self, cmd: UploadMoveFinishCmd) -> None:
         slot = self._upload_chunks.pop(cmd.upload_id, None)
@@ -1502,6 +1584,11 @@ class Backend:
             return
         payload = "".join(slot)
         encoding = meta.get("encoding", "json")
+        # Cap on the assembled-then-decoded JSON size. Anything past
+        # this means either a malicious gzip bomb (typical recorded
+        # moves are < 10 MB JSON, < 5 MB gzipped) or a runaway
+        # client; stop before allocating hundreds of MB on the CM4.
+        max_decoded_bytes = 64 * 1024 * 1024
         try:
             if encoding == "gzip+base64":
                 # Decompressing the assembled base64+gzip payload back
@@ -1510,8 +1597,26 @@ class Backend:
                 import base64
                 import gzip
                 raw = base64.b64decode(payload, validate=False)
-                payload_text = gzip.decompress(raw).decode("utf-8")
+                # gzip.decompress reads the whole stream into RAM; use
+                # GzipFile.read(max_decoded_bytes + 1) so a bomb can't
+                # exhaust memory before we notice it's oversize.
+                import io
+                with gzip.GzipFile(fileobj=io.BytesIO(raw), mode="rb") as gz:
+                    raw_text = gz.read(max_decoded_bytes + 1)
+                if len(raw_text) > max_decoded_bytes:
+                    self.logger.warning(
+                        f"upload_move_finish: decoded payload exceeds "
+                        f"{max_decoded_bytes} bytes on {cmd.upload_id}; dropping"
+                    )
+                    return
+                payload_text = raw_text.decode("utf-8")
             elif encoding == "json":
+                if len(payload) > max_decoded_bytes:
+                    self.logger.warning(
+                        f"upload_move_finish: payload exceeds "
+                        f"{max_decoded_bytes} bytes on {cmd.upload_id}; dropping"
+                    )
+                    return
                 payload_text = payload
             else:
                 self.logger.warning(
@@ -1742,16 +1847,23 @@ class Backend:
             "upload_id": upload_id,
             "has_audio": audio_path is not None,
         }
+        # Install the per-run cancel token under the lock so a
+        # cancel_move arriving in this exact window can't see a stale
+        # (or absent) token. The token is removed in finally.
+        token = _PlaybackCancelToken(upload_id)
+        with self._play_move_lock:
+            self._active_move_token = token
         try:
             await self.play_move(
                 move,
                 play_frequency=cmd.play_frequency,
                 initial_goto_duration=cmd.initial_goto_duration,
                 audio_lead_s=cmd.audio_lead_ms / 1000.0,
+                cancel_token=token,
             )
             # play_move exits its loop in two cases: natural end or
-            # cancel. Inspect the flag to distinguish them.
-            if self._move_cancelled:
+            # cancel. The token preserves which one happened.
+            if token.cancelled:
                 result["cancelled"] = True
             else:
                 result["finished"] = True
@@ -1759,6 +1871,9 @@ class Backend:
             self.logger.exception(f"play_uploaded_move failed: {e}")
             result["error"] = str(e)
         finally:
+            with self._play_move_lock:
+                if self._active_move_token is token:
+                    self._active_move_token = None
             # Always stop any sound that is still running and remove
             # the temp audio file.  Without stop_sound a cancelled
             # play would leave music playing until the WAV ends.
