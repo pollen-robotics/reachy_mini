@@ -1,7 +1,7 @@
 # Build a Reachy Mini app
 
 How to ship a Hugging Face Space that runs on a Reachy Mini robot,
-using `@pollen-robotics/reachy-mini-host` for OAuth, robot picking, session
+using `@pollen-robotics/reachy-mini-sdk/host` for OAuth, robot picking, session
 lifecycle, and a top bar - so your code stays focused on **your
 app's UI** and nothing else.
 
@@ -29,7 +29,7 @@ app's UI** and nothing else.
 
 ## 1. What you get for free
 
-By integrating `@pollen-robotics/reachy-mini-host`, your app **does not have to
+By integrating `@pollen-robotics/reachy-mini-sdk/host`, your app **does not have to
 write**:
 
 - **Hugging Face OAuth**: sign-in screen, redirect handling,
@@ -144,7 +144,7 @@ const params = new URLSearchParams(window.location.search);
 if (params.get('embedded') === '1') {
   void import('./embed');
 } else {
-  void import('@pollen-robotics/reachy-mini-host/auto').then(({ mountHost }) => {
+  void import('@pollen-robotics/reachy-mini-sdk/host/auto').then(({ mountHost }) => {
     mountHost({
       appName: 'My App',
       appIconUrl: '/icon.svg',
@@ -157,7 +157,7 @@ if (params.get('embedded') === '1') {
 ### 3.3 `src/embed.ts` (vanilla example)
 
 ```ts
-import { connectToHost } from '@pollen-robotics/reachy-mini-host/embed';
+import { connectToHost } from '@pollen-robotics/reachy-mini-sdk/host/embed';
 
 interface MyConfig {
   startingEmotion?: string;
@@ -201,7 +201,7 @@ light/dark) is bundled and not overridable - the host owns its
 look, apps own theirs inside the iframe.
 
 ```ts
-import { mountHost } from '@pollen-robotics/reachy-mini-host/auto';
+import { mountHost } from '@pollen-robotics/reachy-mini-sdk/host/auto';
 
 mountHost({
   appName: 'My App',          // REQUIRED: passed to the SDK + shown in top bar
@@ -226,7 +226,7 @@ usually never need this; the page lifecycle handles it.
 Called once from `embed.{ts,tsx}` to get a live SDK handle.
 
 ```ts
-import { connectToHost } from '@pollen-robotics/reachy-mini-host/embed';
+import { connectToHost } from '@pollen-robotics/reachy-mini-sdk/host/embed';
 
 interface MyConfig { /* whatever your app accepts */ }
 
@@ -565,7 +565,7 @@ central. The host **must** disconnect when the embed boots; if it
 doesn't, the central sees two peers with the same `appName` and
 rejects the embed.
 
-This is handled automatically by `@pollen-robotics/reachy-mini-host` (§8.1 of the
+This is handled automatically by `@pollen-robotics/reachy-mini-sdk/host` (§8.1 of the
 SPEC). If you see this in dev, you likely have **two tabs** open
 on the same Space - that's expected behaviour.
 
@@ -580,8 +580,10 @@ slim inside the iframe.
 
 ### "Vite warns about React being installed in two places"
 
-You're using the `file:./vendor/reachy-mini-host` dep pattern. Add
-to your `vite.config.ts`:
+You're using the legacy `file:./vendor/reachy-mini-host` dep
+pattern (now unsupported — the host ships from npm as part of
+`@pollen-robotics/reachy-mini-sdk`). Migrate to the npm dep and,
+if you still see the warning, add to your `vite.config.ts`:
 
 ```ts
 export default defineConfig({
@@ -591,14 +593,13 @@ export default defineConfig({
              '@mui/material', '@mui/icons-material'],
   },
   optimizeDeps: {
-    include: ['@pollen-robotics/reachy-mini-host', '@pollen-robotics/reachy-mini-host/auto',
-              '@pollen-robotics/reachy-mini-host/embed'],
+    include: ['@pollen-robotics/reachy-mini-sdk',
+              '@pollen-robotics/reachy-mini-sdk/host',
+              '@pollen-robotics/reachy-mini-sdk/host/auto',
+              '@pollen-robotics/reachy-mini-sdk/host/embed'],
   },
 });
 ```
-
-Once `@pollen-robotics/reachy-mini-host` is published to npm proper, this `dedupe`
-won't be needed.
 
 ### "I want a different sign-in flow"
 

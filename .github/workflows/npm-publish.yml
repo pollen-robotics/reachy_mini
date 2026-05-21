@@ -9,6 +9,11 @@ on:
       - main
     paths:
       - "js/**"
+      - ".github/workflows/npm-publish.yml"
+  pull_request:
+    paths:
+      - "js/**"
+      - ".github/workflows/npm-publish.yml"
 
 jobs:
   publish:
@@ -23,47 +28,50 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
         with:
-          node-version: "22"
+          node-version: "24"   # ships npm >= 11.5.1 — required for trusted publishing
           registry-url: "https://registry.npmjs.org"
-      - name: Upgrade npm (>=11.5.1 required for trusted publishing)
-        run: npm install -g npm@latest
 
-      # Install workspace deps (root + sdk + host workspaces, hoisted
-      # into js/node_modules/) so the host bundles can be built.
-      - name: Install JS workspace dependencies
+      # Install deps for the single npm package
+      # (@pollen-robotics/reachy-mini-sdk). The SDK runtime is plain
+      # JS at js/reachy-mini-sdk.js; the optional host shell lives
+      # under js/host/ and is bundled by `npm run build` into
+      # js/host/dist/, surfaced via the `./host*` subpath exports.
+      - name: Install JS package dependencies
         run: npm ci
 
-      # Build host bundles into js/host/dist/. Required for the host
-      # package's main/exports to resolve in its published tarball.
+      # Build the host bundles into host/dist/. Required for the
+      # `./host`, `./host/auto`, `./host/embed`, and `./host/protocol`
+      # subpath exports to resolve in the published tarball.
       - name: Build host bundles
-        run: npm run build:host
+        run: npm run build
 
       # pyproject.toml is the single source of truth for the version.
-      # Release  → publish <py_ver>            on the `latest` dist-tag.
-      # Push     → publish <py_ver>-main.<sha> on the `main`   dist-tag.
+      # Release       → publish <py_ver>            on the `latest` dist-tag.
+      # Push to main  → publish <py_ver>-main.<sha> on the `main`   dist-tag.
+      # Pull request  → dry-run only (no publish).
       - name: Compute and apply version from pyproject.toml
         run: |
           py_ver=$(grep -E '^version' ../pyproject.toml | head -1 | sed -E 's/version *= *"([^"]+)"/\1/')
-          if [ "${{ github.event_name }}" = "push" ]; then
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
             sha=$(echo "${{ github.sha }}" | cut -c1-7)
             ver="${py_ver}-main.${sha}"
           else
             ver="${py_ver}"
           fi
-          echo "Publishing version: $ver"
-          npm version "$ver" --no-git-tag-version --workspace=sdk
-          npm version "$ver" --no-git-tag-version --workspace=host
+          echo "Computed version: $ver (event=${{ github.event_name }})"
+          npm version "$ver" --no-git-tag-version
 
-      - name: Publish SDK (latest)
-        if: github.event_name == 'release'
-        run: npm publish --workspace=sdk
-      - name: Publish Host (latest)
-        if: github.event_name == 'release'
-        run: npm publish --workspace=host
+      # PR: pack to confirm the publish would succeed (tarball
+      # layout, manifest validity, no missing files) without
+      # actually publishing.
+      - name: Verify tarball (PR dry-run)
+        if: github.event_name == 'pull_request'
+        run: npm pack --dry-run
 
-      - name: Publish SDK (main)
+      - name: Publish (latest)
+        if: github.event_name == 'release'
+        run: npm publish
+
+      - name: Publish (main)
         if: github.event_name == 'push'
-        run: npm publish --workspace=sdk --tag main
-      - name: Publish Host (main)
-        if: github.event_name == 'push'
-        run: npm publish --workspace=host --tag main
+        run: npm publish --tag main

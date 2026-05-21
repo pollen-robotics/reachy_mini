@@ -3,10 +3,10 @@
  *
  * Vanilla TypeScript helper that lives in the iframe side of the
  * host / app split. Consumed by `src/embed.{ts,tsx}` in each app
- * (or via the CDN entry `@pollen-robotics/reachy-mini-host/embed`
- * script tag).
+ * (or via the CDN entry
+ * `@pollen-robotics/reachy-mini-sdk/host/embed` script tag).
  *
- *   import { connectToHost } from '@pollen-robotics/reachy-mini-host/embed';
+ *   import { connectToHost } from '@pollen-robotics/reachy-mini-sdk/host/embed';
  *
  *   const handle = await connectToHost<MyAppConfig>();
  *   handle.onLeave(() => { /* clean up before unmount *\/ });
@@ -230,7 +230,7 @@ async function bootOnce(
 
   if (!creds) {
     throw new Error(
-      '[reachy-mini-host/embed] no creds bundle found in URL hash. ' +
+      '[reachy-mini-sdk/host/embed] no creds bundle found in URL hash. ' +
         'Was the embed mounted directly without ?embedded=1#creds=...?',
     );
   }
@@ -239,7 +239,7 @@ async function bootOnce(
   const sdkReady = await waitForSdkReady(SDK_READY_TIMEOUT_MS);
   if (!sdkReady) {
     throw new Error(
-      '[reachy-mini-host/embed] window.ReachyMini did not become ' +
+      '[reachy-mini-sdk/host/embed] window.ReachyMini did not become ' +
         `available within ${SDK_READY_TIMEOUT_MS}ms - check the SDK CDN tag.`,
     );
   }
@@ -402,7 +402,7 @@ function createBridge(expectedOrigin: string) {
       try {
         void cb();
       } catch (err) {
-        console.warn('[reachy-mini-host/embed] onLeave threw', err);
+        console.warn('[reachy-mini-sdk/host/embed] onLeave threw', err);
       }
     });
   }
@@ -602,7 +602,7 @@ function postToHost(msg: EmbedToHostMsg): void {
   try {
     window.parent.postMessage(msg, parentTargetOrigin);
   } catch (err) {
-    console.warn('[reachy-mini-host/embed] postMessage to host failed', err);
+    console.warn('[reachy-mini-sdk/host/embed] postMessage to host failed', err);
   }
 }
 

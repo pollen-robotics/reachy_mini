@@ -281,7 +281,7 @@ Lifecycle (advanced — most consumers should just use `autoConnect()`): `authen
 
 Events: `connected`, `disconnected`, `robotsChanged`, `streaming`, `sessionStopped`, `sessionRejected` (robot busy — inspect `e.detail.activeApp`), `state` (every ~500 ms), `videoTrack`, `micSupported`, `error`.
 
-**Full API:** read the top ~90 lines of [`js/sdk/reachy-mini-sdk.js`](js/sdk/reachy-mini-sdk.js) — the file header is a complete reference.
+**Full API:** read the top ~90 lines of [`js/reachy-mini-sdk.js`](js/reachy-mini-sdk.js) — the file header is a complete reference.
 
 ### Iframe-embedded apps (mobile shell, vibe-coder preview)
 
