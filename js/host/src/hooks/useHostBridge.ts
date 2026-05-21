@@ -186,6 +186,6 @@ function postToFrame(iframe: HTMLIFrameElement, msg: unknown): void {
   try {
     iframe.contentWindow.postMessage(msg, window.location.origin);
   } catch (err) {
-    console.warn('[reachy-mini-host] postMessage to embed failed', err);
+    console.warn('[reachy-mini-sdk/host] postMessage to embed failed', err);
   }
 }
