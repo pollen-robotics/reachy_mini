@@ -5,6 +5,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to a permissive pre-1.0 semver (see
 [SPEC.md §11](./SPEC.md#11-backlog) for the policy).
 
+## 1.8.0 - unreleased
+
+Unified-package release: the host now ships as subpath exports
+inside `@pollen-robotics/reachy-mini-sdk@1.8.0`. The SDK and host
+move forward in lock-step from this version onward.
+
+### SDK changes that ripple through to the host
+
+- **Breaking (SDK)**: `wakeUp()` and `gotoSleep()` now return
+  `Promise<void>` (previously `boolean`). The promise resolves on
+  the daemon's `{command, completed: true}` response, after the
+  trajectory player has fully landed. Apps embedded in this host
+  shell that previously relied on the boolean return are unaffected
+  in practice (the boolean was rarely consumed strictly); apps that
+  *want* to await trajectory completion (e.g. to chain
+  `setMotorMode("disabled")` after a `gotoSleep`) can now do so
+  without racing.
+- **SDK**: both motion helpers take an optional `{ timeoutMs }`
+  (default 8000 ms). The promise rejects on session teardown
+  (`stopSession` / `disconnect`) so consumers never wait forever
+  on an interrupted trajectory.
+- **SDK**: `POST /send` responses with a 4xx / 5xx status now
+  produce a `console.warn` carrying the rejected message `type`
+  and the response body, making racy `setPeerStatus` /
+  `endSession` failures easier to diagnose.
+
+### Host changes
+
+- **Types**: `src/lib/sdk-types.ts` refreshed to cover the full
+  SDK 1.8.0 public surface (`autoConnect`, `gotoTarget`,
+  `setMotorTorque`, `subscribeLogs`, `requestState`, version /
+  hardware-id helpers, `robotState`, `isEmbedded`, jitter buffer
+  option, `autoStartFromUrl`). The motion helpers now type as
+  `Promise<void>` to match the SDK.
+
 ## 0.3.0 - 2026-05-16 (unreleased)
 
 **This release is a full rewrite of the package against

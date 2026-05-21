@@ -415,6 +415,27 @@ export class ReachyMini extends EventTarget {
         this._iceConnected = false;
         this._dcOpen = false;
 
+        // Motion-completion plumbing for wakeUp() / gotoSleep().
+        //
+        // The daemon's data-channel handler dispatches `wake_up` and
+        // `goto_sleep` as async tasks and replies with
+        // `{status: "ok", command, completed: true}` when the trajectory
+        // ACTUALLY finishes (or with `{error, command}` on failure). We
+        // surface that as a Promise so callers can `await robot.gotoSleep()`
+        // and chain `setMotorMode('disabled')` without racing the
+        // trajectory player.
+        //
+        // Queues, not single slots: the data-channel protocol has no
+        // request IDs, but FIFO ordering is guaranteed by the daemon's
+        // serialised dispatcher, so the N-th response matches the N-th
+        // request. A queue makes back-to-back calls (e.g. teardown firing
+        // on top of an in-flight wake_up) safe; a single slot would
+        // silently drop the earlier awaiter.
+        this._pendingMotionCompletions = {
+            wake_up: [],
+            goto_sleep: [],
+        };
+
         // Set by attachVideo()
         this._videoElement = null;
     }
@@ -1106,6 +1127,10 @@ export class ReachyMini extends EventTarget {
         // reconnect requires a fresh subscribeLogs() call from the
         // consumer.
         this._logSubscribers.clear();
+        // Drain any in-flight wakeUp() / gotoSleep() awaiters before
+        // the data channel is killed below, so callers don't sit on a
+        // promise that can never resolve.
+        this._rejectPendingMotionCompletions(new Error('Session stopped'));
         if (this._sessionReject) {
             this._sessionReject(new Error('Session stopped'));
             this._sessionResolve = null;
@@ -1149,6 +1174,9 @@ export class ReachyMini extends EventTarget {
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
         this._logSubscribers.clear();
+        // Same rationale as in stopSession(): drain pending motion
+        // awaiters before tearing down the data channel.
+        this._rejectPendingMotionCompletions(new Error('Disconnected'));
         if (this._sessionReject) {
             this._sessionReject(new Error('Disconnected'));
             this._sessionResolve = null;
@@ -1361,8 +1389,9 @@ export class ReachyMini extends EventTarget {
 
     /**
      * Play the wake-up animation (full head/antennas trajectory on the
-     * robot, ~2 s). Fire-and-forget — poll ``requestState()`` and watch
-     * ``is_move_running`` if you need to know when it finishes.
+     * robot, ~1-3 s depending on the starting head pose) and resolve
+     * when the daemon reports the trajectory player has actually
+     * finished.
      *
      * This helper sends a ``set_motor_mode: "enabled"`` command *before*
      * the ``wake_up`` command so the animation actually moves the motors.
@@ -1372,33 +1401,107 @@ export class ReachyMini extends EventTarget {
      * travel over the same data channel so ordering at the backend is
      * preserved.
      *
+     * The returned promise resolves on the daemon's
+     * ``{command: "wake_up", completed: true}`` response (sent after
+     * the trajectory player is fully done, not just when the command
+     * is enqueued). Lets a UI overlay (e.g. the host's "Wake-up" step)
+     * stay up for exactly the right duration, and lets callers chain
+     * setup that depends on the head being in the awake pose without
+     * racing the trajectory.
+     *
      * Semantics match the REST endpoint ``POST /api/move/play/wake_up``
      * plus the LAN convention of enabling motors before playing motion
      * trajectories.
      *
-     * @returns {boolean} false if the data channel is not open.
+     * @param {object} [options]
+     * @param {number} [options.timeoutMs=8000] hard upper bound; the
+     *   promise rejects with a TimeoutError-shaped Error if the daemon
+     *   stops responding (e.g. data channel went down mid-animation
+     *   without firing close events).
+     * @returns {Promise<void>}
      */
-    wakeUp() {
+    wakeUp({ timeoutMs = 8000 } = {}) {
         this._sendCommand({ type: "set_motor_mode", mode: "enabled" });
-        return this._sendCommand({ type: "wake_up" });
+        return this._sendCommandAwaitCompletion("wake_up", timeoutMs);
     }
 
     /**
-     * Play the goto-sleep animation. Fire-and-forget; see ``wakeUp`` for
-     * progress-polling notes.
+     * Play the goto-sleep animation and resolve when the daemon reports
+     * the trajectory player has finished. See ``wakeUp`` for the
+     * completion-signal rationale.
      *
      * Does NOT touch motor mode: the daemon's ``goto_sleep`` handler
      * manages the transition out of torque on its own (motors must stay
      * powered during the trajectory to move into the sleep pose, then
      * are typically disabled by the daemon once the pose is reached).
      *
+     * The awaitable form lets callers chain ``setMotorMode('disabled')``
+     * AFTER the trajectory lands instead of racing it, which previously
+     * caused the head to drop mid-animation when consumers tore down
+     * too eagerly.
+     *
      * Semantics match ``POST /api/move/play/goto_sleep`` and the
      * ``"goto_sleep"`` WebRTC command.
      *
-     * @returns {boolean} false if the data channel is not open.
+     * @param {object} [options]
+     * @param {number} [options.timeoutMs=8000]
+     * @returns {Promise<void>}
      */
-    gotoSleep() {
-        return this._sendCommand({ type: "goto_sleep" });
+    gotoSleep({ timeoutMs = 8000 } = {}) {
+        return this._sendCommandAwaitCompletion("goto_sleep", timeoutMs);
+    }
+
+    /**
+     * Internal: send a motion command and resolve when the daemon's
+     * matching ``{command, completed: true}`` response lands.
+     *
+     * Pushes one entry onto ``_pendingMotionCompletions[command]``; the
+     * data-channel reader (``_handleRobotMessage``) shifts the oldest
+     * entry off the queue when a response arrives, which preserves the
+     * FIFO matching that the daemon's serialised dispatcher relies on.
+     *
+     * Rejects immediately if the data channel is not open; the underlying
+     * ``_sendCommand`` returns false in that case and we never enqueue an
+     * awaiter that the daemon could never reach.
+     *
+     * @param {"wake_up"|"goto_sleep"} command
+     * @param {number} timeoutMs
+     * @returns {Promise<void>}
+     */
+    _sendCommandAwaitCompletion(command, timeoutMs) {
+        if (!this._sendCommand({ type: command })) {
+            return Promise.reject(new Error(`${command}: data channel not open`));
+        }
+        return new Promise((resolve, reject) => {
+            const entry = {
+                resolve,
+                reject,
+                timer: setTimeout(() => {
+                    const queue = this._pendingMotionCompletions[command];
+                    const idx = queue.indexOf(entry);
+                    if (idx !== -1) queue.splice(idx, 1);
+                    reject(new Error(`${command} timed out after ${timeoutMs}ms`));
+                }, timeoutMs),
+            };
+            this._pendingMotionCompletions[command].push(entry);
+        });
+    }
+
+    /**
+     * Internal: drain every pending motion-completion resolver with the
+     * given error. Called by ``stopSession()`` and ``disconnect()`` so a
+     * teardown that interrupts an in-flight ``gotoSleep`` does not leave
+     * the caller awaiting forever.
+     */
+    _rejectPendingMotionCompletions(error) {
+        for (const command of Object.keys(this._pendingMotionCompletions)) {
+            const queue = this._pendingMotionCompletions[command];
+            while (queue.length) {
+                const entry = queue.shift();
+                clearTimeout(entry.timer);
+                entry.reject(error);
+            }
+        }
     }
 
     /**
@@ -1453,7 +1556,13 @@ export class ReachyMini extends EventTarget {
             });
         }
         if (this.isAwake()) return true;
-        this.wakeUp();
+        // wakeUp() now returns a Promise. Fire-and-forget here — we
+        // intentionally do not await the trajectory completion, the
+        // caller of ensureAwake() decides whether to block on the
+        // animation. Catch the rejection so a teardown that interrupts
+        // the wake doesn't surface an unhandledrejection event from
+        // this internal helper.
+        this.wakeUp().catch(() => { /* swallow: caller may have torn down */ });
         return true;
     }
 
@@ -1712,6 +1821,22 @@ export class ReachyMini extends EventTarget {
                 },
                 body: JSON.stringify(message),
             });
+            if (!res.ok) {
+                // Surface 4xx/5xx with the rejected message type. The
+                // browser already logs "Failed to load resource: <status>"
+                // but never says which call produced it, which makes
+                // tardy `peer`/`endSession`/`setPeerStatus` races
+                // (typical after a session has been torn down) hard to
+                // diagnose. Returning null preserves the historical
+                // contract for callers that only care about the success
+                // path.
+                let body = '';
+                try { body = await res.text(); } catch { /* ignore */ }
+                console.warn(
+                    `[reachy-mini] /send rejected (${res.status}) for type=${message?.type}; body=${body || '<empty>'}`,
+                );
+                return null;
+            }
             return await res.json();
         } catch (e) {
             console.error('Send error:', e);
@@ -1954,6 +2079,32 @@ export class ReachyMini extends EventTarget {
                 this._micVolumeResolve = null;
             }
             return;
+        }
+        // Motion completion responses. The daemon emits
+        // `{status: "ok", command: "wake_up"|"goto_sleep", completed: true}`
+        // after the trajectory player is fully done, or `{error, command}`
+        // on failure. Route them to the FIFO queue of pending awaiters
+        // populated by `_sendCommandAwaitCompletion`; the N-th response
+        // matches the N-th request thanks to the daemon's serialised
+        // dispatcher.
+        if (
+            (data.command === 'wake_up' || data.command === 'goto_sleep') &&
+            this._pendingMotionCompletions &&
+            this._pendingMotionCompletions[data.command]
+        ) {
+            const queue = this._pendingMotionCompletions[data.command];
+            if (data.completed === true && queue.length > 0) {
+                const entry = queue.shift();
+                clearTimeout(entry.timer);
+                entry.resolve();
+                return;
+            }
+            if (data.error && queue.length > 0) {
+                const entry = queue.shift();
+                clearTimeout(entry.timer);
+                entry.reject(new Error(`${data.command}: ${data.error}`));
+                return;
+            }
         }
         if (data.type === 'log_line') {
             for (const sub of this._logSubscribers) {
