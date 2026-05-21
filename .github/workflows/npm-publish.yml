@@ -28,6 +28,18 @@ jobs:
       - name: Upgrade npm (>=11.5.1 required for trusted publishing)
         run: npm install -g npm@latest
 
+      # Install workspace deps (root + `host` workspace, hoisted into
+      # js/node_modules/) so the host bundles can be built before publish.
+      - name: Install JS workspace dependencies
+        run: npm ci
+
+      # Build host bundles into js/host/dist/. This step is required for
+      # the `./host`, `./host/auto`, `./host/embed`, `./host/protocol`
+      # subpath exports declared in js/package.json to resolve in the
+      # published tarball.
+      - name: Build host bundles
+        run: npm run build:host
+
       # Release → publish current version on the `latest` dist-tag.
       - name: Verify js/package.json version matches pyproject.toml
         if: github.event_name == 'release'
