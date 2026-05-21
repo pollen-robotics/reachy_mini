@@ -267,3 +267,8 @@ js/node_modules/
 js/host/node_modules/
 js/host/dist/
 js/.vite/
+# The unanchored `lib/` rule above (Python template, intended for
+# root-level build artefacts) also matches `js/host/src/lib/`,
+# which holds TypeScript source. Re-include it explicitly.
+!js/host/src/lib/
+!js/host/src/lib/**
