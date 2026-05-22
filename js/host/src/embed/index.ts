@@ -19,8 +19,9 @@
  *  3. Instantiate the SDK, seed the HF token into
  *     `sessionStorage`.
  *  4. Send `embed:ready` to the parent.
- *  5. Wait for `host:init` (8 s timeout; Mode B proceeds from
- *     hash alone when this never arrives).
+ *  5. Wait for `host:init` (2 s soft timeout; on hit we proceed
+ *     from the hash creds alone via `liveStateFromCreds`, which
+ *     carries the same fields as `liveStateFromInit`).
  *  6. `connect()` → `startSession()` → `ensureAwake()`, emitting
  *     `embed:app-state` at each step.
  *  7. Resolve `connectToHost()` with the live SDK handle.
@@ -53,7 +54,14 @@ import type {
 } from '../lib/protocol';
 
 const SDK_READY_TIMEOUT_MS = 8000;
-const HOST_INIT_TIMEOUT_MS = 8000;
+// Soft deadline for the parent's `host:init` reply. The embed can
+// boot from `#creds=` alone (see `liveStateFromCreds`), so this is
+// purely the upper bound on "wait a touch in case `host:init` is in
+// flight". Was 8000 ms when the cross-origin filter was broken (every
+// message got dropped, every Space sat the full 8 s before falling
+// back). With the origin filter fixed the host:init typically lands
+// in <100 ms; 2 s is comfortable defensive slack.
+const HOST_INIT_TIMEOUT_MS = 2000;
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 
 /**
@@ -179,11 +187,18 @@ let bootPromise: Promise<ConnectedHandle<unknown>> | null = null;
 
 /**
  * Target origin used by every outgoing `postMessage`. In Mode A
- * (host shell same-origin) this equals `window.location.origin`,
- * which is the strict default. In Mode B (mobile WebView at a
- * different origin like `http://localhost:1422`) we infer the
- * parent's origin from `document.referrer` at boot and fall back
- * to `'*'` if even that is empty.
+ * (host shell same-origin as the embed) this equals
+ * `window.location.origin`. In Mode B (mobile WebView at a
+ * different origin like `tauri.localhost`) we infer the parent's
+ * origin from `document.referrer` at boot and fall back to `'*'`
+ * if even that is empty.
+ *
+ * Same value drives the INBOUND filter (`expectedOrigin` in
+ * `bootOnce`): we accept `host:init` and other host-to-embed
+ * messages from this origin only. Previously the inbound filter
+ * defaulted to `window.location.origin`, which silently dropped
+ * every cross-origin message and stalled Mode B boots for the
+ * full `HOST_INIT_TIMEOUT_MS`.
  *
  * Outgoing messages carry no secrets (the HF token lives in the
  * URL hash, never in postMessage payloads), so `'*'` is safe as a
@@ -218,11 +233,18 @@ export async function connectToHost<TConfig = unknown>(
 async function bootOnce(
   options: ConnectToHostOptions,
 ): Promise<ConnectedHandle<unknown>> {
-  const expectedOrigin = options.expectedOrigin ?? window.location.origin;
-  // Pin the parent origin once, before any outgoing postMessage so
-  // diagnostic events reach a cross-origin mobile shell instead of
-  // being dropped by the browser. See `parentTargetOrigin` above.
+  // Detect the parent's origin once: drives both the outbound
+  // `postMessage` target AND the inbound message filter. Previously
+  // the inbound filter defaulted to `window.location.origin` (the
+  // EMBED's own origin), which is never what we want for cross-
+  // origin Mode B (mobile shell at `tauri.localhost`, embed at
+  // `*.hf.space`): every incoming `host:init` got dropped, the embed
+  // sat the full `HOST_INIT_TIMEOUT_MS` and fell back to creds.
+  // `detectParentOrigin()` returns the actual parent origin (from
+  // `document.referrer`) or `'*'` if the referrer is empty; either
+  // way it matches what `event.origin` carries on incoming messages.
   parentTargetOrigin = detectParentOrigin();
+  const expectedOrigin = options.expectedOrigin ?? parentTargetOrigin;
 
   // 1. Parse creds from the URL hash and wipe it synchronously.
   const creds = decodeCredsFromHash(window.location.hash);
@@ -274,8 +296,15 @@ async function bootOnce(
   });
   bridge.start();
 
-  // 6. Optional host:init wait. In Mode B (mobile) the parent
-  //    never sends this and we proceed with the hash bundle alone.
+  // 6. Wait for host:init. Both Mode A (same-origin host shell) and
+  //    Mode B (cross-origin mobile shell at e.g. `tauri.localhost`)
+  //    send this message; the cross-origin path was previously
+  //    broken by a `event.origin !== window.location.origin` filter
+  //    that silently dropped parent messages. Origin handling is
+  //    now driven by `expectedOrigin` (computed above from
+  //    `detectParentOrigin()`). On timeout we fall back to
+  //    `liveStateFromCreds`, which carries the same fields as
+  //    `liveStateFromInit` (verified in `liveStateFrom*` below).
   const live = await bridge.awaitHostInit(HOST_INIT_TIMEOUT_MS, creds);
 
   // 7. Sequence: connect → startSession → ensureAwake.
@@ -412,7 +441,12 @@ function createBridge(expectedOrigin: string) {
       if (started) return;
       started = true;
       onMessage = (event: MessageEvent) => {
-        if (event.origin !== expectedOrigin) return;
+        // `'*'` means we couldn't detect the parent's origin (empty
+        // `document.referrer`); fall back to payload-only validation
+        // via `isProtocolMessage`. The protocol carries no secrets,
+        // so a spoofed message can only corrupt our own life-state -
+        // bounded blast radius.
+        if (expectedOrigin !== '*' && event.origin !== expectedOrigin) return;
         if (!isProtocolMessage(event.data)) return;
         dispatchMessage(event.data as HostToEmbedMsg);
       };
@@ -423,9 +457,12 @@ function createBridge(expectedOrigin: string) {
       timeoutMs: number,
       fallbackCreds: CredsBundle,
     ): Promise<LiveState> {
-      // Mode A path: we expect a host:init. Mode B path: parent
-      // is `window` (no iframe), so no one will reply - fall
-      // back to creds after the timeout.
+      // No-iframe path (rare: direct page load for testing): the
+      // parent IS this window, so no one will ever reply - resolve
+      // synchronously from the hash creds. Both real Mode A
+      // (same-origin shell + iframe) and Mode B (cross-origin
+      // shell + iframe) send `host:init` and follow the listener
+      // path below.
       const isInIframe = window.parent !== window;
       if (!isInIframe) {
         current = liveStateFromCreds(fallbackCreds);
@@ -437,7 +474,11 @@ function createBridge(expectedOrigin: string) {
 
       return new Promise((resolve) => {
         const initListener = (event: MessageEvent): void => {
-          if (event.origin !== expectedOrigin) return;
+          // Same wildcard tolerance as the main bridge listener -
+          // accept any origin when we couldn't detect the parent's
+          // (empty referrer). `isProtocolMessage` is the real
+          // payload safety net.
+          if (expectedOrigin !== '*' && event.origin !== expectedOrigin) return;
           if (!isProtocolMessage(event.data)) return;
           const data = event.data as HostToEmbedMsg;
           if (data.type !== 'host:init') return;
