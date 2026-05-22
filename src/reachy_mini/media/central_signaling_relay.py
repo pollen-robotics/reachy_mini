@@ -407,6 +407,130 @@ class CentralSignalingRelay:
         """
         await self._reconnect_now(self.hf_token, reason="Forced relay reconnect")
 
+    def notify_peer_session_failed(
+        self,
+        peer_id: str,
+        reason: str,
+        diagnostic: dict[str, Any],
+    ) -> None:
+        """Forward a daemon-side WebRTC failure to central as ``endSession``.
+
+        Thread-safe entry point intended for callers running on the
+        GStreamer / GLib thread (e.g. ``GstMediaServer``'s negotiation
+        watchdog). It schedules the actual network send onto this
+        relay's own asyncio event loop via
+        ``asyncio.run_coroutine_threadsafe``, so the GStreamer thread
+        never blocks on aiohttp.
+
+        ``peer_id`` is the identifier surfaced by ``webrtcsink``'s
+        ``consumer-added`` signal. ``webrtcsink`` uses the same UUID
+        for the WebRTC consumer and the local GStreamer signaling
+        session, so ``peer_id`` is also the ``local_session_id`` we
+        use for the central <-> local session mapping.
+
+        Args:
+            peer_id: ``webrtcbin`` consumer id == local GStreamer
+                session id.
+            reason: Wire-level reason carried in the ``endSession``
+                envelope; matched against
+                ``SESSION_FAILED_REASON_*`` constants in
+                ``media_server.py``. The JS SDK switches on this to
+                pick a user-facing message (vs. silent retry).
+            diagnostic: Free-form dict (ICE / connection / signaling
+                state, elapsed seconds) included in the daemon log
+                line. Not forwarded over the wire to keep the
+                envelope size bounded; central operators can grep the
+                daemon log if they need detail on a specific failure.
+
+        """
+        if self._thread_loop is None or not self._thread_loop.is_running():
+            logger.debug(
+                "[Central Relay] notify_peer_session_failed: relay loop not running, "
+                "dropping notification (peer_id=%s, reason=%s)",
+                peer_id,
+                reason,
+            )
+            return
+        asyncio.run_coroutine_threadsafe(
+            self._notify_peer_session_failed(peer_id, reason, diagnostic),
+            self._thread_loop,
+        )
+
+    async def _notify_peer_session_failed(
+        self,
+        peer_id: str,
+        reason: str,
+        diagnostic: dict[str, Any],
+    ) -> None:
+        """Inner coroutine for ``notify_peer_session_failed``.
+
+        Runs on the relay's own thread loop. Looks up the mapping,
+        emits ``endSession`` to central, and clears the bookkeeping
+        for this session. Local GStreamer is intentionally NOT
+        notified here: ``webrtcbin`` already considers the peer dead
+        (that's what triggered the watchdog) and emitting
+        ``endSession`` to local would race ``consumer-removed``,
+        producing a confusing pair of "session ended" log lines for
+        the same UUID.
+        """
+        # Walk the mapping in one pass and capture the central id
+        # before mutating the dicts, so we can log a single coherent
+        # line even if a concurrent ``endSession`` from the other
+        # direction is racing us.
+        local_session_id = peer_id
+        central_session_id = self._local_to_central_session.get(local_session_id)
+        if central_session_id is None:
+            logger.warning(
+                "[Central Relay] notify_peer_session_failed: no central session "
+                "mapped for peer_id=%s (reason=%s, diagnostic=%s); session may "
+                "have already been torn down",
+                peer_id,
+                reason,
+                diagnostic,
+            )
+            return
+
+        logger.error(
+            "[Central Relay] daemon-side WebRTC failure: peer_id=%s -> "
+            "central_session=%s reason=%s diagnostic=%s",
+            peer_id,
+            central_session_id,
+            reason,
+            diagnostic,
+        )
+
+        try:
+            await self._send_to_central(
+                {
+                    "type": "endSession",
+                    "sessionId": central_session_id,
+                    "reason": reason,
+                }
+            )
+        except Exception:
+            logger.warning(
+                "[Central Relay] Failed to notify central of peer session failure",
+                exc_info=True,
+            )
+
+        # Clean up our half of the bookkeeping. ``_consumer_removed``
+        # on the GStreamer side will run shortly after and clean up
+        # the local-side mappings too, but we drop our entries
+        # eagerly to avoid an inconsistent window where central
+        # already considers the session done but the relay still has
+        # stale state.
+        self._local_to_central_session.pop(local_session_id, None)
+        self._central_to_local_session.pop(central_session_id, None)
+        self._session_to_local_peer.pop(central_session_id, None)
+        if central_session_id in self._pending_central_sessions:
+            self._pending_central_sessions.remove(central_session_id)
+        if (
+            self._robot_app_lock is not None
+            and not self._central_to_local_session
+            and not self._pending_central_sessions
+        ):
+            self._robot_app_lock.release_remote()
+
     async def _reconnect_now(self, token: Optional[str], reason: str) -> None:
         """Shared core of token-change and force-reconnect paths.
 
