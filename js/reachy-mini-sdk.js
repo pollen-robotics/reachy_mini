@@ -473,6 +473,15 @@ export class ReachyMini extends EventTarget {
         // on duplicates (rare but possible during reconnect).
         this._broadcastWaiters = [];
 
+        // upload_id of the in-flight playMove / playUploadedAudio so
+        // the parameter-less `cancelMove()` / `cancelAudio()` calls
+        // can target the right run. The daemon now requires upload_id
+        // on cancels (otherwise back-to-back plays would cross-cancel).
+        // Apps that hold the id themselves can pass it explicitly
+        // instead — see the cancelMove / cancelAudio JSDoc.
+        this._activeMoveUploadId = null;
+        this._activeAudioUploadId = null;
+
         // startSession() promise plumbing
         this._sessionResolve = null;
         this._sessionReject = null;
@@ -1922,6 +1931,10 @@ export class ReachyMini extends EventTarget {
             throw new Error("playMove: motion must have time + set_target_data");
         }
         const uploadId = makeUploadId();
+        // Publish the id so `cancelMove()` without args targets this
+        // run. Cleared in finally to avoid stale cancels biting the
+        // next run.
+        this._activeMoveUploadId = uploadId;
 
         // Encode the move payload. gzip+base64 typically compresses
         // recorded-move JSON ~3× thanks to repeated float patterns;
@@ -2066,16 +2079,32 @@ export class ReachyMini extends EventTarget {
                 debugLabel: "play_uploaded_move final",
             },
         );
+        // Release the "current move id" pointer so the next no-arg
+        // cancelMove() doesn't target an already-ended run. Guarded
+        // against the unlikely case that a concurrent playMove has
+        // already overwritten it.
+        if (this._activeMoveUploadId === uploadId) {
+            this._activeMoveUploadId = null;
+        }
         return final;
     }
 
     /**
      * Cancel an in-flight `playMove`. Fire-and-forget; the daemon
      * broadcasts the cancelled event which `playMove` resolves with.
-     * @returns {boolean} false if the data channel isn't open
+     *
+     * Pass `uploadId` explicitly to target a specific run; defaults to
+     * the most recent in-flight `playMove`. The daemon now scopes
+     * cancels by upload_id so two back-to-back plays can't cross-cancel
+     * each other — a cancel with no live target is a no-op.
+     *
+     * @param {string} [uploadId] - optional; defaults to the active playMove id
+     * @returns {boolean} false if the data channel isn't open or no run to target
      */
-    cancelMove() {
-        return this._sendCommand({ type: "cancel_move" });
+    cancelMove(uploadId = null) {
+        const id = uploadId ?? this._activeMoveUploadId;
+        if (!id) return false;
+        return this._sendCommand({ type: "cancel_move", upload_id: id });
     }
 
     /**
@@ -2156,15 +2185,32 @@ export class ReachyMini extends EventTarget {
         this._sendCommand({ type: "play_uploaded_audio", upload_id: uploadId });
         const ack = await waiter;
         if (typeof ack.error === "string") throw new Error(ack.error);
+        // Publish the id so a no-arg `cancelAudio()` targets this run.
+        // The daemon has no "audio ended" event, so the id stays set
+        // until either cancelAudio() is called or playUploadedAudio()
+        // is called again with a different id.
+        this._activeAudioUploadId = uploadId;
         return ack;
     }
 
     /**
      * Cancel an in-flight `playUploadedAudio`. Fire-and-forget.
-     * @returns {boolean} false if the data channel isn't open
+     *
+     * Pass `uploadId` explicitly to target a specific run; defaults
+     * to the most recent `playUploadedAudio`. The daemon scopes
+     * cancels by upload_id so a stale cancel won't kill the audio
+     * attached to a concurrently-running `playMove`.
+     *
+     * @param {string} [uploadId] - optional; defaults to the active playUploadedAudio id
+     * @returns {boolean} false if the data channel isn't open or no run to target
      */
-    cancelAudio() {
-        return this._sendCommand({ type: "cancel_audio" });
+    cancelAudio(uploadId = null) {
+        const id = uploadId ?? this._activeAudioUploadId;
+        if (!id) return false;
+        if (this._activeAudioUploadId === id) {
+            this._activeAudioUploadId = null;
+        }
+        return this._sendCommand({ type: "cancel_audio", upload_id: id });
     }
 
     // ─── Private ─────────────────────────────────────────────────────────

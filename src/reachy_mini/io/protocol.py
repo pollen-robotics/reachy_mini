@@ -359,9 +359,10 @@ class RestartDaemonCmd(BaseModel):
 #                          server-to-client shape below): one at the
 #                          moment the playback loop starts, one when
 #                          it ends (finished / cancelled / error)
-#   5. CancelMoveCmd       flips backend._move_cancelled so the
-#                          running playback loop exits at the next
-#                          tick. Idempotent
+#   5. CancelMoveCmd       cancels the play_uploaded_move that
+#                          owns the given upload_id, via a per-run
+#                          cancellation token. Idempotent; no-op for
+#                          stale ids that don't match the active run
 #
 # Slots are in-memory only; evicted on play-finish, cancel, or TTL.
 #
@@ -398,7 +399,10 @@ class UploadMoveStartCmd(BaseModel):
 
     type: Literal["upload_move_start"] = "upload_move_start"
     upload_id: str
-    total_chunks: int = Field(..., ge=1, le=65536)
+    # 4096 chunks × ~16 KB = 64 MB max wire payload. A 10-minute 100 Hz
+    # gzipped-base64 move is ~5 MB / ~300 chunks; the cap exists to
+    # bound RAM on the CM4 if a misbehaving client over-declares.
+    total_chunks: int = Field(..., ge=1, le=4096)
     description: str = ""
     estimated_duration_s: float = Field(default=0.0, ge=0.0)
     encoding: Literal["json", "gzip+base64"] = "json"
@@ -416,7 +420,10 @@ class UploadMoveChunkCmd(BaseModel):
     type: Literal["upload_move_chunk"] = "upload_move_chunk"
     upload_id: str
     chunk_index: int = Field(..., ge=0)
-    chunk: str
+    # The JS SDK slices at 12 KB; the 16 KB ceiling leaves headroom for
+    # base64/JSON envelope overhead while still blocking pathological
+    # multi-MB single-chunk sends from a misbehaving client.
+    chunk: str = Field(..., max_length=16 * 1024)
 
 
 class UploadMoveFinishCmd(BaseModel):
@@ -451,7 +458,12 @@ class UploadAudioStartCmd(BaseModel):
 
     type: Literal["upload_audio_start"] = "upload_audio_start"
     upload_id: str
-    total_chunks: int = Field(..., ge=1, le=262144)
+    # 16384 chunks × ~16 KB = 256 MB max wire payload. A 5-minute
+    # 16 kHz mono PCM song base64-encodes to ~13 MB / ~850 chunks,
+    # so this cap gives roughly 1.5 hours of headroom without
+    # exposing the CM4 to multi-GB allocations on a misbehaving
+    # client.
+    total_chunks: int = Field(..., ge=1, le=16384)
     encoding: Literal["wav-base64"] = "wav-base64"
     description: str = ""
 
@@ -467,15 +479,17 @@ class UploadAudioChunkCmd(BaseModel):
     type: Literal["upload_audio_chunk"] = "upload_audio_chunk"
     upload_id: str
     chunk_index: int = Field(..., ge=0)
-    chunk: str
+    # Matches UploadMoveChunkCmd.chunk: see comment there.
+    chunk: str = Field(..., max_length=16 * 1024)
 
 
 class UploadAudioFinishCmd(BaseModel):
     """Close an audio slot. Fire-and-forget.
 
     Daemon decodes the base64-assembled payload and writes the
-    resulting WAV bytes to a temp file (under
-    ``/tmp/marionette-audio/{upload_id}.wav``).  At
+    resulting WAV bytes to a temp file under
+    ``<platform-tempdir>/reachy-mini-uploads/audio/{upload_id}.wav``
+    (``/tmp`` on Linux/macOS, ``%TEMP%`` on Windows).  At
     play_uploaded_move time the path is attached as ``sound_path`` on
     the move object so Backend.play_move starts GStreamer playbin in
     lockstep with the motion loop.  The temp file is deleted after
@@ -532,15 +546,21 @@ class PlayUploadedMoveCmd(BaseModel):
 
 
 class CancelMoveCmd(BaseModel):
-    """Cancel any currently-running play_move / goto on the backend.
+    """Cancel the play_uploaded_move identified by ``upload_id``.
 
-    Fire-and-forget. Flips ``backend._move_cancelled`` so the playback
-    loop exits at its next tick. play_move resets the flag on entry
-    so a stale cancel from a previous run cannot leak across plays.
-    No-op if nothing is running.
+    Fire-and-forget. The backend cancels only if the currently-running
+    uploaded move's id matches ``upload_id`` — a stale cancel arriving
+    after the targeted move ended (or against a never-started id) is a
+    no-op. Scoped to uploaded moves; direct ``Backend.play_move`` calls
+    (e.g. via ``goto_target``) are never cancelled by this command.
+
+    Goes through the per-run cancellation token created by
+    ``_async_play_uploaded_move`` so two back-to-back plays can't
+    cross-cancel each other.
     """
 
     type: Literal["cancel_move"] = "cancel_move"
+    upload_id: str
 
 
 class PlayUploadedAudioCmd(BaseModel):
@@ -567,13 +587,17 @@ class PlayUploadedAudioCmd(BaseModel):
 
 
 class CancelAudioCmd(BaseModel):
-    """Stop a running play_uploaded_audio. Fire-and-forget.
+    """Stop the play_uploaded_audio identified by ``upload_id``. Fire-and-forget.
 
-    Calls stop_sound() on the media server.  Idempotent; no-op if
-    nothing is playing.
+    The backend cancels only if the currently-playing standalone audio's
+    id matches ``upload_id``; a stale cancel against a different (or
+    already-finished) id is a no-op. Won't touch audio attached to an
+    in-flight play_uploaded_move — that audio is cancelled together with
+    the move via :class:`CancelMoveCmd`.
     """
 
     type: Literal["cancel_audio"] = "cancel_audio"
+    upload_id: str
 
 
 AnyCommand = Annotated[
