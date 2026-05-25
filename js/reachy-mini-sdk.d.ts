@@ -60,6 +60,13 @@ export interface RobotState {
 /** SDK constructor options. */
 export interface ReachyMiniOptions {
   signalingUrl?: string;
+  /**
+   * @deprecated The SDK no longer acquires the user's microphone. A silent
+   * placeholder audio sender is always set up so apps can `replaceTrack`
+   * their own audio (TTS, files, or — for teleop — the user's mic) onto
+   * it. This option is parsed for backward compatibility but has no
+   * effect.
+   */
   enableMicrophone?: boolean;
   clientId?: string;
   appName?: string;
@@ -156,8 +163,10 @@ export interface ReachyMiniInstance extends EventTarget {
   /** Underlying RTCPeerConnection. Apps can read it to inspect
    *  audio / video transceivers. */
   _pc: RTCPeerConnection | null;
-  /** Local microphone MediaStream acquired by the SDK on
-   *  `startSession()` when `enableMicrophone` is `true`. */
+  /** Silent placeholder MediaStream the SDK feeds the WebRTC audio
+   *  sender so robot-speaker output can negotiate sendrecv. Apps inject
+   *  their own audio (TTS, files, the user's mic for teleop) by calling
+   *  `replaceTrack()` on the audio sender from `_pc.getSenders()`. */
   _micStream: MediaStream | null;
 
   authenticate(): Promise<boolean>;
