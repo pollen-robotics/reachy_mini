@@ -4,7 +4,7 @@
  *
  * QUICK START
  * ───────────
- *   import { ReachyMini } from "./reachy-mini.js";
+ *   import { ReachyMini } from "./reachy-mini-sdk.js";
  *   const robot = new ReachyMini();
  *
  *   // 1. Auth (HuggingFace OAuth — required for the signaling server)
@@ -35,6 +35,18 @@
  *   });
  *   robot.playSound("wake_up.wav");   // filename on robot
  *   const ver = await robot.getVersion(); // e.g. "1.5.1"
+ *
+ *   // …or play a recorded move (motion + optional audio) on the daemon's
+ *   //  local clock — smooth on wireless robots, single-clock A/V sync.
+ *   await robot.playMove(motion, { audioBlob, audioLeadMs: -100 });
+ *   //  robot.cancelMove() to stop early.
+ *   //
+ *   //  For record-time flows that need the same audio pipeline at both
+ *   //  capture and replay:
+ *   //    const audioId = await robot.uploadAudio(blob);
+ *   //    await robot.playUploadedAudio(audioId);   // sync anchor
+ *   //    // …start your motion capture now…
+ *   //    robot.cancelAudio();                       // when capture stops
  *
  *   // 6. Receive live state (emitted every ~500 ms while streaming; call
  *   //    robot.requestState() yourself for higher rates — see its JSDoc).
@@ -325,6 +337,50 @@ function sdpHasAudioSendRecv(sdp) {
     return false;
 }
 
+// ─── Daemon-side upload helpers ──────────────────────────────────────────────
+// Wire-level constants and pure helpers used by playMove / uploadAudio /
+// playUploadedAudio. Private to this module — apps call the public methods.
+
+// Conservative per-message size for the data channel. 16 KB is the cross-
+// browser safe ceiling; we slice payloads at 12 KB and let the JSON envelope
+// add ~80 bytes.
+const UPLOAD_CHUNK_SIZE = 12 * 1024;
+// Backpressure thresholds: pause sending if `bufferedAmount` climbs over the
+// high watermark; resume once it drains below the low watermark. WebRTC's
+// SCTP can buffer plenty, but spiking it to tens of megabytes degrades every
+// other channel on the same peer connection.
+const UPLOAD_BUFFERED_HIGH_WATER = 1 * 1024 * 1024;
+const UPLOAD_BUFFERED_LOW_WATER = 512 * 1024;
+
+function hasCompressionStream() {
+    return typeof CompressionStream !== "undefined";
+}
+
+/** Cheap unique upload id; collision odds within a session are negligible. */
+function makeUploadId() {
+    return "u" + Math.random().toString(36).slice(2, 11)
+        + Date.now().toString(36);
+}
+
+/** Base64-encode a Uint8Array, chunking to avoid call-stack overflow on multi-MB blobs. */
+function bytesToBase64(bytes) {
+    let str = "";
+    const STEP = 0x8000;
+    for (let i = 0; i < bytes.length; i += STEP) {
+        str += String.fromCharCode.apply(null, bytes.subarray(i, i + STEP));
+    }
+    return btoa(str);
+}
+
+/** Base64(gzip(utf8(s))) via the browser CompressionStream API. */
+async function gzipBase64(jsonStr) {
+    const enc = new TextEncoder().encode(jsonStr);
+    const compressed = await new Response(
+        new Blob([enc]).stream().pipeThrough(new CompressionStream("gzip"))
+    ).arrayBuffer();
+    return bytesToBase64(new Uint8Array(compressed));
+}
+
 // ─── ReachyMini class ────────────────────────────────────────────────────────
 
 export class ReachyMini extends EventTarget {
@@ -417,6 +473,23 @@ export class ReachyMini extends EventTarget {
         // `unsubscribe_logs`. We keep a single daemon-side stream and
         // fan out to local subscribers in `_handleRobotMessage`.
         this._logSubscribers = new Set();
+
+        // Pending one-shot broadcast waiters used by playMove /
+        // playUploadedAudio. Each entry is a { predicate, resolve, timer }
+        // installed by `_waitForBroadcast`. Dispatched in `_handleRobotMessage`
+        // when the daemon broadcasts a matching {type, upload_id, ...}
+        // event. LIFO order so the most recently registered waiter wins
+        // on duplicates (rare but possible during reconnect).
+        this._broadcastWaiters = [];
+
+        // upload_id of the in-flight playMove / playUploadedAudio so
+        // the parameter-less `cancelMove()` / `cancelAudio()` calls
+        // can target the right run. The daemon now requires upload_id
+        // on cancels (otherwise back-to-back plays would cross-cancel).
+        // Apps that hold the id themselves can pass it explicitly
+        // instead — see the cancelMove / cancelAudio JSDoc.
+        this._activeMoveUploadId = null;
+        this._activeAudioUploadId = null;
 
         // startSession() promise plumbing
         this._sessionResolve = null;
@@ -1846,10 +1919,383 @@ export class ReachyMini extends EventTarget {
         };
     }
 
+    // ─── Daemon-side recorded-move playback ──────────────────────────────
+    //
+    // These methods talk to the daemon's `feature/daemon-side-move-upload`
+    // protocol: motion (and optional audio) are uploaded once over the
+    // data channel, then the daemon's play_move loop runs at the requested
+    // frequency server-side — no per-frame WebRTC round-trip, smooth on
+    // wireless robots. Audio, when present, plays on the same daemon-side
+    // GStreamer pipeline so motion and sound share a single clock.
+    //
+    // For record-time flows that need the SAME audio pipeline at capture
+    // and replay (so pipeline latency cancels), use uploadAudio +
+    // playUploadedAudio to play audio standalone with a sync anchor.
+
+    /**
+     * Upload a recorded move (and optionally its audio) and play it on
+     * the daemon's local clock. Resolves when playback ends with the
+     * daemon's final broadcast — `{finished: true}`, `{cancelled: true}`,
+     * or `{error: string}`.
+     *
+     * `audioLeadMs` shifts audio relative to motion:
+     *  - Positive: audio fires N ms BEFORE motion (compensates motor pickup).
+     *  - Negative: motion fires N ms BEFORE audio (compensates pipeline warmup).
+     *  - Default `-100` is the empirically-measured system-wide constant
+     *    (combined motor + GStreamer playbin warmup); tune per setup only
+     *    if you've measured a different value.
+     *
+     * @param {{ time: number[], set_target_data: object[] }} motion
+     * @param {object} [opts]
+     * @param {Blob}    [opts.audioBlob]            - canonical 16 kHz mono PCM WAV
+     * @param {number}  [opts.audioLeadMs=-100]
+     * @param {string}  [opts.description="move"]
+     * @param {"gzip+base64"|"json"} [opts.encoding="gzip+base64"]
+     * @param {number}  [opts.playFrequency=100]
+     * @param {number}  [opts.initialGotoDuration=0]
+     * @param {number}  [opts.startTimeoutMs=8000]
+     * @param {(p: { phase: string, sent?: number, total?: number,
+     *               bytes?: number, encoding?: string,
+     *               duration_s?: number }) => void} [opts.onProgress]
+     * @param {(s: { duration_s: number, has_audio: boolean }) => void} [opts.onStarted]
+     * @returns {Promise<{ finished?: boolean, cancelled?: boolean,
+     *                     error?: string, has_audio?: boolean }>}
+     */
+    async playMove(motion, {
+        audioBlob = null,
+        audioLeadMs = -100,
+        description = "move",
+        encoding = "gzip+base64",
+        playFrequency = 100,
+        initialGotoDuration = 0,
+        startTimeoutMs = 8000,
+        onProgress = () => {},
+        onStarted = () => {},
+    } = {}) {
+        if (!this._dc || this._dc.readyState !== "open") {
+            throw new Error("data channel not open");
+        }
+        if (!motion?.time?.length || !motion?.set_target_data?.length) {
+            throw new Error("playMove: motion must have time + set_target_data");
+        }
+        const uploadId = makeUploadId();
+        // Publish the id so `cancelMove()` without args targets this
+        // run. Cleared in finally to avoid stale cancels biting the
+        // next run.
+        this._activeMoveUploadId = uploadId;
+
+        // Encode the move payload. gzip+base64 typically compresses
+        // recorded-move JSON ~3× thanks to repeated float patterns;
+        // falls back to plain JSON if CompressionStream is missing.
+        const moveDict = {
+            description,
+            time: motion.time,
+            set_target_data: motion.set_target_data,
+        };
+        const jsonStr = JSON.stringify(moveDict);
+        let payload;
+        let effectiveEncoding;
+        if (encoding === "gzip+base64" && hasCompressionStream()) {
+            payload = await gzipBase64(jsonStr);
+            effectiveEncoding = "gzip+base64";
+        } else {
+            payload = jsonStr;
+            effectiveEncoding = "json";
+        }
+        const totalChunks = Math.ceil(payload.length / UPLOAD_CHUNK_SIZE) || 1;
+
+        onProgress({
+            phase: "starting",
+            sent: 0,
+            total: totalChunks,
+            bytes: payload.length,
+            encoding: effectiveEncoding,
+        });
+
+        // 1. Open the move slot.
+        this._sendCommand({
+            type: "upload_move_start",
+            upload_id: uploadId,
+            total_chunks: totalChunks,
+            description,
+            encoding: effectiveEncoding,
+        });
+        // 2. Pipeline motion chunks. No per-chunk acks; pace on
+        //    bufferedAmount so a long song doesn't blow up the channel.
+        for (let i = 0; i < totalChunks; i++) {
+            if (this._dc.bufferedAmount > UPLOAD_BUFFERED_HIGH_WATER) {
+                await this._awaitDataChannelDrain();
+            }
+            const start = i * UPLOAD_CHUNK_SIZE;
+            this._sendCommand({
+                type: "upload_move_chunk",
+                upload_id: uploadId,
+                chunk_index: i,
+                chunk: payload.slice(start, start + UPLOAD_CHUNK_SIZE),
+            });
+            onProgress({ phase: "upload", sent: i + 1, total: totalChunks });
+        }
+        // 3. Close the slot. Daemon parses synchronously.
+        this._sendCommand({ type: "upload_move_finish", upload_id: uploadId });
+        onProgress({ phase: "uploaded", sent: totalChunks, total: totalChunks });
+
+        // 3b. Optional audio: pipelined under the SAME upload_id so the
+        //     daemon pairs it with the move at play time. Raw WAV bytes
+        //     are base64-encoded (no gzip; PCM compresses poorly).
+        if (audioBlob) {
+            const rawBytes = new Uint8Array(await audioBlob.arrayBuffer());
+            const audioB64 = bytesToBase64(rawBytes);
+            const audioTotal = Math.ceil(audioB64.length / UPLOAD_CHUNK_SIZE) || 1;
+            onProgress({
+                phase: "audio-starting",
+                sent: 0,
+                total: audioTotal,
+                bytes: audioB64.length,
+            });
+            this._sendCommand({
+                type: "upload_audio_start",
+                upload_id: uploadId,
+                total_chunks: audioTotal,
+                encoding: "wav-base64",
+                description,
+            });
+            for (let i = 0; i < audioTotal; i++) {
+                if (this._dc.bufferedAmount > UPLOAD_BUFFERED_HIGH_WATER) {
+                    await this._awaitDataChannelDrain();
+                }
+                const start = i * UPLOAD_CHUNK_SIZE;
+                this._sendCommand({
+                    type: "upload_audio_chunk",
+                    upload_id: uploadId,
+                    chunk_index: i,
+                    chunk: audioB64.slice(start, start + UPLOAD_CHUNK_SIZE),
+                });
+                onProgress({ phase: "audio-upload", sent: i + 1, total: audioTotal });
+            }
+            this._sendCommand({ type: "upload_audio_finish", upload_id: uploadId });
+            onProgress({ phase: "audio-uploaded", sent: audioTotal, total: audioTotal });
+        }
+
+        // 4. Trigger playback; await the daemon's "started" broadcast.
+        this._sendCommand({
+            type: "play_uploaded_move",
+            upload_id: uploadId,
+            play_frequency: playFrequency,
+            initial_goto_duration: initialGotoDuration,
+            audio_lead_ms: audioLeadMs,
+        });
+        let startedAck;
+        try {
+            startedAck = await this._waitForBroadcast(
+                (m) =>
+                    m?.type === "play_uploaded_move"
+                    && m?.upload_id === uploadId
+                    && (m.started === true || typeof m.error === "string"),
+                { timeoutMs: startTimeoutMs, debugLabel: "play_uploaded_move started" },
+            );
+        } catch (e) {
+            throw new Error(
+                "Daemon did not respond to play_uploaded_move "
+                + "(requires the reachy_mini daemon with feature/daemon-side-move-upload). "
+                + `Underlying: ${e.message}`,
+            );
+        }
+        if (typeof startedAck.error === "string") {
+            throw new Error(`play_uploaded_move: ${startedAck.error}`);
+        }
+        try {
+            onStarted({
+                duration_s: startedAck.duration_s,
+                has_audio: startedAck.has_audio === true,
+            });
+        } catch (e) {
+            // onStarted is user code — never let it abort playback.
+            console.warn("playMove.onStarted threw:", e);
+        }
+        onProgress({ phase: "playing", duration_s: startedAck.duration_s });
+
+        // 5. Wait for the final broadcast.
+        const final = await this._waitForBroadcast(
+            (m) =>
+                m?.type === "play_uploaded_move"
+                && m?.upload_id === uploadId
+                && (m.finished === true
+                    || m.cancelled === true
+                    || typeof m.error === "string"),
+            {
+                timeoutMs: (startedAck.duration_s + 30) * 1000,
+                debugLabel: "play_uploaded_move final",
+            },
+        );
+        // Release the "current move id" pointer so the next no-arg
+        // cancelMove() doesn't target an already-ended run. Guarded
+        // against the unlikely case that a concurrent playMove has
+        // already overwritten it.
+        if (this._activeMoveUploadId === uploadId) {
+            this._activeMoveUploadId = null;
+        }
+        return final;
+    }
+
+    /**
+     * Cancel an in-flight `playMove`. Fire-and-forget; the daemon
+     * broadcasts the cancelled event which `playMove` resolves with.
+     *
+     * Pass `uploadId` explicitly to target a specific run; defaults to
+     * the most recent in-flight `playMove`. The daemon now scopes
+     * cancels by upload_id so two back-to-back plays can't cross-cancel
+     * each other — a cancel with no live target is a no-op.
+     *
+     * @param {string} [uploadId] - optional; defaults to the active playMove id
+     * @returns {boolean} false if the data channel isn't open or no run to target
+     */
+    cancelMove(uploadId = null) {
+        const id = uploadId ?? this._activeMoveUploadId;
+        if (!id) return false;
+        return this._sendCommand({ type: "cancel_move", upload_id: id });
+    }
+
+    /**
+     * Upload audio to the daemon as a standalone slot (no motion attached).
+     * Used by recording flows that want the SAME audio pipeline at record
+     * time and play time — pipeline latency cancels, so a single per-system
+     * `audioLeadMs` is enough for sync.
+     *
+     * @param {Blob} audioBlob - canonical 16 kHz mono PCM WAV
+     * @param {object} [opts]
+     * @param {string} [opts.description="audio"]
+     * @param {(p: { phase: string, sent?: number, total?: number,
+     *               bytes?: number }) => void} [opts.onProgress]
+     * @returns {Promise<string>} uploadId — pair with playUploadedAudio
+     */
+    async uploadAudio(audioBlob, { description = "audio", onProgress = () => {} } = {}) {
+        if (!this._dc || this._dc.readyState !== "open") {
+            throw new Error("data channel not open");
+        }
+        if (!(audioBlob instanceof Blob)) {
+            throw new TypeError("uploadAudio: expected a Blob");
+        }
+        const uploadId = makeUploadId();
+        const rawBytes = new Uint8Array(await audioBlob.arrayBuffer());
+        const audioB64 = bytesToBase64(rawBytes);
+        const total = Math.ceil(audioB64.length / UPLOAD_CHUNK_SIZE) || 1;
+        onProgress({ phase: "audio-starting", sent: 0, total, bytes: audioB64.length });
+        this._sendCommand({
+            type: "upload_audio_start",
+            upload_id: uploadId,
+            total_chunks: total,
+            encoding: "wav-base64",
+            description,
+        });
+        for (let i = 0; i < total; i++) {
+            if (this._dc.bufferedAmount > UPLOAD_BUFFERED_HIGH_WATER) {
+                await this._awaitDataChannelDrain();
+            }
+            const start = i * UPLOAD_CHUNK_SIZE;
+            this._sendCommand({
+                type: "upload_audio_chunk",
+                upload_id: uploadId,
+                chunk_index: i,
+                chunk: audioB64.slice(start, start + UPLOAD_CHUNK_SIZE),
+            });
+            onProgress({ phase: "audio-upload", sent: i + 1, total });
+        }
+        this._sendCommand({ type: "upload_audio_finish", upload_id: uploadId });
+        onProgress({ phase: "audio-uploaded", sent: total, total });
+        return uploadId;
+    }
+
+    /**
+     * Trigger daemon-side playback of a previously-uploaded audio.
+     * Resolves when the daemon broadcasts the "started" event — this is
+     * the sync anchor callers use as t=0 for related capture.
+     *
+     * The daemon does NOT emit a finished event for standalone audio;
+     * callers know the duration from the WAV header and send
+     * `cancelAudio()` when they're done (e.g. recording stopped).
+     *
+     * @param {string} uploadId
+     * @param {object} [opts]
+     * @param {number} [opts.timeoutMs=8000]
+     * @returns {Promise<{ started: true }>}
+     */
+    async playUploadedAudio(uploadId, { timeoutMs = 8000 } = {}) {
+        if (!this._dc || this._dc.readyState !== "open") {
+            throw new Error("data channel not open");
+        }
+        const waiter = this._waitForBroadcast(
+            (m) =>
+                m?.type === "play_uploaded_audio"
+                && m?.upload_id === uploadId
+                && (m.started === true || typeof m.error === "string"),
+            { timeoutMs, debugLabel: "play_uploaded_audio started" },
+        );
+        this._sendCommand({ type: "play_uploaded_audio", upload_id: uploadId });
+        const ack = await waiter;
+        if (typeof ack.error === "string") throw new Error(ack.error);
+        // Publish the id so a no-arg `cancelAudio()` targets this run.
+        // The daemon has no "audio ended" event, so the id stays set
+        // until either cancelAudio() is called or playUploadedAudio()
+        // is called again with a different id.
+        this._activeAudioUploadId = uploadId;
+        return ack;
+    }
+
+    /**
+     * Cancel an in-flight `playUploadedAudio`. Fire-and-forget.
+     *
+     * Pass `uploadId` explicitly to target a specific run; defaults
+     * to the most recent `playUploadedAudio`. The daemon scopes
+     * cancels by upload_id so a stale cancel won't kill the audio
+     * attached to a concurrently-running `playMove`.
+     *
+     * @param {string} [uploadId] - optional; defaults to the active playUploadedAudio id
+     * @returns {boolean} false if the data channel isn't open or no run to target
+     */
+    cancelAudio(uploadId = null) {
+        const id = uploadId ?? this._activeAudioUploadId;
+        if (!id) return false;
+        if (this._activeAudioUploadId === id) {
+            this._activeAudioUploadId = null;
+        }
+        return this._sendCommand({ type: "cancel_audio", upload_id: id });
+    }
+
     // ─── Private ─────────────────────────────────────────────────────────
 
     _emit(name, detail) {
         this.dispatchEvent(new CustomEvent(name, { detail }));
+    }
+
+    /**
+     * Register a one-shot waiter for a daemon broadcast event. Resolves
+     * with the matching payload, rejects on `timeoutMs`. Used internally
+     * by `playMove` / `playUploadedAudio`.
+     */
+    _waitForBroadcast(predicate, { timeoutMs = 5000, debugLabel = "" } = {}) {
+        return new Promise((resolve, reject) => {
+            const slot = { predicate, resolve };
+            slot.timer = setTimeout(() => {
+                const i = this._broadcastWaiters.indexOf(slot);
+                if (i !== -1) this._broadcastWaiters.splice(i, 1);
+                reject(new Error(`broadcast timeout (${timeoutMs} ms): ${debugLabel}`));
+            }, timeoutMs);
+            this._broadcastWaiters.push(slot);
+        });
+    }
+
+    /**
+     * Wait until `_dc.bufferedAmount` drops below the low watermark. Polls
+     * at ~30 ms; browsers don't expose a uniform event for SCTP data channels
+     * (`onbufferedamountlow` is patchy across engines).
+     */
+    async _awaitDataChannelDrain() {
+        while (this._dc && this._dc.bufferedAmount > UPLOAD_BUFFERED_LOW_WATER) {
+            await new Promise((r) => setTimeout(r, 30));
+            if (!this._dc || this._dc.readyState !== "open") {
+                throw new Error("data channel closed mid-upload");
+            }
+        }
     }
 
     async _sendToServer(message) {
@@ -2202,6 +2648,21 @@ export class ReachyMini extends EventTarget {
         }
         if (data.error) {
             this._emit('error', { source: 'robot', error: data.error });
+        }
+        // Daemon-side upload/play broadcasts: dispatch to any waiter
+        // whose predicate matches. Iterating in reverse keeps the
+        // newest registration first (FIFO across same-predicate
+        // duplicates would yield the wrong upload on a stale resend).
+        if (this._broadcastWaiters.length > 0) {
+            for (let i = this._broadcastWaiters.length - 1; i >= 0; i--) {
+                const slot = this._broadcastWaiters[i];
+                if (slot.predicate(data)) {
+                    this._broadcastWaiters.splice(i, 1);
+                    clearTimeout(slot.timer);
+                    slot.resolve(data);
+                    return;
+                }
+            }
         }
     }
 

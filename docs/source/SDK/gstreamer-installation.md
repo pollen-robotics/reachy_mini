@@ -75,7 +75,15 @@ To build and install the WebRTC plugin, run the following commands:
 # Clone the GStreamer Rust plugins repository
 git clone https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git
 cd gst-plugins-rs
-git checkout 0.14.1
+# 0.14.5 ships a critical webrtcsink fix for a deadlock between
+# remote description and ICE handling that manifested on the
+# daemon as the historical "stuck at session" UX (the JS client
+# spinning forever because libnice never reached `connected`).
+# Older 0.14.x tags (0.14.1, 0.14.2, 0.14.3) do NOT carry this
+# fix; see the upstream CHANGELOG. The daemon-side negotiation
+# watchdog (`reachy_mini.media.media_server`) is the safety net,
+# but pinning to a fixed plugin means that net should rarely fire.
+git checkout 0.14.5
 
 # Install the cargo-c build tool
 cargo install cargo-c
