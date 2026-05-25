@@ -26,9 +26,9 @@ import logging
 import os
 import platform
 import time
-from collections.abc import Callable
-from threading import Thread
-from typing import Any, Dict, Optional
+from dataclasses import dataclass, field
+from threading import Lock, Thread
+from typing import Any, Callable, Dict, Optional
 
 import gi
 import numpy as np
@@ -56,6 +56,65 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst, GstApp  # noqa: E402, F401
+
+# Hard cap on how long a freshly-added consumer is allowed to spend
+# before its `webrtcbin.connection-state` reaches "connected". In a
+# healthy run the negotiation completes in well under a second
+# (offer/answer + a few ICE candidate pairs). Past this deadline,
+# we conclude the negotiation is stuck — the typical culprit is
+# libnice frozen mid-`CHECKING` (a known crash mode of certain
+# libnice versions) or a downstream networking issue we can't see
+# from the daemon. We notify the central so the JS client gets a
+# clean rejection instead of a spinner-on-blank-page UX.
+#
+# 12 s is generous for a healthy negotiation and short enough that
+# the user sees the failure quickly. Tuned conservatively because
+# the daemon has no way to distinguish "slow ICE on a flaky
+# network" from "libnice frozen" — at this duration both are bad.
+ICE_NEGOTIATION_DEADLINE_S = 12
+
+# `reason` strings sent to central via the existing `endSession`
+# message. Picked to be parseable by the JS SDK so a user-facing
+# message can map to a precise cause. See
+# `central_signaling_relay.notify_peer_session_failed` for the
+# wire-level emission.
+SESSION_FAILED_REASON_ICE_TIMEOUT = "ice_negotiation_timeout"
+SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
+
+
+@dataclass
+class _PeerWebRTCState:
+    """Live state of a single WebRTC peer's negotiation.
+
+    Used by the watchdog to decide if the session is making progress.
+    Updated on every `notify::*-state` callback fired by webrtcbin.
+    Held under :attr:`GstMediaServer._peer_states_lock` because
+    GStreamer signals can fire on internal threads.
+    """
+
+    peer_id: str
+    ice_state: str = "new"
+    conn_state: str = "new"
+    signaling_state: str = "new"
+    added_at: float = field(default_factory=time.monotonic)
+    # GLib timer source ID (returned by `GLib.timeout_add_seconds`).
+    # Kept so the watchdog can be cancelled if the peer reaches a
+    # terminal state (connected, removed) before the deadline.
+    watchdog_source_id: Optional[int] = None
+    # Whether the failure callback has already fired for this peer.
+    # Prevents double-notification when both `connection-state ==
+    # failed` AND the deadline timer fire close together.
+    failure_notified: bool = False
+
+    def asdict(self) -> Dict[str, Any]:
+        """Build a serialisable snapshot for diagnostics in failure notifications."""
+        return {
+            "peer_id": self.peer_id,
+            "ice_state": self.ice_state,
+            "conn_state": self.conn_state,
+            "signaling_state": self.signaling_state,
+            "elapsed_s": round(time.monotonic() - self.added_at, 2),
+        }
 
 
 class GstMediaServer:
@@ -137,6 +196,23 @@ class GstMediaServer:
         # leaves; used by the backend to free per-peer resources such
         # as the journalctl subprocess for a `subscribe_logs` stream.
         self._on_peer_disconnect: Optional[Callable[[str], None]] = None
+        # Optional callback fired by the ICE negotiation watchdog when
+        # a peer's `webrtcbin` is stuck mid-negotiation (see
+        # `_check_negotiation_deadline`). Wired by the daemon to the
+        # central signaling relay so the JS client gets a typed
+        # `endSession` instead of a spinner. Signature:
+        # `(peer_id, reason, diagnostic_dict) -> None`.
+        self._on_session_failed: Optional[
+            Callable[[str, str, Dict[str, Any]], None]
+        ] = None
+        self._peer_states: Dict[str, _PeerWebRTCState] = {}
+        # GStreamer signals (`notify::*`) can fire on internal threads
+        # owned by webrtcbin / libnice, while consumer-added /
+        # consumer-removed run on the GLib main thread. The state
+        # dict is touched from both, so we take a lock around every
+        # mutation. The critical sections are tiny (a few field
+        # writes) so contention is negligible.
+        self._peer_states_lock = Lock()
         self._incoming_audio: Dict[str, Dict[str, Any]] = {}
         self._playbin: Optional[Gst.Element] = None
         self._head_wobbler: Optional[HeadWobbler] = None
@@ -217,6 +293,12 @@ class GstMediaServer:
         # Listen for incoming audio pads from the browser (bidirectional audio)
         webrtcbin.connect("pad-added", self._on_consumer_pad_added, peer_id)
 
+        # Watchdog wiring: track ICE / connection / signaling state on
+        # this peer's webrtcbin so we can detect a stuck negotiation
+        # and report it (instead of letting the JS client spin
+        # forever). See `ICE_NEGOTIATION_DEADLINE_S`.
+        self._install_negotiation_watchdog(peer_id, webrtcbin)
+
     # GstWebRTCRTPTransceiverDirection enum values
     _WEBRTC_DIRECTION_SENDRECV = 4
 
@@ -252,6 +334,9 @@ class GstMediaServer:
     ) -> None:
         self._logger.info(f"consumer removed: {peer_id}")
         self._cleanup_incoming_audio(peer_id)
+        # Cancel any outstanding watchdog for this peer; the consumer
+        # is gone so there's nothing left to police.
+        self._teardown_negotiation_watchdog(peer_id)
         if self._on_peer_disconnect is not None:
             try:
                 self._on_peer_disconnect(peer_id)
@@ -385,6 +470,19 @@ class GstMediaServer:
             "pad": pad,
         }
         self._logger.info(f"Audio playback pipeline started for peer {peer_id}")
+
+    def _on_playback_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, peer_id: str
+    ) -> bool:
+        """Handle messages from a per-peer audio playback pipeline."""
+        if msg.type == Gst.MessageType.ERROR:
+            err, debug = msg.parse_error()
+            self._logger.error(f"Audio playback error for {peer_id}: {err} {debug}")
+            return False
+        if msg.type == Gst.MessageType.EOS:
+            self._logger.info(f"Audio playback EOS for {peer_id}")
+            return False
+        return True
 
     def _cleanup_incoming_audio(self, peer_id: str) -> None:
         """Remove the incoming-audio pad probe and playback pipeline for a peer."""
@@ -1152,6 +1250,258 @@ class GstMediaServer:
         loop before touching shared state.
         """
         self._on_peer_disconnect = handler
+
+    def set_session_failed_handler(
+        self,
+        handler: Callable[[str, str, Dict[str, Any]], None],  # (peer_id, reason, diag)
+    ) -> None:
+        """Set a callback fired when the negotiation watchdog gives up on a peer.
+
+        The callback runs on the GStreamer/GLib thread (or the
+        webrtcbin internal thread for `connection-state == failed`),
+        so consumers must hop back to their own loop before doing I/O.
+        Typical wiring is to forward to the central signaling relay
+        which converts the call into an ``endSession`` message for
+        the JS client.
+
+        Args:
+            handler: ``(peer_id, reason, diagnostic_dict) -> None``.
+                ``reason`` is one of ``SESSION_FAILED_REASON_*``.
+                ``diagnostic_dict`` carries the snapshot of the
+                webrtcbin state at failure time, suitable for logs.
+
+        """
+        self._on_session_failed = handler
+
+    # ------------------------------------------------------------------
+    # ICE negotiation watchdog (see `ICE_NEGOTIATION_DEADLINE_S`).
+    # ------------------------------------------------------------------
+
+    def _install_negotiation_watchdog(
+        self, peer_id: str, webrtcbin: Gst.Element
+    ) -> None:
+        """Subscribe to webrtcbin's state notifications and start the deadline timer.
+
+        Runs on the GLib main thread (called from `_consumer_added`).
+        """
+        state = _PeerWebRTCState(peer_id=peer_id)
+        with self._peer_states_lock:
+            # In theory `consumer-added` fires once per peer_id, but
+            # webrtcsink has been seen to re-add a peer after a brief
+            # disconnect. Drop the previous watchdog if any to avoid
+            # leaking timers.
+            existing = self._peer_states.pop(peer_id, None)
+            if existing is not None and existing.watchdog_source_id is not None:
+                GLib.source_remove(existing.watchdog_source_id)
+            self._peer_states[peer_id] = state
+
+        # `notify::*-state` fires every time the named property
+        # changes, on whatever thread webrtcbin is using internally.
+        # We pass `peer_id` as user data so the handlers don't need
+        # to reverse-lookup the peer from the GObject.
+        webrtcbin.connect(
+            "notify::ice-connection-state",
+            self._on_ice_connection_state_change,
+            peer_id,
+        )
+        webrtcbin.connect(
+            "notify::connection-state",
+            self._on_connection_state_change,
+            peer_id,
+        )
+        webrtcbin.connect(
+            "notify::signaling-state",
+            self._on_signaling_state_change,
+            peer_id,
+        )
+
+        source_id = GLib.timeout_add_seconds(
+            ICE_NEGOTIATION_DEADLINE_S,
+            self._on_negotiation_deadline,
+            peer_id,
+        )
+        with self._peer_states_lock:
+            # The peer might have already been removed in the brief
+            # window above (rare but possible on flaky networks).
+            current = self._peer_states.get(peer_id)
+            if current is state:
+                current.watchdog_source_id = source_id
+            else:
+                # Peer is gone; cancel the timer we just scheduled.
+                GLib.source_remove(source_id)
+
+    def _teardown_negotiation_watchdog(self, peer_id: str) -> None:
+        """Cancel the watchdog timer for `peer_id` and forget its state.
+
+        Called from `_consumer_removed` (peer left cleanly) and from
+        `_check_negotiation_deadline` (we just notified failure).
+        Safe to call twice — the second call is a no-op.
+        """
+        with self._peer_states_lock:
+            state = self._peer_states.pop(peer_id, None)
+        if state is None:
+            return
+        if state.watchdog_source_id is not None:
+            try:
+                GLib.source_remove(state.watchdog_source_id)
+            except Exception:
+                # `source_remove` raises (or returns False, depending
+                # on the binding) if the source has already fired.
+                # That's fine; we just wanted to make sure it's gone.
+                pass
+
+    def _on_ice_connection_state_change(
+        self,
+        webrtcbin: Gst.Element,
+        _pspec: Any,
+        peer_id: str,
+    ) -> None:
+        new_state = self._read_state_nick(webrtcbin, "ice-connection-state")
+        with self._peer_states_lock:
+            state = self._peer_states.get(peer_id)
+            if state is None:
+                return
+            state.ice_state = new_state
+        self._logger.debug(
+            f"[watchdog] peer={peer_id} ice-connection-state -> {new_state}"
+        )
+
+    def _on_signaling_state_change(
+        self,
+        webrtcbin: Gst.Element,
+        _pspec: Any,
+        peer_id: str,
+    ) -> None:
+        new_state = self._read_state_nick(webrtcbin, "signaling-state")
+        with self._peer_states_lock:
+            state = self._peer_states.get(peer_id)
+            if state is None:
+                return
+            state.signaling_state = new_state
+        self._logger.debug(f"[watchdog] peer={peer_id} signaling-state -> {new_state}")
+
+    def _on_connection_state_change(
+        self,
+        webrtcbin: Gst.Element,
+        _pspec: Any,
+        peer_id: str,
+    ) -> None:
+        new_state = self._read_state_nick(webrtcbin, "connection-state")
+        snapshot: Optional[Dict[str, Any]] = None
+        should_notify_failure = False
+        with self._peer_states_lock:
+            state = self._peer_states.get(peer_id)
+            if state is None:
+                return
+            state.conn_state = new_state
+            # `failed` is the terminal "we tried and gave up" state
+            # webrtcbin reaches when ICE check pairs all fail. We
+            # report it eagerly without waiting for the deadline, so
+            # the JS client gets a fast rejection on bad networks.
+            if new_state == "failed" and not state.failure_notified:
+                state.failure_notified = True
+                snapshot = state.asdict()
+                should_notify_failure = True
+
+        self._logger.info(f"[watchdog] peer={peer_id} connection-state -> {new_state}")
+
+        if should_notify_failure and snapshot is not None:
+            self._dispatch_session_failed(
+                peer_id,
+                SESSION_FAILED_REASON_PC_FAILED,
+                snapshot,
+            )
+            self._teardown_negotiation_watchdog(peer_id)
+
+    def _on_negotiation_deadline(self, peer_id: str) -> bool:
+        """Run the watchdog deadline check for ``peer_id``.
+
+        Fired by GLib ``ICE_NEGOTIATION_DEADLINE_S`` seconds after
+        ``consumer-added``. Returns False so GLib drops the source
+        automatically.
+        """
+        snapshot: Optional[Dict[str, Any]] = None
+        is_stuck = False
+        with self._peer_states_lock:
+            state = self._peer_states.get(peer_id)
+            if state is None:
+                # Peer already cleaned up; nothing to do.
+                return False
+            # Connection is healthy if we're connected or completed.
+            # The completed state means ICE has finished checking and
+            # promoted a candidate pair.
+            if state.conn_state in ("connected",) or state.ice_state in (
+                "connected",
+                "completed",
+            ):
+                # All good, but mark the timer as gone so
+                # `_teardown_negotiation_watchdog` doesn't try to
+                # remove an already-fired source.
+                state.watchdog_source_id = None
+                return False
+            if state.failure_notified:
+                # `connection-state == failed` already ran the
+                # callback; don't double-fire.
+                state.watchdog_source_id = None
+                return False
+            state.failure_notified = True
+            state.watchdog_source_id = None
+            snapshot = state.asdict()
+            is_stuck = True
+
+        if is_stuck and snapshot is not None:
+            self._logger.error(
+                f"[watchdog] peer={peer_id} stuck mid-negotiation "
+                f"after {ICE_NEGOTIATION_DEADLINE_S}s, snapshot={snapshot}"
+            )
+            self._dispatch_session_failed(
+                peer_id,
+                SESSION_FAILED_REASON_ICE_TIMEOUT,
+                snapshot,
+            )
+            self._teardown_negotiation_watchdog(peer_id)
+        return False
+
+    def _dispatch_session_failed(
+        self,
+        peer_id: str,
+        reason: str,
+        diagnostic: Dict[str, Any],
+    ) -> None:
+        """Invoke the user-supplied session-failed callback safely.
+
+        Swallows exceptions so a misbehaving handler can't crash the
+        GStreamer bus thread.
+        """
+        handler = self._on_session_failed
+        if handler is None:
+            self._logger.warning(
+                f"[watchdog] peer={peer_id} reason={reason} but no "
+                "session-failed handler is wired; the JS client will "
+                "have to rely on its own timeout"
+            )
+            return
+        try:
+            handler(peer_id, reason, diagnostic)
+        except Exception as e:
+            self._logger.warning(f"session-failed handler raised for {peer_id}: {e}")
+
+    @staticmethod
+    def _read_state_nick(webrtcbin: Gst.Element, prop: str) -> str:
+        """Read a webrtcbin enum property as its short string nick.
+
+        Returns ``"connected"`` instead of
+        ``GstWebRTCICEConnectionState.connected``. Returns ``"unknown"``
+        if introspection fails - we never want a diagnostic helper to raise.
+        """
+        try:
+            value = webrtcbin.get_property(prop)
+            nick = getattr(value, "value_nick", None)
+            if isinstance(nick, str) and nick:
+                return nick
+            return str(value)
+        except Exception:
+            return "unknown"
 
     def send_data_message(self, peer_id: Optional[str], message: str) -> None:
         """Send a message to connected peers via data channel.

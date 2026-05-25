@@ -187,13 +187,24 @@ class Daemon:
             transport = "wifi" if self.wireless_version else "usb"
 
             self.logger.info("Starting central signaling relay...")
-            await start_central_relay(
+            relay = await start_central_relay(
                 hf_token=hf_token,
                 robot_name=self.robot_name,
                 transport=transport,
                 robot_app_lock=self.robot_app_lock,
             )
             self.logger.info("Central signaling relay started")
+
+            # Wire the negotiation watchdog: when GstMediaServer
+            # detects a stuck WebRTC negotiation (typically libnice
+            # frozen mid-CHECKING), it forwards the failure to central
+            # via the relay so the JS client gets a typed
+            # ``endSession`` instead of a spinner-on-blank-page UX.
+            # See `media_server.set_session_failed_handler`.
+            if self._media_server is not None:
+                self._media_server.set_session_failed_handler(
+                    relay.notify_peer_session_failed
+                )
         except Exception as e:
             self.logger.warning(f"Failed to start central signaling relay: {e}")
 

@@ -269,6 +269,8 @@ Underlying state: `disconnected` → `connect()` → `connected` → `startSessi
 
 Commands: `setHeadRpyDeg(r°,p°,y°)`, `setAntennasDeg(right°, left°)`, `setBodyYawDeg(yaw°)`, `setTarget({ head?: number[16], antennas?: [rRad, lRad], body_yaw?: rad })` (atomic raw-units update), `playSound(file)`, `setAudioMuted(bool)`, `setMicMuted(bool)`, `sendRaw(obj)`, `getVersion()`. Math utilities exported from the module: `rpyToMatrix`, `matrixToRpy`, `degToRad`, `radToDeg`.
 
+Recorded-move playback (daemon-side, single-clock A/V sync): `playMove(motion, { audioBlob?, audioLeadMs? })` uploads motion + optional WAV and plays both on the daemon's local clock; resolves with `{finished|cancelled|error}`. `cancelMove()` stops mid-play. For record-time flows that need the SAME audio pipeline at capture and replay (so pipeline latency cancels), `uploadAudio(blob)` returns an `uploadId`, then `playUploadedAudio(uploadId)` resolves on the daemon's `started` broadcast (sync anchor), and `cancelAudio()` stops. Default `audioLeadMs` is `-100` — empirical system-wide constant covering combined motor + GStreamer playbin warmup; tune only if you've measured a different value on your hardware. Use these instead of hand-rolling `sendRaw` chunked uploads. Full reference: [`docs/source/SDK/javascript-sdk.md`](docs/source/SDK/javascript-sdk.md#daemon-side-recorded-move-playback).
+
 Speaker / mic volume: `getVolume()` → 0-100, `setVolume(0-100)`, `getMicrophoneVolume()`, `setMicrophoneVolume(0-100)`. All return a `Promise`; `setVolume` resolves with the value the server actually applied (may be clamped/rounded).
 
 Torque / wake: `setMotorMode("enabled"|"disabled"|"gravity_compensation")`, `wakeUp()`, `gotoSleep()`, `isAwake()`, `ensureAwake()`. `robot.robotState.motor_mode` reflects the live state.
@@ -279,7 +281,7 @@ Lifecycle (advanced — most consumers should just use `autoConnect()`): `authen
 
 Events: `connected`, `disconnected`, `robotsChanged`, `streaming`, `sessionStopped`, `sessionRejected` (robot busy — inspect `e.detail.activeApp`), `state` (every ~500 ms), `videoTrack`, `micSupported`, `error`.
 
-**Full API:** read the top ~90 lines of [`js/reachy-mini.js`](js/reachy-mini.js) — the file header is a complete reference.
+**Full API:** read the top ~90 lines of [`js/reachy-mini-sdk.js`](js/reachy-mini-sdk.js) — the file header is a complete reference.
 
 ### Iframe-embedded apps (mobile shell, vibe-coder preview)
 

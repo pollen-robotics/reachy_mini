@@ -64,6 +64,12 @@ class WSServer(AbstractServer):
         self.backend.set_imu_publisher(publisher)
         self.backend.set_recording_publisher(publisher)
 
+        # The backend uses this to broadcast unsolicited messages
+        # (e.g. play_uploaded_move start / end events) to every WS
+        # client. WebRTC peers are reached through the parallel
+        # send_data_message path the backend already owns.
+        self.backend.set_ws_broadcast_callback(self._broadcast)
+
     def stop(self) -> None:
         """Stop the WebSocket server."""
         self._clients.clear()

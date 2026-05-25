@@ -21,7 +21,7 @@ Web apps are deployed as **static Hugging Face Spaces** (`sdk: static`). There i
 ```
 ┌─────────────────────────────────┐
 │  Browser                        │
-│  (your app + reachy-mini.js)    │
+│  (your app + reachy-mini-sdk.js)│
 └───────┬────────────┬────────────┘
         │ SSE/HTTP   │ WebRTC (peer-to-peer)
         │ signaling  │ video + audio + data
@@ -39,7 +39,7 @@ Web apps are deployed as **static Hugging Face Spaces** (`sdk: static`). There i
 ```
 
 1. **Your app** is a static HTML/JS page hosted on Hugging Face Spaces.
-2. **reachy-mini.js** handles authentication, signaling, and WebRTC negotiation.
+2. **reachy-mini-sdk.js** handles authentication, signaling, and WebRTC negotiation.
 3. The **signaling server** relays SDP offers/answers and ICE candidates. It also validates Hugging Face OAuth tokens.
 4. Once the WebRTC connection is established, **video, audio, and commands flow peer-to-peer** — the signaling server is no longer in the path.
 
@@ -70,17 +70,24 @@ In your `index.html`, import the SDK as an ES module:
 
 ```html
 <script type="module">
-import { ReachyMini } from "./reachy-mini.js";
+import { ReachyMini } from "./reachy-mini-sdk.js";
 
 const robot = new ReachyMini();
 </script>
 ```
 
-You can grab `reachy-mini.js` from the [reference example](https://huggingface.co/spaces/cduss/webrtc_example) or from the npm CDN:
+You can grab `reachy-mini-sdk.js` from the [reference example](https://huggingface.co/spaces/cduss/webrtc_example) or from the npm CDN:
 
 ```js
-import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@anthropic-robotics/reachy-mini/+esm";
+import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk/+esm";
 ```
+
+> The same npm package also ships the optional **host shell** (OAuth + robot picker + iframe lifecycle) for apps deployed as Hugging Face Spaces, under the `./host*` subpath exports:
+> ```js
+> import { mountHost } from "@pollen-robotics/reachy-mini-sdk/host/auto";
+> import { connectToHost } from "@pollen-robotics/reachy-mini-sdk/host/embed";
+> ```
+> See the [host README](https://github.com/pollen-robotics/reachy_mini/tree/main/js/host) for the full integration recipe.
 
 ### 3. Connect to your robot
 
@@ -226,6 +233,11 @@ new ReachyMini({
 | `requestState()` | `boolean` | Request a state snapshot |
 | `setAudioMuted(muted)` | — | Mute/unmute robot speaker (local) |
 | `setMicMuted(muted)` | — | Mute/unmute your microphone |
+| `playMove(motion, opts?)` | `Promise<{finished?, cancelled?, error?, has_audio?}>` | Upload + play a recorded move (optionally with audio) on the daemon's local clock; resolves when playback ends — see [Daemon-side recorded-move playback](#daemon-side-recorded-move-playback) |
+| `cancelMove()` | `boolean` | Cancel an in-flight `playMove` |
+| `uploadAudio(blob, opts?)` | `Promise<string>` | Upload a standalone audio slot, returns `uploadId` — pair with `playUploadedAudio` for record-time sync |
+| `playUploadedAudio(uploadId, opts?)` | `Promise<{started: true, ...}>` | Trigger daemon-side standalone audio playback; resolves on the daemon's `started` broadcast (use as a sync anchor) |
+| `cancelAudio()` | `boolean` | Cancel an in-flight `playUploadedAudio` |
 
 ### Events
 
@@ -246,11 +258,71 @@ Use `robot.addEventListener(name, handler)` — the SDK extends `EventTarget`.
 ### Math Utilities
 
 ```js
-import { rpyToMatrix, matrixToRpy, degToRad, radToDeg } from "./reachy-mini.js";
+import { rpyToMatrix, matrixToRpy, degToRad, radToDeg } from "./reachy-mini-sdk.js";
 
 rpyToMatrix(roll, pitch, yaw)  // degrees → 4×4 rotation matrix (ZYX)
 matrixToRpy(matrix)            // 4×4 matrix → { roll, pitch, yaw } in degrees
 ```
+
+## Daemon-side recorded-move playback
+
+Long recorded moves (and any move with audio) should play **server-side on the daemon's local clock**, not by streaming `set_target` frames from the browser. The browser uploads the move once over the WebRTC data channel and the daemon ticks the inner loop at the requested frequency — no per-frame round-trip, smooth on wireless robots. When audio is attached the daemon plays it on the same GStreamer pipeline, so motion and audio share a single clock (no cross-network drift).
+
+### Combined motion + audio
+
+```js
+const result = await robot.playMove(motion, {
+    audioBlob,                    // optional, 16 kHz mono PCM WAV
+    audioLeadMs: -100,            // system-wide default
+    description: "happy wave",
+    onProgress: (p) => console.log(p.phase, p.sent, p.total),
+    onStarted: ({ duration_s, has_audio }) => { /* sync anchor */ },
+});
+// result is { finished: true } | { cancelled: true } | { error: "..." }
+
+// Cancel at any time from another code path:
+robot.cancelMove();
+```
+
+`motion` is the shape the Python `RecordedMove` parser expects:
+```js
+{ time: [0, 0.01, 0.02, …], set_target_data: [{ head, antennas, body_yaw }, …] }
+```
+
+`audioLeadMs` shifts audio relative to motion at the daemon:
+- **Positive** — audio fires N ms BEFORE motion (compensates motor pickup).
+- **Negative** — motion fires N ms BEFORE audio (compensates GStreamer playbin warmup).
+- **Default `-100`** is the empirical system-wide constant (combined motor + pipeline). Tune only after measuring.
+
+The encoded wire form defaults to `gzip+base64` (typically ~3× smaller for recorded-move JSON). Falls back to plain JSON if the browser lacks `CompressionStream`.
+
+### Record-time audio (sync anchor)
+
+For recording flows that want the SAME audio pipeline at capture AND replay (so pipeline latency cancels out and one `audioLeadMs` works for all recordings):
+
+```js
+// 1. During the countdown — upload the source audio.
+const audioId = await robot.uploadAudio(audioBlob, { description: "song" });
+
+// 2. At the GO! moment — kick off daemon-side playback, await the
+//    started broadcast, then start motion capture.
+await robot.playUploadedAudio(audioId);
+const captureT0 = performance.now();
+startMyMotionCapture();
+
+// 3. On stop / cancel / restart — stop the audio.
+robot.cancelAudio();
+```
+
+The daemon does NOT emit a `finished` event for standalone audio; callers know the duration from the WAV header and call `cancelAudio()` when done.
+
+### Audio format
+
+Audio must be canonical **16 kHz mono 16-bit PCM WAV**. Apps are responsible for normalizing before upload — the daemon does not transcode. Format mismatch is a frequent cause of "audio is silent / wrong speed" on inherited datasets.
+
+### Backpressure & cancellation
+
+`playMove` and `uploadAudio` pace chunk sends on the data channel's `bufferedAmount` so multi-megabyte uploads (a 3-min song's WAV is ~6 MB base64) don't degrade other channels on the same peer connection. There's no separate `pause` — to stop a long upload mid-way, close the session.
 
 ## Security
 
