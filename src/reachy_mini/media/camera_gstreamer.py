@@ -57,7 +57,7 @@ from reachy_mini.media.camera_constants import (
     CameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
-from reachy_mini.media.gstreamer_utils import get_sample
+from reachy_mini.media.gstreamer_utils import get_sample, handle_default_bus_message
 
 try:
     import gi
@@ -210,27 +210,25 @@ class GStreamerCamera(CameraBase):
         queue.link(convert)
         convert.link(self._appsink_video)
 
-    def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
-        t = msg.type
-        if t == Gst.MessageType.EOS:
-            self.logger.warning("End-of-stream")
-            return False
-        elif t == Gst.MessageType.ERROR:
+    def _on_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
+    ) -> bool:
+        # Some camera errors are transient and the pipeline can
+        # self-recover, so we log them but keep the bus watch alive.
+        # Default handler would tear it down.
+        if msg.type == Gst.MessageType.ERROR:
             err, debug = msg.parse_error()
             self.logger.warning(
                 f"GStreamer pipeline error (domain={err.domain}, code={err.code}): {err.message}"
             )
             self.logger.debug(f"GStreamer error debug info: {debug}")
-            # Keep the bus watch active — some errors are transient and the pipeline
-            # will self-recover. Fatal errors should be handled by inspecting
-            # err.domain and err.code.
             return True
-        return True
+        return handle_default_bus_message(self.logger, msg, pipeline)
 
     def _handle_bus_calls(self) -> None:
         self.logger.debug("starting bus message loop")
         bus = self.pipeline.get_bus()
-        bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop)
+        bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self.pipeline)
         self._loop.run()
         bus.remove_watch()
         self.logger.debug("bus message loop stopped")

@@ -106,7 +106,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._bus_record = self._pipeline_record.get_bus()
         self._bus_record.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_record
         )
 
         self._appsink_audio = Gst.ElementFactory.make("appsink")
@@ -144,7 +144,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._webrtcbin = None
         self._audio_send_ready = False
         self._appsrc = None
-        self._appsrc_pts = 0  # running PTS in nanoseconds for appsrc buffers
+        self._first_push_done = False
         self.daemon_url: str = ""  # set by MediaManager for remote sound ops
         self._webrtcsrc.connect("deep-element-added", self._on_deep_element_added)
         self.logger.info("GstWebRTCClient initialized (bidirectional audio support)")
@@ -300,21 +300,18 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         GLib.timeout_add_seconds(5, self._dump_latency)
 
-    def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
-        t = msg.type
-        if t == Gst.MessageType.EOS:
-            self.logger.warning("End-of-stream")
-            return False
-        elif t == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
+    def _on_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
+    ) -> bool:
+        # webrtcsrc may emit non-fatal errors from its internal
+        # elements (e.g. appsrc not-negotiated when a sendrecv
+        # transceiver has no data to send).  GStreamer wraps the
+        # actual reason as "Internal data stream error." in the
+        # GError, with "not-negotiated" only in the debug string.
+        # These should not tear down the whole pipeline.
+        if msg.type == Gst.MessageType.ERROR:
+            err, _ = msg.parse_error()
             src = msg.src
-
-            # webrtcsrc may emit non-fatal errors from its internal
-            # elements (e.g. appsrc not-negotiated when a sendrecv
-            # transceiver has no data to send).  GStreamer wraps the
-            # actual reason as "Internal data stream error." in the
-            # GError, with "not-negotiated" only in the debug string.
-            # These should not tear down the whole pipeline.
             if (
                 src is not None
                 and src.get_factory() is not None
@@ -326,10 +323,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
             ):
                 self.logger.debug(f"Ignoring non-fatal webrtcsrc internal error: {err}")
                 return True
-
-            self.logger.error(f"Error: {err} {debug}")
-            return False
-        return True
+        return super()._on_bus_message(bus, msg, pipeline)
 
     def open(self) -> None:
         """Start the WebRTC pipeline (both video and audio)."""
@@ -404,6 +398,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         appsrc = Gst.ElementFactory.make("appsrc")
         appsrc.set_property("format", Gst.Format.TIME)
         appsrc.set_property("is-live", True)
+
         caps = Gst.Caps.from_string(
             f"audio/x-raw,format=F32LE,channels={self.CHANNELS},rate={self.SAMPLE_RATE},layout=interleaved"
         )
@@ -417,7 +412,13 @@ class GstWebRTCClient(CameraBase, AudioBase):
         rtpopuspay = Gst.ElementFactory.make("rtpopuspay")
         rtpopuspay.set_property("pt", pt)
 
-        elems = (appsrc, audioconvert, audioresample, opusenc, rtpopuspay)
+        elems = (
+            appsrc,
+            audioconvert,
+            audioresample,
+            opusenc,
+            rtpopuspay,
+        )
 
         target_bin = self._pipeline_record
         for elem in elems:
@@ -453,7 +454,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def stop_playing(self) -> None:
         """Reset the PTS counter for the send chain and stop daemon-side sound."""
-        self._appsrc_pts = 0
+        self._appsrc_pts = -1
         # Also stop any sound file playing on the daemon's speaker.
         if self.daemon_url:
             try:
@@ -468,34 +469,54 @@ class GstWebRTCClient(CameraBase, AudioBase):
         """No-op (WebRTC send chain does not buffer significantly)."""
         pass
 
+    def _push_buffer(self, data: npt.NDArray[np.float32]) -> None:
+        """Single push of one F32LE chunk with gap-aware PTS."""
+        if self._appsrc is None:
+            return
+
+        pts_ns, duration_ns, self._appsrc_pts = self._compute_pts(
+            int(data.shape[0]),
+            self._appsrc.get_current_running_time(),
+            self._appsrc_pts,
+        )
+        buf = Gst.Buffer.new_wrapped(data.tobytes())
+        buf.pts = pts_ns
+        buf.dts = pts_ns
+        buf.duration = duration_ns
+
+        ret = self._appsrc.push_buffer(buf)
+        if ret != Gst.FlowReturn.OK:
+            self.logger.warning("push_buffer dropped: %s", ret)
+
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the remote peer via WebRTC.
+
+        The very first call also primes the send chain with 0.5 s of
+        silence so the Opus encoder and webrtcbin can warm up before
+        the caller's real audio arrives; without this the first word
+        of an utterance gets swallowed.
 
         Args:
             data: Float32 audio samples.
 
         """
         if self._appsrc is None:
-            return  # send chain not ready yet, silently drop
+            return
 
-        num_samples = data.shape[0]
-        duration_ns = (num_samples * Gst.SECOND) // self.SAMPLE_RATE
-
-        buf = Gst.Buffer.new_wrapped(data.tobytes())
-        buf.pts = self._appsrc_pts
-        buf.duration = duration_ns
-        self._appsrc_pts += duration_ns
-
-        self._appsrc.push_buffer(buf)
+        if not self._first_push_done:
+            self._first_push_done = True
+            warmup = np.zeros(self.SAMPLE_RATE // 2, dtype=np.float32)
+            self._push_buffer(warmup)
+        self._push_buffer(data)
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker via the daemon REST API.
 
         If *sound_file* is a local path that exists on this machine the
-        file is automatically uploaded to the daemon's temporary sound
-        directory (skipping the upload when a file with the same name is
-        already present).  Otherwise the filename is sent as-is and the
-        daemon resolves it from its built-in assets or filesystem.
+        file is uploaded to the daemon's temporary sound directory
+        (overwriting any previous upload with the same basename).
+        Otherwise the filename is sent as-is and the daemon resolves it
+        from its built-in assets or filesystem.
 
         Args:
             sound_file: Absolute local path **or** asset filename
@@ -506,17 +527,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
             self.logger.error("No daemon URL configured — cannot play sound remotely.")
             return
 
-        # If the file exists on the client, ensure it is uploaded first.
         remote_file = sound_file
         if os.path.isfile(sound_file):
-            filename = os.path.basename(sound_file)
-            remote_files = self.list_sounds()
-            if filename not in remote_files:
-                remote_file = self.upload_sound(sound_file)
-            else:
-                # Already uploaded — ask the daemon to resolve by filename.
-                # The daemon's play_sound checks the temp dir, assets, etc.
-                remote_file = filename
+            remote_file = self.upload_sound(sound_file)
 
         try:
             resp = _requests.post(

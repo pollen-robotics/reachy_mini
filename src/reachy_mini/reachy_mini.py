@@ -29,8 +29,10 @@ from reachy_mini.io.protocol import (
     SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
+    SetSpeechOffsetsCmd,
     SetTargetCmd,
     SetTorqueCmd,
+    SetWobblingCmd,
     StartRecordingCmd,
     StopRecordingCmd,
 )
@@ -231,6 +233,35 @@ class ReachyMini:
         self.media_manager = self._configure_mediamanager(self._media_backend, self._log_level)
         self._media_released = False
         self.logger.info("Media re-acquired by daemon.")
+
+    def enable_wobbling(self) -> None:
+        """Enable audio-reactive head wobbling.
+
+        When enabled, audio played through ``media.play_sound()`` or
+        ``media.push_audio_sample()`` is analysed and converted into
+        subtle head movements that are composed with the current target
+        pose on the daemon side.
+
+        For LOCAL backend: wobbling runs on the SDK side; offsets are sent
+        over WebSocket.  For all backends the daemon is also told to enable
+        wobbling so that daemon-side sounds (wake-up, sleep, etc.) and
+        incoming WebRTC audio also produce head movement.
+
+        """
+        def _send_offsets(offsets: tuple[float, float, float, float, float, float]) -> None:
+            self.client.send_command(SetSpeechOffsetsCmd(offsets=list(offsets)))
+
+        # Enable SDK-side wobbling (LOCAL backend only, no-op for WEBRTC)
+        self.media_manager.enable_wobbling(_send_offsets)
+        # Enable daemon-side wobbling (media server play_sound + incoming audio)
+        self.client.send_command(SetWobblingCmd(enabled=True))
+        self.logger.info("Head wobbling enabled")
+
+    def disable_wobbling(self) -> None:
+        """Disable audio-reactive head wobbling and reset offsets to zero."""
+        self.media_manager.disable_wobbling()
+        self.client.send_command(SetWobblingCmd(enabled=False))
+        self.logger.info("Head wobbling disabled")
 
     @property
     def imu(self) -> Dict[str, List[float] | float] | None:

@@ -19,6 +19,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Optional
 
+import gi
 import numpy as np
 import numpy.typing as npt
 
@@ -28,7 +29,10 @@ from reachy_mini.media.audio_control_utils import (
     init_respeaker_usb,
 )
 from reachy_mini.media.audio_doa import AudioDoA
-from reachy_mini.media.gstreamer_utils import get_sample
+from reachy_mini.media.gstreamer_utils import get_sample, handle_default_bus_message
+
+gi.require_version("Gst", "1.0")
+from gi.repository import Gst  # noqa: E402
 
 
 class AudioBase(ABC):
@@ -37,17 +41,57 @@ class AudioBase(ABC):
     Attributes:
         SAMPLE_RATE: Default sample rate (16 000 Hz — ReSpeaker hardware).
         CHANNELS: Number of audio channels (2 — stereo).
+        GAP_RESET_NS: PTS-continuity threshold for ``_compute_pts``.
+            If the gap between the next expected PTS and the appsrc's
+            current running-time exceeds this value, we treat it as a
+            new utterance and re-anchor to running-time.
 
     """
 
     SAMPLE_RATE = 16000
     CHANNELS = 2
+    GAP_RESET_NS = 200_000_000  # 200 ms
 
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize shared audio attributes (DoA helper)."""
         self.logger = logging.getLogger(type(self).__module__)
         self.logger.setLevel(log_level)
         self._doa = AudioDoA()
+        # Next expected PTS for the playback / send appsrc; -1 means
+        # "no previous buffer, anchor to running-time on next push".
+        self._appsrc_pts: int = -1
+
+    def _compute_pts(
+        self,
+        num_samples: int,
+        running_time_ns: int,
+        next_pts_ns: int,
+    ) -> tuple[int, int, int]:
+        """Return ``(pts_ns, duration_ns, next_pts_ns)`` for an appsrc buffer.
+
+        Anchors PTS to ``running_time_ns`` when ``next_pts_ns`` is
+        negative (sentinel for "no previous") or the gap is larger
+        than ``GAP_RESET_NS``; otherwise continues the previous
+        stream's PTS to keep audio contiguous across consecutive
+        push calls.
+        """
+        duration_ns = (num_samples * 1_000_000_000) // self.SAMPLE_RATE
+        if next_pts_ns < 0 or running_time_ns > next_pts_ns + self.GAP_RESET_NS:
+            pts_ns = running_time_ns
+        else:
+            pts_ns = next_pts_ns
+        return pts_ns, duration_ns, pts_ns + duration_ns
+
+    def _on_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
+    ) -> bool:
+        """Delegate to the shared default-bus-message helper.
+
+        Subclasses can override to add custom behaviour, then return
+        ``super()._on_bus_message(bus, msg, pipeline)`` to keep the
+        default handling.
+        """
+        return handle_default_bus_message(self.logger, msg, pipeline)
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Pull the next recorded audio chunk.

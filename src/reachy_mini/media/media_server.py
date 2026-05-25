@@ -31,6 +31,7 @@ from threading import Lock, Thread
 from typing import Any, Callable, Dict, Optional
 
 import gi
+import numpy as np
 
 from reachy_mini.daemon.utils import (
     CAMERA_PIPE_NAME,
@@ -47,12 +48,14 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
+from reachy_mini.media.gstreamer_utils import handle_default_bus_message
+from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
-from gi.repository import GLib, Gst  # noqa: E402
+from gi.repository import GLib, Gst, GstApp  # noqa: E402, F401
 
 # Hard cap on how long a freshly-added consumer is allowed to spend
 # before its `webrtcbin.connection-state` reaches "connected". In a
@@ -131,6 +134,10 @@ class GstMediaServer:
 
     """
 
+    # Sample rate the wobbler appsink demands; the per-branch audioresample
+    # converts whatever the source produces down to this rate before delivery.
+    WOBBLER_SAMPLE_RATE = 16_000
+
     def __init__(
         self,
         log_level: str = "INFO",
@@ -208,6 +215,8 @@ class GstMediaServer:
         self._peer_states_lock = Lock()
         self._incoming_audio: Dict[str, Dict[str, Any]] = {}
         self._playbin: Optional[Gst.Element] = None
+        self._head_wobbler: Optional[HeadWobbler] = None
+        self._pipeline_playback: Optional[Gst.Pipeline] = None
 
         self._build_pipeline()
 
@@ -216,7 +225,7 @@ class GstMediaServer:
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
         self._bus_sender = self._pipeline_sender.get_bus()
         self._bus_sender.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_sender
         )
 
         webrtcsink = self._configure_webrtc(self._pipeline_sender)
@@ -270,9 +279,9 @@ class GstMediaServer:
     ) -> None:
         self._logger.info(f"consumer added with peer id: {peer_id}")
 
-        Gst.debug_bin_to_dot_file(
-            self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
-        )
+        # Gst.debug_bin_to_dot_file(
+        #     self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
+        # )
 
         GLib.timeout_add_seconds(5, self._dump_latency)
 
@@ -372,7 +381,11 @@ class GstMediaServer:
         self._logger.info(f"Setting up incoming audio playback for peer {peer_id}")
 
         # Build playback pipeline element-by-element
-        playback_pipe = Gst.Pipeline.new(f"audio_playback_{peer_id}")
+        self._pipeline_playback = Gst.Pipeline.new(f"audio_playback_{peer_id}")
+
+        sender_clock = self._pipeline_sender.get_pipeline_clock()
+        self._pipeline_playback.use_clock(sender_clock)
+        self._pipeline_playback.set_start_time(Gst.CLOCK_TIME_NONE)
 
         appsrc = Gst.ElementFactory.make("appsrc", "audio_in")
         appsrc.set_property("format", Gst.Format.TIME)
@@ -381,49 +394,78 @@ class GstMediaServer:
 
         rtpopusdepay = Gst.ElementFactory.make("rtpopusdepay")
         opusdec = Gst.ElementFactory.make("opusdec")
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        audioresample = Gst.ElementFactory.make("audioresample")
 
         audiosink = self._build_audiosink_element()
         if audiosink is None:
             self._logger.error("Failed to create audio sink element")
             return
-        audiosink.set_property("sync", False)
+        audiosink.set_property("sync", True)
+
+        # Per-branch audioconvert+audioresample so the wobbler appsink's
+        # F32LE/2/16000 caps don't drag the audiosink branch into a rate
+        # the device can't accept (e.g. wireless XMOS PCM falls back to
+        # IEC958 at non-native rates).
+        tee = Gst.ElementFactory.make("tee")
+        queue_speaker = Gst.ElementFactory.make("queue")
+        ac_speaker = Gst.ElementFactory.make("audioconvert")
+        ar_speaker = Gst.ElementFactory.make("audioresample")
+        queue_wobbler = Gst.ElementFactory.make("queue")
+        ac_wobbler = Gst.ElementFactory.make("audioconvert")
+        ar_wobbler = Gst.ElementFactory.make("audioresample")
+
+        appsink_wobbler = self._make_wobbler_appsink()
 
         for elem in [
             appsrc,
             rtpopusdepay,
             opusdec,
-            audioconvert,
-            audioresample,
+            tee,
+            queue_speaker,
+            ac_speaker,
+            ar_speaker,
             audiosink,
+            queue_wobbler,
+            ac_wobbler,
+            ar_wobbler,
+            appsink_wobbler,
         ]:
-            playback_pipe.add(elem)
+            self._pipeline_playback.add(elem)
         appsrc.link(rtpopusdepay)
         rtpopusdepay.link(opusdec)
-        opusdec.link(audioconvert)
-        audioconvert.link(audioresample)
-        audioresample.link(audiosink)
+        opusdec.link(tee)
+        tee.link(queue_speaker)
+        queue_speaker.link(ac_speaker)
+        ac_speaker.link(ar_speaker)
+        ar_speaker.link(audiosink)
+        tee.link(queue_wobbler)
+        queue_wobbler.link(ac_wobbler)
+        ac_wobbler.link(ar_wobbler)
+        ar_wobbler.link(appsink_wobbler)
 
-        play_bus = playback_pipe.get_bus()
+        play_bus = self._pipeline_playback.get_bus()
         play_bus.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_playback_bus_message, peer_id
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_playback
         )
 
-        playback_pipe.set_state(Gst.State.PLAYING)
+        self._pipeline_playback.set_state(Gst.State.PAUSED)
+        self._pipeline_playback.set_base_time(self._pipeline_sender.get_base_time())
+        self._pipeline_playback.set_state(Gst.State.PLAYING)
 
         # Pad probe: intercept every RTP buffer, forward to the separate
         # playback pipeline, then DROP so webrtcsink's pipeline is unaffected.
         def _buffer_probe(pad: Gst.Pad, info: Gst.PadProbeInfo, _: None) -> int:
             buf = info.get_buffer()
-            if buf is not None:
-                appsrc.emit("push-buffer", buf.copy())
+            appsrc.push_buffer(buf)
             return int(Gst.PadProbeReturn.DROP)
 
         probe_id = pad.add_probe(Gst.PadProbeType.BUFFER, _buffer_probe, None)
 
+        if self._head_wobbler is not None:
+            self._head_wobbler.reset()
+            self._head_wobbler.start()
+
         self._incoming_audio[peer_id] = {
-            "playback_pipeline": playback_pipe,
+            "playback_pipeline": self._pipeline_playback,
             "probe_id": probe_id,
             "pad": pad,
         }
@@ -957,18 +999,10 @@ class GstMediaServer:
         )
         return Gst.ElementFactory.make("autoaudiosrc")
 
-    def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
-        t = msg.type
-        if t == Gst.MessageType.EOS:
-            self._logger.warning("End-of-stream")
-            return False
-
-        elif t == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
-            self._logger.error(f"Error: {err} {debug}")
-            return False
-
-        return True
+    def _on_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
+    ) -> bool:
+        return handle_default_bus_message(self._logger, msg, pipeline)
 
     def start(self) -> None:
         """Rebuild the pipeline from scratch and start it.
@@ -1007,9 +1041,6 @@ class GstMediaServer:
         else:
             file_path = sound_file
 
-        # Build platform-aware audio sink element
-        audiosink = self._build_audiosink_element()
-
         if self._playbin is not None:
             self._playbin.set_state(Gst.State.NULL)
 
@@ -1029,8 +1060,11 @@ class GstMediaServer:
             uri = f"file://{file_path}"
 
         playbin.set_property("uri", uri)
-        if audiosink is not None:
-            playbin.set_property("audio-sink", audiosink)
+        playbin.set_property("audio-sink", self._build_audiosink_tee_bin())
+
+        if self._head_wobbler is not None:
+            self._head_wobbler.reset()
+            self._head_wobbler.start()
 
         self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
@@ -1083,6 +1117,115 @@ class GstMediaServer:
             return audiosink
 
         return Gst.ElementFactory.make("autoaudiosink")
+
+    def _make_wobbler_appsink(self) -> Gst.Element:
+        """Create a sync=True appsink that feeds audio to the head wobbler.
+
+        new-sample fires at the buffer's PTS on the pipeline clock —
+        the same instant the audiosink renders that audio.
+        """
+        appsink = Gst.ElementFactory.make("appsink")
+        # Force mono so the speech tapper receives a 1-D float32 array.
+        # The per-branch audioconvert handles the downmix.
+        caps = Gst.Caps.from_string(
+            f"audio/x-raw,format=F32LE,channels=1,rate={self.WOBBLER_SAMPLE_RATE},layout=interleaved"
+        )
+        appsink.set_property("caps", caps)
+        appsink.set_property("drop", True)
+        appsink.set_property("max-buffers", 5)
+        appsink.set_property("sync", True)
+        appsink.set_property("emit-signals", True)
+        appsink.connect("new-sample", self._on_wobbler_sample)
+        return appsink
+
+    def _on_wobbler_sample(self, appsink: Gst.Element) -> Gst.FlowReturn:
+        """GStreamer callback: forward audio buffer to the head wobbler.
+
+        The appsink is sync=True so the callback fires at the buffer's
+        PTS on the pipeline clock — audio is playing NOW.
+        """
+        sample = appsink.pull_sample()
+        if sample is None or self._head_wobbler is None:
+            return Gst.FlowReturn.OK
+        buf = sample.get_buffer()
+        data = buf.extract_dup(0, buf.get_size())
+        pcm = np.frombuffer(data, dtype=np.float32)
+        self._head_wobbler.feed(pcm, time.monotonic_ns())
+        return Gst.FlowReturn.OK
+
+    def _build_audiosink_tee_bin(self) -> Gst.Bin:
+        """Build a Gst.Bin splitting audio to speaker and wobbler appsink.
+
+        Per-branch audioconvert+audioresample isolate each leaf's caps
+        from the other (the wobbler appsink demands F32LE/2/16000; the
+        audiosink wants whatever the device prefers — e.g. on the
+        wireless XMOS PCM, anything but its native rate triggers an
+        IEC958 fallback that fails to open).
+
+        The bin exposes a single ghost sink pad for use as a playbin audio-sink::
+
+            ghost_sink → tee ─┬→ queue → audioconvert → audioresample → audiosink
+                               └→ queue → audioconvert → audioresample → appsink
+        """
+        audio_bin = Gst.Bin.new("audio_tee_bin")
+
+        tee = Gst.ElementFactory.make("tee")
+        queue_speaker = Gst.ElementFactory.make("queue")
+        ac_speaker = Gst.ElementFactory.make("audioconvert")
+        ar_speaker = Gst.ElementFactory.make("audioresample")
+        audiosink = self._build_audiosink_element()
+        queue_wobbler = Gst.ElementFactory.make("queue")
+        ac_wobbler = Gst.ElementFactory.make("audioconvert")
+        ar_wobbler = Gst.ElementFactory.make("audioresample")
+        appsink_wobbler = self._make_wobbler_appsink()
+
+        for el in (
+            tee,
+            queue_speaker,
+            ac_speaker,
+            ar_speaker,
+            audiosink,
+            queue_wobbler,
+            ac_wobbler,
+            ar_wobbler,
+            appsink_wobbler,
+        ):
+            audio_bin.add(el)
+
+        tee.link(queue_speaker)
+        queue_speaker.link(ac_speaker)
+        ac_speaker.link(ar_speaker)
+        ar_speaker.link(audiosink)
+
+        tee.link(queue_wobbler)
+        queue_wobbler.link(ac_wobbler)
+        ac_wobbler.link(ar_wobbler)
+        ar_wobbler.link(appsink_wobbler)
+
+        ghost_pad = Gst.GhostPad.new("sink", tee.get_static_pad("sink"))
+        audio_bin.add_pad(ghost_pad)
+
+        return audio_bin
+
+    def enable_wobbling(self, callback: Callable[[SpeechOffsets], None]) -> None:
+        """Enable head wobbling driven by audio playback.
+
+        Args:
+            callback: Called with ``(x_m, y_m, z_m, roll_rad, pitch_rad,
+                yaw_rad)`` for each movement hop.
+
+        """
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
+        self._head_wobbler = HeadWobbler(callback, sample_rate=self.WOBBLER_SAMPLE_RATE)
+        self._logger.info("Head wobbler enabled (daemon-side)")
+
+    def disable_wobbling(self) -> None:
+        """Disable head wobbling."""
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
+            self._head_wobbler = None
+            self._logger.info("Head wobbler disabled (daemon-side)")
 
     def set_message_handler(
         self,
