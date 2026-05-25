@@ -109,6 +109,10 @@
     - local: examples/custom_media_manager
       title: Custom Media Manager
   title: Examples
+- sections:
+    - local: integrations/home_assistant
+      title: Home Assistant
+  title: Integrations
 - isExpanded: false
   sections:
     - local: API/reachymini
