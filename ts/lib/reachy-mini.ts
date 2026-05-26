@@ -9,12 +9,12 @@ import {
     oauthLoginUrl,
 } from '@huggingface/hub';
 
-import { degToRad, rpyToMatrix } from './math';
+import { degToRad, rpyToMatrix } from './math.js';
 import {
     consumeFragmentCredentials,
     readPreselectedRobotIdFromUrl,
     sdpHasAudioSendRecv,
-} from './url-helpers';
+} from './url-helpers.js';
 import {
     UPLOAD_CHUNK_SIZE,
     UPLOAD_BUFFERED_HIGH_WATER,
@@ -24,7 +24,7 @@ import {
     bytesToBase64,
     gzipBase64,
     clampVolume,
-} from './upload-helpers';
+} from './upload-helpers.js';
 import type {
     ApplyAudioConfigOptions,
     AudioConfigEntry,
@@ -44,7 +44,7 @@ import type {
     SessionRejectError,
     SubscribeLogsOptions,
     UploadAudioOptions,
-} from './types';
+} from './types.js';
 
 interface PendingMotion {
     resolve: () => void;

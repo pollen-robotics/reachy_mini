@@ -62,8 +62,8 @@
  *   plus the public type surface (RobotInfo, RobotState, ReachyMiniOptions, …).
  */
 
-export { ReachyMini } from './lib/reachy-mini';
-export { degToRad, radToDeg, rpyToMatrix, matrixToRpy } from './lib/math';
+export { ReachyMini } from './lib/reachy-mini.js';
+export { degToRad, radToDeg, rpyToMatrix, matrixToRpy } from './lib/math.js';
 export type {
     RobotInfo,
     RobotState,
@@ -97,7 +97,7 @@ export type {
     VideoTrackEventDetail,
     MicSupportedEventDetail,
     ErrorEventDetail,
-} from './lib/types';
+} from './lib/types.js';
 
-import { ReachyMini } from './lib/reachy-mini';
+import { ReachyMini } from './lib/reachy-mini.js';
 export default ReachyMini;

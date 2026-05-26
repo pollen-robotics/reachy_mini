@@ -2,8 +2,16 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    // NodeNext (not Bundler) so the compiler enforces explicit `.js`
+    // file extensions in relative imports. The SDK ships as raw ESM
+    // consumed directly by browsers via jsdelivr (HF Spaces don't
+    // bundle), so the emitted output MUST have `.js` extensions or
+    // browsers 404 on every transitive import. NodeNext + source-
+    // level `.js` extensions is the canonical TypeScript pattern for
+    // emitting native-ESM output; the compiler maps `.js` ↔ `.ts` at
+    // build time, the emitted JS is unchanged from source.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "resolveJsonModule": true,
     "allowImportingTsExtensions": false,
     "strict": true,
