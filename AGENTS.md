@@ -283,6 +283,81 @@ Events: `connected`, `disconnected`, `robotsChanged`, `streaming`, `sessionStopp
 
 **Full API:** read the top ~90 lines of [`js/reachy-mini-sdk.js`](js/reachy-mini-sdk.js) — the file header is a complete reference.
 
+### Subroutines: ship-and-call JS skills running on the robot
+
+**What.** A *subroutine* is a small JS module the Space ships to the robot at startup. The robot runs it inside an embedded QuickJS sandbox; the Space then calls methods on it as if it were a local object. The subroutine can also run idle loops (`setInterval` / `setTimeout`) on its own and push events back via `emit(...)`.
+
+**When to use.** Anything that needs low-latency reactive behaviour on the robot side — breathing animations, idle micro-movements, debouncing rapid sensor inputs, a watchdog that kills motion if the user goes silent. The relay round-trip is too slow for ~50 Hz update loops; a subroutine runs in-process on the robot and pays zero network cost between ticks.
+
+**End-goal.** A subroutine can carry the *entire* app logic. The browser tab becomes a thin UI shell — close it, walk away, the behaviour keeps running (set `persist: true` to outlive the WebRTC session).
+
+**Example.**
+```js
+const robot = new ReachyMini({ appName: "breathing-demo" });
+await robot.autoConnect({ pickRobot: pickByName("My Robot") });
+
+const breathing = await robot.loadSubroutine(`
+  let amplitude = 0.05;   // metres
+  let period    = 4.0;    // seconds
+  const t0 = now();
+
+  setInterval(() => {
+    const t = (now() - t0) / 1000;
+    const z = amplitude * Math.sin(2 * Math.PI * t / period);
+    robot.setBodyYaw(z);
+    emit("breath", { z, t });
+  }, 20);                  // 50 Hz local loop, never hits the network
+
+  export const api = {
+    setAmplitude(v)        { amplitude = v; },
+    setPeriod(seconds)     { period = seconds; },
+    headSpin({ signal }) {
+      // Cooperative cancel: poll signal.aborted between work units.
+      for (let i = 0; i < 8 && !signal.aborted; i++) {
+        robot.setBodyYaw(i * Math.PI / 4);
+      }
+      return "done";
+    },
+  };
+`, { name: "breathing", persist: false });
+
+// Comlink-style: methods declared on `api` are accessible as proxies.
+await breathing.api.setAmplitude(0.08);
+await breathing.api.setPeriod(3.0);
+
+// Subscribe to events the subroutine emits.
+breathing.on("breath", ({ z }) => updateDial(z));
+
+// Cancellable long-running call.
+const ctrl = new AbortController();
+breathing.api.headSpin({ signal: ctrl.signal }).catch(e => {
+  if (e.name === "AbortError") console.log("user cancelled");
+});
+setTimeout(() => ctrl.abort(), 5000);
+
+// Teardown (or just close the tab if persist=false).
+await breathing.unload();
+```
+
+**Host bindings exposed to the guest** (deliberately narrow — every new binding widens the trust boundary):
+- `robot.setHeadPose(matrix16)`, `robot.setHeadJoints([7])`, `robot.setAntennas([right, left])`, `robot.setBodyYaw(rad)`
+- `robot.playSound(filename)`, `robot.getState()`
+- `setInterval(fn, ms)`, `setTimeout(fn, ms)`, `clearInterval(id)`, `clearTimeout(id)` (host-pumped — not browser-grade accuracy, ±2 ms typical)
+- `console.log/warn/error(...)` — surfaced both in the robot's logs and as `'log'` events on the Subroutine handle
+- `emit(name, payload)` — push an event to the Space; received via `subroutine.on(name, handler)`
+- `now()` — monotonic ms
+
+**Out of scope (v1):** ES module imports, async/await in guest code, networking (no `fetch`), the DOM.
+
+**Lifecycle / failure model.**
+- `loadSubroutine` is idempotent under the same `id` only if the SDK reuses it; normally each call gets a fresh UUID and previous subroutines stay live until explicitly `unload()`-ed.
+- An exception inside a method call rejects only that one `call()` promise — the runtime stays up.
+- An exception in an idle (`setInterval`) callback fires a non-fatal `'error'` event on the handle; the runtime stays up.
+- A peer disconnect unloads non-persistent subroutines automatically. Persistent ones must be unloaded by an explicit `unload_subroutine` from the next session, by `daemon stop`, or by daemon process death.
+- The daemon hot-reloads in place when the same `subroutine_id` is uploaded again — useful during development, but the SDK doesn't use this path on its own.
+
+**Platform note.** Requires the `quickjs` Python wheel on the daemon host. The aarch64 wheel for CM4 builds from source automatically; if it's unavailable, `loadSubroutine` rejects with a clear error and the rest of the SDK keeps working.
+
 ### Iframe-embedded apps (mobile shell, vibe-coder preview)
 
 Browser apps may run **standalone** (the user opens the Space URL directly) or **embedded** in a host iframe (the Reachy Mini mobile shell, the vibe-coder preview, future shells). HF blocks `huggingface.co/oauth/authorize` from being framed (`X-Frame-Options: SAMEORIGIN`), so OAuth-in-iframe is impossible. The host shell instead pre-authenticates and pre-picks a robot, then forwards both pieces of state to the embed via the iframe URL.

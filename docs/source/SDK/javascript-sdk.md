@@ -324,6 +324,91 @@ Audio must be canonical **16 kHz mono 16-bit PCM WAV**. Apps are responsible for
 
 `playMove` and `uploadAudio` pace chunk sends on the data channel's `bufferedAmount` so multi-megabyte uploads (a 3-min song's WAV is ~6 MB base64) don't degrade other channels on the same peer connection. There's no separate `pause` — to stop a long upload mid-way, close the session.
 
+## Subroutines (ship-and-call JS on the robot)
+
+Subroutines let a Space ship a chunk of JS to the robot and run it there. The robot evaluates the source inside an embedded QuickJS sandbox; the Space then invokes methods on the subroutine as if it were a local object, listens for events the subroutine pushes back, and (optionally) lets the subroutine outlive the WebRTC session.
+
+The killer use-case is **low-latency reactive behaviour** — anything that needs to run at ~50 Hz between user actions (breathing, idle micro-movements, debounced sensor reads, watchdogs). The relay round-trip is too slow for that; a subroutine pays zero network cost between ticks because both ends of every loop run on the robot.
+
+### Loading
+
+```js
+const breathing = await robot.loadSubroutine(`
+  let amplitude = 0.05;
+  setInterval(() => {
+    const z = amplitude * Math.sin(now() / 1000);
+    robot.setBodyYaw(z);
+  }, 20);
+
+  export const api = {
+    setAmplitude(v) { amplitude = v; },
+  };
+`, { name: "breathing", persist: false });
+```
+
+`persist: true` lets the subroutine survive the calling peer's disconnect — useful for "drop a behaviour and walk away" workflows. Default is `false`: the subroutine is torn down when the WebRTC session ends.
+
+### Calling methods
+
+The `Subroutine` handle exposes both a Proxy-style `api` and an explicit `call` method:
+
+```js
+// Comlink-style: any property access on `.api` becomes a remote call.
+await breathing.api.setAmplitude(0.08);
+
+// Explicit form (gives you AbortSignal support):
+const ctrl = new AbortController();
+await breathing.call("setAmplitude", [0.08], { signal: ctrl.signal });
+```
+
+If the guest method expects a `{ signal }` argument, the SDK injects one as the tail argument automatically — both for the proxy form and the explicit form. The guest should poll `ctx.signal.aborted` between work units to cooperatively cancel.
+
+### Receiving events
+
+The guest pushes events via `emit(name, payload)`. The Space subscribes via `subroutine.on(name, handler)`:
+
+```js
+breathing.on("breath", ({ z }) => updateUI(z));
+const off = breathing.on("error", (e) => console.warn(e));
+off();  // unsubscribe
+```
+
+Two events are always available regardless of what the guest emits: `'log'` (carrying `{ level, message }` from the guest's `console.*`) and `'error'` (carrying `{ error, fatal }` from any uncaught exception in an idle callback; `fatal: true` means the runtime has been torn down).
+
+### Host bindings exposed to the guest
+
+The guest sees a `robot` global plus a small set of platform-ish primitives. The surface is deliberately narrow — every new binding widens the trust boundary.
+
+- `robot.setHeadPose(matrix16)` — flat 4×4 row-major matrix
+- `robot.setHeadJoints([7])`
+- `robot.setAntennas([right, left])` — radians
+- `robot.setBodyYaw(rad)`
+- `robot.playSound(filename)` — robot-side WAV/OGG
+- `robot.getState()` — `{ head_pose, antennas, motor_mode, is_move_running }`
+- `setInterval(fn, ms)`, `setTimeout(fn, ms)`, `clearInterval(id)`, `clearTimeout(id)`
+- `console.log/info/warn/error(...args)` — surfaced both in robot logs and as `'log'` events
+- `emit(name, payload)` — push an event to the Space (payload must be JSON-serializable)
+- `now()` — monotonic ms
+
+### Lifecycle and failure model
+
+- An exception inside a method call rejects only that one `call()` promise; the runtime stays up.
+- An exception in an idle (`setInterval`) callback emits a non-fatal `'error'` event; the runtime stays up.
+- A peer disconnect unloads non-persistent subroutines automatically. Persistent ones must be unloaded by an explicit `unload()`, by daemon stop, or by daemon process death.
+- The daemon hot-reloads in place when the same `subroutine_id` is uploaded again — but the SDK generates a fresh UUID on every `loadSubroutine`, so the typical pattern is "load, use, unload, load fresh".
+- Method arguments and return values cross the boundary as JSON, so they must be JSON-serializable (no functions, no `Date`, no `Uint8Array`).
+
+### Out of scope
+
+- ES module imports (`import` / `export` other than `export const api = ...`).
+- `async`/`await` inside guest code (QuickJS supports it but pumping the JS microtask queue from the host is fiddly; revisit if app authors need it).
+- Networking from the guest (no `fetch`).
+- DOM, browser globals, anything Node-specific.
+
+### Platform requirements
+
+The daemon needs the `quickjs` Python wheel installed. It builds from source on aarch64 (CM4) if a pre-built wheel isn't available. If `quickjs` is missing, `loadSubroutine` rejects with a clear error and the rest of the SDK keeps working — nothing else depends on it.
+
 ## Security
 
 - Authentication goes through Hugging Face OAuth — only users logged in to HF can access the signaling server.

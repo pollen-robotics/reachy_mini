@@ -27,6 +27,8 @@ from scipy.spatial.transform import Rotation as R
 from reachy_mini.io.protocol import (
     AnyCommand,
     AppendRecordCmd,
+    CallSubroutineCmd,
+    CancelSubroutineCallCmd,
     CancelAudioCmd,
     CancelMoveCmd,
     GetHardwareIdCmd,
@@ -61,6 +63,10 @@ from reachy_mini.io.protocol import (
     SetVolumeCmd,
     StartRecordingCmd,
     StopRecordingCmd,
+    UnloadSubroutineCmd,
+    UploadSubroutineChunkCmd,
+    UploadSubroutineFinishCmd,
+    UploadSubroutineStartCmd,
     SubscribeLogsCmd,
     UnsubscribeLogsCmd,
     UploadAudioChunkCmd,
@@ -285,6 +291,20 @@ class Backend:
         self._audio_temp_dir: str = os.path.join(
             tempfile.gettempdir(), "reachy-mini-uploads", "audio"
         )
+
+        # ------------------------------------------------------------------
+        # Subroutines: chunked source upload slots (parallel to the move /
+        # audio ones) + the live SubroutineRuntime instances keyed by
+        # subroutine_id. Owner mapping (subroutine_id -> peer_id) is used
+        # to (a) route events back to the right peer, (b) auto-unload on
+        # peer disconnect unless ``persist=True`` was set at load time.
+        # See reachy_mini.subroutines.runtime for the JS sandbox.
+        # ------------------------------------------------------------------
+        self._subroutine_chunks: Dict[str, list[str]] = {}
+        self._subroutine_meta: Dict[str, dict[str, Any]] = {}
+        self._subroutine_ts: Dict[str, float] = {}
+        self._subroutine_runtimes: Dict[str, Any] = {}  # subroutine_id -> SubroutineRuntime
+        self._subroutine_owner: Dict[str, Optional[str]] = {}  # subroutine_id -> peer_id
 
         # WebRTC support
         self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
@@ -1279,6 +1299,18 @@ class Backend:
             self._handle_play_uploaded_audio(cmd)
         elif isinstance(cmd, CancelAudioCmd):
             self._handle_cancel_audio(cmd)
+        elif isinstance(cmd, UploadSubroutineStartCmd):
+            self._handle_subroutine_upload_start(cmd, send_response)
+        elif isinstance(cmd, UploadSubroutineChunkCmd):
+            self._handle_subroutine_upload_chunk(cmd, send_response)
+        elif isinstance(cmd, UploadSubroutineFinishCmd):
+            self._handle_subroutine_upload_finish(cmd, send_response, peer_id)
+        elif isinstance(cmd, CallSubroutineCmd):
+            self._handle_call_subroutine(cmd, send_response, peer_id)
+        elif isinstance(cmd, CancelSubroutineCallCmd):
+            self._handle_cancel_subroutine_call(cmd, send_response)
+        elif isinstance(cmd, UnloadSubroutineCmd):
+            self._handle_unload_subroutine(cmd, send_response)
 
     # ------------------------------------------------------------------
     # Inline-move upload + daemon-side playback
@@ -1670,11 +1702,396 @@ class Backend:
 
         Called from the media server's GStreamer/GLib thread, so we hop
         back onto the asyncio loop before touching task state.
+
+        Two per-peer resources to clean up:
+          - the journalctl subscription task, if any;
+          - any non-persistent subroutines this peer loaded (subroutines
+            with ``persist=True`` survive disconnect intentionally so an
+            app can drop a behaviour and walk away).
         """
         loop = self._log_loop
-        if loop is None or peer_id not in self._log_tasks:
+        if loop is None:
             return
-        loop.call_soon_threadsafe(self._cancel_log_subscription, peer_id)
+        if peer_id in self._log_tasks:
+            loop.call_soon_threadsafe(self._cancel_log_subscription, peer_id)
+        # Subroutine eviction: scan the owner map for matches. The hop
+        # onto the asyncio loop is what makes it safe to call .unload()
+        # (timer cancellation touches asyncio.Task state).
+        loop.call_soon_threadsafe(self._unload_subroutines_for_peer, peer_id)
+
+    def _unload_subroutines_for_peer(self, peer_id: str) -> None:
+        """Unload all non-persistent subroutines owned by ``peer_id``.
+
+        Runs on the asyncio loop so timer/task cleanup inside
+        ``SubroutineRuntime.unload()`` is safe.
+        """
+        to_drop = [
+            sid
+            for sid, owner in self._subroutine_owner.items()
+            if owner == peer_id
+            and not getattr(self._subroutine_runtimes.get(sid), "persist", True)
+        ]
+        for sid in to_drop:
+            runtime = self._subroutine_runtimes.pop(sid, None)
+            self._subroutine_owner.pop(sid, None)
+            if runtime is not None:
+                try:
+                    runtime.unload()
+                except Exception:
+                    self.logger.exception(
+                        "subroutine %s: unload during peer disconnect failed", sid
+                    )
+
+    # ------------------------------------------------------------------
+    # Subroutine handlers (ship-and-call JS skills running inside the daemon)
+    # ------------------------------------------------------------------
+
+    def _handle_subroutine_upload_start(
+        self,
+        cmd: UploadSubroutineStartCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Open an upload slot for a new subroutine source payload."""
+        self._evict_stale_uploads()  # piggyback the existing TTL sweeper
+        if len(self._subroutine_chunks) >= self._upload_max_active_slots:
+            send_response(
+                {
+                    "error": "too many in-flight subroutine uploads",
+                    "command": "upload_subroutine_start",
+                    "subroutine_id": cmd.subroutine_id,
+                }
+            )
+            return
+        self._subroutine_chunks[cmd.subroutine_id] = []
+        self._subroutine_meta[cmd.subroutine_id] = {
+            "total_chunks": cmd.total_chunks,
+            "name": cmd.name,
+            "persist": cmd.persist,
+            "encoding": cmd.encoding,
+        }
+        self._subroutine_ts[cmd.subroutine_id] = time.time()
+        send_response(
+            {
+                "status": "ok",
+                "command": "upload_subroutine_start",
+                "subroutine_id": cmd.subroutine_id,
+            }
+        )
+
+    def _handle_subroutine_upload_chunk(
+        self,
+        cmd: UploadSubroutineChunkCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        slot = self._subroutine_chunks.get(cmd.subroutine_id)
+        meta = self._subroutine_meta.get(cmd.subroutine_id)
+        if slot is None or meta is None:
+            send_response(
+                {
+                    "error": "unknown subroutine_id",
+                    "command": "upload_subroutine_chunk",
+                    "subroutine_id": cmd.subroutine_id,
+                }
+            )
+            return
+        # Same out-of-order policy as moves: discard the slot so the
+        # next start can recover. The client SDK serialises chunks so
+        # this should be unreachable on a healthy data channel.
+        if cmd.chunk_index != len(slot):
+            self._subroutine_chunks.pop(cmd.subroutine_id, None)
+            self._subroutine_meta.pop(cmd.subroutine_id, None)
+            self._subroutine_ts.pop(cmd.subroutine_id, None)
+            send_response(
+                {
+                    "error": (
+                        f"out-of-order chunk: expected {len(slot)}, got "
+                        f"{cmd.chunk_index} (slot discarded)"
+                    ),
+                    "command": "upload_subroutine_chunk",
+                    "subroutine_id": cmd.subroutine_id,
+                }
+            )
+            return
+        slot.append(cmd.chunk)
+        self._subroutine_ts[cmd.subroutine_id] = time.time()
+
+    def _handle_subroutine_upload_finish(
+        self,
+        cmd: UploadSubroutineFinishCmd,
+        send_response: Callable[[dict[str, Any]], None],
+        peer_id: Optional[str],
+    ) -> None:
+        """Assemble + instantiate the subroutine; reply with its method surface."""
+        slot = self._subroutine_chunks.pop(cmd.subroutine_id, None)
+        meta = self._subroutine_meta.pop(cmd.subroutine_id, None)
+        self._subroutine_ts.pop(cmd.subroutine_id, None)
+        if slot is None or meta is None:
+            send_response(
+                {
+                    "error": "no upload slot for this subroutine_id",
+                    "command": "upload_subroutine_finish",
+                    "subroutine_id": cmd.subroutine_id,
+                }
+            )
+            return
+        if len(slot) != meta["total_chunks"]:
+            send_response(
+                {
+                    "error": (
+                        f"chunk count mismatch: expected {meta['total_chunks']}, "
+                        f"got {len(slot)}"
+                    ),
+                    "command": "upload_subroutine_finish",
+                    "subroutine_id": cmd.subroutine_id,
+                }
+            )
+            return
+        # Decode the assembled payload. ``json`` = chunks already
+        # concatenated to UTF-8 source; ``gzip+base64`` = base64 of
+        # gzipped source.
+        joined = "".join(slot)
+        try:
+            if meta["encoding"] == "gzip+base64":
+                import base64
+                import gzip
+
+                source = gzip.decompress(base64.b64decode(joined)).decode("utf-8")
+            else:
+                source = joined
+        except Exception as e:
+            send_response(
+                {
+                    "error": f"subroutine payload decode failed: {e}",
+                    "command": "upload_subroutine_finish",
+                    "subroutine_id": cmd.subroutine_id,
+                }
+            )
+            return
+
+        # Replace any subroutine already registered under this id.
+        # Hot-reload pattern: app authors will iterate by re-uploading
+        # under the same id during development.
+        prev = self._subroutine_runtimes.pop(cmd.subroutine_id, None)
+        if prev is not None:
+            try:
+                prev.unload()
+            except Exception:
+                self.logger.exception(
+                    "subroutine %s: pre-replace unload failed", cmd.subroutine_id
+                )
+
+        # Build a SubroutineHost adapter that delegates to this backend.
+        # Defined inline so we capture ``self`` cleanly without a heavy
+        # per-backend host class.
+        from reachy_mini.subroutines import (  # noqa: PLC0415
+            QUICKJS_AVAILABLE,
+            SubroutineRuntime,
+            SubroutineRuntimeError,
+        )
+
+        if not QUICKJS_AVAILABLE:
+            send_response(
+                {
+                    "error": (
+                        "subroutines require the 'quickjs' Python package; "
+                        "install it on the daemon host to enable this feature."
+                    ),
+                    "command": "upload_subroutine_finish",
+                    "subroutine_id": cmd.subroutine_id,
+                }
+            )
+            return
+
+        backend = self
+
+        class _HostAdapter:
+            def set_head_pose(self, m: list[float]) -> None:
+                import numpy as np  # local import: keeps subroutines import-cheap
+
+                backend.set_target_head_pose(np.array(m).reshape(4, 4))
+
+            def set_head_joints(self, j: list[float]) -> None:
+                import numpy as np
+
+                backend.set_target_head_joint_positions(np.array(j))
+
+            def set_antennas(self, a: list[float]) -> None:
+                import numpy as np
+
+                backend.set_target_antenna_joint_positions(np.array(a))
+
+            def set_body_yaw(self, y: float) -> None:
+                backend.set_target_body_yaw(float(y))
+
+            def play_sound(self, f: str) -> None:
+                backend.play_sound(f)
+
+            def get_state(self) -> dict[str, Any]:
+                # Lightweight subset of the full GetState response —
+                # what a behaviour actually needs (poses + joints +
+                # motor mode), without the heavyweight fields. Apps
+                # that need the rest can call get_state via the SDK.
+                try:
+                    head = backend.get_current_head_pose().flatten().tolist()
+                except Exception:
+                    head = None
+                try:
+                    antennas = (
+                        backend.get_present_antenna_joint_positions().tolist()
+                    )
+                except Exception:
+                    antennas = None
+                return {
+                    "head_pose": head,
+                    "antennas": antennas,
+                    "motor_mode": backend.get_motor_control_mode().value,
+                    "is_move_running": backend.is_move_running,
+                }
+
+        # Route subroutine events to the owning peer if we know it,
+        # else broadcast (matches the existing _send_message_to_webrtc
+        # fan-out path).
+        sub_peer_id = peer_id
+
+        def _send(payload: dict[str, Any]) -> None:
+            try:
+                msg = json.dumps(payload)
+            except (TypeError, ValueError):
+                self.logger.warning(
+                    "subroutine event payload not JSON-serialisable: %s",
+                    list(payload),
+                )
+                return
+            sender = self._send_message_to_webrtc
+            if sender is not None:
+                try:
+                    sender(sub_peer_id, msg)
+                except Exception:
+                    self.logger.warning(
+                        "subroutine event WebRTC send failed", exc_info=True
+                    )
+            if self._ws_broadcast_callback is not None and sub_peer_id is None:
+                # WS clients are not multiplexed by peer; only fan out
+                # broadcast events to them (matches the existing
+                # _send_message_to_webrtc(None, ...) convention).
+                try:
+                    self._ws_broadcast_callback(msg)
+                except Exception:
+                    self.logger.warning(
+                        "subroutine event WS broadcast failed", exc_info=True
+                    )
+
+        loop = asyncio.get_event_loop()
+        try:
+            runtime = SubroutineRuntime(
+                subroutine_id=cmd.subroutine_id,
+                source=source,
+                host=_HostAdapter(),
+                sender=_send,
+                owner_peer_id=peer_id,
+                name=meta["name"] or cmd.subroutine_id,
+                persist=meta["persist"],
+                loop=loop,
+            )
+        except SubroutineRuntimeError as e:
+            send_response(
+                {
+                    "error": f"subroutine load failed: {e}",
+                    "command": "upload_subroutine_finish",
+                    "subroutine_id": cmd.subroutine_id,
+                }
+            )
+            return
+
+        self._subroutine_runtimes[cmd.subroutine_id] = runtime
+        self._subroutine_owner[cmd.subroutine_id] = peer_id
+        send_response(
+            {
+                "status": "ok",
+                "command": "upload_subroutine_finish",
+                "subroutine_id": cmd.subroutine_id,
+                "methods": runtime.method_names,
+                "persist": meta["persist"],
+            }
+        )
+
+    def _handle_call_subroutine(
+        self,
+        cmd: CallSubroutineCmd,
+        send_response: Callable[[dict[str, Any]], None],
+        peer_id: Optional[str],
+    ) -> None:
+        runtime = self._subroutine_runtimes.get(cmd.subroutine_id)
+        if runtime is None:
+            send_response(
+                {
+                    "type": "subroutine_call_response",
+                    "subroutine_id": cmd.subroutine_id,
+                    "call_id": cmd.call_id,
+                    "error": "no such subroutine",
+                }
+            )
+            return
+        try:
+            result = runtime.call(cmd.call_id, cmd.method, cmd.args)
+            send_response(
+                {
+                    "type": "subroutine_call_response",
+                    "subroutine_id": cmd.subroutine_id,
+                    "call_id": cmd.call_id,
+                    "result": result,
+                }
+            )
+        except Exception as e:
+            send_response(
+                {
+                    "type": "subroutine_call_response",
+                    "subroutine_id": cmd.subroutine_id,
+                    "call_id": cmd.call_id,
+                    "error": str(e),
+                }
+            )
+
+    def _handle_cancel_subroutine_call(
+        self,
+        cmd: CancelSubroutineCallCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        runtime = self._subroutine_runtimes.get(cmd.subroutine_id)
+        # Cancellation is cooperative and best-effort: silent no-op if
+        # the subroutine or call is gone.
+        if runtime is not None:
+            try:
+                runtime.cancel_call(cmd.call_id)
+            except Exception:
+                self.logger.debug(
+                    "subroutine %s: cancel_call %s failed",
+                    cmd.subroutine_id,
+                    cmd.call_id,
+                    exc_info=True,
+                )
+
+    def _handle_unload_subroutine(
+        self,
+        cmd: UnloadSubroutineCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        runtime = self._subroutine_runtimes.pop(cmd.subroutine_id, None)
+        self._subroutine_owner.pop(cmd.subroutine_id, None)
+        if runtime is not None:
+            try:
+                runtime.unload()
+            except Exception:
+                self.logger.exception(
+                    "subroutine %s: unload failed", cmd.subroutine_id
+                )
+        send_response(
+            {
+                "status": "ok",
+                "command": "unload_subroutine",
+                "subroutine_id": cmd.subroutine_id,
+            }
+        )
 
     async def _async_subscribe_logs(
         self,

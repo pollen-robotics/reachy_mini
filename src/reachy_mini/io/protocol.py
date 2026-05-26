@@ -600,6 +600,127 @@ class CancelAudioCmd(BaseModel):
     upload_id: str
 
 
+# ------------------------------------------------------------------
+# Subroutines: ship-and-call JS skills running inside the daemon
+# ------------------------------------------------------------------
+#
+# A subroutine is a small JS module shipped by a client over the data
+# channel. The daemon assembles it (same chunked upload mechanism as
+# UploadMove*), evaluates it inside an embedded QuickJS context, and
+# exposes a remote-callable surface: the subroutine declares an ``api``
+# object whose methods the original client can invoke as
+# ``await subroutine.foo(args)``. The subroutine can also run idle
+# loops (e.g. a breathing animation) and ``emit`` events back to its
+# owner without being called first.
+#
+# Wire envelope follows JSON-RPC 2.0 in spirit (single bidirectional
+# channel, id-correlated request/response, sibling cancel
+# notification) but is encoded as our usual {type, ...} payloads so
+# the same dispatcher handles it.
+#
+# Lifecycle:
+#   1. upload_subroutine_start / chunk / finish — ship the source.
+#   2. The "finish" handler instantiates a runtime; runtime returns
+#      the surface (method names) which the daemon ACKs.
+#   3. call_subroutine{id, method, args} -> SubroutineCallResponseMsg{id, result|error}.
+#   4. cancel_subroutine_call{id} signals an AbortSignal on the guest.
+#   5. The subroutine may emit at any time via SubroutineEventMsg.
+#   6. unload_subroutine tears it down; peer disconnect does the
+#      same unless ``persist=True`` was set at load time.
+
+
+class UploadSubroutineStartCmd(BaseModel):
+    """Open an upload slot for a new subroutine. Fire-and-forget.
+
+    Same chunked-upload contract as :class:`UploadMoveStartCmd`. The
+    payload is a JS source string (UTF-8) that the daemon hands to its
+    embedded QuickJS runtime on ``upload_subroutine_finish``.
+
+    ``subroutine_id`` is chosen by the client (use a UUID) and becomes
+    the handle for ``call_subroutine`` / ``unload_subroutine`` / event
+    routing. It deliberately equals ``upload_id`` to keep the surface
+    small — there's only one identifier per subroutine.
+
+    ``name`` is a free-form label for logs; the daemon does not enforce
+    uniqueness. ``persist`` controls survival across peer disconnects:
+    by default the subroutine is unloaded when its owning peer goes
+    away (same lifecycle as a remote WebRTC session). Set ``True`` to
+    let the subroutine outlive its loader — useful for "drop in a
+    behavior, walk away" workflows.
+    """
+
+    type: Literal["upload_subroutine_start"] = "upload_subroutine_start"
+    subroutine_id: str
+    total_chunks: int = Field(..., ge=1, le=256)
+    name: str = ""
+    persist: bool = False
+    # Mirror UploadMove's encoding options so very long subroutines
+    # (rare but possible if someone vendors a library) compress well.
+    encoding: Literal["json", "gzip+base64"] = "json"
+
+
+class UploadSubroutineChunkCmd(BaseModel):
+    """One fragment of a subroutine source payload. Fire-and-forget."""
+
+    type: Literal["upload_subroutine_chunk"] = "upload_subroutine_chunk"
+    subroutine_id: str
+    chunk_index: int = Field(..., ge=0)
+    chunk: str = Field(..., max_length=16384)
+
+
+class UploadSubroutineFinishCmd(BaseModel):
+    """Close an upload slot: daemon assembles, instantiates, returns surface.
+
+    The ACK carries ``{"status": "ok", "command": "upload_subroutine_finish",
+    "subroutine_id": ..., "methods": ["foo", "bar", ...]}`` on success,
+    or ``{"error": "...", ...}`` if compilation/instantiation failed.
+    The method list lets the SDK build a typed proxy without a separate
+    introspection round-trip.
+    """
+
+    type: Literal["upload_subroutine_finish"] = "upload_subroutine_finish"
+    subroutine_id: str
+
+
+class CallSubroutineCmd(BaseModel):
+    """Invoke a method on a previously-loaded subroutine.
+
+    ``call_id`` is chosen by the client and echoed in the response so
+    multiple in-flight calls can be correlated. The response is a
+    ``SubroutineCallResponseMsg`` sent unicast to the calling peer.
+    """
+
+    type: Literal["call_subroutine"] = "call_subroutine"
+    subroutine_id: str
+    call_id: str
+    method: str
+    args: list[Any] = Field(default_factory=list)
+
+
+class CancelSubroutineCallCmd(BaseModel):
+    """Signal cooperative cancellation on an in-flight subroutine call.
+
+    The guest's ``signal.aborted`` becomes ``True``; it's the
+    subroutine's responsibility to check and unwind. Idempotent; calls
+    for unknown ``call_id`` are ignored.
+    """
+
+    type: Literal["cancel_subroutine_call"] = "cancel_subroutine_call"
+    subroutine_id: str
+    call_id: str
+
+
+class UnloadSubroutineCmd(BaseModel):
+    """Tear down a subroutine, cancelling any pending calls and stopping its loops.
+
+    Idempotent. Sends a final ACK to the caller; existing pending
+    calls receive an error response with ``reason: "unloaded"``.
+    """
+
+    type: Literal["unload_subroutine"] = "unload_subroutine"
+    subroutine_id: str
+
+
 AnyCommand = Annotated[
     SetTargetCmd
     | SetHeadJointsCmd
@@ -637,7 +758,13 @@ AnyCommand = Annotated[
     | PlayUploadedMoveCmd
     | CancelMoveCmd
     | PlayUploadedAudioCmd
-    | CancelAudioCmd,
+    | CancelAudioCmd
+    | UploadSubroutineStartCmd
+    | UploadSubroutineChunkCmd
+    | UploadSubroutineFinishCmd
+    | CallSubroutineCmd
+    | CancelSubroutineCallCmd
+    | UnloadSubroutineCmd,
     Field(discriminator="type"),
 ]
 
@@ -708,6 +835,74 @@ class LogStreamErrorMsg(BaseModel):
 
     type: Literal["log_stream_error"] = "log_stream_error"
     error: str
+
+
+# ------------------------------------------------------------------
+# Subroutine messages (server -> client, unicast to the owning peer)
+# ------------------------------------------------------------------
+
+
+class SubroutineCallResponseMsg(BaseModel):
+    """Reply to a :class:`CallSubroutineCmd`.
+
+    Either ``result`` (any JSON-serialisable value, ``None`` for void
+    methods) or ``error`` (string) is set; never both. ``call_id``
+    echoes the value from the request so the client can correlate
+    multiple in-flight calls.
+    """
+
+    type: Literal["subroutine_call_response"] = "subroutine_call_response"
+    subroutine_id: str
+    call_id: str
+    result: Any = None
+    error: Optional[str] = None
+
+
+class SubroutineEventMsg(BaseModel):
+    """Server-pushed event from a subroutine's ``emit()`` binding.
+
+    Fire-and-forget; no response expected. Unicast to the peer that
+    owns the subroutine (so two Spaces loading the same skill code
+    don't see each other's events).
+    """
+
+    type: Literal["subroutine_event"] = "subroutine_event"
+    subroutine_id: str
+    event: str
+    payload: Any = None
+
+
+class SubroutineLogMsg(BaseModel):
+    """A line of ``console.log`` / ``console.warn`` / ``console.error`` from a subroutine.
+
+    Helps the Space author debug skill code without ssh'ing into the
+    robot. The daemon also writes the same line to its own logger at
+    the matching level.
+    """
+
+    type: Literal["subroutine_log"] = "subroutine_log"
+    subroutine_id: str
+    level: Literal["log", "warn", "error"] = "log"
+    message: str
+
+
+class SubroutineErrorMsg(BaseModel):
+    """Uncaught error inside the subroutine VM (typically from a setInterval / setTimeout callback).
+
+    Distinct from :class:`SubroutineCallResponseMsg`'s error field —
+    that covers errors thrown by a method the client invoked. This
+    one covers errors that happen on the subroutine's own time
+    (idle loops, async callbacks, etc.).
+    """
+
+    type: Literal["subroutine_error"] = "subroutine_error"
+    subroutine_id: str
+    error: str
+    # ``fatal=True`` means the runtime has been torn down — the
+    # subroutine is no longer running and the client must reload it
+    # to recover. ``False`` means the error was caught at the VM
+    # boundary but the subroutine itself is still alive.
+    fatal: bool = False
 
 
 # ------------------------------------------------------------------

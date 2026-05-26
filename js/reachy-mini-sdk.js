@@ -482,6 +482,17 @@ export class ReachyMini extends EventTarget {
         this._activeMoveUploadId = null;
         this._activeAudioUploadId = null;
 
+        // Subroutine bookkeeping. Keyed by ``subroutine_id`` (which we
+        // generate as a UUID on load). Each entry holds:
+        //   - the Subroutine wrapper instance the app interacts with
+        //   - the set of installed event handlers (subroutine.on(...))
+        //   - the Map of in-flight call_id -> {resolve, reject} pairs
+        //     so `_handleRobotMessage` can resolve responses by id.
+        // Cleared in disconnect() / stopSession() so a lingering
+        // promise can't hang the page after a teardown.
+        this._subroutines = new Map();        // id -> Subroutine
+        this._subroutineCalls = new Map();    // call_id -> { resolve, reject, subroutine }
+
         // startSession() promise plumbing
         this._sessionResolve = null;
         this._sessionReject = null;
@@ -2213,10 +2224,143 @@ export class ReachyMini extends EventTarget {
         return this._sendCommand({ type: "cancel_audio", upload_id: id });
     }
 
+    // ─── Subroutines: ship-and-call JS skills running on the robot ─────
+    //
+    // A subroutine is a small JS module the app ships to the robot at
+    // startup. The robot runs it in an embedded QuickJS sandbox and
+    // exposes the methods declared on its ``api`` object as remote
+    // callable surfaces. The subroutine can also run idle loops
+    // (``setInterval`` / ``setTimeout``), emit events back via
+    // ``emit(name, payload)``, and read robot state via the ``robot.*``
+    // host namespace it gets injected with.
+    //
+    // End-goal: a Space's entire app logic can live in a subroutine on
+    // the robot, with the browser tab acting as a thin UI shell.
+    //
+    // Example:
+    //   const sub = await robot.loadSubroutine(`
+    //     let amplitude = 0.05;
+    //     setInterval(() => {
+    //       const z = amplitude * Math.sin(now() / 1000);
+    //       robot.setBodyYaw(z);
+    //     }, 20);
+    //     export const api = {
+    //       setAmplitude(v) { amplitude = v; },
+    //     };
+    //   `, { name: 'breathing' });
+    //   await sub.api.setAmplitude(0.1);
+    //   sub.on('error', e => console.warn('subroutine errored', e));
+    //   await sub.unload();
+
+    /**
+     * Upload + instantiate a subroutine on the robot.
+     *
+     * The source is a JS string. App authors typically declare
+     * ``export const api = { ... }`` for the remote-callable surface
+     * (the ``export`` is rewritten away — the SDK doesn't actually run
+     * ES modules) and may use ``setInterval`` / ``setTimeout`` /
+     * ``emit`` / ``console.*`` / a ``robot`` global with motion
+     * primitives.
+     *
+     * @param {string} source - JS source for the subroutine
+     * @param {Object} [opts]
+     * @param {string} [opts.name] - free-form label for logs
+     * @param {boolean} [opts.persist=false] - survive peer disconnect
+     *   if ``true``; otherwise unloaded automatically when the WebRTC
+     *   session ends. Set ``true`` for "drop a behaviour and walk away"
+     *   workflows.
+     * @returns {Promise<Subroutine>}
+     */
+    async loadSubroutine(source, opts = {}) {
+        const { name = "", persist = false } = opts;
+        if (typeof source !== "string" || !source.trim()) {
+            throw new Error("loadSubroutine: source must be a non-empty string");
+        }
+        if (!this._dc || this._dc.readyState !== "open") {
+            throw new Error("loadSubroutine: data channel not open");
+        }
+        const subroutineId = (typeof crypto !== "undefined" && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : `sub-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+        // Chunked upload, mirroring the playMove pattern. Subroutines
+        // are typically small (a few KB) but chunked transport keeps
+        // very long ones (vendored libraries) safe under SCTP frame
+        // limits. We install the finish-ACK waiter BEFORE sending the
+        // finish command so we never race the daemon's response.
+        const totalChunks = Math.ceil(source.length / UPLOAD_CHUNK_SIZE) || 1;
+        const ackPromise = this._waitForResponse({
+            command: "upload_subroutine_finish",
+            subroutineId,
+        });
+        this._sendCommand({
+            type: "upload_subroutine_start",
+            subroutine_id: subroutineId,
+            total_chunks: totalChunks,
+            name,
+            persist: !!persist,
+            encoding: "json",
+        });
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * UPLOAD_CHUNK_SIZE;
+            this._sendCommand({
+                type: "upload_subroutine_chunk",
+                subroutine_id: subroutineId,
+                chunk_index: i,
+                chunk: source.slice(start, start + UPLOAD_CHUNK_SIZE),
+            });
+        }
+        this._sendCommand({
+            type: "upload_subroutine_finish",
+            subroutine_id: subroutineId,
+        });
+        const finishAck = await ackPromise;
+        if (finishAck.error) {
+            throw new Error(`loadSubroutine: ${finishAck.error}`);
+        }
+        const sub = new Subroutine(
+            this,
+            subroutineId,
+            name || subroutineId,
+            finishAck.methods || [],
+            !!finishAck.persist,
+        );
+        this._subroutines.set(subroutineId, sub);
+        return sub;
+    }
+
     // ─── Private ─────────────────────────────────────────────────────────
 
     _emit(name, detail) {
         this.dispatchEvent(new CustomEvent(name, { detail }));
+    }
+
+    /**
+     * Wait for a {command, subroutine_id, [status|error|methods]} ACK
+     * matching the criteria. Used by the chunked load flow; the daemon
+     * replies once per command (start, finish), so this resolves on
+     * the next matching message and ignores everything else.
+     *
+     * The handler is installed via `_broadcastWaiters` for symmetry
+     * with the playMove path. Caller is expected to chain start ->
+     * waitForResponse(start) -> finish -> waitForResponse(finish).
+     */
+    _waitForResponse({ command, subroutineId, timeoutMs = 15000 }) {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                const idx = this._broadcastWaiters.indexOf(waiter);
+                if (idx >= 0) this._broadcastWaiters.splice(idx, 1);
+                reject(new Error(`timeout waiting for ${command} ack`));
+            }, timeoutMs);
+            const waiter = {
+                predicate: d =>
+                    d && d.command === command && d.subroutine_id === subroutineId,
+                resolve: d => { clearTimeout(timer); resolve(d); },
+            };
+            // LIFO so the most recent waiter wins (matches the existing
+            // _waitForBroadcast convention).
+            this._broadcastWaiters.unshift(waiter);
+        });
     }
 
     /**
@@ -2552,6 +2696,49 @@ export class ReachyMini extends EventTarget {
                 return;
             }
         }
+        // Subroutine messages: response to a remote call, event push,
+        // log line, or fatal error. We dispatch by ``data.type`` because
+        // the upload start/finish ACKs reuse the ``command`` field
+        // (handled elsewhere) and we want subroutine routing to live
+        // in one place.
+        if (data.type === 'subroutine_call_response') {
+            const entry = this._subroutineCalls.get(data.call_id);
+            if (entry) {
+                this._subroutineCalls.delete(data.call_id);
+                if (data.error) entry.reject(new Error(data.error));
+                else entry.resolve(data.result);
+            }
+            return;
+        }
+        if (data.type === 'subroutine_event') {
+            const sub = this._subroutines.get(data.subroutine_id);
+            if (sub) sub._dispatchEvent(data.event, data.payload);
+            return;
+        }
+        if (data.type === 'subroutine_log') {
+            const sub = this._subroutines.get(data.subroutine_id);
+            const level = data.level === 'error' ? 'error' : data.level === 'warn' ? 'warn' : 'log';
+            // Tag console output so devs can grep for a specific
+            // subroutine when many are running.
+            const tag = sub ? `[${sub.name}]` : `[subroutine ${data.subroutine_id}]`;
+            (console[level] || console.log)(tag, data.message);
+            if (sub) sub._dispatchEvent('log', { level, message: data.message });
+            return;
+        }
+        if (data.type === 'subroutine_error') {
+            const sub = this._subroutines.get(data.subroutine_id);
+            if (sub) {
+                sub._dispatchEvent('error', { error: data.error, fatal: !!data.fatal });
+                if (data.fatal) {
+                    // Fatal error tore the runtime down on the robot;
+                    // mirror that locally so subsequent .call() rejects
+                    // instead of hanging.
+                    sub._markUnloaded();
+                    this._subroutines.delete(data.subroutine_id);
+                }
+            }
+            return;
+        }
         if (data.type === 'log_line') {
             for (const sub of this._logSubscribers) {
                 try {
@@ -2621,5 +2808,201 @@ export class ReachyMini extends EventTarget {
         }, 2000);
     }
 }
+
+
+// ─── Subroutine ────────────────────────────────────────────────────────────
+//
+// Handle returned by `robot.loadSubroutine(...)`. Wraps the call/event
+// machinery for one live subroutine running on the robot.
+
+/**
+ * Live handle to a subroutine running on the robot.
+ *
+ * Do not instantiate directly — use ``robot.loadSubroutine(source)``.
+ *
+ * The class exposes:
+ *   - ``sub.api`` — a Proxy whose method calls auto-route to the robot
+ *     (``await sub.api.foo(1, 2)`` ≡ ``await sub.call('foo', [1, 2])``).
+ *     Methods declared via ``export const api = { ... }`` on the
+ *     subroutine side become accessible without manual registration.
+ *   - ``sub.call(method, args, { signal })`` — explicit invocation with
+ *     an AbortSignal for cancellation.
+ *   - ``sub.on(event, handler)`` — listen for ``emit(...)`` from the
+ *     subroutine, plus the built-in ``'log'`` / ``'error'`` events.
+ *   - ``sub.unload()`` — tear down the runtime on the robot.
+ */
+export class Subroutine {
+    constructor(robot, id, name, methodNames, persist) {
+        this._robot = robot;
+        this.id = id;
+        this.name = name;
+        this.methodNames = methodNames;
+        this.persist = persist;
+        this._eventHandlers = new Map();        // event -> Set<fn>
+        this._nextCallId = 1;
+        this._unloaded = false;
+
+        // ``api`` is a Comlink-style proxy: any method access returns
+        // a function that wraps `call(method, args)`. We don't seed it
+        // with the declared methodNames — the proxy answers everything,
+        // and an unknown method just produces a rejected promise from
+        // the robot. This matches MCP/JSON-RPC ergonomics (request a
+        // method, server says yes or no) without forcing the SDK to
+        // know the surface ahead of time.
+        this.api = new Proxy({}, {
+            get: (_target, method) => {
+                if (typeof method !== "string") return undefined;
+                if (method === "then") return undefined; // not thenable
+                return (...args) => {
+                    // Convention: if the last arg is `{ signal }`, hoist
+                    // it out so the user can pass an AbortSignal as the
+                    // trailing arg in either positional or named form.
+                    let signal;
+                    if (
+                        args.length > 0 &&
+                        args[args.length - 1] &&
+                        typeof args[args.length - 1] === "object" &&
+                        args[args.length - 1] !== null &&
+                        args[args.length - 1].signal instanceof AbortSignal
+                    ) {
+                        signal = args.pop().signal;
+                    }
+                    return this.call(method, args, { signal });
+                };
+            },
+        });
+    }
+
+    /**
+     * Invoke a method on the subroutine. Returns a Promise that resolves
+     * with the method's return value or rejects with the error string.
+     *
+     * Cancellation: pass an AbortSignal in ``opts.signal``; on abort
+     * the SDK sends ``cancel_subroutine_call`` to flip the guest's
+     * ``ctx.signal.aborted`` flag. The promise rejects with an
+     * AbortError as soon as the abort fires, regardless of whether
+     * the guest has noticed yet.
+     *
+     * @param {string} method
+     * @param {any[]} [args=[]]
+     * @param {Object} [opts]
+     * @param {AbortSignal} [opts.signal]
+     * @returns {Promise<any>}
+     */
+    call(method, args = [], opts = {}) {
+        if (this._unloaded) {
+            return Promise.reject(new Error(`subroutine ${this.name} is unloaded`));
+        }
+        const { signal } = opts;
+        const callId = `${this.id}-c${this._nextCallId++}`;
+        return new Promise((resolve, reject) => {
+            const onAbort = () => {
+                this._robot._subroutineCalls.delete(callId);
+                this._robot._sendCommand({
+                    type: "cancel_subroutine_call",
+                    subroutine_id: this.id,
+                    call_id: callId,
+                });
+                // DOMException with name 'AbortError' so callers can
+                // distinguish from real failures.
+                reject(
+                    typeof DOMException !== "undefined"
+                        ? new DOMException("aborted", "AbortError")
+                        : Object.assign(new Error("aborted"), { name: "AbortError" }),
+                );
+            };
+            if (signal) {
+                if (signal.aborted) { onAbort(); return; }
+                signal.addEventListener("abort", onAbort, { once: true });
+            }
+            this._robot._subroutineCalls.set(callId, {
+                resolve: v => {
+                    if (signal) signal.removeEventListener("abort", onAbort);
+                    resolve(v);
+                },
+                reject: e => {
+                    if (signal) signal.removeEventListener("abort", onAbort);
+                    reject(e);
+                },
+                subroutine: this,
+            });
+            const sent = this._robot._sendCommand({
+                type: "call_subroutine",
+                subroutine_id: this.id,
+                call_id: callId,
+                method,
+                args: Array.isArray(args) ? args : [args],
+            });
+            if (!sent) {
+                this._robot._subroutineCalls.delete(callId);
+                if (signal) signal.removeEventListener("abort", onAbort);
+                reject(new Error("data channel not open"));
+            }
+        });
+    }
+
+    /**
+     * Subscribe to events from the subroutine. The handler is invoked
+     * with the ``payload`` argument passed to ``emit(event, payload)``
+     * in the guest. The built-in ``'log'`` and ``'error'`` events
+     * carry ``{ level, message }`` and ``{ error, fatal }`` shapes
+     * respectively.
+     *
+     * @param {string} event
+     * @param {(payload: any) => void} handler
+     * @returns {() => void} unsubscribe fn
+     */
+    on(event, handler) {
+        if (typeof handler !== "function") {
+            throw new Error("Subroutine.on: handler must be a function");
+        }
+        let set = this._eventHandlers.get(event);
+        if (!set) { set = new Set(); this._eventHandlers.set(event, set); }
+        set.add(handler);
+        return () => set.delete(handler);
+    }
+
+    /**
+     * Tear down the subroutine on the robot. Idempotent. Any pending
+     * calls reject with ``subroutine unloaded``.
+     *
+     * @returns {Promise<void>}
+     */
+    async unload() {
+        if (this._unloaded) return;
+        this._markUnloaded();
+        // Drop the wrapper from the robot's registry so events for a
+        // re-loaded subroutine with a fresh id don't reach this one.
+        this._robot._subroutines.delete(this.id);
+        this._robot._sendCommand({
+            type: "unload_subroutine",
+            subroutine_id: this.id,
+        });
+    }
+
+    // --- internals -----------------------------------------------------
+
+    _dispatchEvent(name, payload) {
+        const set = this._eventHandlers.get(name);
+        if (!set) return;
+        for (const h of set) {
+            try { h(payload); }
+            catch (e) { console.error(`Subroutine[${this.name}] handler for '${name}' threw:`, e); }
+        }
+    }
+
+    _markUnloaded() {
+        this._unloaded = true;
+        // Reject every pending call belonging to this subroutine so
+        // callers don't hang.
+        for (const [callId, entry] of this._robot._subroutineCalls) {
+            if (entry.subroutine === this) {
+                this._robot._subroutineCalls.delete(callId);
+                entry.reject(new Error("subroutine unloaded"));
+            }
+        }
+    }
+}
+
 
 export default ReachyMini;
