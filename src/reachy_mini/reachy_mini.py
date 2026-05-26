@@ -512,6 +512,11 @@ class ReachyMini:
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
 
+        Note:
+            `enable_motors()` pins all targets to the present pose before flipping
+            torque on, so the pattern ``set_target(X); enable_motors()`` no longer
+            drives the robot to ``X``. Call ``set_target`` *after* ``enable_motors``.
+
         """
         if head is None and antennas is None and body_yaw is None:
             raise ValueError(
