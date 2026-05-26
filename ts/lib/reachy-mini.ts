@@ -504,8 +504,16 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         // calling sender.replaceTrack() on the audio sender exposed via
         // this._pc after the `streaming` event fires.
         try {
-            const Ctx = (window.AudioContext
-                || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+            // Safari (and the iOS WKWebView Tauri ships on) exposes
+            // AudioContext only under the `webkitAudioContext` prefix.
+            // Narrow once, locally, so we don't sprinkle vendor casts
+            // through the code.
+            const w = window as Window & {
+                AudioContext?: typeof AudioContext;
+                webkitAudioContext?: typeof AudioContext;
+            };
+            const Ctx = w.AudioContext ?? w.webkitAudioContext;
+            if (!Ctx) throw new Error('AudioContext not supported');
             const ctx = new Ctx();
             const dst = ctx.createMediaStreamDestination();
             const osc = ctx.createOscillator();
@@ -513,8 +521,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             gain.gain.value = 0;
             osc.connect(gain).connect(dst);
             osc.start();
-            this._micStream = dst.stream;
-            this._micStream.getAudioTracks().forEach((t) => { t.enabled = false; });
+            const stream = dst.stream;
+            stream.getAudioTracks().forEach((t) => { t.enabled = false; });
+            this._micStream = stream;
             this._micMuted = true;
         } catch (e) {
             console.warn('Audio sender placeholder setup failed:', e);
@@ -522,7 +531,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         }
 
         this._pc = new RTCPeerConnection({
-            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] satisfies RTCIceServer[],
         });
 
         return new Promise<void>((resolve, reject) => {
@@ -897,27 +906,34 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     getVolume(): Promise<number | null> {
-        return this._volumeRoundtrip({ type: 'get_volume' }, '_volumeResolve');
+        return this._slotRoundtrip(
+            () => this._volumeResolve,
+            (next) => { this._volumeResolve = next; },
+            { type: 'get_volume' },
+        );
     }
 
     setVolume(volume: number): Promise<number | null> {
-        return this._volumeRoundtrip(
+        return this._slotRoundtrip(
+            () => this._volumeResolve,
+            (next) => { this._volumeResolve = next; },
             { type: 'set_volume', volume: clampVolume(volume) },
-            '_volumeResolve',
         );
     }
 
     getMicrophoneVolume(): Promise<number | null> {
-        return this._volumeRoundtrip(
+        return this._slotRoundtrip(
+            () => this._micVolumeResolve,
+            (next) => { this._micVolumeResolve = next; },
             { type: 'get_microphone_volume' },
-            '_micVolumeResolve',
         );
     }
 
     setMicrophoneVolume(volume: number): Promise<number | null> {
-        return this._volumeRoundtrip(
+        return this._slotRoundtrip(
+            () => this._micVolumeResolve,
+            (next) => { this._micVolumeResolve = next; },
             { type: 'set_microphone_volume', volume: clampVolume(volume) },
-            '_micVolumeResolve',
         );
     }
 
@@ -925,16 +941,18 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         config: AudioConfigEntry[],
         { verify = true }: ApplyAudioConfigOptions = {},
     ): Promise<boolean> {
-        return this._volumeRoundtrip<boolean>(
+        return this._slotRoundtrip(
+            () => this._applyAudioConfigResolve,
+            (next) => { this._applyAudioConfigResolve = next; },
             { type: 'apply_audio_config', config, verify },
-            '_applyAudioConfigResolve',
         ).then((v) => v === true);
     }
 
     readAudioParameter(name: string): Promise<number[] | null> {
-        return this._volumeRoundtrip<number[]>(
+        return this._slotRoundtrip(
+            () => this._readAudioParameterResolve,
+            (next) => { this._readAudioParameterResolve = next; },
             { type: 'read_audio_parameter', name },
-            '_readAudioParameterResolve',
         );
     }
 
@@ -946,23 +964,25 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * sufficient. If a previous request on the same slot is still
      * pending when a new one comes in, the older promise is resolved to
      * `null` so its caller doesn't hang forever.
+     *
+     * Slot access is passed in as getter/setter closures rather than a
+     * key into `this`: that keeps the helper fully generic-checked (T is
+     * inferred from the slot's resolver type at each call site) with no
+     * indexed-property casts.
      */
-    private _volumeRoundtrip<T>(
+    private _slotRoundtrip<T>(
+        getSlot: () => ((v: T | null) => void) | null,
+        setSlot: (next: ((v: T | null) => void) | null) => void,
         command: Record<string, unknown>,
-        slot:
-            | '_volumeResolve'
-            | '_micVolumeResolve'
-            | '_applyAudioConfigResolve'
-            | '_readAudioParameterResolve',
     ): Promise<T | null> {
         return new Promise<T | null>((resolve, reject) => {
             if (!this._dc || this._dc.readyState !== 'open') {
                 reject(new Error('Data channel not open'));
                 return;
             }
-            const prev = this[slot] as ((v: T | null) => void) | null;
+            const prev = getSlot();
             if (prev) prev(null);
-            this[slot] = resolve as never;
+            setSlot(resolve);
             this._sendCommand(command);
         });
     }
