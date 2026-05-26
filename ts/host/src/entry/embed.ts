@@ -21,7 +21,7 @@
  * Existing apps that set `window.ReachyMini` themselves keep
  * working — we only assign when the global is missing.
  */
-import { ReachyMini } from '../../../reachy-mini-sdk';
+import { ReachyMini } from '@pollen-robotics/reachy-mini-sdk';
 import { connectToHost } from '../embed';
 import type {
   ConnectedHandle,

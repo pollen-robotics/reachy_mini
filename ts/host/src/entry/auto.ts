@@ -22,7 +22,7 @@
  * (e.g. via the old jsdelivr `<script type="module">` tag) are
  * untouched: we only assign when the global is unset.
  */
-import { ReachyMini } from '../../../reachy-mini-sdk';
+import { ReachyMini } from '@pollen-robotics/reachy-mini-sdk';
 import { mountHost } from '../mountHost';
 import type { MountHostOptions, MountedHost } from '../mountHost';
 

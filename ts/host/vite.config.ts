@@ -43,13 +43,26 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+      // Host imports the SDK by its published package name to keep the
+      // import surface symmetric with external consumers. The package
+      // isn't installed in `node_modules` (it IS the workspace), so we
+      // map it back to the in-tree TypeScript source. Vite compiles
+      // `.ts` natively, no separate build step needed for dev.
+      '@pollen-robotics/reachy-mini-sdk': resolve(__dirname, '../reachy-mini-sdk.ts'),
     },
   },
   build: {
     target: 'es2022',
     minify: 'esbuild',
     cssCodeSplit: false,
-    sourcemap: true,
+    // Host runtime sourcemaps disabled: the mountHost chunk's map is
+    // ~4.6 MB (React + MUI + shell), 80% of the published tarball and
+    // of the jsdelivr CDN bundle every Space loads. App authors never
+    // debug into the shell itself, only their own code; if Pollen
+    // Robotics need a host-side stack trace they can rebuild locally
+    // with `npm run dev`. Declaration maps (tsc) stay on — they're
+    // tiny and power "go to definition" jumps in consumer IDEs.
+    sourcemap: false,
     emptyOutDir: true,
     // Inline ALL asset imports (SVGs, fonts) as base64 data URIs
     // into the JS bundle. Without this Vite would emit them as
