@@ -430,6 +430,85 @@
         }
       }
     },
+    "/api/audio/config/apply": {
+      "post": {
+        "summary": "Apply Audio Config",
+        "description": "Write a batch of XVF3800 parameters and optionally verify them.",
+        "operationId": "apply_audio_config_api_audio_config_apply_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyAudioConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyAudioConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audio/config/parameter/{name}": {
+      "get": {
+        "summary": "Read Audio Parameter",
+        "description": "Read a single XVF3800 parameter by name.",
+        "operationId": "read_audio_parameter_api_audio_config_parameter__name__get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadAudioParameterResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/camera/specs": {
       "get": {
         "summary": "Get Camera Specs",
@@ -2317,6 +2396,64 @@
         "title": "AppUpdatesResponse",
         "description": "Response for list of app updates."
       },
+      "ApplyAudioConfigRequest": {
+        "properties": {
+          "config": {
+            "items": {
+              "$ref": "#/components/schemas/AudioParamPair"
+            },
+            "type": "array",
+            "title": "Config"
+          },
+          "verify": {
+            "type": "boolean",
+            "title": "Verify",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "config"
+        ],
+        "title": "ApplyAudioConfigRequest",
+        "description": "Request body for ``POST /audio/config/apply``."
+      },
+      "ApplyAudioConfigResponse": {
+        "properties": {
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          }
+        },
+        "type": "object",
+        "required": [
+          "applied"
+        ],
+        "title": "ApplyAudioConfigResponse",
+        "description": "Response body for ``POST /audio/config/apply``."
+      },
+      "AudioParamPair": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "values": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "values"
+        ],
+        "title": "AudioParamPair",
+        "description": "One ``(parameter_name, values)`` pair in an audio config payload."
+      },
       "Body_upload_sound_api_media_sounds_upload_post": {
         "properties": {
           "file": {
@@ -3062,6 +3199,35 @@
         ],
         "title": "PrivateSpaceInstallRequest",
         "description": "Request model for installing a private HuggingFace space."
+      },
+      "ReadAudioParameterResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "values": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "values"
+        ],
+        "title": "ReadAudioParameterResponse",
+        "description": "Response body for ``GET /audio/config/parameter/{name}``."
       },
       "ResolutionInfo": {
         "properties": {

@@ -89,9 +89,24 @@ with ReachyMini(media_backend="local") as mini:
     applied = mini.media.audio.apply_audio_config(custom_audio_config)
 ```
 
-For Reachy Mini Wireless, run this from the robot itself so the process can
-access the USB audio board. Remote REST/WebRTC audio-board configuration is
-not exposed yet.
+For Reachy Mini Wireless, the USB audio board is attached to the on-board
+CM4. Remote apps (browser/Space or other non-local clients) can apply and
+read parameters over the daemon's REST API or the WebRTC DataChannel,
+without SSHing into the robot:
+
+```bash
+# Read a parameter over REST
+curl http://reachy-mini.local:8000/api/audio/config/parameter/AUDIO_MGR_MIC_GAIN
+
+# Apply a config over REST
+curl -X POST http://reachy-mini.local:8000/api/audio/config/apply \
+    -H 'Content-Type: application/json' \
+    -d '{"config": [{"name": "AUDIO_MGR_MIC_GAIN", "values": [1.0]}], "verify": true}'
+```
+
+From a JS app, the SDK exposes `robot.applyAudioConfig(config)` and
+`robot.readAudioParameter(name)` (same trusted transport that carries
+`setVolume` / `getVolume`).
 
 The microphone array outputs a stereo channel, so it is not possible to get the raw output of all 4 mics at once. However, you can output two raw microphones at a time:
 

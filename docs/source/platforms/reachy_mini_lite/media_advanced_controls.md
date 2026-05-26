@@ -97,3 +97,8 @@ On Reachy Mini Lite, the ReSpeaker audio board is connected to your computer
 over USB. SDK audio-board configuration helpers such as
 `mini.media.audio.apply_audio_config(...)` are available when using the local
 media backend from that computer.
+
+The same operations are also reachable over the daemon's REST API and
+WebRTC DataChannel — see the [Wireless page](../reachy_mini/media_advanced_controls.md#microphones-and-speakers)
+for `curl` and JS examples. On Lite the daemon endpoint is
+`http://localhost:8000` instead of `http://reachy-mini.local:8000`.

@@ -141,6 +141,18 @@ export interface SubscribeLogsOptions {
   onError?: (error: string) => void;
 }
 
+/** One XVF3800 parameter entry for `applyAudioConfig()`. */
+export interface AudioConfigEntry {
+  name: string;
+  values: number[];
+}
+
+/** Options for `applyAudioConfig()`. */
+export interface ApplyAudioConfigOptions {
+  /** Read each parameter back after writing. Default `true`. */
+  verify?: boolean;
+}
+
 /** Public surface of a ReachyMini SDK instance. */
 export interface ReachyMiniInstance extends EventTarget {
   readonly state: 'disconnected' | 'connected' | 'streaming';
@@ -224,6 +236,23 @@ export interface ReachyMiniInstance extends EventTarget {
   setVolume(volume: number): Promise<number | null>;
   getMicrophoneVolume(): Promise<number | null>;
   setMicrophoneVolume(volume: number): Promise<number | null>;
+
+  /**
+   * Apply a batch of XVF3800 audio-board parameters on the robot.
+   * Resolves `true` iff every parameter was written (and read back
+   * when `verify` is true). Resolves `false` if the board is
+   * unavailable.
+   */
+  applyAudioConfig(
+    config: AudioConfigEntry[],
+    options?: ApplyAudioConfigOptions,
+  ): Promise<boolean>;
+  /**
+   * Read a single XVF3800 parameter by name. Resolves to the decoded
+   * numeric values, or `null` if the parameter is unknown / the board
+   * is unavailable.
+   */
+  readAudioParameter(name: string): Promise<number[] | null>;
 
   /** Daemon version string, or `null` when unavailable. */
   getVersion(): Promise<string | null>;

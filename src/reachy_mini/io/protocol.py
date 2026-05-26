@@ -12,7 +12,8 @@ Client->Server command types:
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
     play_uploaded_move, cancel_move,
-    play_uploaded_audio, cancel_audio
+    play_uploaded_audio, cancel_audio,
+    apply_audio_config, read_audio_parameter
 
 Server->Client message types:
     joint_positions, head_pose, imu_data, recorded_data,
@@ -319,6 +320,37 @@ class UnsubscribeLogsCmd(BaseModel):
     """Stop the calling peer's log subscription. No-op if no stream."""
 
     type: Literal["unsubscribe_logs"] = "unsubscribe_logs"
+
+
+# XVF3800 audio-board configuration over the DataChannel.
+#
+# Remote counterparts of `AudioBase.apply_audio_config()` and
+# `ReSpeaker.read_values()` (see `media/audio_control_utils.py`).
+# Both operations open a short-lived ReSpeaker USB handle on the
+# daemon side; values flow as plain numbers (the protocol does not
+# distinguish int vs float — see `AudioControlValue`).
+
+
+class AudioParamPair(BaseModel):
+    """One ``(parameter_name, values)`` pair in an audio config payload."""
+
+    name: str
+    values: list[float]
+
+
+class ApplyAudioConfigCmd(BaseModel):
+    """Write a batch of XVF3800 parameters and (optionally) verify them."""
+
+    type: Literal["apply_audio_config"] = "apply_audio_config"
+    config: list[AudioParamPair]
+    verify: bool = True
+
+
+class ReadAudioParameterCmd(BaseModel):
+    """Read a single XVF3800 parameter by name."""
+
+    type: Literal["read_audio_parameter"] = "read_audio_parameter"
+    name: str
 
 
 # ------------------------------------------------------------------
@@ -651,7 +683,9 @@ AnyCommand = Annotated[
     | PlayUploadedMoveCmd
     | CancelMoveCmd
     | PlayUploadedAudioCmd
-    | CancelAudioCmd,
+    | CancelAudioCmd
+    | ApplyAudioConfigCmd
+    | ReadAudioParameterCmd,
     Field(discriminator="type"),
 ]
 

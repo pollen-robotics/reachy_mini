@@ -66,6 +66,10 @@
  *   // 7. Audio controls
  *   robot.setAudioMuted(false);   // unmute robot speaker (muted by default)
  *   robot.setMicMuted(false);     // unmute your mic → robot speaker (if supported)
+ *   // XVF3800 audio-board tuning (works on both Lite and Wireless — the
+ *   // daemon talks to the audio board over USB on whichever host it runs):
+ *   await robot.applyAudioConfig([{ name: "AUDIO_MGR_MIC_GAIN", values: [1.0] }]);
+ *   const v = await robot.readAudioParameter("AUDIO_MGR_MIC_GAIN"); // [1.0]
  *
  *   // 8. Cleanup
  *   detach();                      // remove video binding
@@ -462,6 +466,11 @@ export class ReachyMini extends EventTarget {
         // requests can't collide on the same slot.
         this._volumeResolve = null;
         this._micVolumeResolve = null;
+
+        // applyAudioConfig() / readAudioParameter() promise plumbing.
+        // Each has its own slot so the two can be in-flight concurrently.
+        this._applyAudioConfigResolve = null;
+        this._readAudioParameterResolve = null;
 
         // subscribeLogs(): a Set of {onLine, onError} subscribers. The
         // first add sends `subscribe_logs`; removing the last sends
@@ -1188,6 +1197,8 @@ export class ReachyMini extends EventTarget {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
+        if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         // Drop any active log subscribers — the daemon-side subprocess
         // is torn down on peer-disconnect, so resubscribing across a
         // reconnect requires a fresh subscribeLogs() call from the
@@ -1239,6 +1250,8 @@ export class ReachyMini extends EventTarget {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
+        if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         this._logSubscribers.clear();
         // Same rationale as in stopSession(): drain pending motion
         // awaiters before tearing down the data channel.
@@ -1719,6 +1732,41 @@ export class ReachyMini extends EventTarget {
         return this._volumeRoundtrip(
             { type: "set_microphone_volume", volume: clampVolume(volume) },
             "_micVolumeResolve",
+        );
+    }
+
+    /**
+     * Apply a batch of XVF3800 audio-board parameters on the robot.
+     * Mirrors the on-robot `AudioBase.apply_audio_config()` SDK call.
+     *
+     * @param {Array<{name: string, values: number[]}>} config Parameter
+     *        names and values to write (see `audio_control_utils.PARAMETERS`).
+     * @param {{verify?: boolean}} [opts] When verify is true (default),
+     *        each parameter is read back after writing.
+     * @returns {Promise<boolean>} True iff every parameter was written
+     *        and (when verify=true) read back successfully. Resolves false
+     *        if the audio board is unavailable.
+     */
+    applyAudioConfig(config, { verify = true } = {}) {
+        return this._volumeRoundtrip(
+            { type: "apply_audio_config", config, verify },
+            "_applyAudioConfigResolve",
+        );
+    }
+
+    /**
+     * Read a single XVF3800 parameter by name.
+     * Mirrors the on-robot `ReSpeaker.read_values()` SDK call.
+     *
+     * @param {string} name Parameter name (see `PARAMETERS` catalog).
+     * @returns {Promise<number[]|null>} Decoded numeric values, or null
+     *        if the parameter is unknown / unreadable / the audio board
+     *        is unavailable.
+     */
+    readAudioParameter(name) {
+        return this._volumeRoundtrip(
+            { type: "read_audio_parameter", name },
+            "_readAudioParameterResolve",
         );
     }
 
@@ -2516,6 +2564,20 @@ export class ReachyMini extends EventTarget {
             if (this._micVolumeResolve) {
                 this._micVolumeResolve(data.status === 'error' ? null : data.volume);
                 this._micVolumeResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'apply_audio_config') {
+            if (this._applyAudioConfigResolve) {
+                this._applyAudioConfigResolve(data.error ? false : !!data.applied);
+                this._applyAudioConfigResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'read_audio_parameter') {
+            if (this._readAudioParameterResolve) {
+                this._readAudioParameterResolve(data.error ? null : (data.values ?? null));
+                this._readAudioParameterResolve = null;
             }
             return;
         }
