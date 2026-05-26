@@ -51,6 +51,13 @@ export interface RobotState {
 /** SDK constructor options. */
 export interface ReachyMiniOptions {
     signalingUrl?: string;
+    /**
+     * @deprecated The SDK no longer acquires the user's microphone. A silent
+     * placeholder audio sender is always set up so apps can `replaceTrack`
+     * their own audio (TTS, files, or — for teleop — the user's mic) onto
+     * it. This option is parsed for backward compatibility but has no
+     * effect.
+     */
     enableMicrophone?: boolean;
     clientId?: string;
     appName?: string;
@@ -123,6 +130,19 @@ export interface MotionAwaitOptions {
 export interface SubscribeLogsOptions {
     onLine: (entry: { timestamp: string; line: string }) => void;
     onError?: (error: string) => void;
+}
+
+// ─── XVF3800 audio-board config (Wireless only) ──────────────────────────────
+
+/** Single XVF3800 parameter write. */
+export interface AudioConfigEntry {
+    name: string;
+    values: number[];
+}
+
+export interface ApplyAudioConfigOptions {
+    /** Read each parameter back after writing. Default `true`. */
+    verify?: boolean;
 }
 
 // ─── Move / audio upload ─────────────────────────────────────────────────────
@@ -238,8 +258,10 @@ export interface ReachyMiniInstance extends EventTarget {
     /** Underlying RTCPeerConnection. Apps can read it to inspect
      *  audio / video transceivers. */
     _pc: RTCPeerConnection | null;
-    /** Local microphone MediaStream acquired by the SDK on
-     *  `startSession()` when `enableMicrophone` is `true`. */
+    /** Silent placeholder MediaStream the SDK feeds the WebRTC audio
+     *  sender so robot-speaker output can negotiate sendrecv. Apps inject
+     *  their own audio (TTS, files, the user's mic for teleop) by calling
+     *  `replaceTrack()` on the audio sender from `_pc.getSenders()`. */
     _micStream: MediaStream | null;
 
     authenticate(): Promise<boolean>;
@@ -297,6 +319,25 @@ export interface ReachyMiniInstance extends EventTarget {
     setVolume(volume: number): Promise<number | null>;
     getMicrophoneVolume(): Promise<number | null>;
     setMicrophoneVolume(volume: number): Promise<number | null>;
+
+    /**
+     * Apply a batch of XVF3800 audio-board parameters on the robot.
+     * Mirrors the on-robot `AudioBase.apply_audio_config()` SDK call.
+     * Resolves `true` when every parameter was written (and, when
+     * `verify` is `true`, read back successfully); `false` when the
+     * audio board is unavailable.
+     */
+    applyAudioConfig(
+        config: AudioConfigEntry[],
+        opts?: ApplyAudioConfigOptions,
+    ): Promise<boolean>;
+    /**
+     * Read a single XVF3800 parameter by name. Mirrors the on-robot
+     * `ReSpeaker.read_values()` SDK call. Resolves the decoded
+     * numeric values, or `null` when the parameter is unknown /
+     * unreadable / the audio board is unavailable.
+     */
+    readAudioParameter(name: string): Promise<number[] | null>;
 
     /** Daemon version string, or `null` when unavailable. */
     getVersion(): Promise<string | null>;

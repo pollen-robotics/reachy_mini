@@ -26,6 +26,8 @@ import {
     clampVolume,
 } from './upload-helpers';
 import type {
+    ApplyAudioConfigOptions,
+    AudioConfigEntry,
     AutoConnectOptions,
     AutoConnectResult,
     AutoConnectRobotChoice,
@@ -88,7 +90,6 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Config ──────────────────────────────────────────────────────────
     private readonly _signalingUrl: string;
-    private readonly _enableMicrophone: boolean;
     private readonly _clientId: string | null;
     private readonly _appName: string;
     private readonly _videoJitterBufferTargetMs: number;
@@ -131,6 +132,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _hardwareIdResolve: ((v: string | null) => void) | null = null;
     private _volumeResolve: ((v: number | null) => void) | null = null;
     private _micVolumeResolve: ((v: number | null) => void) | null = null;
+    // applyAudioConfig() / readAudioParameter() share the same single-slot
+    // pattern as the volume helpers. Separate slots so the two can be
+    // in-flight concurrently without collision.
+    private _applyAudioConfigResolve: ((v: boolean | null) => void) | null = null;
+    private _readAudioParameterResolve: ((v: number[] | null) => void) | null = null;
 
     // ─── Log subscribers ─────────────────────────────────────────────────
     private readonly _logSubscribers: Set<LogSubscriber> = new Set();
@@ -160,7 +166,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     constructor(options: ReachyMiniOptions = {}) {
         super();
         this._signalingUrl = options.signalingUrl || 'https://pollen-robotics-reachy-mini-central.hf.space';
-        this._enableMicrophone = options.enableMicrophone !== false;
+        // `enableMicrophone` is intentionally NOT stored: the SDK no longer
+        // calls getUserMedia (see startSession). Apps that still pass it for
+        // backward compatibility have their value silently ignored — matches
+        // the @deprecated annotation on the option type.
         this._clientId = options.clientId || null;
         this._appName = options.appName || 'unknown';
         this._videoJitterBufferTargetMs = options.videoJitterBufferTargetMs ?? 0;
@@ -485,31 +494,31 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._micSupported = false;
         this._pendingRemoteIce = [];
 
-        if (this._enableMicrophone) {
-            try {
-                this._micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                this._micStream.getAudioTracks().forEach((t) => { t.enabled = false; });
-                this._micMuted = true;
-            } catch (e) {
-                console.warn('Microphone not available:', e);
-                try {
-                    const Ctx = (window.AudioContext
-                        || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
-                    const ctx = new Ctx();
-                    const dst = ctx.createMediaStreamDestination();
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    gain.gain.value = 0;
-                    osc.connect(gain).connect(dst);
-                    osc.start();
-                    this._micStream = dst.stream;
-                    this._micStream.getAudioTracks().forEach((t) => { t.enabled = false; });
-                    this._micMuted = true;
-                } catch (fallbackErr) {
-                    console.warn('Silent mic fallback failed:', fallbackErr);
-                    this._micStream = null;
-                }
-            }
+        // Silent placeholder audio track for the WebRTC audio sender.
+        // The SDK does NOT call navigator.mediaDevices.getUserMedia — the
+        // user's microphone is the app's responsibility. WebRTC needs a
+        // sendrecv audio sender for robot-speaker output to work, so we
+        // always set up a 0-gain oscillator → MediaStreamDestination as
+        // the initial track. Apps that want to send actual audio (TTS,
+        // prerecorded files, the user's mic for teleop, …) do so by
+        // calling sender.replaceTrack() on the audio sender exposed via
+        // this._pc after the `streaming` event fires.
+        try {
+            const Ctx = (window.AudioContext
+                || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+            const ctx = new Ctx();
+            const dst = ctx.createMediaStreamDestination();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            gain.gain.value = 0;
+            osc.connect(gain).connect(dst);
+            osc.start();
+            this._micStream = dst.stream;
+            this._micStream.getAudioTracks().forEach((t) => { t.enabled = false; });
+            this._micMuted = true;
+        } catch (e) {
+            console.warn('Audio sender placeholder setup failed:', e);
+            this._micStream = null;
         }
 
         this._pc = new RTCPeerConnection({
@@ -618,6 +627,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
+        if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         this._logSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Session stopped'));
         if (this._sessionReject) {
@@ -658,6 +669,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
+        if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         this._logSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Disconnected'));
         if (this._sessionReject) {
@@ -908,18 +921,48 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         );
     }
 
-    private _volumeRoundtrip(
+    applyAudioConfig(
+        config: AudioConfigEntry[],
+        { verify = true }: ApplyAudioConfigOptions = {},
+    ): Promise<boolean> {
+        return this._volumeRoundtrip<boolean>(
+            { type: 'apply_audio_config', config, verify },
+            '_applyAudioConfigResolve',
+        ).then((v) => v === true);
+    }
+
+    readAudioParameter(name: string): Promise<number[] | null> {
+        return this._volumeRoundtrip<number[]>(
+            { type: 'read_audio_parameter', name },
+            '_readAudioParameterResolve',
+        );
+    }
+
+    /**
+     * Internal: send a command and await the matching daemon response in a
+     * named single-resolver slot. Used by the volume helpers and the
+     * XVF3800 audio-config helpers — every one of them has a strict
+     * request/response shape where a single in-flight call per slot is
+     * sufficient. If a previous request on the same slot is still
+     * pending when a new one comes in, the older promise is resolved to
+     * `null` so its caller doesn't hang forever.
+     */
+    private _volumeRoundtrip<T>(
         command: Record<string, unknown>,
-        slot: '_volumeResolve' | '_micVolumeResolve',
-    ): Promise<number | null> {
-        return new Promise<number | null>((resolve, reject) => {
+        slot:
+            | '_volumeResolve'
+            | '_micVolumeResolve'
+            | '_applyAudioConfigResolve'
+            | '_readAudioParameterResolve',
+    ): Promise<T | null> {
+        return new Promise<T | null>((resolve, reject) => {
             if (!this._dc || this._dc.readyState !== 'open') {
                 reject(new Error('Data channel not open'));
                 return;
             }
-            const prev = this[slot];
+            const prev = this[slot] as ((v: T | null) => void) | null;
             if (prev) prev(null);
-            this[slot] = resolve;
+            this[slot] = resolve as never;
             this._sendCommand(command);
         });
     }
@@ -1466,6 +1509,22 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             if (this._micVolumeResolve) {
                 this._micVolumeResolve(data.status === 'error' ? null : (data.volume as number));
                 this._micVolumeResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'apply_audio_config') {
+            if (this._applyAudioConfigResolve) {
+                this._applyAudioConfigResolve(data.error ? false : !!data.applied);
+                this._applyAudioConfigResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'read_audio_parameter') {
+            if (this._readAudioParameterResolve) {
+                this._readAudioParameterResolve(
+                    data.error ? null : ((data.values as number[] | undefined) ?? null),
+                );
+                this._readAudioParameterResolve = null;
             }
             return;
         }

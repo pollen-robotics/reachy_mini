@@ -43,6 +43,11 @@
  *   robot.setAudioMuted(false);
  *   robot.setMicMuted(false);
  *
+ *   // XVF3800 audio-board tuning (the daemon owns the USB board; works
+ *   // on both Lite and Wireless robots):
+ *   await robot.applyAudioConfig([{ name: "AUDIO_MGR_MIC_GAIN", values: [1.0] }]);
+ *   const v = await robot.readAudioParameter("AUDIO_MGR_MIC_GAIN"); // [1.0]
+ *
  *   // 8. Cleanup
  *   detach();
  *   await robot.stopSession();
@@ -70,6 +75,8 @@ export type {
     AutoConnectResult,
     MotionAwaitOptions,
     SubscribeLogsOptions,
+    AudioConfigEntry,
+    ApplyAudioConfigOptions,
     MoveData,
     PlayMoveOptions,
     PlayMoveProgress,
