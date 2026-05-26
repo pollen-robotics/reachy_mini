@@ -3,14 +3,14 @@
   "version": "0.0.0-managed-by-ci",
   "description": "Browser SDK for controlling a Reachy Mini robot over WebRTC, plus an optional Hugging Face Spaces host shell (OAuth + robot picker + iframe bridge) exposed via the ./host subpath.",
   "type": "module",
-  "main": "./reachy-mini-sdk.js",
-  "module": "./reachy-mini-sdk.js",
-  "types": "./reachy-mini-sdk.d.ts",
+  "main": "./dist/reachy-mini-sdk.js",
+  "module": "./dist/reachy-mini-sdk.js",
+  "types": "./dist/reachy-mini-sdk.d.ts",
   "exports": {
     ".": {
-      "types": "./reachy-mini-sdk.d.ts",
-      "import": "./reachy-mini-sdk.js",
-      "default": "./reachy-mini-sdk.js"
+      "types": "./dist/reachy-mini-sdk.d.ts",
+      "import": "./dist/reachy-mini-sdk.js",
+      "default": "./dist/reachy-mini-sdk.js"
     },
     "./host": {
       "types": "./host/dist/index.d.ts",
@@ -31,8 +31,7 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "reachy-mini-sdk.js",
-    "reachy-mini-sdk.d.ts",
+    "dist",
     "host/dist",
     "host/README.md",
     "host/SPEC.md",
@@ -43,11 +42,15 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "cd host && vite build && tsc -p tsconfig.build.json",
+    "build:sdk": "tsc -p tsconfig.json",
+    "build:host": "cd host && vite build && tsc -p tsconfig.build.json",
+    "build": "npm run build:sdk && npm run build:host",
     "build:watch": "cd host && vite build --watch",
-    "typecheck": "cd host && tsc --noEmit",
+    "typecheck:sdk": "tsc -p tsconfig.json --noEmit",
+    "typecheck:host": "cd host && tsc --noEmit",
+    "typecheck": "npm run typecheck:sdk && npm run typecheck:host",
     "dev": "cd host && vite",
-    "clean": "rm -rf host/dist"
+    "clean": "rm -rf dist host/dist"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -97,7 +100,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pollen-robotics/reachy_mini.git",
-    "directory": "js"
+    "directory": "ts"
   },
   "publishConfig": {
     "access": "public"

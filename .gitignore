@@ -262,12 +262,26 @@ src/reachy_mini/tools/camera_calibration/images_for_crop_analysis/*
 src/reachy_mini/tools/camera_calibration/images_for_crop_analysis_lite/*
 src/reachy_mini/tools/camera_calibration/*.yaml
 
-# JavaScript (single npm package at js/)
-js/node_modules/
-js/host/dist/
-js/.vite/
+# TypeScript (single npm package at ts/)
+ts/node_modules/
+ts/dist/
+ts/host/dist/
+ts/.vite/
 # The unanchored `lib/` rule above (Python template, intended for
-# root-level build artefacts) also matches `js/host/src/lib/`,
-# which holds TypeScript source. Re-include it explicitly.
-!js/host/src/lib/
-!js/host/src/lib/**
+# root-level build artefacts) also matches `ts/host/src/lib/` and
+# `ts/lib/`, which hold TypeScript source. Re-include them explicitly.
+!ts/host/src/lib/
+!ts/host/src/lib/**
+!ts/lib/
+!ts/lib/**
+# Belt-and-suspenders: declaration outputs ONLY belong under dist/.
+# A stray `tsc` run (or an IDE on-save) can emit `.d.ts(.map)` next to
+# the source; never commit those. `ts/host/src/assets/svg.d.ts` is an
+# ambient declaration (hand-written, not generated) — kept by the rule
+# below.
+ts/lib/*.d.ts
+ts/lib/*.d.ts.map
+ts/*.d.ts
+ts/*.d.ts.map
+ts/host/src/**/*.d.ts.map
+!ts/host/src/assets/svg.d.ts

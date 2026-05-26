@@ -1,6 +1,6 @@
-"""Verify that the JS browser SDK sends commands matching protocol.py.
+"""Verify that the TS browser SDK sends commands matching protocol.py.
 
-Parses _sendCommand({...}) calls from js/reachy-mini-sdk.js and checks each one
+Parses _sendCommand({...}) calls from ts/lib/reachy-mini.ts and checks each one
 against the Pydantic command models defined in protocol.py.  This catches
 field renames, missing required fields, and unknown type values at CI time.
 """
@@ -18,7 +18,7 @@ from reachy_mini.io.protocol import AnyCommand
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-JS_SDK_PATH = REPO_ROOT / "js" / "reachy-mini-sdk.js"
+TS_SDK_PATH = REPO_ROOT / "ts" / "lib" / "reachy-mini.ts"
 
 
 def _get_protocol_commands() -> dict[str, dict[str, bool]]:
@@ -56,10 +56,11 @@ def _strip_nested(text: str) -> str:
     i = 0
     while i < len(text):
         ch = text[i]
-        if ch == '"':
-            # Skip string literal
+        if ch in ('"', "'"):
+            # Skip string literal (single or double quoted)
+            quote = ch
             i += 1
-            while i < len(text) and text[i] != '"':
+            while i < len(text) and text[i] != quote:
                 if text[i] == "\\":
                     i += 1
                 i += 1
@@ -85,8 +86,9 @@ def _parse_js_commands(js_source: str) -> list[dict[str, set[str]]]:
     # Match _sendCommand({ ... }) — the content between the braces.
     for m in re.finditer(r"_sendCommand\(\{([^}]+)\}\)", js_source):
         body = m.group(1)
-        # Extract the "type" value before stripping (it's in a string).
-        type_match = re.search(r'type:\s*"([^"]+)"', body)
+        # Extract the "type" value before stripping (it's in a string —
+        # double- or single-quoted, since both are valid in JS and TS).
+        type_match = re.search(r"""type:\s*["']([^"']+)["']""", body)
         if not type_match:
             continue
         type_value = type_match.group(1)
@@ -116,7 +118,7 @@ def _parse_js_commands(js_source: str) -> list[dict[str, set[str]]]:
 def test_js_command_types_exist_in_protocol() -> None:
     """Every type value sent by the JS SDK must be a valid protocol command."""
     protocol = _get_protocol_commands()
-    js_source = JS_SDK_PATH.read_text()
+    js_source = TS_SDK_PATH.read_text()
     js_cmds = _parse_js_commands(js_source)
 
     assert js_cmds, "Failed to parse any _sendCommand calls from JS SDK"
@@ -131,7 +133,7 @@ def test_js_command_types_exist_in_protocol() -> None:
 def test_js_command_fields_match_protocol() -> None:
     """Payload field names sent by the JS SDK must match the protocol model."""
     protocol = _get_protocol_commands()
-    js_source = JS_SDK_PATH.read_text()
+    js_source = TS_SDK_PATH.read_text()
     js_cmds = _parse_js_commands(js_source)
 
     for cmd in js_cmds:
@@ -149,7 +151,7 @@ def test_js_command_fields_match_protocol() -> None:
 def test_js_command_required_fields_present() -> None:
     """All required protocol fields must be present in the JS command."""
     protocol = _get_protocol_commands()
-    js_source = JS_SDK_PATH.read_text()
+    js_source = TS_SDK_PATH.read_text()
     js_cmds = _parse_js_commands(js_source)
 
     for cmd in js_cmds:

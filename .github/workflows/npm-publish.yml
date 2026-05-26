@@ -8,11 +8,11 @@ on:
     branches:
       - main
     paths:
-      - "js/**"
+      - "ts/**"
       - ".github/workflows/npm-publish.yml"
   pull_request:
     paths:
-      - "js/**"
+      - "ts/**"
       - ".github/workflows/npm-publish.yml"
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
       id-token: write   # required for npm trusted publishing (OIDC)
     defaults:
       run:
-        working-directory: js
+        working-directory: ts
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
@@ -32,17 +32,19 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       # Install deps for the single npm package
-      # (@pollen-robotics/reachy-mini-sdk). The SDK runtime is plain
-      # JS at js/reachy-mini-sdk.js; the optional host shell lives
-      # under js/host/ and is bundled by `npm run build` into
-      # js/host/dist/, surfaced via the `./host*` subpath exports.
-      - name: Install JS package dependencies
+      # (@pollen-robotics/reachy-mini-sdk). The SDK runtime lives at
+      # ts/reachy-mini-sdk.ts (+ ts/lib/*.ts) and is compiled to
+      # ts/dist/ by `npm run build:sdk`. The optional host shell lives
+      # under ts/host/ and is bundled by `npm run build:host` into
+      # ts/host/dist/, surfaced via the `./host*` subpath exports.
+      - name: Install package dependencies
         run: npm ci
 
-      # Build the host bundles into host/dist/. Required for the
-      # `./host`, `./host/auto`, `./host/embed`, and `./host/protocol`
-      # subpath exports to resolve in the published tarball.
-      - name: Build host bundles
+      # Build the SDK dist/ + host bundles into host/dist/. Required
+      # for the `.`, `./host`, `./host/auto`, `./host/embed`, and
+      # `./host/protocol` subpath exports to resolve in the published
+      # tarball.
+      - name: Build SDK and host bundles
         run: npm run build
 
       # pyproject.toml is the single source of truth for the version.

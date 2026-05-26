@@ -31,7 +31,10 @@ import pytest
 TOKEN_SENSITIVE_FILES = [
     "src/reachy_mini/media/central_signaling_relay.py",
     "src/reachy_mini/daemon/app/routers/hf_auth.py",
-    "js/reachy-mini-sdk.js",
+    "ts/reachy-mini-sdk.ts",
+    "ts/lib/reachy-mini.ts",
+    "ts/lib/url-helpers.ts",
+    "ts/lib/upload-helpers.ts",
 ]
 
 # Substring patterns that indicate a token leaking into a URL. Keep

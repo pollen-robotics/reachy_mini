@@ -14,7 +14,7 @@
  * on the global — installing this package is enough.
  */
 
-import { ReachyMini } from '../../reachy-mini-sdk';
+import { ReachyMini } from '@pollen-robotics/reachy-mini-sdk';
 
 if (typeof window !== 'undefined' && !window.ReachyMini) {
   window.ReachyMini = ReachyMini;
