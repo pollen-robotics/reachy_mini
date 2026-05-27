@@ -2,7 +2,7 @@
  * Top-level host shell. Wires the SDK, OAuth, bridge, and the
  * per-phase views together into one component.
  *
- * Phases (cf. SPEC §5):
+ * Phases (cf. APP_CREATION_GUIDE §14.3 Mode A standalone flow):
  *   signing-in : SignInView visible (signed-out or post-OAuth
  *                splash). Host SDK alive for OAuth only.
  *   picking    : PickerView visible. Robots fetched via REST
@@ -432,7 +432,7 @@ function ReachyHostShellNormal({
       `[host-debug] iframeUrl = ${window.location.origin}/?embedded=1#${hash}`,
     );
     // Hash creds carry the same data as host:init; the iframe
-    // wipes the hash on its first tick (SPEC §8.2). The
+    // wipes the hash on its first tick (APP_CREATION_GUIDE §14.5.2). The
     // postMessage init is the canonical source once the bridge
     // is up; the hash exists so Mode B (mobile handoff) works
     // when there's no parent to talk to.

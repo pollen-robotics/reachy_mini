@@ -19,7 +19,7 @@ Subpath exports of [`@pollen-robotics/reachy-mini-sdk`](https://www.npmjs.com/pa
 - **`connectToHost()`** — the vanilla-JS client that runs inside the iframe and
   hands your app a fully-connected `ReachyMini` SDK instance.
 
-Two boot modes are supported (cf. [SPEC.md §4](./SPEC.md#4-two-boot-modes)):
+Two boot modes are supported (cf. [`APP_CREATION_GUIDE.md` §14.3](../APP_CREATION_GUIDE.md#143-two-boot-modes-one-url-surface)):
 
 | Mode | Entry point | Use case |
 |------|-------------|----------|
@@ -32,12 +32,11 @@ The same app code works in both modes; only the entry point differs.
 
 | Document | Audience | Read it when… |
 |----------|----------|----------------|
-| **[SPEC.md](./SPEC.md)** | host maintainers + app authors | You want the canonical behaviour, state machines, invariants, and wire protocol. |
-| **[APP_AUTHOR_GUIDE.md](./APP_AUTHOR_GUIDE.md)** | app authors | You're building a new Reachy Mini app and need the step-by-step recipe. |
-| **[CHANGELOG.md](../CHANGELOG.md)** | everyone | You're upgrading from a previous version. |
+| **[`../APP_CREATION_GUIDE.md`](../APP_CREATION_GUIDE.md)** | app authors **and** host maintainers | Single source of truth: scaffold, deploy static/docker, host ↔ embed contract, invariants, protocol v1. Today's SDK pin: `1.8.0-rc1-main.fd4354c`. |
 
-App authors should start with the **[APP_AUTHOR_GUIDE](./APP_AUTHOR_GUIDE.md)**.
-Library maintainers and reviewers should start with the **[SPEC](./SPEC.md)**.
+App authors and library maintainers both start with the
+**[App Creation Guide](../APP_CREATION_GUIDE.md)**: §1-§13 are the
+app-author recipe, §14 is the host ↔ embed architecture reference.
 
 ## Installation
 
@@ -121,8 +120,8 @@ handle.onLeave(() => {
 
 That's the whole contract. The host does OAuth, picks the robot, mounts the
 iframe; the embed wakes the robot and drives it. Everything else is your
-app's logic. See the [APP_AUTHOR_GUIDE](./APP_AUTHOR_GUIDE.md) for the
-detailed walk-through and reference apps.
+app's logic. See the [App Creation Guide](../APP_CREATION_GUIDE.md)
+for the detailed walk-through and reference apps.
 
 ## Reference apps
 
@@ -137,7 +136,8 @@ with every release:
 
 App authors are free to use any UI framework they want inside the iframe; the
 host doesn't care. This is a hard design rule, not an accident
-([SPEC §10.2](./SPEC.md#102-tech-freedom-is-a-core-design-principle)).
+(see [`APP_CREATION_GUIDE.md` §14.1](../APP_CREATION_GUIDE.md#141-roles-app--host--embed)
+"Why React + MUI for the host (and only the host)").
 
 ## Versioning
 
@@ -145,10 +145,12 @@ The host ships inside `@pollen-robotics/reachy-mini-sdk` and shares its
 version with the SDK and the Reachy Mini Python daemon (a single source of
 truth, enforced by the npm publish CI). The major version of the **wire
 protocol** is tracked separately in `PROTOCOL_VERSION` and bumped only on
-incompatible postMessage changes (cf. [SPEC §11](./SPEC.md#11-backlog)).
+incompatible postMessage changes
+(see [`APP_CREATION_GUIDE.md` §14.6](../APP_CREATION_GUIDE.md#146-protocol-v1-messages)).
 
-App authors should pin to a major (`@1`) in their CDN URL and audit the
-[CHANGELOG](../CHANGELOG.md) on each minor bump.
+App authors should **pin to the exact prerelease build that the
+reference apps use** - today `1.8.0-rc1-main.fd4354c`, see
+[`APP_CREATION_GUIDE.md` §10](../APP_CREATION_GUIDE.md#10-sdk-version-pinning).
 
 ## License
 

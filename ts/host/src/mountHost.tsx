@@ -12,7 +12,8 @@
  * This is the recommended entry for app authors. It handles:
  *  - Finding (or auto-creating) the mount node.
  *  - Wrapping in `React.StrictMode` so dev-mode double-mount is
- *    a working configuration (SPEC §8.4).
+ *    a working configuration (see APP_CREATION_GUIDE §14.5.4
+ *    React Strict Mode safety).
  *  - Seeding a dev token (`devToken`) for local development
  *    without OAuth.
  *  - Stamping the document title with `appName` for browser
