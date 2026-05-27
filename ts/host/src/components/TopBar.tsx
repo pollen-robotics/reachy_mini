@@ -164,22 +164,40 @@ export function TopBar({
             onClick={handleEndSession}
             disabled={isStopping}
             startIcon={
-              isStopping ? (
-                <CircularProgress
-                  size={14}
-                  thickness={5}
-                  sx={{ color: 'inherit' }}
-                />
-              ) : (
-                <PowerSettingsNewIcon sx={{ fontSize: 16 }} />
-              )
+              // Wrap both the icon and the spinner in a fixed 16x16
+              // slot so the button width does NOT shift by ~2px when
+              // we swap glyphs during teardown. `CircularProgress`
+              // and `PowerSettingsNewIcon` otherwise render at
+              // slightly different intrinsic sizes.
+              <Box
+                sx={{
+                  width: 16,
+                  height: 16,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {isStopping ? (
+                  <CircularProgress
+                    size={14}
+                    thickness={5}
+                    sx={{ color: 'inherit' }}
+                  />
+                ) : (
+                  <PowerSettingsNewIcon sx={{ fontSize: 16 }} />
+                )}
+              </Box>
             }
             sx={{
               fontSize: 12.5,
               fontWeight: 600,
               py: 0.5,
               px: 1.25,
-              minWidth: 0,
+              // Lock the horizontal footprint to the widest label
+              // ("End session") so swapping in the shorter "Ending…"
+              // copy doesn't visibly shrink the chip mid-teardown.
+              minWidth: 116,
               borderRadius: 999,
               textTransform: 'none',
               lineHeight: 1.1,
