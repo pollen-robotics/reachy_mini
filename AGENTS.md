@@ -214,7 +214,7 @@ git --version
 
 **2. Write `plan.md` first** (same rule as Python apps). Wait for user approval before scaffolding.
 
-**3. Scaffold three files locally** in `<app-name>/`:
+**3. Scaffold four files locally** in `<app-name>/`:
 
 - **`README.md`** — the Space YAML header is where `sdk`, OAuth, and discovery tags live (all required):
 
@@ -228,21 +228,23 @@ sdk: static
 pinned: false
 hf_oauth: true
 hf_oauth_expiration_minutes: 480
+short_description: One-line description shown in the mobile catalog.
 tags:
   - reachy_mini
   - reachy_mini_js_app
 ---
 ```
 
-- **`index.html`** — **copy from [`../hfspace/webrtc_example/index.html`](https://huggingface.co/spaces/cduss/webrtc_example)** and trim panels you don't need. Do not write from scratch.
+- **`index.html`** — **copy from [`../hfspace/webrtc_example/index.html`](https://huggingface.co/spaces/cduss/webrtc_example)** and trim panels you don't need. Do not write from scratch. Reference the icon from `<head>` with `<link rel="icon" href="/icon.svg" type="image/svg+xml" />`.
 - **`style.css`** — copy from the same example, then tweak.
+- **`icon.svg`** — the app's logo, served at the Space root (`https://<username>-<app-name>.static.hf.space/icon.svg`). Powers three surfaces from a single file: the browser tab favicon, the mobile catalog tile (the catalog API probes `icon.svg` / `icon.png` on the Space repo), and the host top bar when the app is embedded in the mobile shell. Use a square `viewBox`, inline all colours, keep it readable at 16 px, and target ~30 KB or less. PNG fallback (`icon.png`) is accepted for raster art but loses crispness on hi-DPI. Without this file, the mobile catalog falls back to the frontmatter `emoji`, so it's optional but strongly recommended. See [`ts/host/APP_AUTHOR_GUIDE.md` §6](ts/host/APP_AUTHOR_GUIDE.md#6-visual-identity-icon-name-emoji) for full icon design guidelines.
 
 **4. Create + push:**
 
 ```bash
 hf repos create <app-name> --repo-type space --space-sdk static
 git clone https://huggingface.co/spaces/<username>/<app-name>
-cp <scaffold-dir>/{README.md,index.html,style.css} <app-name>/
+cp <scaffold-dir>/{README.md,index.html,style.css,icon.svg} <app-name>/
 cd <app-name> && git add . && git commit -m "Initial app scaffold" && git push
 ```
 
