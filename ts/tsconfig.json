@@ -25,6 +25,6 @@
     "outDir": "./dist",
     "rootDir": "."
   },
-  "include": ["reachy-mini-sdk.ts", "lib/**/*.ts"],
+  "include": ["reachy-mini-sdk.ts", "utils.ts", "lib/**/*.ts"],
   "exclude": ["dist", "node_modules", "host"]
 }
