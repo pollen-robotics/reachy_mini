@@ -129,257 +129,376 @@ See and run `examples/minimal_demo.py` - demonstrates connection, head motion, a
 
 ## Live/Web/JS Apps
 
-> ## START HERE: clone `webrtc_example` and modify it.
+> ## START HERE: clone one of the three reference apps under `pollen-robotics/*` on Hugging Face and trim.
 >
-> **Live Space (run it, read the source):** https://huggingface.co/spaces/cduss/webrtc_example
+> | Reference app | Stack | Use it for |
+> |---|---|---|
+> | [`pollen-robotics/reachy_mini_minimal_conversation`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation) | **Vanilla TS + Vite** | Smallest runtime, zero framework. |
+> | [`pollen-robotics/reachy_mini_emotions`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions) | React 19 + MUI 7 + Vite | UI-rich apps (rich components, theming, deep links). |
+> | [`pollen-robotics/reachy_mini_telepresence`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence) | React 19 + MUI 7 + Vite | Camera / media-stream apps. |
 >
-> This is the **canonical reference implementation** 
->
- **Mimicking what is done in this example is the fastest path to a working app.**
+> These are kept in lockstep with every SDK release. **Mimicking them is the fastest path to a working app.**
 
-Don't necessarily clone it verbatim — feel free to trim panels, remove features, and tweak the UI as needed. But the core patterns (SDK wiring, event handling, session management, media flow, responsive mobile layout) are already solved there; start by understanding how it works before scaffolding something new. **Default to a mobile-friendly responsive design** (most users open Spaces on phones) — see the section below.
+Browser apps that drive a Reachy Mini over WebRTC, deployed as **Hugging Face Spaces with `sdk: static`** (a Vite build pushed to the Space's CDN). Any HF-authenticated user can open the Space URL from anywhere and reach any robot they have access to, through the central signaling server.
 
-Browser apps that control a Reachy Mini remotely over WebRTC. **The app IS a static Hugging Face Space**, not something installed on the robot. Any HF-authenticated user can open the Space URL from anywhere and reach any robot they have access to, through the central signaling server.
+> ⚠️ **`sdk: static` is the recommended default.** Static Spaces scale better (cold-start free, served from HF's CDN, no container costs) and HF replaces `__OAUTH_CLIENT_ID__` at file-serve time, so you don't need a Docker entrypoint. The three reference apps below currently still ship a `Dockerfile`; you can drop it on your fork. A short `sdk: docker` fallback is documented at the end of this section for cases where you can't run the Vite build locally.
 
-> **Full walkthrough**: [`docs/source/SDK/javascript-sdk.md`](docs/source/SDK/javascript-sdk.md) — architecture diagram, end-to-end deployment, complete SDK reference. The section below is a quick-start; read the full doc when scaffolding something non-trivial.
+> **Full walkthroughs**: [`ts/host/APP_AUTHOR_GUIDE.md`](ts/host/APP_AUTHOR_GUIDE.md) (app-author recipe), [`ts/host/SPEC.md`](ts/host/SPEC.md) (host ↔ embed contract + invariants), [`docs/source/SDK/javascript-sdk.md`](docs/source/SDK/javascript-sdk.md) (SDK + media architecture). The section below is the quick-start; read those before scaffolding anything non-trivial.
 
 **What this flavour unlocks:**
 - **Remote launch** — no LAN, no USB, no local daemon on the end-user side.
 - **Zero-install sharing** — the Space URL *is* the product.
-- **Off-robot compute** — work lives in the browser (static Space) or in the Space backend (Gradio/Docker variants). The robot stays a pure IO device.
+- **Off-robot compute** — work lives in the browser or the Space backend. The robot stays a pure IO device.
 - **Bidirectional media** — robot camera/mic → browser; optionally user's mic → robot speaker.
-- **Clean version pinning** — each app imports the SDK from a specific GitHub tag; stable even as the SDK advances.
+- **Free OAuth + robot picker + top bar + leave flow** via the host shell (see next section).
 
-### Design for mobile first — most users will open the Space on a phone
+### What the host shell does for you
 
-Unless the user explicitly asks for a desktop-only / kiosk / dev-tool UI, **assume the app will be opened on a smartphone** and design accordingly. The Space URL is shareable, and "open this link on your phone and play with the robot" is the most common end-user flow.
+The npm package [`@pollen-robotics/reachy-mini-sdk`](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk) exposes two subpath entries (`./host/auto` for the shell, `./host/embed` for the iframe) that, together, take care of:
 
-Practical rules:
-- Include `<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />` in `<head>` (the `webrtc_example` already does).
-- Use fluid widths and `rem`/`vh`/`vw` units, not fixed pixel layouts. Stack panels vertically by default; reserve side-by-side layouts for `@media (min-width: 768px)`.
-- Touch-friendly hit targets: ≥ 44×44 px buttons, sliders with comfortable thumbs.
-- No hover-only affordances. Anything reachable by mouse-hover must also be reachable by tap.
-- Test in Chrome devtools' phone emulation before declaring the app done.
-- Bidirectional audio + camera permissions on iOS Safari are the most fragile path — verify on a real iPhone if the app uses them.
+- **Hugging Face OAuth** — sign-in screen, redirect, token storage, sign-out menu.
+- **Robot discovery + picker** — live online / offline / busy list, click-to-pick.
+- **Connecting overlay** — 3-step "Connecting / Starting session / Waking up" view.
+- **Top bar** — app icon, app name, robot status, "End session", OAuth menu.
+- **Dark / light theme** — from `prefers-color-scheme` or HF settings, propagated to the iframe.
+- **Teardown** — `onLeave` callbacks fire reliably on user "End session", `requestLeave()`, or page unload.
 
-The `webrtc_example` is already responsive; cloning it gets you the mobile baseline for free. Don't undo it by hardcoding desktop widths in your edits.
+You only write the app's UI. **Use any framework you want inside the iframe** (React, Svelte, Vue, vanilla TS) — the host doesn't care. Tech freedom is a [hard design rule, not an accident](ts/host/SPEC.md#tech-freedom-is-a-core-design-principle). **The host shell is always there, even in static deployments** — it owns OAuth + picker + top bar in every flavour of the app.
 
-### SDK import — strongly prefer an immutable ref (tag or commit SHA)
+### App-author contract
 
-For anything you'd want to be stable, pin to either a `v*` **tag** (preferred for releases) or a 40-char **commit SHA** (when you need an unreleased SDK feature, like the live `webrtc_example` does). Both are immutable on jsDelivr. Pinning to a branch like `@main` works, but means the app can break on any SDK change — fine for early prototyping, risky for anything you share.
+Every Reachy Mini app ships exactly **three source files** (+ a `public/icon.svg`, a `package.json` for Vite, and the Space `README.md` frontmatter — see below):
 
-> ⚠️ **Pin `v1.7.2` or newer.** Earlier versions default `signalingUrl` to a decommissioned HF Space (`cduss-reachy-mini-central` / `tfrere-reachy-mini-central`). The canonical signaling server moved to `pollen-robotics-reachy-mini-central.hf.space` in v1.7.2. Apps on `@v1.7.1` or older that don't pass an explicit `signalingUrl` constructor option **cannot reach any robot** — central returns 404/CORS and `connect()` hangs.
->
-> v1.7.2 also adds `robot.autoConnect()` (see [SDK cheatsheet](#sdk-cheatsheet) below) which is the single supported way to bring a session up going forward. Apps stuck on `v1.7.1` and older miss it and have to re-implement the auth + connect + pick + startSession + ensureAwake chain by hand.
+| File | Purpose |
+|---|---|
+| `index.html` | Theme bootstrap + `<link rel="icon">` + `<script src=dispatch>` |
+| `src/dispatch.ts` | Two-branch boot (host shell vs embed) |
+| `src/embed.{ts,tsx}` | The app itself; calls `connectToHost()` once |
+
+A 4th file — `Dockerfile` — is only needed if you fall back to `sdk: docker` (see the "Optional: docker fallback" subsection below). For `sdk: static`, you build locally with Vite and push the resulting `dist/` to the Space.
+
+#### `index.html`
 
 ```html
-<script type="module">
-  // Tagged release — preferred. v1.7.2 is the minimum supported pin.
-  import { ReachyMini } from "https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@v1.7.2/js/reachy-mini.js";
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My App</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
 
-  // Or a specific commit SHA — for unreleased SDK changes
-  // import { ReachyMini } from "https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@e8ba0b3dfcd48af528a8223eb2f2d58986204c94/js/reachy-mini.js";
+    <!-- Theme bootstrap: paint the right palette before CSS lands -->
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var raw = params.get("theme");
+        var mode = (raw === "dark" || raw === "light") ? raw
+          : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", mode);
+      })();
+    </script>
 
-  const robot = new ReachyMini({ appName: "my-app" });
-</script>
+    <!-- HF Spaces substitutes __OAUTH_CLIENT_ID__ (file-serve time in
+         static Spaces, container-start time in docker Spaces) when
+         `hf_oauth: true` is set in the README frontmatter. -->
+    <script>
+      (function () {
+        var clientId = "__OAUTH_CLIENT_ID__";
+        if (clientId && clientId.indexOf("__") !== 0) {
+          window.huggingface = { variables: { OAUTH_CLIENT_ID: clientId } };
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/dispatch.ts"></script>
+  </body>
+</html>
 ```
 
-Single ES module from jsDelivr; no build step, no npm.
+#### `src/dispatch.ts`
 
-**When scaffolding a new app**, resolve the latest `v*` tag and hardcode it:
+```ts
+const params = new URLSearchParams(window.location.search);
 
-```bash
-git ls-remote --tags --refs --sort=-v:refname \
-  https://github.com/pollen-robotics/reachy_mini.git \
-  | head -1 | awk -F/ '{print $NF}'
+if (params.get("embedded") === "1") {
+  void import("./embed");
+} else {
+  void import("@pollen-robotics/reachy-mini-sdk/host/auto").then(({ mountHost }) => {
+    mountHost({
+      appName: "My App",
+      appIconUrl: "/icon.svg",
+      enableMicrophone: false,
+    });
+  });
+}
 ```
 
-**When extending an existing app**, re-check for a newer tag and bump only if the app needs it. Stale pins are fine *as long as they're `v1.7.2` or newer* — anything older needs to be bumped before the app can connect at all (signaling URL is hard-coded into the SDK default). Branch pins (`@main`, etc.) work but trade stability for freshness — use them deliberately, not by default.
+#### `src/embed.ts`
 
-### Create the Space from scratch
+```ts
+import { connectToHost } from "@pollen-robotics/reachy-mini-sdk/host/embed";
 
-> **Reminder**: don't actually scaffold "from scratch." Start by **copying [`../hfspace/webrtc_example/`](https://huggingface.co/spaces/cduss/webrtc_example)** (or the live Space) and trimming. The steps below are for the rare case where the example doesn't apply.
+const handle = await connectToHost();
+const { reachy, theme, config, onLeave } = handle;
 
-The app *is* the Space repo. Workflow:
+reachy.setHeadRpyDeg(0, 10, 0);
 
-**0. Preconditions**
-
-```bash
-hf --version           # pip install -U huggingface_hub if missing
-hf auth whoami         # run `hf auth login` if not authenticated
-git --version
+onLeave(async () => {
+  // ~1.5–2 s budget. Cancel streams, release audio, flush telemetry.
+});
 ```
 
-**1. Gather** app name (slug, lowercase, underscores/hyphens), one-line title, feature list. Username comes from `hf auth whoami`.
+By the time `connectToHost()` resolves: SDK loaded, session started, robot awake. **Don't reimplement `connect()` / `startSession()` / `ensureAwake()`** — let the host do it.
 
-**2. Write `plan.md` first** (same rule as Python apps). Wait for user approval before scaffolding.
+### `public/icon.svg` — the single app-identity asset
 
-**3. Scaffold four files locally** in `<app-name>/`:
+**One SVG file** powers three independent surfaces:
 
-- **`README.md`** — the Space YAML header is where `sdk`, OAuth, and discovery tags live (all required):
+| Surface | What it shows | How it gets there |
+|---|---|---|
+| Host top bar (inside iframe) | App logo | You pass `appIconUrl: "/icon.svg"` to `mountHost()` |
+| Hugging Face mobile catalog | App tile icon | The catalog API lists the Space's `siblings` and matches the repo path `public/icon.svg` (or `public/icon.png`) |
+| Browser tab / OS | Favicon | `<link rel="icon" href="/icon.svg" type="image/svg+xml" />` in `index.html` |
+
+Ship one **`public/icon.svg`** in your repo. Vite copies it verbatim to `dist/icon.svg`, so it's served at `https://<space>.hf.space/icon.svg`. **PNG fallback** (`public/icon.png`) is accepted; SVG wins when both exist. Without an icon, the mobile catalog falls back to the frontmatter `emoji` — pass the same emoji to `mountHost({ appEmoji: "🤖" })` so the top-bar fallback matches.
+
+Design hint: square `viewBox`, readable at 16 px, inline all colours, target ≤ 30 KB. Full guidance: [`ts/host/APP_AUTHOR_GUIDE.md` §6](ts/host/APP_AUTHOR_GUIDE.md#6-visual-identity-icon-name-emoji).
+
+### HF Space frontmatter
 
 ```yaml
 ---
 title: <one-line title>
 emoji: 🤖
-colorFrom: blue
-colorTo: indigo
+colorFrom: yellow
+colorTo: red
 sdk: static
 pinned: false
 hf_oauth: true
-hf_oauth_expiration_minutes: 480
 short_description: One-line description shown in the mobile catalog.
 tags:
   - reachy_mini
-  - reachy_mini_js_app
+  - reachy_mini_js_app   # mandatory: mobile-catalog discovery filters on this exact string
 ---
 ```
 
-- **`index.html`** — **copy from [`../hfspace/webrtc_example/index.html`](https://huggingface.co/spaces/cduss/webrtc_example)** and trim panels you don't need. Do not write from scratch. Reference the icon from `<head>` with `<link rel="icon" href="/icon.svg" type="image/svg+xml" />`.
-- **`style.css`** — copy from the same example, then tweak.
-- **`icon.svg`** — the app's logo, served at the Space root (`https://<username>-<app-name>.static.hf.space/icon.svg`). Powers three surfaces from a single file: the browser tab favicon, the mobile catalog tile (the catalog API probes `icon.svg` / `icon.png` on the Space repo), and the host top bar when the app is embedded in the mobile shell. Use a square `viewBox`, inline all colours, keep it readable at 16 px, and target ~30 KB or less. PNG fallback (`icon.png`) is accepted for raster art but loses crispness on hi-DPI. Without this file, the mobile catalog falls back to the frontmatter `emoji`, so it's optional but strongly recommended. See [`ts/host/APP_AUTHOR_GUIDE.md` §6](ts/host/APP_AUTHOR_GUIDE.md#6-visual-identity-icon-name-emoji) for full icon design guidelines.
+- `sdk: static` is the recommended default. HF serves whatever you push as the Space root, replaces `__OAUTH_CLIENT_ID__` placeholders in HTML at file-serve time when `hf_oauth: true` is set, and gives you free CDN caching.
+- The **`reachy_mini_js_app` tag is mandatory** to appear in the mobile catalog. The catalog API filters on this exact string.
+- `hf_oauth: true` makes HF auto-provision an OAuth client and inject its ID into the served `index.html`.
+- Apps published under the `pollen-robotics/*` namespace are automatically tagged as "official" in the catalog ([SPEC §1: Official vs community apps](ts/host/SPEC.md#official-vs-community-apps)); no extra config.
 
-**4. Create + push:**
+### Design for mobile first — most users will open the Space on a phone
+
+Unless the user explicitly asks for a desktop-only / kiosk / dev-tool UI, **assume the app will be opened on a smartphone**. The Space URL is shareable, and "open this link on your phone and play with the robot" is the most common end-user flow.
+
+Practical rules:
+- Include `<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />` in `<head>`.
+- Use fluid widths and `rem` / `vh` / `vw` units, not fixed pixel layouts. Stack panels vertically by default; reserve side-by-side layouts for `@media (min-width: 768px)`.
+- Touch-friendly hit targets: ≥ 44×44 px buttons, sliders with comfortable thumbs.
+- No hover-only affordances. Anything reachable by mouse-hover must also be reachable by tap.
+- Test in Chrome devtools' phone emulation before declaring the app done.
+- Bidirectional audio + camera permissions on iOS Safari are the most fragile path — verify on a real iPhone if the app uses them.
+
+The reference apps are already responsive; cloning them gets you the mobile baseline for free. Don't undo it by hardcoding desktop widths in your edits.
+
+### Create + deploy the Space
+
+```bash
+hf --version           # pip install -U huggingface_hub if missing
+hf auth whoami         # run `hf auth login` if not authenticated
+git --version
+node --version         # need a recent Node (≥ 20) for the Vite build
+```
+
+1. **Pick a reference app** (`reachy_mini_minimal_conversation` for vanilla TS, `reachy_mini_emotions` for React + MUI, `reachy_mini_telepresence` for media) and clone its repo locally. The reference apps currently ship a `Dockerfile` — for the static path, you'll drop it.
+2. **Write `plan.md` first** (same rule as Python apps). Wait for user approval before scaffolding.
+3. Customise: `package.json` `name`, README frontmatter (`title`, `emoji`, `short_description`, **`sdk: static`** — drop `sdk: docker` and `app_port` if you cloned a docker-based reference), `public/icon.svg`, `src/embed.{ts,tsx}` (your app code). You can also delete the cloned `Dockerfile` and `docker-entrypoint.d/` folder.
+4. Build locally:
+
+```bash
+npm install
+npm run build      # produces ./dist/ — the artifact you'll ship to HF
+```
+
+5. Create the Space and push the built `dist/` (plus `README.md` and a copy of `public/`) as the Space root:
 
 ```bash
 hf repos create <app-name> --repo-type space --space-sdk static
-git clone https://huggingface.co/spaces/<username>/<app-name>
-cp <scaffold-dir>/{README.md,index.html,style.css,icon.svg} <app-name>/
-cd <app-name> && git add . && git commit -m "Initial app scaffold" && git push
+git clone https://huggingface.co/spaces/<username>/<app-name> ../<app-name>-space
+
+# Space frontmatter
+cp README.md ../<app-name>-space/
+
+# Built app (served by HF's static CDN at the Space root)
+cp -R dist/. ../<app-name>-space/
+
+# Source-side public/ duplicated at the repo path the mobile catalog API matches.
+# Vite already copied icon.svg into dist/, so it's served at /icon.svg for the
+# top bar + favicon; this second copy lives only so `siblings` listing matches
+# `public/icon.svg` for the catalog probe.
+mkdir -p ../<app-name>-space/public
+cp public/icon.svg ../<app-name>-space/public/
+# (also cp public/icon.png if you ship a raster fallback)
+
+cd ../<app-name>-space
+git add -A && git commit -m "Initial deploy" && git push
 ```
 
-Static Spaces go live in ~10 s. **The live URL is `https://<username>-<app-name>.static.hf.space/`** — not `huggingface.co/spaces/<username>/<app-name>/`. The latter is the file browser; only the `.static.hf.space/` origin actually serves the app (and only that origin can complete the HF OAuth redirect). Return the `.static.hf.space/` URL to the user.
+The contract: **only built artifacts + `README.md` + `public/icon.svg` live in the HF Space repo**. Source stays in your dev folder (or a separate GitHub repo) and you re-run `npm run build && cp -R dist/.` for each deploy. Tip: most teams wire this into a GitHub Action that builds on push and mirrors to HF — pick any HF "sync" action that runs `npm ci && npm run build` and force-pushes `dist/` + `README.md` + `public/` to the Space's `main`.
 
-### SDK cheatsheet
+**The live URL is `https://<username>-<app-name>.static.hf.space/`** (not `huggingface.co/spaces/<username>/<app-name>/`, which is the file browser). Return the `.static.hf.space/` URL to the user.
 
-**Bring-up — use `robot.autoConnect()` (v1.7.2+).** One call does auth + SSE connect + robot selection (auto-pick if exactly one free, otherwise the consumer-supplied `pickRobot` callback) + `startSession()` + `ensureAwake()`. Replaces the legacy `connect()` → `robotsChanged` → `startSession()` → `ensureAwake()` chain. Works for both standalone Spaces and iframe-embedded apps (the SDK auto-detects embed mode from the URL — see [Iframe-embedded apps](#iframe-embedded-apps-mobile-shell-vibe-coder-preview) below).
+**Sanity check OAuth substitution**: open the live URL, view source, and search for `__OAUTH_CLIENT_ID__`. If the placeholder is still there, HF didn't substitute it — verify `hf_oauth: true` is in your frontmatter and that you didn't accidentally minify the placeholder out of `index.html`. If you're stuck, fall back to `sdk: docker` (next subsection).
 
-```js
-const robot = new ReachyMini({ appName: "my-app" });
-await robot.autoConnect({
-    pickRobot: async (robots) =>
-        // robots: [{ id, name, busy, activeApp, meta, lastSeenAgeSeconds }]
-        // Already busy-filtered + deduped by install_id.
-        await showMyPickerUI(robots),       // your UI; returns the chosen id
+**Cache busting**: if a push doesn't update the live bundle, push an empty commit (`git commit --allow-empty -m "chore: bust cache" && git push`).
+
+### Optional: `sdk: docker` fallback
+
+Use this when you can't run the Vite build locally (e.g. CI-less environment, agent without Node, deployment from a tablet, etc.) — let HF build the Dockerfile for you instead.
+
+1. Keep the `Dockerfile` + `docker-entrypoint.d/10-inject-hf-vars.sh` you cloned from the reference app.
+2. Restore `sdk: docker` and `app_port: 7860` in the README frontmatter.
+3. Push the **source** (not the build) to a `--space-sdk docker` Space:
+   ```bash
+   hf repos create <app-name> --repo-type space --space-sdk docker
+   git remote add space git@hf.co:spaces/<username>/<app-name>
+   git push space main
+   ```
+
+HF Spaces builds the `Dockerfile`, runs the entrypoint to inject HF vars, and serves nginx on `app_port: 7860`. The live URL is `https://<username>-<app-name>.hf.space/`.
+
+Trade-off vs. static: the Space spins up a container on each cold start, costs more, and is slower to deploy. Prefer static whenever the build can run upstream.
+
+### `mountHost()` and `connectToHost()` — API quick reference
+
+```ts
+import { mountHost } from "@pollen-robotics/reachy-mini-sdk/host/auto";
+
+mountHost({
+  appName: "My App",        // REQUIRED: passed to the SDK + shown in top bar
+  appIconUrl: "/icon.svg",  // optional: top-bar logo
+  appEmoji: "🤖",           // optional: fallback when no icon.svg
+  enableMicrophone: false,  // false unless your app uses user-mic input
+  clientId: undefined,      // optional; defaults to window.huggingface.variables.OAUTH_CLIENT_ID
+  devToken: undefined,      // optional: { token, userName } — dev shortcut, see local dev below
 });
-// Now streaming — robot is awake, motors enabled, ready to drive.
 ```
 
-Options: `token?` (skip `authenticate()` and use this raw HF token), `autoPickIfSingle?` (default `true`), `filterBusy?` (default `true`), `wakeOnConnect?` (default `true`).
+```ts
+import { connectToHost } from "@pollen-robotics/reachy-mini-sdk/host/embed";
 
-Underlying state: `disconnected` → `connect()` → `connected` → `startSession(robotId)` → `streaming`. `autoConnect()` wraps the whole chain; the primitives stay exposed for advanced consumers (mobile shell, app preview tools).
+interface MyConfig { startingEmotion?: string; }
 
-Commands: `setHeadRpyDeg(r°,p°,y°)`, `setAntennasDeg(right°, left°)`, `setBodyYawDeg(yaw°)`, `setTarget({ head?: number[16], antennas?: [rRad, lRad], body_yaw?: rad })` (atomic raw-units update), `playSound(file)`, `setAudioMuted(bool)`, `setMicMuted(bool)`, `sendRaw(obj)`, `getVersion()`. Math utilities exported from the module: `rpyToMatrix`, `matrixToRpy`, `degToRad`, `radToDeg`.
+const handle = await connectToHost<MyConfig>();
+const { reachy, theme, config, onLeave, onThemeChange, onConfigChange,
+        setAppState, requestLeave, reportError } = handle;
+```
+
+By the time `connectToHost()` resolves, `reachy` is a live SDK instance with a session running and the robot awake. **`config` is `unknown` at runtime** — cast is not enough, validate it (an attacker controlling the URL can shape config freely).
+
+The host owns all teardown: don't call `reachy.stopSession()` yourself, register an `onLeave` callback instead. Full surface: [`ts/host/APP_AUTHOR_GUIDE.md` §4-§5](ts/host/APP_AUTHOR_GUIDE.md#4-mounthost-api).
+
+### SDK cheatsheet (motion + media + daemon-side playback)
+
+The `reachy` instance you get from `connectToHost()` is the same `ReachyMini` object app authors used to instantiate by hand. Once connected, you drive it the same way regardless of which boot path you came from.
+
+Commands: `setHeadRpyDeg(r°, p°, y°)`, `setAntennasDeg(right°, left°)`, `setBodyYawDeg(yaw°)`, `setTarget({ head?: number[16], antennas?: [rRad, lRad], body_yaw?: rad })` (atomic raw-units update), `playSound(file)`, `setAudioMuted(bool)`, `setMicMuted(bool)`, `sendRaw(obj)`, `getVersion()`. Math utilities exported from the module: `rpyToMatrix`, `matrixToRpy`, `degToRad`, `radToDeg`.
 
 Recorded-move playback (daemon-side, single-clock A/V sync): `playMove(motion, { audioBlob?, audioLeadMs? })` uploads motion + optional WAV and plays both on the daemon's local clock; resolves with `{finished|cancelled|error}`. `cancelMove()` stops mid-play. For record-time flows that need the SAME audio pipeline at capture and replay (so pipeline latency cancels), `uploadAudio(blob)` returns an `uploadId`, then `playUploadedAudio(uploadId)` resolves on the daemon's `started` broadcast (sync anchor), and `cancelAudio()` stops. Default `audioLeadMs` is `-100` — empirical system-wide constant covering combined motor + GStreamer playbin warmup; tune only if you've measured a different value on your hardware. Use these instead of hand-rolling `sendRaw` chunked uploads. Full reference: [`docs/source/SDK/javascript-sdk.md`](docs/source/SDK/javascript-sdk.md#daemon-side-recorded-move-playback).
 
-Speaker / mic volume: `getVolume()` → 0-100, `setVolume(0-100)`, `getMicrophoneVolume()`, `setMicrophoneVolume(0-100)`. All return a `Promise`; `setVolume` resolves with the value the server actually applied (may be clamped/rounded).
+Speaker / mic volume: `getVolume()` → 0-100, `setVolume(0-100)`, `getMicrophoneVolume()`, `setMicrophoneVolume(0-100)`. All return a `Promise`; `setVolume` resolves with the value the server actually applied (may be clamped / rounded).
 
 Torque / wake: `setMotorMode("enabled"|"disabled"|"gravity_compensation")`, `wakeUp()`, `gotoSleep()`, `isAwake()`, `ensureAwake()`. `robot.robotState.motor_mode` reflects the live state.
 
-Lifecycle (advanced — most consumers should just use `autoConnect()`): `authenticate()` / `login()` / `connect()` / `startSession()` / `stopSession()` / `disconnect()` / `logout()`. Video: `attachVideo(<video>)` returns a detach fn.
-
-**If you opt out of `autoConnect()` and drive the lifecycle manually, always call `await robot.ensureAwake()` right after `startSession()`** — otherwise if the robot is in the sleep pose (torque off, head on the base) every `setHeadRpyDeg` / `setAntennasDeg` is silently ignored and the app looks broken. `ensureAwake()` is a no-op when the robot is already awake (including gravity-compensation mode), so it's safe to call unconditionally at startup. `autoConnect()` calls it for you.
+Lifecycle primitives (only needed if you opt out of the host shell): `authenticate()` / `login()` / `connect()` / `startSession()` / `stopSession()` / `disconnect()` / `logout()` / `autoConnect()` / `ensureAwake()`. Video: `attachVideo(<video>)` returns a detach fn.
 
 Events: `connected`, `disconnected`, `robotsChanged`, `streaming`, `sessionStopped`, `sessionRejected` (robot busy — inspect `e.detail.activeApp`), `state` (every ~500 ms), `videoTrack`, `micSupported`, `error`.
 
 **Full API:** read the top ~60 lines of [`ts/reachy-mini-sdk.ts`](ts/reachy-mini-sdk.ts) — the file header is a complete reference.
 
-### Iframe-embedded apps (mobile shell, vibe-coder preview)
-
-Browser apps may run **standalone** (the user opens the Space URL directly) or **embedded** in a host iframe (the Reachy Mini mobile shell, the vibe-coder preview, future shells). HF blocks `huggingface.co/oauth/authorize` from being framed (`X-Frame-Options: SAMEORIGIN`), so OAuth-in-iframe is impossible. The host shell instead pre-authenticates and pre-picks a robot, then forwards both pieces of state to the embed via the iframe URL.
-
-**The SDK handles the plumbing.** App authors don't parse URLs, don't manage `sessionStorage` keys, and don't wire `robotsChanged` listeners for preselect. With `robot.autoConnect()` (v1.7.2+), the embed-vs-standalone branch is hidden entirely inside the SDK.
-
-The relevant SDK surface:
-
-- `robot.autoConnect({ pickRobot })` — single entry point. Detects embed mode from the URL, skips the picker in that case (uses `preselectedRobotId`), invokes your `pickRobot` callback in standalone mode. Does auth + connect + startSession + ensureAwake.
-- `robot.authenticate()` (called internally by `autoConnect`) consumes `#hf_token=…&hf_username=…&hf_token_expires=…` from the URL fragment automatically. Standalone visits with no fragment fall through to the existing OAuth path.
-- `robot.preselectedRobotId` (string | null) and `robot.isEmbedded` (boolean) — exposed for UX branching (e.g. hide the picker UI in embed mode), not for orchestration.
-
-**Receiver recipe** (the only app-side code you need):
-
-```js
-const robot = new ReachyMini({ appName: "..." });
-
-document.addEventListener("DOMContentLoaded", async () => {
-    // Hide your picker UI in embed mode — the SDK won't call pickRobot
-    // there. This is the only embed-vs-standalone branch you need.
-    if (robot.isEmbedded) hidePickerUI();
-
-    try {
-        await robot.autoConnect({
-            pickRobot: async (robots) => showPickerAndAwaitChoice(robots),
-        });
-    } catch (e) {
-        // 'Not authenticated' → user needs to log in (await robot.login()).
-        // 'No reachable robots' → no candidates on central.
-        // 'Robot selection cancelled' → user closed the picker.
-        // Any other → check e.reason for 'robot_busy' / 'local_app_started' etc.
-        showError(e);
-    }
-});
-
-robot.addEventListener("streaming", () => {
-    // Same handler for both embedded and standalone paths.
-});
-```
-
-That's it. No URL parsing, no `connect()`/`startSession()`/`ensureAwake()` chaining, no `autoStartFromUrl` flag, no postMessage listener, no `consumeTokenFromHash` boilerplate.
-
-> **Deprecation note.** The old `autoStartFromUrl: true` constructor option still exists in v1.7.2+ for backward compat, but **do not use it alongside `autoConnect()`** — they race two `startSession()` calls against the same preselected robot, with central rejecting the second one as *"Robot is busy: <our own appName>"*. `autoConnect()` defensively suppresses `autoStartFromUrl` while it runs, but the cleanest path is to drop the constructor option entirely.
-
-**For host-shell authors** (writing a NEW iframe parent), the URL contract is:
-- Credentials in the **fragment**: `#hf_token=<jwt>&hf_username=<handle>&hf_token_expires=<ISO>`. Fragment because it doesn't travel over HTTP (no referrer, no server logs).
-- Robot pre-select in the **query** (or fragment if you prefer symmetry): `?robot_peer_id=<peerId>`. Not a secret; query is fine.
-
-The mobile-shell reference implementation lives in [`reachy_mini_mobile_app/src/screens/apps/AppIframeOverlay.tsx`](https://github.com/pollen-robotics/reachy_mini_mobile_app); read its file-level docstring for the host-side authoritative contract. The receiver-side reference is the dev `webrtc_example` Space using the recipe above.
-
 ### Media flow — use WebRTC, not `getUserMedia`, for robot media
 
-The `<video>` element you pass to `attachVideo()` receives the **robot's** camera and microphone over WebRTC. Do **not** call `navigator.mediaDevices.getUserMedia()` to read robot media — that grabs the user's *own* laptop camera.
+The `<video>` element you pass to `reachy.attachVideo()` receives the **robot's** camera and microphone over WebRTC. Do **not** call `navigator.mediaDevices.getUserMedia()` to read robot media — that grabs the user's *own* laptop camera.
 
-Bidirectional audio is automatic: with `enableMicrophone: true` (default), the SDK acquires the user's mic via `getUserMedia`, negotiates it into the peer connection, and exposes `setMicMuted()`. Check `micSupported` after session start before showing a mic UI.
+Bidirectional audio is automatic: with `enableMicrophone: true` on `mountHost`, the SDK acquires the user's mic via `getUserMedia`, negotiates it into the peer connection, and exposes `setMicMuted()`. Check `micSupported` after session start before showing a mic UI.
 
 Rule of thumb: robot IO flows through WebRTC; the user's own laptop IO flows through browser APIs; the SDK wires them together.
 
-### Reference implementation
+### Iframe-embedded apps (mobile-shell handoff)
 
-**`webrtc_example`** — canonical JS app: login, robot picker, video stream, head/antenna sliders, sound presets, latency overlay. ~500 lines.
+Reachy Mini apps run in two boot modes (cf. [SPEC.md §2](ts/host/SPEC.md#2-two-boot-modes-one-url-surface)):
 
-- Live Space: https://huggingface.co/spaces/cduss/webrtc_example
-- Source (in sibling repo): `../hfspace/webrtc_example/`
+| Mode | URL shape | What happens |
+|---|---|---|
+| **A. Standalone** | `https://<space>.hf.space/` | Full host shell (OAuth → picker → iframe with app). |
+| **B. Mobile handoff** | `https://<space>.hf.space/?embedded=1#creds=<base64(CredsBundle)>` | Skip shell; embed boots directly, creds from hash. |
 
-Always start from this when scaffolding anything non-trivial. Integration patterns (event wiring, slider debouncing, state sync, session-rejection handling) are already solved there.
+The dispatcher routes between them. **The same `embed.ts` works in both modes** — `connectToHost()` reads creds from the URL hash in Mode B, waits for `host:init` in Mode A, and resolves identically. App authors don't parse URLs, don't manage `sessionStorage`, don't gate on embed-vs-standalone.
 
-### Local development (without pushing to HF every iteration) (advanced user)
+The mobile app (`reachy_mini_mobile_app`) is the canonical Mode-B host: it pre-authenticates, pre-picks a robot, then opens the Space in a WebView with creds in the URL hash. Reference implementation: [`reachy_mini_mobile_app/src/ui/panels/apps-list/AppIframeOverlay.tsx`](https://github.com/pollen-robotics/reachy_mini_mobile_app).
 
-OAuth only works from the deployed `*.static.hf.space` origin — clicking "Sign in with HF" on `localhost` or `file://` silently fails because HF auto-provisions the OAuth client against your Space's origin. HF Spaces **Dev Mode is not available for static Spaces**, so the manual-token loop below is the only low-latency option:
+For host-shell authors (writing a NEW iframe parent), the wire protocol lives in [`ts/host/src/lib/protocol.ts`](ts/host/src/lib/protocol.ts) and the contract is in [`ts/host/SPEC.md` §4-§6](ts/host/SPEC.md#4-mode-b-mobile-handoff-flow).
 
-1. Create a read-only token at https://huggingface.co/settings/tokens.
-2. In dev, skip `authenticate()` / `login()` and pass the token directly to `connect()`:
-   ```js
-   const token = new URLSearchParams(location.search).get("hf")
-                 || localStorage.getItem("hf_dev_token");
-   await robot.connect(token);    // SDK accepts a manually-pasted HF token
+### Local development
+
+Two options, switched via `mountHost()` props. Reference apps support both via `.env.local`.
+
+**Option A: personal access token (no OAuth).** Fastest for local dev:
+
+1. Get a token at <https://huggingface.co/settings/tokens> (read scope is enough).
+2. Create `.env.local` (gitignored):
    ```
-3. Serve with `python3 -m http.server 8765` (not `file://` — the SDK is an ES module from jsDelivr and needs a real HTTP origin). Open `http://localhost:8765/?hf=hf_…` once, then rely on `localStorage`.
-4. Before pushing to the Space, restore the OAuth path and **never commit the token**.
+   VITE_HF_TOKEN=hf_xxx
+   VITE_HF_USERNAME=your-handle
+   ```
+3. In `dispatch.ts`, forward to `mountHost`:
+   ```ts
+   mountHost({
+     appName: "My App",
+     devToken: import.meta.env.VITE_HF_TOKEN && import.meta.env.VITE_HF_USERNAME
+       ? { token: import.meta.env.VITE_HF_TOKEN, userName: import.meta.env.VITE_HF_USERNAME }
+       : undefined,
+   });
+   ```
+4. `npm run dev` → you're signed in on page load. **Never commit the token.**
 
-Rule of thumb: for UI-heavy iteration (CSS, slider behaviour, state machine wiring), local reload ≪ push-to-HF (~10-30 s). For a one-off tweak, just push.
+**Option B: real OAuth client ID.** Use when you're touching the OAuth / logout paths:
+
+1. Create one at <https://huggingface.co/settings/applications/new> (Homepage + Redirect = `http://localhost:5173`, scopes `openid` + `profile`).
+2. `VITE_HF_OAUTH_CLIENT_ID=...` in `.env.local`.
+3. `mountHost({ appName: "My App", clientId: import.meta.env.VITE_HF_OAUTH_CLIENT_ID })`.
+
+For testing Mode B locally (the mobile-handoff URL shape), see [`APP_AUTHOR_GUIDE.md` §11](ts/host/APP_AUTHOR_GUIDE.md#11-faq-and-common-pitfalls).
 
 ### Common gotchas
 
 | Symptom | Cause |
 |---|---|
-| `robot.login()` fails / redirects to `about:blank` | Running via `file://` or localhost — OAuth only works on the live Space domain. |
-| Head doesn't move | `setHeadRpyDeg` called before `startSession()` resolved. Check the return value. |
-| Head doesn't move, session *is* streaming | Robot is asleep (torque off). Call `await robot.ensureAwake()` after `startSession()`. |
+| Pushed to the Space but nothing changed | Forgot to re-run `npm run build` before copying `dist/` over. The Space serves whatever's at the repo root, not whatever's in your local `src/`. |
+| Live page shows raw `__OAUTH_CLIENT_ID__` in the HTML | HF didn't substitute the placeholder. Check `hf_oauth: true` is in the frontmatter, the placeholder is still the literal string `__OAUTH_CLIENT_ID__` (Vite / minifier didn't rename it), and you're on `sdk: static`. |
+| `connectToHost()` hangs forever | Dispatcher isn't routing to embed correctly. Check `?embedded=1` is being passed; check console for postMessage origin errors. |
+| Top bar shows the emoji fallback | `appIconUrl` not resolvable. Open `https://<space>.static.hf.space/icon.svg` directly; confirm `public/icon.svg` is in your source tree and Vite is copying it into `dist/`. |
+| App missing from mobile catalog | `reachy_mini_js_app` tag missing from README frontmatter, or `icon.svg` / `icon.png` not at `public/` in your **source** repo (the catalog API reads from the Space repo's `siblings`, which means you may need to also commit `public/icon.svg` alongside the build artifacts depending on your deploy layout). |
+| Head doesn't move | `setHeadRpyDeg` called before `connectToHost()` resolved. Always `await` the handle. |
+| Head doesn't move, session *is* streaming | Robot is asleep (torque off). With the host shell, this should not happen (`ensureAwake()` runs as part of boot) — file a bug. Without it, call `await reachy.ensureAwake()` after `startSession()`. |
 | Audio stays silent after `setAudioMuted(false)` | Browser requires unmute inside a user-gesture handler. |
-| `sessionRejected` | Robot is locked by another app. Surface `e.detail.activeApp` in the UI. |
-| Stream laggy | See buffer-lag overlay in `webrtc_example/index.html`; > 500 ms jitter = network issue. |
-| UI broken on phone | Hardcoded pixel widths or desktop-only layout. Use the `webrtc_example` viewport meta + fluid units; test in Chrome devtools phone emulation. |
+| `Robot is busy: <our own appName>` | Two SDK instances on the same `appName`. Likely a Strict-Mode double mount; ensure your embed runs `connectToHost()` exactly once. The host enforces "single SDK per tab" ([SPEC §8.1](ts/host/SPEC.md#81-single-live-sdk-per-tab)). |
+| `Robot is busy` (other peer) | Robot is locked by another app. Surface `e.detail.activeApp` in the UI. |
+| Stream laggy | Network jitter > 500 ms. Check the latency overlay in the reference apps. |
+| UI broken on phone | Hardcoded pixel widths or desktop-only layout. Reference apps use the responsive viewport meta; don't undo it. |
 | Volume slider floods the data channel | Wire `setVolume` on the slider's `'change'` event (release) — not `'input'` (per-pixel). Sync once on streaming-start with `await robot.getVolume()` to reflect the robot's real level, then reflect the value that `setVolume` resolves with back into the slider. |
+| Vite warns about React installed twice | Add `react`, `react-dom`, `@emotion/react`, `@emotion/styled`, `@mui/material` to `resolve.dedupe` in `vite.config.ts`. Full snippet: [`APP_AUTHOR_GUIDE.md` §11](ts/host/APP_AUTHOR_GUIDE.md#11-faq-and-common-pitfalls). |
+
+### Legacy: minimal CDN-only path (`webrtc_example`)
+
+Before the host shell, JS apps were `sdk: static` HF Spaces with a single `index.html` importing the SDK directly from jsDelivr (`https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@vTAG/js/reachy-mini.js`) and reimplementing OAuth + picker + session lifecycle by hand. The canonical example is [`cduss/webrtc_example`](https://huggingface.co/spaces/cduss/webrtc_example) (~500 lines).
+
+**Use this only** for one-off prototypes that don't need the host shell's surface (no top bar, no picker, no theme propagation, no mobile-catalog tile). For anything you'd share, **start from a reference app instead** — you get OAuth, picker, mobile-catalog discovery, mode-B handoff, and the entire `connectToHost()` API for free.
+
+If you do go this route, pin the SDK to `v1.7.2` or newer (earlier versions default `signalingUrl` to a decommissioned HF Space) and use `robot.autoConnect({ pickRobot })` to handle both standalone and embed modes from the URL.
 
 ---
 
