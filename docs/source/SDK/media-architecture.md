@@ -84,6 +84,13 @@ frame = mini.media.get_frame()
 
 For a complete example with both OpenCV and sounddevice, see [Custom Media Manager](../examples/custom_media_manager.md).
 
+## Cloud Backends
+
+For Python services running off-robot (e.g. an HF Space doing inference
+on the camera stream and steering the head), there's a hardware-free
+aiortc client built on the same central relay protocol — see
+[Cloud-Backend Consumer](./cloud-backend-consumer.md).
+
 ## Advanced Controls
 
 Please refer to the dedicated pages to fine-tune camera and microphone parameters for [Reachy Mini](../platforms/reachy_mini/media_advanced_controls.md) and [Reachy Mini Lite](../platforms/reachy_mini_lite/media_advanced_controls.md).
