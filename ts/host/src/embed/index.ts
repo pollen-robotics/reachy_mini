@@ -181,9 +181,53 @@ export interface ConnectToHostOptions {
   expectedOrigin?: string;
 }
 
+/**
+ * Resolved state from `connectToHostCredsOnly()`.
+ *
+ * Mirrors `ConnectedHandle` but **without** `reachy` and `media` —
+ * intended for apps that run the WebRTC session in their own backend
+ * (e.g. a Python aiortc consumer talking to central with the user's
+ * token). The handle exposes the credentials the app needs to forward
+ * (`hfToken`, `robotPeerId`, `signalingUrl`) plus the same lifecycle
+ * methods so the host shell still gets correct UX (theme/config/leave).
+ */
+export interface CredsOnlyHandle<TConfig = unknown> {
+  /** Short-lived HF Bearer token, forward to the backend. */
+  hfToken: string;
+  /** Robot peer id (on central) the user picked; forward to the backend. */
+  robotPeerId: string;
+  /** Central signaling URL the backend should target. */
+  signalingUrl: string;
+  /** Current theme; updated via `onThemeChange`. */
+  theme: ThemeMode;
+  /** Initial config; updates pushed via `onConfigChange`. */
+  config: TConfig | null;
+  /** App display name as passed by the host. */
+  appName: string;
+  /** Host display name. */
+  hostName: string;
+  /** HF user name when known. */
+  userName: string | null;
+
+  onLeave(cb: () => void | Promise<void>): () => void;
+  onThemeChange(cb: (theme: ThemeMode) => void): () => void;
+  onConfigChange(cb: (config: TConfig | null) => void): () => void;
+  setAppState(state: {
+    phase: AppPhase;
+    connectingStep?: AppConnectingStep | null;
+    message?: string | null;
+  }): void;
+  requestLeave(): void;
+  reportError(
+    message: string,
+    opts?: { fatal?: boolean; detail?: unknown },
+  ): void;
+}
+
 /* ─────────────────── Module-level idempotency ─────────────────── */
 
 let bootPromise: Promise<ConnectedHandle<unknown>> | null = null;
+let credsOnlyBootPromise: Promise<CredsOnlyHandle<unknown>> | null = null;
 
 /**
  * Target origin used by every outgoing `postMessage`. In Mode A
@@ -226,6 +270,35 @@ export async function connectToHost<TConfig = unknown>(
     bootPromise = bootOnce(options) as Promise<ConnectedHandle<unknown>>;
   }
   return (await bootPromise) as ConnectedHandle<TConfig>;
+}
+
+/**
+ * Boot the embed in **credentials-only** mode.
+ *
+ * Identical handshake to `connectToHost()` for steps 1–6 (parse hash
+ * creds, post `embed:ready`, await `host:init`), but **skips** steps
+ * 7–8: no `new ReachyMini`, no `authenticate / connect / startSession
+ * / ensureAwake`. The returned handle exposes the credentials the app
+ * needs to forward to its own backend (`hfToken`, `robotPeerId`,
+ * `signalingUrl`) plus the standard host lifecycle methods.
+ *
+ * Use this when the WebRTC session to the robot is owned by your
+ * **backend** (e.g. a Python aiortc consumer that authenticates to
+ * central with the user's HF token). Calling `connectToHost()` from a
+ * backend-owned app would race the backend's session and central would
+ * reject one of them as "robot busy".
+ *
+ * Same idempotency guarantee: calling twice returns the same promise.
+ */
+export async function connectToHostCredsOnly<TConfig = unknown>(
+  options: ConnectToHostOptions = {},
+): Promise<CredsOnlyHandle<TConfig>> {
+  if (!credsOnlyBootPromise) {
+    credsOnlyBootPromise = bootOnceCredsOnly(options) as Promise<
+      CredsOnlyHandle<unknown>
+    >;
+  }
+  return (await credsOnlyBootPromise) as CredsOnlyHandle<TConfig>;
 }
 
 /* ─────────────────── Boot pipeline ─────────────────── */
@@ -342,6 +415,54 @@ async function bootOnce(
   pushAppState('live', null);
 
   return bridge.buildHandle<unknown>(sdk, live);
+}
+
+/**
+ * Credentials-only boot: same handshake as bootOnce up through
+ * `host:init`, then build a CredsOnlyHandle without instantiating
+ * the SDK or starting a WebRTC session.
+ */
+async function bootOnceCredsOnly(
+  options: ConnectToHostOptions,
+): Promise<CredsOnlyHandle<unknown>> {
+  parentTargetOrigin = detectParentOrigin();
+  const expectedOrigin = options.expectedOrigin ?? parentTargetOrigin;
+
+  // 1. Parse creds from URL hash and wipe it synchronously.
+  const creds = decodeCredsFromHash(window.location.hash);
+  wipeUrlHash();
+  if (!creds) {
+    throw new Error(
+      '[reachy-mini-sdk/host/embed] no creds bundle found in URL hash. ' +
+        'Was the embed mounted directly without ?embedded=1#creds=...?',
+    );
+  }
+
+  // 2. (Skipped — no SDK instance is created.)
+  // 3. (Skipped — no session token to seed; the backend uses the
+  //    hfToken directly via the returned handle.)
+  // 4. (Skipped — no `new ReachyMini`.)
+
+  // 5. Bridge + post ready.
+  const bridge = createBridge(expectedOrigin);
+  postToHost({
+    source: PROTOCOL_SOURCE,
+    type: 'embed:ready',
+    version: PROTOCOL_VERSION,
+  });
+  bridge.start();
+
+  // 6. Wait for host:init (falls back to hash creds on timeout).
+  const live = await bridge.awaitHostInit(HOST_INIT_TIMEOUT_MS, creds);
+
+  // 7. (Skipped — the backend, not us, runs the central + WebRTC flow.)
+  // 8. Wire pagehide to fire onLeave handlers (no SDK to stopSession;
+  //    backend cleanup is the app's responsibility — typically a
+  //    sendBeacon to its own /stop endpoint inside an onLeave handler).
+  bridge.attachPageHideCredsOnly();
+  pushAppState('live', null);
+
+  return bridge.buildCredsOnlyHandle<unknown>(live, creds);
 }
 
 /* ─────────────────── Bridge state ─────────────────── */
@@ -509,6 +630,88 @@ function createBridge(expectedOrigin: string) {
         }
       };
       window.addEventListener('pagehide', onPageHide, { once: true });
+    },
+
+    /** Credentials-only variant — no SDK to stop; just fire onLeave. */
+    attachPageHideCredsOnly(): void {
+      window.addEventListener('pagehide', runLeaveOnce, { once: true });
+    },
+
+    /**
+     * Build the credentials-only handle. Same lifecycle accessors as
+     * `buildHandle` but exposes `hfToken` / `robotPeerId` /
+     * `signalingUrl` (from the creds bundle) instead of a `reachy`
+     * SDK instance, so the embed app can forward those to its
+     * backend.
+     */
+    buildCredsOnlyHandle<TConfig>(
+      live: LiveState,
+      creds: CredsBundle,
+    ): CredsOnlyHandle<TConfig> {
+      current = live;
+      if (!creds.hfToken) {
+        throw new Error(
+          '[reachy-mini-sdk/host/embed] creds-only handle requires hfToken; ' +
+            'the host shell did not provide one (visitor logged out?).',
+        );
+      }
+      return {
+        hfToken: creds.hfToken,
+        robotPeerId: live.robotPeerId,
+        signalingUrl: creds.signalingUrl,
+        get theme(): ThemeMode {
+          return current!.theme;
+        },
+        get config(): TConfig | null {
+          return current!.config as TConfig | null;
+        },
+        get appName(): string {
+          return current!.appName;
+        },
+        get hostName(): string {
+          return current!.hostName;
+        },
+        get userName(): string | null {
+          return current!.userName;
+        },
+        onLeave(cb) {
+          leaveListeners.add(cb);
+          return () => leaveListeners.delete(cb);
+        },
+        onThemeChange(cb) {
+          themeListeners.add(cb);
+          return () => themeListeners.delete(cb);
+        },
+        onConfigChange(cb) {
+          const wrapped = (c: unknown) => cb(c as TConfig | null);
+          configListeners.add(wrapped);
+          return () => configListeners.delete(wrapped);
+        },
+        setAppState(state) {
+          pushAppState(
+            state.phase,
+            state.connectingStep ?? null,
+            state.message ?? null,
+          );
+        },
+        requestLeave() {
+          postToHost({
+            source: PROTOCOL_SOURCE,
+            type: 'embed:request-leave',
+            version: PROTOCOL_VERSION,
+          });
+        },
+        reportError(message, opts) {
+          postToHost({
+            source: PROTOCOL_SOURCE,
+            type: 'embed:error',
+            version: PROTOCOL_VERSION,
+            message,
+            fatal: opts?.fatal === true,
+            detail: opts?.detail,
+          });
+        },
+      };
     },
 
     buildHandle<TConfig>(
