@@ -39,10 +39,8 @@
     "dist",
     "host/dist",
     "host/README.md",
-    "host/SPEC.md",
-    "host/APP_AUTHOR_GUIDE.md",
+    "APP_CREATION_GUIDE.md",
     "README.md",
-    "CHANGELOG.md",
     "LICENSE"
   ],
   "sideEffects": false,
