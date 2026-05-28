@@ -1286,12 +1286,12 @@ same-origin iframe within the same Space.
 Subpath import: `@pollen-robotics/reachy-mini-sdk/animation`
 
 Pure-TypeScript helpers that every Reachy Mini JS app used to copy-paste
-from RemiFabre's [`reachy-mini-js-practices`](https://github.com/pollen-robotics/reachy-mini-js-practices)
-bench. **No daemon changes** - everything routes through existing
-data-channel commands (`setMotorMode`, `setTarget`, `gotoTarget`). Three
-concrete callers today (`reachy_mini_emotions`, `reachy_mini_marionette`
-v1 + v2) still carry their own copies and are being migrated off as
-follow-up PRs.
+from Rémi's `reachy-mini-js-practices` bench (the same source referenced
+inline in `ts/animation/safe-return.ts`, `distance.ts`, `presets.ts`).
+**No daemon changes** - everything routes through existing data-channel
+commands (`setMotorMode`, `setTarget`, `gotoTarget`). Three concrete
+callers today (`reachy_mini_emotions`, `reachy_mini_marionette` v1 + v2)
+still carry their own copies; consolidate onto this lib for new apps.
 
 See [`ts/animation/DESIGN.md`](./animation/DESIGN.md) for the two-phase
 roadmap: Phase 1 (everything below) ships now; Phase 2 is the video-game-style
