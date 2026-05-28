@@ -175,11 +175,16 @@ Once `connectToHost()` resolves you get a live `ReachyMini` instance (`handle.re
 
 **The host owns all teardown** - never call `reachy.stopSession()` yourself, register an `onLeave` callback instead. For the canonical `onLeave` body, see [§14.3](ts/APP_CREATION_GUIDE.md#143-safe-return-to-home-pose-safelyreturntopose).
 
-### Legacy: minimal CDN-only path (`webrtc_example`)
+### Alternative: bare HTML + CDN (no bundler)
 
-Before the host shell, JS apps were `sdk: static` HF Spaces with a single `index.html` importing the SDK directly from jsDelivr and reimplementing OAuth + picker + session lifecycle by hand. The canonical example is [`cduss/webrtc_example`](https://huggingface.co/spaces/cduss/webrtc_example).
+For prototypes, learners, or anyone who'd rather not run `npm install`, a JS app can ship as a single `index.html` that imports the SDK from jsDelivr. No `package.json`, no `app_build_command`, no build step. Two sub-variants exist in the wild:
 
-**Use this only** for one-off prototypes that don't need the host shell's surface (no top bar, no picker, no theme propagation, no mobile-catalog tile). For anything you'd share, **start from a reference app instead** - you get OAuth, picker, mobile-catalog discovery, mode-B handoff, and the entire `connectToHost()` API for free.
+- **Modern (recommended for new apps)**: import the npm SDK from `cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@<sha>/+esm` and use the host shell (`mountHost` + `connectToHost`). Same OAuth / picker / top bar / mode-B handoff as the bundled path - the host shell is identical, just loaded from the CDN instead of npm.
+- **Legacy single-file (pre-host-shell)**: import the SDK bundle from `cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@<tag>/js/reachy-mini.js`, instantiate `new ReachyMini(...)` directly, render your own picker / gate / top bar. Useful when you want full control over the pre-session UI; otherwise prefer the modern variant.
+
+The two variants are interoperable at the daemon level - they hit the same REST + WebRTC surface, so the motion API (`setTarget`, `setMotorMode`, `gotoTarget`, `setHeadRpyDeg`, `setAntennasDeg`, etc.) is identical on both. Migrating an existing legacy app to the modern host shell is a four-step swap that leaves motion code untouched.
+
+Full recipe (frontmatter, CDN imports, scaling guidance, when to graduate to Vite, legacy -> modern migration): [§11.5 of the App Creation Guide](ts/APP_CREATION_GUIDE.md#115-alternative-bare-html--cdn-no-bundler).
 
 ---
 
