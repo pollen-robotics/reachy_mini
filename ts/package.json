@@ -12,6 +12,11 @@
       "import": "./dist/reachy-mini-sdk.js",
       "default": "./dist/reachy-mini-sdk.js"
     },
+    "./animation": {
+      "types": "./dist/animation/index.d.ts",
+      "import": "./dist/animation/index.js",
+      "default": "./dist/animation/index.js"
+    },
     "./host": {
       "types": "./host/dist/index.d.ts",
       "import": "./host/dist/index.js"
