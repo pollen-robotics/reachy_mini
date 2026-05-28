@@ -1,0 +1,108 @@
+{
+  "name": "@pollen-robotics/reachy-mini-sdk",
+  "version": "0.0.0-managed-by-ci",
+  "description": "Browser SDK for controlling a Reachy Mini robot over WebRTC, plus an optional Hugging Face Spaces host shell (OAuth + robot picker + iframe bridge) exposed via the ./host subpath.",
+  "type": "module",
+  "main": "./dist/reachy-mini-sdk.js",
+  "module": "./dist/reachy-mini-sdk.js",
+  "types": "./dist/reachy-mini-sdk.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/reachy-mini-sdk.d.ts",
+      "import": "./dist/reachy-mini-sdk.js",
+      "default": "./dist/reachy-mini-sdk.js"
+    },
+    "./host": {
+      "types": "./host/dist/index.d.ts",
+      "import": "./host/dist/index.js"
+    },
+    "./host/auto": {
+      "types": "./host/dist/entry/auto.d.ts",
+      "import": "./host/dist/entry/auto.js"
+    },
+    "./host/embed": {
+      "types": "./host/dist/entry/embed.d.ts",
+      "import": "./host/dist/entry/embed.js"
+    },
+    "./host/protocol": {
+      "types": "./host/dist/lib/protocol.d.ts",
+      "import": "./host/dist/lib/protocol.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "host/dist",
+    "host/README.md",
+    "host/SPEC.md",
+    "host/APP_AUTHOR_GUIDE.md",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build:sdk": "tsc -p tsconfig.json",
+    "build:host": "cd host && vite build && tsc -p tsconfig.build.json",
+    "build": "npm run build:sdk && npm run build:host",
+    "build:watch": "cd host && vite build --watch",
+    "typecheck:sdk": "tsc -p tsconfig.json --noEmit",
+    "typecheck:host": "cd host && tsc --noEmit",
+    "typecheck": "npm run typecheck:sdk && npm run typecheck:host",
+    "dev": "cd host && vite",
+    "clean": "rm -rf dist host/dist"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@huggingface/hub": "^0.15.2",
+    "@mui/icons-material": "^7.3.5",
+    "@mui/material": "^7.3.5"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react-swc": "^4.0.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "typescript": "^5.7.3",
+    "vite": "^7.2.1"
+  },
+  "keywords": [
+    "reachy",
+    "reachy-mini",
+    "pollen-robotics",
+    "robot",
+    "robotics",
+    "webrtc",
+    "sdk",
+    "browser",
+    "huggingface-spaces",
+    "host",
+    "iframe",
+    "shell"
+  ],
+  "author": "Pollen Robotics",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/pollen-robotics/reachy_mini#readme",
+  "bugs": {
+    "url": "https://github.com/pollen-robotics/reachy_mini/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pollen-robotics/reachy_mini.git",
+    "directory": "ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -17,7 +17,7 @@ This example demonstrates how to record audio from Reachy Mini's microphone arra
 
 **Usage:**
 ```bash
-python sound_record.py --backend [default_no_video|gstreamer_no_video|webrtc]
+python sound_record.py --backend [default|local|webrtc]
 ```
 
 The recorded audio will be saved to `recorded_audio.wav` in the current directory.

@@ -260,9 +260,10 @@ def check_and_sync_apps_venv_sdk() -> None:
 
     """
     import json
-    import shutil
+    import os
 
     from .update_available import get_install_source
+    from .utils import build_install_command
 
     # Get daemon install info
     try:
@@ -328,24 +329,17 @@ def check_and_sync_apps_venv_sdk() -> None:
         return
 
     # Build install command
-    use_uv = shutil.which("uv") is not None
-    if daemon_info["source"] == "git" and daemon_info.get("git_ref"):
-        git_url = f"git+https://github.com/pollen-robotics/reachy_mini.git@{daemon_info['git_ref']}"
-        pkg = f"reachy-mini @ {git_url}"
-        extra = ["--force-reinstall"]
-        print(f"Syncing apps_venv to git ref: {daemon_info['git_ref']}")
-    else:
-        pkg = f"reachy-mini=={daemon_info['version']}"
-        extra = []
-        print(f"Syncing apps_venv to version: {daemon_info['version']}")
+    cmd, extra_env = build_install_command(
+        extras="",
+        git_ref=daemon_info.get("git_ref") if daemon_info["source"] == "git" else None,
+        version=daemon_info["version"] if daemon_info["source"] != "git" else None,
+        python=apps_venv_python,
+    )
 
-    if use_uv:
-        cmd = ["uv", "pip", "install", "--python", str(apps_venv_python), pkg] + extra
-    else:
-        cmd = [str(Path("/venvs/apps_venv/bin/pip")), "install", pkg] + extra
+    resolved_env = {**os.environ, **extra_env} if extra_env else None
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=300, env=resolved_env, cwd=Path.home())
         if result.returncode == 0:
             print("Successfully synced apps_venv SDK")
         else:

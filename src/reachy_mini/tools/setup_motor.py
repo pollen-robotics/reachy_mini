@@ -66,7 +66,7 @@ def setup_motor(
         from_baudrate,
     ):
         raise RuntimeError(
-            f"No motor found on port {serial_port}. Make sure Reachy Mini is powered !"
+            f"Motor '{id2name.get(from_id, from_id)}' not found!"
         )
         # f"Make sure the motor {id2name.get(from_id, from_id)} is in factory settings (ID {from_id} and baudrate {from_baudrate}) and connected to the specified port."
 

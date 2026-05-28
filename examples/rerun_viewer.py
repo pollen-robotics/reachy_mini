@@ -1,7 +1,7 @@
-"""Reachy Mini Rerun Viewer Example.
+"""Reachy Mini Rerun Viewer example.
 
-This example shows how to use the Rerun utility to log and visualize Reachy Mini's state.
-It is based on the gravity compensation example, so the robot will be compliant and easy to move around.
+Connects to a Reachy Mini, enables gravity compensation, and opens the Rerun
+Viewer that shows the live 3D URDF model with joint positions and camera feed.
 
 Requirements:
 - Install with: pip install reachy-mini[rerun,placo_kinematics]

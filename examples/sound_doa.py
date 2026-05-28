@@ -21,8 +21,9 @@ def main() -> None:
     with ReachyMini(log_level="DEBUG", automatic_body_yaw=True) as mini:
         # Get the robot IP address
         robot_ip = "localhost"
-        if mini.client.get_status()["wireless_version"]:
-            robot_ip = mini.client.get_status()["wlan_ip"]
+        status = mini.client.get_status()
+        if status.wireless_version and status.wlan_ip:
+            robot_ip = status.wlan_ip
 
         doa_url = f"http://{robot_ip}:8000/api/state/doa"
 

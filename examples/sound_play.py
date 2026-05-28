@@ -8,9 +8,9 @@ Two modes:
 # START doc_example
 
 import argparse
-import logging
 import os
 import time
+import wave
 
 import numpy as np
 
@@ -22,8 +22,9 @@ def play_wav(mini: "ReachyMini", wav_path: str) -> None:
     wav_path = os.path.abspath(wav_path)
     print(f"Playing {wav_path}...")
     mini.media.play_sound(wav_path)
-    
-    wav_duration = os.path.getsize(wav_path) / mini.media.get_output_audio_samplerate()
+
+    with wave.open(wav_path, "rb") as wf:
+        wav_duration = wf.getnframes() / mini.media.get_output_audio_samplerate()
     time.sleep(wav_duration)
     print("Playback finished.")
 
@@ -50,13 +51,13 @@ def play_live_tone(mini: "ReachyMini", tone_hz: float) -> None:
         mini.media.stop_playing()
 
 
-def main(backend: str, wav_path: str | None, tone_hz: float) -> None:
+def main(
+    backend: str, wav_path: str | None, tone_hz: float, wobbling: bool = False
+) -> None:
     """Run the sound playback example."""
-    logging.basicConfig(
-        level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
-    )
-
     with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
+        if wobbling:
+            mini.enable_wobbling()
         if wav_path:
             play_wav(mini, wav_path)
         else:
@@ -70,8 +71,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backend",
         type=str,
-        choices=["default_no_video", "gstreamer_no_video", "webrtc"],
-        default="default_no_video",
+        choices=["default", "local", "webrtc"],
+        default="default",
         help="Media backend to use.",
     )
 
@@ -93,8 +94,18 @@ if __name__ == "__main__":
         type=float,
         help="Sine wave frequency in Hz (--live mode only).",
     )
+    parser.add_argument(
+        "--wobbling",
+        action="store_true",
+        help="Enable audio-reactive head wobbling.",
+    )
 
     args = parser.parse_args()
-    main(backend=args.backend, wav_path=args.wav, tone_hz=args.tone_hz)
+    main(
+        backend=args.backend,
+        wav_path=args.wav,
+        tone_hz=args.tone_hz,
+        wobbling=args.wobbling,
+    )
 
 # END doc_example

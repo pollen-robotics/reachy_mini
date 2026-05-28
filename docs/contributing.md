@@ -1,5 +1,9 @@
 # Contributing
 
+## Requirements
+
+Follow the [instructions](https://huggingface.co/docs/reachy_mini/SDK/installation) to install the SDK. Please note that the Linux users have to [manually install gstreamer](https://huggingface.co/docs/reachy_mini/SDK/gstreamer-installation).
+
 ## Code quality
 
 The quality of code is insured by ruff and mypy. Please make sure to run them before pushing your code.
@@ -38,7 +42,7 @@ Please note that mpy results depend on the installed package. The [CI](../.githu
 uv sync --all-extras --group dev
 ```
 
-## Code testing
+## Code testing
 
 The code is tested with pytest. You can run the tests with the following command:
 

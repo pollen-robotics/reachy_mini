@@ -16,22 +16,15 @@ from pydantic import BaseModel, Field
 from reachy_mini.daemon.app.dependencies import get_backend
 from reachy_mini.daemon.backend.abstract import Backend
 
-from .volume_control import VolumeControl, create_volume_control
+from .volume_control import VolumeControl, get_volume_control
 
 router = APIRouter(prefix="/volume")
 logger = logging.getLogger(__name__)
 
-# Lazily-initialised singleton – created on first request
-# Remark: removing this could be an over-kill yet efficient way to account for dynamic changes in the audio devices :eyes:
-_volume_control: VolumeControl | None = None
-
-
-def _get_volume_control() -> VolumeControl:
-    """Return the shared VolumeControl instance, creating it on first call."""
-    global _volume_control  # noqa: PLW0603
-    if _volume_control is None:
-        _volume_control = create_volume_control()
-    return _volume_control
+# The VolumeControl singleton now lives in volume_control.get_volume_control()
+# so the WebRTC command handler in the backend can share the same instance.
+# Kept as a thin alias here to minimise this diff.
+_get_volume_control = get_volume_control
 
 
 class VolumeRequest(BaseModel):
@@ -58,7 +51,9 @@ class TestSoundResponse(BaseModel):
 # ---- Helpers ----
 
 
-def _read_volume(getter: Callable[[], int], vc: VolumeControl, device_name: str, error_detail: str) -> VolumeResponse:
+def _read_volume(
+    getter: Callable[[], int], vc: VolumeControl, device_name: str, error_detail: str
+) -> VolumeResponse:
     """Read a volume value and return a VolumeResponse or raise on failure."""
     volume = getter()
     if volume < 0:
@@ -66,7 +61,13 @@ def _read_volume(getter: Callable[[], int], vc: VolumeControl, device_name: str,
     return VolumeResponse(volume=volume, platform=vc.platform_name, device=device_name)
 
 
-def _write_volume(setter: Callable[[int], bool], volume: int, vc: VolumeControl, device_name: str, error_detail: str) -> VolumeResponse:
+def _write_volume(
+    setter: Callable[[int], bool],
+    volume: int,
+    vc: VolumeControl,
+    device_name: str,
+    error_detail: str,
+) -> VolumeResponse:
     """Write a volume value and return a VolumeResponse or raise on failure."""
     if not setter(volume):
         raise HTTPException(status_code=500, detail=error_detail)
@@ -80,7 +81,9 @@ def _write_volume(setter: Callable[[int], bool], volume: int, vc: VolumeControl,
 async def get_volume() -> VolumeResponse:
     """Get the current output volume level."""
     vc = _get_volume_control()
-    return _read_volume(vc.get_output_volume, vc, vc.output_device.name, "Failed to get volume")
+    return _read_volume(
+        vc.get_output_volume, vc, vc.output_device.name, "Failed to get volume"
+    )
 
 
 @router.post("/set")
@@ -90,17 +93,21 @@ async def set_volume(
 ) -> VolumeResponse:
     """Set the output volume level and play a test sound."""
     vc = _get_volume_control()
-    response = _write_volume(vc.set_output_volume, volume_req.volume, vc, vc.output_device.name, "Failed to set volume")
+    response = _write_volume(
+        vc.set_output_volume,
+        volume_req.volume,
+        vc,
+        vc.output_device.name,
+        "Failed to set volume",
+    )
 
     daemon = getattr(request.app.state, "daemon", None)
     backend: Backend | None = daemon.backend if daemon is not None else None
-    if backend is not None and backend.ready.is_set() and backend.audio:
+    if backend is not None and backend.ready.is_set():
         try:
-            backend.audio.play_sound("impatient1.wav")
+            backend.play_sound("impatient1.wav")
         except Exception as e:
             logger.warning("Failed to play test sound: %s", e)
-    else:
-        logger.warning("No audio backend available, skipping test sound.")
 
     return response
 
@@ -108,11 +115,8 @@ async def set_volume(
 @router.post("/test-sound")
 async def play_test_sound(backend: Backend = Depends(get_backend)) -> TestSoundResponse:
     """Play a test sound."""
-    if not backend.audio:
-        raise HTTPException(status_code=503, detail="Audio device not available")
-
     try:
-        backend.audio.play_sound("impatient1.wav")
+        backend.play_sound("impatient1.wav")
         return TestSoundResponse(status="ok", message="Test sound played")
     except Exception as e:
         msg = str(e).lower()
@@ -141,11 +145,19 @@ async def play_test_sound(backend: Backend = Depends(get_backend)) -> TestSoundR
 async def get_microphone_volume() -> VolumeResponse:
     """Get the current microphone input volume level."""
     vc = _get_volume_control()
-    return _read_volume(vc.get_input_volume, vc, vc.input_device.name, "Failed to get microphone volume")
+    return _read_volume(
+        vc.get_input_volume, vc, vc.input_device.name, "Failed to get microphone volume"
+    )
 
 
 @router.post("/microphone/set")
 async def set_microphone_volume(volume_req: VolumeRequest) -> VolumeResponse:
     """Set the microphone input volume level."""
     vc = _get_volume_control()
-    return _write_volume(vc.set_input_volume, volume_req.volume, vc, vc.input_device.name, "Failed to set microphone volume")
+    return _write_volume(
+        vc.set_input_volume,
+        volume_req.volume,
+        vc,
+        vc.input_device.name,
+        "Failed to set microphone volume",
+    )

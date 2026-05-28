@@ -21,7 +21,7 @@ Web apps are deployed as **static Hugging Face Spaces** (`sdk: static`). There i
 ```
 ┌─────────────────────────────────┐
 │  Browser                        │
-│  (your app + reachy-mini.js)    │
+│  (your app + reachy-mini-sdk.js)│
 └───────┬────────────┬────────────┘
         │ SSE/HTTP   │ WebRTC (peer-to-peer)
         │ signaling  │ video + audio + data
@@ -39,7 +39,7 @@ Web apps are deployed as **static Hugging Face Spaces** (`sdk: static`). There i
 ```
 
 1. **Your app** is a static HTML/JS page hosted on Hugging Face Spaces.
-2. **reachy-mini.js** handles authentication, signaling, and WebRTC negotiation.
+2. **reachy-mini-sdk.js** handles authentication, signaling, and WebRTC negotiation.
 3. The **signaling server** relays SDP offers/answers and ICE candidates. It also validates Hugging Face OAuth tokens.
 4. Once the WebRTC connection is established, **video, audio, and commands flow peer-to-peer** — the signaling server is no longer in the path.
 
@@ -70,17 +70,24 @@ In your `index.html`, import the SDK as an ES module:
 
 ```html
 <script type="module">
-import { ReachyMini } from "./reachy-mini.js";
+import { ReachyMini } from "./reachy-mini-sdk.js";
 
 const robot = new ReachyMini();
 </script>
 ```
 
-You can grab `reachy-mini.js` from the [reference example](https://huggingface.co/spaces/cduss/webrtc_example) or from the npm CDN:
+You can grab `reachy-mini-sdk.js` from the [reference example](https://huggingface.co/spaces/cduss/webrtc_example) or from the npm CDN:
 
 ```js
-import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@anthropic-robotics/reachy-mini/+esm";
+import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk/+esm";
 ```
+
+> The same npm package also ships the optional **host shell** (OAuth + robot picker + iframe lifecycle) for apps deployed as Hugging Face Spaces, under the `./host*` subpath exports:
+> ```js
+> import { mountHost } from "@pollen-robotics/reachy-mini-sdk/host/auto";
+> import { connectToHost } from "@pollen-robotics/reachy-mini-sdk/host/embed";
+> ```
+> See the [host README](https://github.com/pollen-robotics/reachy_mini/tree/main/ts/host) for the full integration recipe.
 
 ### 3. Connect to your robot
 
@@ -111,10 +118,20 @@ await robot.startSession(robotId);
 
 ```js
 // Move the head (roll, pitch, yaw in degrees)
-robot.setHeadPose(0, 10, -5);
+robot.setHeadRpyDeg(0, 10, -5);
 
 // Move the antennas (right, left in degrees)
-robot.setAntennas(30, -30);
+robot.setAntennasDeg(30, -30);
+
+// Rotate the body (yaw in degrees)
+robot.setBodyYawDeg(15);
+
+// Atomic raw-units update (single datachannel message; no XYZ loss)
+robot.setTarget({
+    head: rpyToMatrix(0, 10, -5).flat(),    // number[16] flat 4×4
+    antennas: [degToRad(30), degToRad(-30)],
+    body_yaw: degToRad(15),
+});
 
 // Play a sound file on the robot
 robot.playSound("wake_up.wav");
@@ -126,11 +143,16 @@ robot.sendRaw({ my_custom_command: "hello" });
 ### 5. Receive robot state
 
 ```js
-// Emitted every ~500ms while streaming
+// Emitted every ~500ms while streaming. Wire-shape, raw units —
+// use the exported math utilities for human conversions.
 robot.addEventListener("state", (e) => {
-    const { head, antennas } = e.detail;
-    // head:     { roll, pitch, yaw }  — degrees
-    // antennas: { right, left }       — degrees
+    const { head, antennas, body_yaw, motor_mode, is_move_running } = e.detail;
+    // head:            number[16]            — flat row-major 4×4
+    // antennas:        [rightRad, leftRad]
+    // body_yaw:        number                — radians
+    // motor_mode:      "enabled" | "disabled" | "gravity_compensation"
+    // is_move_running: boolean
+    const rpy = matrixToRpy(head);   // { roll, pitch, yaw } in degrees
 });
 ```
 
@@ -147,6 +169,15 @@ robot.setMicMuted(false);
 robot.addEventListener("micSupported", (e) => {
     console.log("Mic supported:", e.detail.supported);
 });
+
+// XVF3800 audio-board tuning. Available on both Lite and Wireless — the
+// daemon owns the USB handle (on Lite that's your laptop, on Wireless
+// it's the CM4), and these calls cross the same DataChannel as the
+// volume helpers above.
+const values = await robot.readAudioParameter("AUDIO_MGR_MIC_GAIN"); // number[] | null
+const ok = await robot.applyAudioConfig([
+    { name: "AUDIO_MGR_MIC_GAIN", values: [1.0] },
+]); // boolean
 ```
 
 ### 7. Cleanup
@@ -164,7 +195,7 @@ robot.logout();              // clear HF credentials
 
 ```js
 new ReachyMini({
-    signalingUrl: "https://cduss-reachy-mini-central.hf.space",  // default
+    signalingUrl: "https://pollen-robotics-reachy-mini-central.hf.space",  // default
     enableMicrophone: true,  // default — request mic on startSession()
 })
 ```
@@ -183,7 +214,7 @@ new ReachyMini({
 | :--- | :--- | :--- |
 | `state` | `string` | `"disconnected"`, `"connected"`, or `"streaming"` |
 | `robots` | `Array` | Available robots: `[{ id, meta: { name } }]` |
-| `robotState` | `Object` | `{ head: { roll, pitch, yaw }, antennas: { right, left } }` (degrees) |
+| `robotState` | `Object` | Latest `state` event detail — `{ head: number[16], antennas: [rRad, lRad], body_yaw, motor_mode, is_move_running }` (wire shape) |
 | `username` | `string\|null` | HF username after `authenticate()` |
 | `isAuthenticated` | `boolean` | True if a valid HF token is available |
 | `micSupported` | `boolean` | True if robot offers bidirectional audio |
@@ -202,13 +233,20 @@ new ReachyMini({
 | `disconnect()` | — | Close signaling (keeps auth) |
 | `logout()` | — | Clear HF credentials |
 | `attachVideo(videoEl)` | `() => void` | Bind video stream to element; returns cleanup function |
-| `setHeadPose(roll, pitch, yaw)` | `boolean` | Set head orientation in degrees |
-| `setAntennas(right, left)` | `boolean` | Set antenna positions in degrees |
+| `setTarget({ head?, antennas?, body_yaw? })` | `boolean` | Atomic raw-units update — `head` is `number[16]` (flat 4×4), `antennas` is `[rRad, lRad]`, `body_yaw` is radians |
+| `setHeadRpyDeg(roll, pitch, yaw)` | `boolean` | Set head orientation in degrees (wraps `setTarget`) |
+| `setAntennasDeg(right, left)` | `boolean` | Set antenna positions in degrees (wraps `setTarget`) |
+| `setBodyYawDeg(yaw)` | `boolean` | Set body yaw in degrees (wraps `setTarget`) |
 | `playSound(filename)` | `boolean` | Play a sound file on the robot |
 | `sendRaw(data)` | `boolean` | Send arbitrary JSON via data channel |
 | `requestState()` | `boolean` | Request a state snapshot |
 | `setAudioMuted(muted)` | — | Mute/unmute robot speaker (local) |
 | `setMicMuted(muted)` | — | Mute/unmute your microphone |
+| `playMove(motion, opts?)` | `Promise<{finished?, cancelled?, error?, has_audio?}>` | Upload + play a recorded move (optionally with audio) on the daemon's local clock; resolves when playback ends — see [Daemon-side recorded-move playback](#daemon-side-recorded-move-playback) |
+| `cancelMove()` | `boolean` | Cancel an in-flight `playMove` |
+| `uploadAudio(blob, opts?)` | `Promise<string>` | Upload a standalone audio slot, returns `uploadId` — pair with `playUploadedAudio` for record-time sync |
+| `playUploadedAudio(uploadId, opts?)` | `Promise<{started: true, ...}>` | Trigger daemon-side standalone audio playback; resolves on the daemon's `started` broadcast (use as a sync anchor) |
+| `cancelAudio()` | `boolean` | Cancel an in-flight `playUploadedAudio` |
 
 ### Events
 
@@ -221,7 +259,7 @@ Use `robot.addEventListener(name, handler)` — the SDK extends `EventTarget`.
 | `robotsChanged` | `{ robots }` | Robot list updated |
 | `streaming` | `{ sessionId, robotId }` | WebRTC session active |
 | `sessionStopped` | `{ reason }` | Session ended |
-| `state` | `{ head, antennas }` | Robot state update (~500ms) |
+| `state` | `{ head, antennas, body_yaw, motor_mode, is_move_running }` | Robot state update (~500ms; wire shape — see "Receive robot state" above) |
 | `videoTrack` | `{ track, stream }` | Video track available |
 | `micSupported` | `{ supported }` | Bidirectional audio availability |
 | `error` | `{ source, error }` | Error from `signaling`, `webrtc`, or `robot` |
@@ -229,11 +267,71 @@ Use `robot.addEventListener(name, handler)` — the SDK extends `EventTarget`.
 ### Math Utilities
 
 ```js
-import { rpyToMatrix, matrixToRpy, degToRad, radToDeg } from "./reachy-mini.js";
+import { rpyToMatrix, matrixToRpy, degToRad, radToDeg } from "./reachy-mini-sdk.js";
 
 rpyToMatrix(roll, pitch, yaw)  // degrees → 4×4 rotation matrix (ZYX)
 matrixToRpy(matrix)            // 4×4 matrix → { roll, pitch, yaw } in degrees
 ```
+
+## Daemon-side recorded-move playback
+
+Long recorded moves (and any move with audio) should play **server-side on the daemon's local clock**, not by streaming `set_target` frames from the browser. The browser uploads the move once over the WebRTC data channel and the daemon ticks the inner loop at the requested frequency — no per-frame round-trip, smooth on wireless robots. When audio is attached the daemon plays it on the same GStreamer pipeline, so motion and audio share a single clock (no cross-network drift).
+
+### Combined motion + audio
+
+```js
+const result = await robot.playMove(motion, {
+    audioBlob,                    // optional, 16 kHz mono PCM WAV
+    audioLeadMs: -100,            // system-wide default
+    description: "happy wave",
+    onProgress: (p) => console.log(p.phase, p.sent, p.total),
+    onStarted: ({ duration_s, has_audio }) => { /* sync anchor */ },
+});
+// result is { finished: true } | { cancelled: true } | { error: "..." }
+
+// Cancel at any time from another code path:
+robot.cancelMove();
+```
+
+`motion` is the shape the Python `RecordedMove` parser expects:
+```js
+{ time: [0, 0.01, 0.02, …], set_target_data: [{ head, antennas, body_yaw }, …] }
+```
+
+`audioLeadMs` shifts audio relative to motion at the daemon:
+- **Positive** — audio fires N ms BEFORE motion (compensates motor pickup).
+- **Negative** — motion fires N ms BEFORE audio (compensates GStreamer playbin warmup).
+- **Default `-100`** is the empirical system-wide constant (combined motor + pipeline). Tune only after measuring.
+
+The encoded wire form defaults to `gzip+base64` (typically ~3× smaller for recorded-move JSON). Falls back to plain JSON if the browser lacks `CompressionStream`.
+
+### Record-time audio (sync anchor)
+
+For recording flows that want the SAME audio pipeline at capture AND replay (so pipeline latency cancels out and one `audioLeadMs` works for all recordings):
+
+```js
+// 1. During the countdown — upload the source audio.
+const audioId = await robot.uploadAudio(audioBlob, { description: "song" });
+
+// 2. At the GO! moment — kick off daemon-side playback, await the
+//    started broadcast, then start motion capture.
+await robot.playUploadedAudio(audioId);
+const captureT0 = performance.now();
+startMyMotionCapture();
+
+// 3. On stop / cancel / restart — stop the audio.
+robot.cancelAudio();
+```
+
+The daemon does NOT emit a `finished` event for standalone audio; callers know the duration from the WAV header and call `cancelAudio()` when done.
+
+### Audio format
+
+Audio must be canonical **16 kHz mono 16-bit PCM WAV**. Apps are responsible for normalizing before upload — the daemon does not transcode. Format mismatch is a frequent cause of "audio is silent / wrong speed" on inherited datasets.
+
+### Backpressure & cancellation
+
+`playMove` and `uploadAudio` pace chunk sends on the data channel's `bufferedAmount` so multi-megabyte uploads (a 3-min song's WAV is ~6 MB base64) don't degrade other channels on the same peer connection. There's no separate `pause` — to stop a long upload mid-way, close the session.
 
 ## Security
 

@@ -74,8 +74,10 @@ The **Daemon** is a background service that handles the low-level communication 
       mjpython -m reachy_mini.daemon.app.main --sim
       ```
       > **⚠️ macOS Users:** `uv` may have compatibility issues with MuJoCo on macOS. If you encounter installation or runtime problems, it's recommended to use `pip` directly instead of `uv` for MuJoCo-related packages.
+      >
+      > If you get a segmentation fault from `libgstpython`, see the [simulation troubleshooting](../platforms/simulation/get_started.md#-troubleshooting) section.
 
-✅ **Verification:** Open [http://localhost:8000](http://localhost:8000) in your browser. If you see the Reachy Dashboard, you are ready!
+✅ **Verification:** Open [http://localhost:8000/docs](http://localhost:8000/docs) in your browser. If you see the Reachy SDK API documentation, you are ready!
 
 ## 3. Your First Script
 
@@ -88,6 +90,8 @@ The **Daemon** is a background service that handles the low-level communication 
 **Step 2:** Create a new file called `hello.py` and copy-paste the following code into it:
 
 > Tip: The constructor now auto-detects Lite vs Wireless and switches between localhost and network automatically. Only override it for advanced cases, e.g. `ReachyMini(connection_mode="network")`.
+
+
 ```python
 from reachy_mini import ReachyMini
 
@@ -107,6 +111,7 @@ with ReachyMini() as mini:
 **Step 3:** Save the file and run your script:
 
 In your new terminal, run:
+
 ```bash
 python hello.py
 ```
@@ -114,6 +119,7 @@ python hello.py
 🎉 If everything went well, your robot should now wiggle its antennas!
 
 ## ❓ Troubleshooting
+
 Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting.md)**
 
 
@@ -121,7 +127,7 @@ Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../trouble
 
 If you're using an AI agent like **Claude Code**, **Codex**, or **Copilot**, you can start building apps right away. Just paste this prompt:
 
-> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/develop/AGENTS.md*
+> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/main/AGENTS.md*
 
 This guide gives your AI agent everything it needs to know about the SDK, best practices, and available tools.
 

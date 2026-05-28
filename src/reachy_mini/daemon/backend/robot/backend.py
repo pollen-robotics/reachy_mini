@@ -5,11 +5,9 @@ It handles the control loop, joint positions, torque enabling/disabling, and pro
 It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
 """
 
-import json
 import logging
 import struct
 import time
-from dataclasses import dataclass
 from datetime import timedelta
 from multiprocessing import Event  # It seems to be more accurate than threading.Event
 from typing import Annotated, Any
@@ -17,12 +15,18 @@ from typing import Annotated, Any
 import log_throttling
 import numpy as np
 import numpy.typing as npt
-import zenoh
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
+from reachy_mini.io.protocol import (
+    HeadPoseMsg,
+    ImuDataMsg,
+    JointPositionsMsg,
+    MotorControlMode,
+    RobotBackendStatus,
+)
 from reachy_mini.utils.hardware_config.parser import parse_yaml_config
 
-from ..abstract import Backend, MotorControlMode
+from ..abstract import Backend
 
 
 class RobotBackend(Backend):
@@ -130,8 +134,6 @@ class RobotBackend(Backend):
                 self.bmi088 = None
         else:
             self.bmi088 = None
-
-        self.imu_publisher: zenoh.Publisher | None = None
 
     def run(self) -> None:
         """Run the control loop for the robot backend.
@@ -242,26 +244,21 @@ class RobotBackend(Backend):
 
                 if not self.is_shutting_down:
                     self.joint_positions_publisher.put(
-                        json.dumps(
-                            {
-                                "head_joint_positions": head_positions,
-                                "antennas_joint_positions": antenna_positions,
-                            }
+                        JointPositionsMsg(
+                            head_joint_positions=head_positions,
+                            antennas_joint_positions=antenna_positions,
                         )
                     )
                     self.pose_publisher.put(
-                        json.dumps(
-                            {
-                                "head_pose": self.get_present_head_pose().tolist(),
-                            }
+                        HeadPoseMsg(
+                            head_pose=self.get_present_head_pose().tolist(),
                         )
                     )
 
-                    # Publish IMU data if available
                     if self.imu_publisher is not None and self.bmi088 is not None:
-                        imu_data = self.get_imu_data()
-                        if imu_data is not None:
-                            self.imu_publisher.put(json.dumps(imu_data))
+                        imu_msg = self.get_imu_data()
+                        if imu_msg is not None:
+                            self.imu_publisher.put(imu_msg)
 
                 self.last_alive = time.time()
 
@@ -327,8 +324,27 @@ class RobotBackend(Backend):
         return self._status
 
     def enable_motors(self) -> None:
-        """Enable the motors by turning the torque on."""
+        """Enable motor torque; pin all targets to present pose first to avoid a snap."""
         assert self.c is not None, "Motor controller not initialized or already closed."
+
+        motor_pos = self.c.get_last_position()
+        present_head_joints = np.array([motor_pos.body_yaw] + motor_pos.stewart)
+        present_antennas = np.array(motor_pos.antennas)
+
+        # Setter clears ik_required so the next IK tick can't overwrite the pin.
+        self.set_target_head_joint_positions(present_head_joints)
+        self.set_target_antenna_joint_positions(present_antennas)
+        # Keep Cartesian target consistent (current_head_pose is FK'd each tick)
+        # so a later body_yaw-only setTarget can't re-arm IK against a stale pose.
+        if self.current_head_pose is not None:
+            self.target_head_pose = self.current_head_pose
+        self.target_body_yaw = float(motor_pos.body_yaw)
+
+        if self._current_head_operation_mode != 0:
+            self.c.set_stewart_platform_position(present_head_joints[1:].tolist())
+            self.c.set_body_rotation(present_head_joints[0])
+        if self._current_antennas_operation_mode != 0:
+            self.c.set_antennas_positions(present_antennas.tolist())
 
         self.c.enable_torque()
         self._torque_enabled = True
@@ -474,12 +490,11 @@ class RobotBackend(Backend):
         """
         return np.array(self.get_all_joint_positions()[1])
 
-    def get_imu_data(self) -> dict[str, list[float] | float] | None:
+    def get_imu_data(self) -> ImuDataMsg | None:
         """Get current IMU data (accelerometer, gyroscope, quaternion, temperature).
 
         Returns:
-            dict with 'accelerometer', 'gyroscope', 'quaternion', and 'temperature' keys,
-            or None if IMU is not available.
+            An ImuDataMsg, or None if IMU is not available.
 
         """
         if self.bmi088 is None:
@@ -500,12 +515,12 @@ class RobotBackend(Backend):
             temperature = self.bmi088.read_temperature()
 
             # Convert all numpy types to native Python floats for JSON serialization
-            return {
-                "accelerometer": [float(accel_x), float(accel_y), float(accel_z)],
-                "gyroscope": [float(gyro_x), float(gyro_y), float(gyro_z)],
-                "quaternion": [float(q) for q in quat],
-                "temperature": float(temperature),
-            }
+            return ImuDataMsg(
+                accelerometer=[float(accel_x), float(accel_y), float(accel_z)],
+                gyroscope=[float(gyro_x), float(gyro_y), float(gyro_z)],
+                quaternion=[float(q) for q in quat],
+                temperature=float(temperature),
+            )
         except Exception as e:
             self.logger.error(f"Error reading IMU data: {e}")
             return None
@@ -679,12 +694,3 @@ class RobotBackend(Backend):
         return result
 
 
-@dataclass
-class RobotBackendStatus:
-    """Status of the Robot Backend."""
-
-    ready: bool
-    motor_control_mode: MotorControlMode
-    last_alive: float | None
-    control_loop_stats: dict[str, Any]
-    error: str | None = None

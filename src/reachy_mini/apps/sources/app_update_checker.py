@@ -21,9 +21,7 @@ HF_CACHE_PATTERN = re.compile(
 
 # Pattern to extract space ID from a HuggingFace spaces URL (git+https installs)
 # e.g., https://huggingface.co/spaces/RemiFabre/marionette
-HF_SPACES_URL_PATTERN = re.compile(
-    r"huggingface\.co/spaces/([^/]+)/([^/?#]+)"
-)
+HF_SPACES_URL_PATTERN = re.compile(r"huggingface\.co/spaces/([^/]+)/([^/?#]+)")
 
 
 @dataclass

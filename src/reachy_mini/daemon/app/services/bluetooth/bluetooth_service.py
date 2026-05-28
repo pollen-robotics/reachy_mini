@@ -5,15 +5,60 @@ Includes a fixed NoInputNoOutput agent for automatic Just Works pairing.
 """
 # mypy: ignore-errors
 
+import fcntl
+import hashlib
 import logging
 import os
 import subprocess
+from pathlib import Path
 from typing import Callable
 
 import dbus
 import dbus.mainloop.glib
 import dbus.service
 from gi.repository import GLib
+
+# ─── Hardware identity (inlined) ──────────────────────────────────────────
+#
+# IMPORTANT: this file runs on `/usr/bin/python3` (see the systemd unit in
+# install_service_bluetooth.sh), NOT inside the daemon's venv. That means
+# we CANNOT `from reachy_mini.utils.hardware_id import …` — the package
+# is not installed in the system Python, and its own __init__ chains into
+# numpy/scipy which also aren't there.
+#
+# The canonical implementation lives in `reachy_mini.utils.hardware_id`.
+# Keep the constants and logic below in lock-step with it. The drift-check
+# test at `tests/unit_tests/test_hardware_id_inline_consistency.py` parses
+# both files as plain text and asserts the literals match — restore /
+# update it whenever this block changes.
+POLLEN_AUDIO_VID = "38fb"
+POLLEN_AUDIO_PID = "1001"
+
+
+def _read_raw_audio_serial() -> str | None:
+    """Read the raw Pollen audio device USB serial from sysfs."""
+    usb_root = Path("/sys/bus/usb/devices")
+    if not usb_root.exists():
+        return None
+    for dev in usb_root.iterdir():
+        try:
+            if (dev / "idVendor").read_text().strip() != POLLEN_AUDIO_VID:
+                continue
+            if (dev / "idProduct").read_text().strip() != POLLEN_AUDIO_PID:
+                continue
+            serial = (dev / "serial").read_text().strip()
+            return serial or None
+        except (OSError, FileNotFoundError):
+            continue
+    return None
+
+
+def get_hardware_id() -> str | None:
+    """Public hardware ID — SHA-256 of the raw serial, truncated to 16 hex."""
+    raw = _read_raw_audio_serial()
+    if raw is None:
+        return None
+    return hashlib.sha256(raw.encode("ascii")).hexdigest()[:16]
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,6 +79,7 @@ REACHY_STATUS_SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef3"
 NETWORK_STATUS_UUID = "12345678-1234-5678-1234-56789abcdef4"
 SYSTEM_STATUS_UUID = "12345678-1234-5678-1234-56789abcdef5"
 AVAILABLE_COMMANDS_UUID = "12345678-1234-5678-1234-56789abcdef6"
+HARDWARE_ID_UUID = "12345678-1234-5678-1234-56789abcdef7"
 
 BLUEZ_SERVICE_NAME = "org.bluez"
 GATT_MANAGER_IFACE = "org.bluez.GattManager1"
@@ -274,7 +320,9 @@ class CommandCharacteristic(Characteristic):
         self.service.response_char.value = [
             dbus.Byte(b) for b in response.encode("utf-8")
         ]
-        logger.info(f"Command received: {response}")
+        cmd_str = command_bytes.decode("utf-8", errors="replace").strip()
+        if cmd_str.upper() != "JOURNAL_READ":
+            logger.info(f"Command received: {response}")
 
 
 class ResponseCharacteristic(Characteristic):
@@ -283,6 +331,35 @@ class ResponseCharacteristic(Characteristic):
     def __init__(self, bus, index, service):
         """Initialize the Response Characteristic."""
         super().__init__(bus, index, RESPONSE_CHAR_UUID, ["read", "notify"], service)
+        self.notifying = False
+
+    @dbus.service.method(GATT_CHRC_IFACE, in_signature="", out_signature="")
+    def StartNotify(self):
+        """Handle BlueZ notification subscription from a client."""
+        self.notifying = True
+        logger.info("Response notifications enabled")
+
+    @dbus.service.method(GATT_CHRC_IFACE, in_signature="", out_signature="")
+    def StopNotify(self):
+        """Handle BlueZ notification unsubscription from a client."""
+        self.notifying = False
+        logger.info("Response notifications disabled")
+        # Stop journal streaming if running (client disconnected without JOURNAL_STOP)
+        if hasattr(self.service, '_bt_service') and self.service._bt_service:
+            self.service._bt_service._stop_journal()
+
+    def send_notification(self, text: str):
+        """Send a BLE notification with the given text."""
+        self.value = [dbus.Byte(b) for b in text.encode("utf-8")]
+        if self.notifying:
+            self.PropertiesChanged(
+                GATT_CHRC_IFACE, {"Value": dbus.Array(self.value, signature="y")}, []
+            )
+
+    @dbus.service.signal(DBUS_PROP_IFACE, signature="sa{sv}as")
+    def PropertiesChanged(self, interface, changed, invalidated):
+        """Emit PropertiesChanged signal for BLE notifications."""
+        pass
 
 
 class Service(dbus.service.Object):
@@ -488,6 +565,26 @@ class ReachyStatusService(dbus.service.Object):
             )
         )
 
+        # Hardware ID — robot-unique Pollen audio device serial. Read-only,
+        # populated once at service init (the audio device is hot-pluggable in
+        # principle but in practice present for the daemon's lifetime). Lives
+        # here rather than the advertisement because the legacy 31-byte advert
+        # is already at capacity.
+        #
+        # `get_hardware_id` is the locally-inlined version at the top of this
+        # module — see the comment block there for why we can't import from
+        # the venv-hosted `reachy_mini.utils.hardware_id`.
+        self.add_characteristic(
+            StaticCharacteristic(
+                bus,
+                3,
+                HARDWARE_ID_UUID,
+                self,
+                get_hardware_id() or "unknown",
+                "Hardware ID",
+            )
+        )
+
     def update_network_status(self):
         """Update the network status characteristic value."""
         if hasattr(self, "network_char"):
@@ -571,10 +668,91 @@ class BluetoothCommandService:
         self.app = None
         self.adv = None
         self.mainloop = None
+        self._journal_proc = None
+        self._journal_watch_id = None
+        self._journal_buffer = ""
+
+    def _start_journal(self) -> str:
+        """Start journalctl -f and buffer output for poll-based reading."""
+        if self._journal_proc is not None:
+            return "OK: Journal already streaming"
+        try:
+            self._journal_buffer = ""
+            self._journal_proc = subprocess.Popen(
+                ["stdbuf", "-oL", "journalctl", "-f", "-n", "20", "--no-pager", "-u", "reachy-mini-daemon"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+            # Set non-blocking so GLib IO watch doesn't block the main loop
+            fd = self._journal_proc.stdout.fileno()
+            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+            fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+            self._journal_watch_id = GLib.io_add_watch(
+                self._journal_proc.stdout,
+                GLib.IO_IN | GLib.IO_HUP,
+                self._on_journal_data,
+            )
+            logger.info("Journal streaming started")
+            return "OK: Journal streaming started"
+        except Exception as e:
+            logger.error(f"Error starting journal: {e}")
+            self._stop_journal()
+            return f"ERROR: {e}"
+
+    def _on_journal_data(self, source, condition):
+        """GLib callback — accumulate journalctl output into the buffer."""
+        if condition & GLib.IO_IN:
+            try:
+                data = source.read(4096)
+                if data:
+                    text = data.decode("utf-8", errors="replace")
+                    self._journal_buffer += text
+                    logger.info(f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}")
+                    # Cap buffer to ~32KB to avoid unbounded growth
+                    if len(self._journal_buffer) > 32768:
+                        self._journal_buffer = self._journal_buffer[-32768:]
+            except BlockingIOError:
+                pass
+            except Exception as e:
+                logger.error(f"Error reading journal: {e}")
+
+        if condition & GLib.IO_HUP:
+            logger.info("Journal process ended")
+            self._stop_journal()
+            return False
+
+        return True
+
+    def _read_journal(self) -> str:
+        """Return buffered journal data and clear the buffer."""
+        if self._journal_proc is None:
+            return "ERROR: Journal not running"
+        chunk = self._journal_buffer[:480]  # Stay within BLE limits
+        self._journal_buffer = self._journal_buffer[480:]
+        if chunk:
+            logger.info(f"Journal read: {len(chunk)} bytes")
+        return chunk if chunk else ""
+
+    def _stop_journal(self):
+        """Stop the journalctl streaming subprocess."""
+        if self._journal_watch_id is not None:
+            GLib.source_remove(self._journal_watch_id)
+            self._journal_watch_id = None
+        if self._journal_proc is not None:
+            try:
+                self._journal_proc.terminate()
+                self._journal_proc.wait(timeout=2)
+            except Exception:
+                self._journal_proc.kill()
+            self._journal_proc = None
+            self._journal_buffer = ""
+            logger.info("Journal streaming stopped")
 
     def _handle_command(self, value: bytes) -> str:
         command_str = value.decode("utf-8").strip()
-        logger.info(f"Received command: {command_str}")
+        if command_str.upper() != "JOURNAL_READ":
+            logger.info(f"Received command: {command_str}")
         # Custom command handling
         if command_str.upper() == "PING":
             return "PONG"
@@ -586,6 +764,13 @@ class BluetoothCommandService:
             except Exception as e:
                 logger.error(f"Error executing command: {e}")
             return "OK: System running"
+        elif command_str.upper() == "JOURNAL_START":
+            return self._start_journal()
+        elif command_str.upper() == "JOURNAL_READ":
+            return self._read_journal()
+        elif command_str.upper() == "JOURNAL_STOP":
+            self._stop_journal()
+            return "OK: Journal streaming stopped"
         elif command_str.startswith("PIN_"):
             pin = command_str[4:].strip()
             if pin == self.pin_code:
@@ -647,6 +832,8 @@ class BluetoothCommandService:
         # Register GATT application
         service_manager = dbus.Interface(adapter, GATT_MANAGER_IFACE)
         self.app = Application(self.bus, self._handle_command)
+        # Back-reference so ResponseCharacteristic can stop journal on disconnect
+        self.app.services[0]._bt_service = self
         service_manager.RegisterApplication(
             self.app.get_path(),
             {},
@@ -693,25 +880,27 @@ class BluetoothCommandService:
             self.mainloop.run()
         except KeyboardInterrupt:
             logger.info("Shutting down...")
+            self._stop_journal()
             self.mainloop.quit()
 
 
 def get_pin() -> str:
-    """Extract the last 5 digits of the serial number from dfu-util -l output."""
+    """Last 5 chars of the Pollen audio device serial — used as BLE pairing PIN.
+
+    The PIN is a proximity-only short-lived secret, so leaking 5 chars of
+    the raw serial is acceptable; the public hardware ID surfaced over the
+    GATT characteristic is hashed (see `get_hardware_id` above). Falls back
+    to a fixed default when no Reachy is attached so pairing still works
+    on a dev workstation.
+
+    Mirrors `reachy_mini.utils.hardware_id.get_pin`; see the inline-import
+    note at the top of this file for why we don't share the implementation.
+    """
     default_pin = "46879"
-    try:
-        result = subprocess.run(["dfu-util", "-l"], capture_output=True, text=True)
-        lines = result.stdout.splitlines()
-        for line in lines:
-            if "serial=" in line:
-                # Extract serial number
-                serial_part = line.split("serial=")[-1].strip().strip('"')
-                if len(serial_part) >= 5:
-                    return serial_part[-5:]
-        return default_pin  # fallback if not found
-    except Exception as e:
-        logger.error(f"Error getting pin from serial: {e}")
-        return default_pin
+    raw = _read_raw_audio_serial()
+    if raw and len(raw) >= 5:
+        return raw[-5:]
+    return default_pin
 
 
 def get_network_status() -> str:

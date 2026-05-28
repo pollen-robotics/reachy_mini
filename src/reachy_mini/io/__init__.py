@@ -1,9 +1,9 @@
 """IO module."""
 
-from .zenoh_client import ZenohClient
-from .zenoh_server import ZenohServer
+from .ws_client import WSClient
+from .ws_server import WSServer
 
 __all__ = [
-    "ZenohClient",
-    "ZenohServer",
+    "WSClient",
+    "WSServer",
 ]

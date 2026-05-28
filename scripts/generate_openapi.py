@@ -30,7 +30,9 @@ from pathlib import Path
 
 from reachy_mini.daemon.app.main import Args, create_app
 
-OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "source" / "API" / "openapi.json"
+OUTPUT_PATH = (
+    Path(__file__).resolve().parent.parent / "docs" / "source" / "API" / "openapi.json"
+)
 
 
 def main() -> None:

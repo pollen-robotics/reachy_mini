@@ -18,7 +18,8 @@ To run the notebooks, make sure that you have a python environment with Reachy M
 pip install notebook
 ```
 
-Also, you'll need to have Reachy Mini daemon's up and running by checking the [dashboard](https://huggingface.co/docs/reachy_mini/platforms/reachy_mini/usage#1-the-dashboard-), the robot is considered ready when the toggle in the top right corner is on.
+Also, you'll need to have Reachy Mini daemon's up and running by using Reachy Mini Control. Please refer to the [installation guide](https://huggingface.co/docs/reachy_mini/platforms/reachy_mini/usage#2-installation).
+
 
 <details>
 <summary><strong>In case <code>ipykernel</code> is asked to be installed</strong></summary>
@@ -73,4 +74,4 @@ Make Reachy see and hear! Learn to capture images, record audio, and play sounds
 
 ### ❓ Troubleshooting
 
-If you encounter any issues during your exploration of the notebooks, check the **[Troubleshooting & FAQ Guide](https://github.com/pollen-robotics/reachy_mini/blob/develop/docs/troubleshooting.md)**
+If you encounter any issues during your exploration of the notebooks, check the **[Troubleshooting & FAQ Guide](https://github.com/pollen-robotics/reachy_mini/blob/main/docs/troubleshooting.md)**
