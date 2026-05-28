@@ -25,6 +25,34 @@ Platform audio sources / sinks are discovered at runtime:
 The "Reachy Mini Audio" card is located by name via ``Gst.DeviceMonitor``.
 If no matching card is found the platform default is used instead.
 
+Software acoustic echo cancellation (no-board fallback)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When no XVF3800 audio board is in the audio path (no Wireless
+``~/.asoundrc`` AND no ReSpeaker USB dongle detected), the backend
+falls back to the platform default mic + speaker. Without the
+hardware AEC of the XMOS chip the OpenAI Realtime / conversation
+loop hears its own voice through the laptop speakers and collapses
+on feedback.
+
+To keep the simulation / dev workflow usable, this backend inserts
+a ``webrtcdsp`` + ``webrtcechoprobe`` pair (from
+``gst-plugins-bad``) on top of the record / playback pipelines in
+that case. Detection is automatic:
+
+* If ``has_reachymini_asoundrc()`` is true → no extra processing
+  (Wireless XMOS handles AEC).
+* If ``get_audio_device("Source")`` finds a ReSpeaker card → no
+  extra processing (USB XVF3800 handles AEC).
+* Otherwise → enable the software AEC stage.
+
+Two environment variables can be set to override the heuristic, for
+example to benchmark or troubleshoot:
+
+* ``REACHY_MINI_DISABLE_SW_AEC=1`` force-disables the fallback.
+* ``REACHY_MINI_FORCE_SW_AEC=1`` force-enables it (e.g. to compare
+  output against the hardware XVF3800 AEC on a board-equipped robot).
+
 Note:
     This class is typically used internally by ``MediaManager`` when the
     ``LOCAL`` backend is selected.  Direct usage is possible but usually
@@ -96,6 +124,12 @@ class GStreamerAudio(AudioBase):
     PLAYBACK_SINK_BUFFER_TIME_US = 50_000
     PLAYBACK_SINK_LATENCY_TIME_US = 5_000
 
+    # Shared name that ties the recording-side `webrtcdsp` to the
+    # playback-side `webrtcechoprobe`. Both elements communicate via
+    # a process-wide registry indexed by this string, so the value
+    # just needs to be stable and unique within the process.
+    _AEC_PROBE_NAME = "reachymini_aec_probe"
+
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize recording and playback pipelines.
 
@@ -114,6 +148,8 @@ class GStreamerAudio(AudioBase):
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
+        self._sw_aec_enabled = self._resolve_sw_aec_enabled()
+
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._init_pipeline_record(self._pipeline_record)
         self._bus_record = self._pipeline_record.get_bus()
@@ -128,6 +164,197 @@ class GStreamerAudio(AudioBase):
         self._bus_playback.add_watch(
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_playback
         )
+
+    # ------------------------------------------------------------------
+    # Software AEC fallback
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _sw_aec_env_override() -> Optional[bool]:
+        """Return the env-var override for the software AEC, or None.
+
+        ``REACHY_MINI_DISABLE_SW_AEC`` takes precedence over
+        ``REACHY_MINI_FORCE_SW_AEC`` so an explicit disable always wins;
+        anything else falls back to the auto-detection heuristic.
+        """
+        truthy = {"1", "true", "yes", "on"}
+        if os.environ.get("REACHY_MINI_DISABLE_SW_AEC", "").lower() in truthy:
+            return False
+        if os.environ.get("REACHY_MINI_FORCE_SW_AEC", "").lower() in truthy:
+            return True
+        return None
+
+    def _resolve_sw_aec_enabled(self) -> bool:
+        """Decide whether to insert a `webrtcdsp` + `webrtcechoprobe` pair.
+
+        See the module docstring for the full rationale. Short version:
+        return ``True`` only when neither hardware AEC (Wireless XMOS
+        loopback via ``.asoundrc`` or USB XVF3800 dongle) is present,
+        unless an environment variable overrides the heuristic.
+
+        Also verifies that both AEC elements are actually present in
+        the running GStreamer build — packaging without
+        ``gst-plugins-bad`` would otherwise crash pipeline construction
+        with a cryptic ``Failed to create GStreamer elements``.
+        """
+        # Read via the class so tests can fake `self` with a plain
+        # `SimpleNamespace`; the helper is a `@staticmethod` and never
+        # depends on instance state.
+        override = GStreamerAudio._sw_aec_env_override()
+        if override is False:
+            self.logger.info("Software AEC disabled via REACHY_MINI_DISABLE_SW_AEC.")
+            return False
+
+        if override is True:
+            self.logger.warning(
+                "Software AEC force-enabled via REACHY_MINI_FORCE_SW_AEC. "
+                "If a hardware AEC (XMOS / XVF3800) is also active you "
+                "will likely double-process and end up with audible "
+                "artefacts — this knob is meant for A/B testing."
+            )
+        else:
+            # Auto-detection path. Bail out as soon as we find any
+            # hardware AEC in the audio path.
+            if has_reachymini_asoundrc():
+                self.logger.info(
+                    "Wireless `.asoundrc` detected — relying on XMOS "
+                    "hardware AEC, skipping software AEC stage."
+                )
+                return False
+            if get_audio_device("Source") is not None:
+                self.logger.info(
+                    "ReSpeaker / Reachy Mini Audio card detected — "
+                    "relying on XVF3800 hardware AEC, skipping software "
+                    "AEC stage."
+                )
+                return False
+
+        for name in ("webrtcdsp", "webrtcechoprobe"):
+            if Gst.ElementFactory.find(name) is None:
+                self.logger.warning(
+                    "Software AEC requested but GStreamer element '%s' "
+                    "is unavailable in this build (install "
+                    "gst-plugins-bad). Conversation audio will loop "
+                    "back through the laptop mic — use a headset to "
+                    "work around it.",
+                    name,
+                )
+                return False
+
+        self.logger.warning(
+            "No XVF3800 audio board detected — enabling software AEC "
+            "(webrtcdsp + webrtcechoprobe). Quality is best-effort; for "
+            "production voice loops use the ReSpeaker USB dongle or a "
+            "Wireless robot with the XMOS AEC loopback."
+        )
+        return True
+
+    def _make_aec_capsfilter(self) -> Gst.Element:
+        """Force ``webrtcdsp``-friendly caps (S16LE interleaved, 16 kHz).
+
+        `webrtcdsp` accepts either ``S16LE/interleaved`` or
+        ``F32LE/non-interleaved``; the rest of our pipeline uses
+        ``F32LE/interleaved``, so we pin S16LE on the AEC link and let
+        the surrounding ``audioconvert`` elements bridge the format
+        gap on both sides.
+        """
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        capsfilter.set_property(
+            "caps",
+            Gst.Caps.from_string(
+                "audio/x-raw,"
+                "format=S16LE,"
+                "layout=interleaved,"
+                f"rate={self.SAMPLE_RATE},"
+                f"channels={self.CHANNELS}"
+            ),
+        )
+        return capsfilter
+
+    def _append_aec_dsp(
+        self, pipeline: Gst.Pipeline, src_element: Gst.Element
+    ) -> Gst.Element:
+        """Append the recording-side AEC DSP chain to ``src_element``.
+
+        Inserts ``audioconvert → capsfilter(S16LE) → audiobuffersplit
+        (10 ms) → webrtcdsp(probe=..., delay-agnostic, extended-filter)
+        → audioconvert`` and returns the new tail element to which the
+        next downstream consumer should link.
+
+        ``audiobuffersplit`` is required because libwebrtc-audio-
+        processing operates on fixed 10 ms frames; without it the dsp
+        either rejects or stutters depending on the upstream buffer
+        cadence. ``delay-agnostic`` + ``extended-filter`` is the
+        recommended combo when the mic and reference clocks come from
+        different audio devices (which is exactly our case here:
+        record pipeline drives off the mic clock, playback pipeline
+        off the speaker clock).
+        """
+        ac_in = Gst.ElementFactory.make("audioconvert")
+        capsf = self._make_aec_capsfilter()
+        bsplit = Gst.ElementFactory.make("audiobuffersplit")
+        # `output-buffer-duration` is a GstFraction. PyGObject's
+        # set_property() segfaults when given a `Gst.Fraction(1, 100)`
+        # value, so we route through `Gst.util_set_object_arg` which
+        # accepts the same property as a string and constructs the
+        # underlying GValue C-side.
+        Gst.util_set_object_arg(bsplit, "output-buffer-duration", "1/100")
+        dsp = Gst.ElementFactory.make("webrtcdsp")
+        dsp.set_property("probe", self._AEC_PROBE_NAME)
+        dsp.set_property("delay-agnostic", True)
+        dsp.set_property("extended-filter", True)
+        ac_out = Gst.ElementFactory.make("audioconvert")
+
+        if not all([ac_in, capsf, bsplit, dsp, ac_out]):
+            raise RuntimeError("Failed to create AEC DSP elements")
+
+        for el in (ac_in, capsf, bsplit, dsp, ac_out):
+            pipeline.add(el)
+        src_element.link(ac_in)
+        ac_in.link(capsf)
+        capsf.link(bsplit)
+        bsplit.link(dsp)
+        dsp.link(ac_out)
+        return ac_out
+
+    def _attach_aec_probe(self, pipeline: Gst.Pipeline, tee: Gst.Element) -> None:
+        """Attach the playback-side AEC reference branch to ``tee``.
+
+        Adds a parallel branch: ``tee → queue → audioconvert →
+        capsfilter(S16LE) → audiobuffersplit(10 ms) → webrtcechoprobe
+        → fakesink``. The probe buffers reference frames internally
+        and the recording-side ``webrtcdsp`` pulls from it via the
+        shared name registered above.
+
+        The terminal ``fakesink`` uses ``sync=False, async=False`` so
+        the reference branch never throttles the rest of the playback
+        pipeline (the speaker branch already paces it).
+        """
+        queue_p = Gst.ElementFactory.make("queue")
+        ac_p = Gst.ElementFactory.make("audioconvert")
+        capsf_p = self._make_aec_capsfilter()
+        bsplit_p = Gst.ElementFactory.make("audiobuffersplit")
+        # See note on the record-side bsplit: GstFraction setter
+        # segfaults from Python; use the string-based helper instead.
+        Gst.util_set_object_arg(bsplit_p, "output-buffer-duration", "1/100")
+        probe = Gst.ElementFactory.make("webrtcechoprobe")
+        probe.set_property("name", self._AEC_PROBE_NAME)
+        fakesink_p = Gst.ElementFactory.make("fakesink")
+        fakesink_p.set_property("sync", False)
+        fakesink_p.set_property("async", False)
+        fakesink_p.set_property("enable-last-sample", False)
+
+        if not all([queue_p, ac_p, capsf_p, bsplit_p, probe, fakesink_p]):
+            raise RuntimeError("Failed to create AEC probe elements")
+
+        for el in (queue_p, ac_p, capsf_p, bsplit_p, probe, fakesink_p):
+            pipeline.add(el)
+        tee.link(queue_p)
+        queue_p.link(ac_p)
+        ac_p.link(capsf_p)
+        capsf_p.link(bsplit_p)
+        bsplit_p.link(probe)
+        probe.link(fakesink_p)
 
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
@@ -180,7 +407,15 @@ class GStreamerAudio(AudioBase):
         audiosrc.link(queue)
         queue.link(audioconvert)
         audioconvert.link(audioresample)
-        audioresample.link(self._appsink_audio)
+        # When no XVF3800 hardware is in the audio path, splice the
+        # software AEC chain between `audioresample` and the appsink.
+        # Otherwise link directly to keep the on-board AEC pristine.
+        tail = (
+            self._append_aec_dsp(pipeline, audioresample)
+            if self._sw_aec_enabled
+            else audioresample
+        )
+        tail.link(self._appsink_audio)
 
     def _build_audiosink_element(self) -> Gst.Element:
         """Create a platform-appropriate audio sink element."""
@@ -362,6 +597,20 @@ class GStreamerAudio(AudioBase):
         queue_wobbler.link(ac_wobbler)
         ac_wobbler.link(ar_wobbler)
         ar_wobbler.link(appsink_wobbler)
+
+        # Software AEC reference branch. We only attach it to the
+        # appsrc-based playback pipeline (i.e. conversation audio
+        # pushed via `push_audio_sample`), NOT to the `playbin`-driven
+        # tee bin used by `play_sound`. Two reasons:
+        #   1. Sound-file beeps are short and not interpretable by an
+        #      LLM as speech even if they leak into the mic, so the
+        #      cost/benefit doesn't justify the extra wiring.
+        #   2. `webrtcechoprobe` registers a process-wide name, so
+        #      keeping it bound to a single, long-lived element is the
+        #      simplest way to avoid duplicate-name collisions when a
+        #      playbin tee bin spins up mid-conversation.
+        if self._sw_aec_enabled:
+            self._attach_aec_probe(pipeline, tee)
 
     def _on_bus_message(
         self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
