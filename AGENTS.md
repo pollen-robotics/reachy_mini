@@ -164,7 +164,7 @@ Unless the user explicitly asks for a desktop-only / kiosk / dev-tool UI, **assu
 
 Once `connectToHost()` resolves you get a live `ReachyMini` instance (`handle.reachy`). The full method/event reference lives in [`docs/source/SDK/javascript-sdk.md`](docs/source/SDK/javascript-sdk.md). The quick mental model:
 
-- **Motion (degrees)**: `setHeadRpyDeg(r, p, y)`, `setAntennasDeg(right, left)`, `setBodyYawDeg(yaw)`. Atomic raw-units: `setTarget({ head?: number[16], antennas?: [rRad, lRad], body_yaw?: rad })`.
+- **Motion (degrees)**: `setHeadRpyDeg(r, p, y)`, `setAntennasDeg(right, left)`, `setBodyYawDeg(yaw)`. Atomic raw-units: `setTarget({ head?: number[16], antennas?: [rRad, lRad], body_yaw?: rad })`. The head matrix is in world frame, so `body_yaw` alone pivots the body under the head — to make the head follow the body, ship a `head` matrix in the same call with the body delta added to the head yaw. Use your own last-commanded buffer as the baseline, not telemetry (lags by one RTT).
 - **Recorded-move playback (daemon-side, single-clock A/V sync)**: `playMove(motion, { audioBlob?, audioLeadMs? = -100 })` → `{finished|cancelled|error}`. `cancelMove()` stops mid-play. For record-time flows: `uploadAudio(blob)` returns `uploadId`, then `playUploadedAudio(uploadId)` resolves on the daemon's `started` broadcast (sync anchor). **Use these instead of hand-rolling `sendRaw` chunked uploads.**
 - **Audio**: `setAudioMuted(bool)`, `setMicMuted(bool)`, `getVolume()` / `setVolume(0-100)`, `getMicrophoneVolume()` / `setMicrophoneVolume(0-100)`. `playSound(file)`.
 - **Wake / torque**: `setMotorMode("enabled"|"disabled"|"gravity_compensation")`, `wakeUp()` / `gotoSleep()` / `isAwake()` / `ensureAwake()`.

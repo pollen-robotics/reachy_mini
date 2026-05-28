@@ -119,6 +119,17 @@ new ReachyMini({
 | `playUploadedAudio(uploadId, opts?)` | `Promise<{started: true, ...}>` | Trigger daemon-side standalone audio playback; resolves on the daemon's `started` broadcast (use as a sync anchor) |
 | `cancelAudio()` | `boolean` | Cancel an in-flight `playUploadedAudio` |
 
+> **`setTarget` head-vs-body coupling.** The `head` matrix is in the
+> world frame. Sending `setTarget({ body_yaw })` alone rotates the
+> body *but not the head's commanded world yaw* — the head's gaze
+> stays fixed in world frame, so visually it appears to counter-rotate
+> as the body turns. For tank-style "head follows body", add the body
+> yaw delta to the head RPY's yaw and ship `head` + `body_yaw` in the
+> same `setTarget` call. The baseline for the head yaw must be the
+> last *commanded* value you tracked yourself, not `state.head` from
+> the telemetry event — telemetry lags one WebRTC RTT and cumulative
+> deltas computed against it stall under rapid input.
+
 ### Events
 
 Use `robot.addEventListener(name, handler)` — the SDK extends `EventTarget`.

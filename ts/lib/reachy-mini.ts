@@ -711,6 +711,49 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Commands ────────────────────────────────────────────────────────
 
+    /**
+     * Atomic raw-units pose update over the data channel. Channels you
+     * omit are held at their last commanded value (per-axis, independent).
+     *
+     * **Head pose is in the WORLD frame.** The daemon's IK splits the
+     * requested head world-yaw between body rotation and the stewart
+     * platform, subject to the mechanical limit
+     * `|head_yaw_world − body_yaw| ≤ 65°`.
+     *
+     * **If you want the head to FOLLOW the body** (tank-style rotation):
+     * a `setTarget({ body_yaw })` on its own does NOT rotate the head —
+     * the head's commanded world yaw is unchanged, so its gaze stays
+     * pinned in world frame while the body turns under it. To make the
+     * head turn with the body, include a `head` matrix in the SAME call
+     * with the body-yaw delta added to the head RPY's yaw:
+     *
+     * ```ts
+     * // Body-yaw drag handler: tank-couple the head so it follows.
+     * const delta = newBodyDeg - lastCommandedBodyDeg;
+     * const nextHeadYaw = lastCommandedHeadYawDeg + delta;
+     * robot.setTarget({
+     *   head: rpyToMatrix(headRoll, headPitch, nextHeadYaw).flat(),
+     *   body_yaw: degToRad(newBodyDeg),
+     * });
+     * lastCommandedHeadYawDeg = nextHeadYaw;
+     * lastCommandedBodyDeg    = newBodyDeg;
+     * ```
+     *
+     * **Baseline must be the last COMMANDED value, not telemetry.** For
+     * continuous-input controllers (slider drag, joystick), do not use
+     * `state.head` from the `state` event as the baseline for incremental
+     * commands — telemetry lags one WebRTC round-trip, so cumulative
+     * deltas computed against it stall (every iteration in a rapid drag
+     * adds the same `delta` to the same stale baseline → the head fails
+     * to keep up). Track the last-commanded RPY in your own buffer.
+     *
+     * @param head      Flat row-major 4×4 matrix (16 finite numbers) in
+     *                  the world frame. Omit to hold the previous head target.
+     * @param antennas  `[rightRad, leftRad]` (radians). Omit to hold.
+     * @param body_yaw  Signed radians. Omit to hold.
+     * @returns `true` if the command was queued on the data channel,
+     *          `false` if the channel is not open.
+     */
     setTarget(
         { head, antennas, body_yaw }: { head?: number[]; antennas?: number[]; body_yaw?: number } = {},
     ): boolean {
