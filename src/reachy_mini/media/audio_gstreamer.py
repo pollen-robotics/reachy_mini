@@ -85,6 +85,11 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
+from reachy_mini.media.audio_aec import (
+    build_aec_dsp_chain,
+    build_aec_probe_chain,
+    resolve_sw_aec_enabled,
+)
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
@@ -120,12 +125,6 @@ class GStreamerAudio(AudioBase):
     PLAYBACK_SINK_BUFFER_TIME_US = 50_000
     PLAYBACK_SINK_LATENCY_TIME_US = 5_000
 
-    # Shared name that ties the recording-side `webrtcdsp` to the
-    # playback-side `webrtcechoprobe`. Both elements communicate via
-    # a process-wide registry indexed by this string, so the value
-    # just needs to be stable and unique within the process.
-    _AEC_PROBE_NAME = "reachymini_aec_probe"
-
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize recording and playback pipelines.
 
@@ -144,7 +143,7 @@ class GStreamerAudio(AudioBase):
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
-        self._sw_aec_enabled = self._resolve_sw_aec_enabled()
+        self._sw_aec_enabled = resolve_sw_aec_enabled(self.logger)
 
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._init_pipeline_record(self._pipeline_record)
@@ -160,87 +159,6 @@ class GStreamerAudio(AudioBase):
         self._bus_playback.add_watch(
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_playback
         )
-
-    # ------------------------------------------------------------------
-    # Software AEC fallback
-    # ------------------------------------------------------------------
-
-    def _resolve_sw_aec_enabled(self) -> bool:
-        """Decide whether to insert a `webrtcdsp` + `webrtcechoprobe` pair.
-
-        Pure auto-detection from the same audio device parsing the
-        rest of the backend uses. Returns ``True`` only when no
-        hardware AEC sits in the audio path and the matching
-        ``gst-plugins-bad`` elements are actually packaged:
-
-        * ``has_reachymini_asoundrc()`` → Wireless XMOS does AEC, skip.
-        * ``get_audio_device("Source")`` → XVF3800 / ReSpeaker on USB
-          does AEC, skip.
-        * ``webrtcdsp`` or ``webrtcechoprobe`` missing → skip with a
-          loud warning so callers can install the missing plugin.
-
-        Anything else (typically ``--sim`` / ``--mockup-sim`` or a
-        developer workstation) gets the software AEC.
-        """
-        if has_reachymini_asoundrc():
-            self.logger.info(
-                "Wireless `.asoundrc` detected — relying on XMOS "
-                "hardware AEC, skipping software AEC stage."
-            )
-            return False
-        if get_audio_device("Source") is not None:
-            self.logger.info(
-                "ReSpeaker / Reachy Mini Audio card detected — "
-                "relying on XVF3800 hardware AEC, skipping software "
-                "AEC stage."
-            )
-            return False
-
-        for name in ("webrtcdsp", "webrtcechoprobe"):
-            if Gst.ElementFactory.find(name) is None:
-                self.logger.warning(
-                    "No XVF3800 audio board detected AND GStreamer "
-                    "element '%s' is unavailable in this build "
-                    "(install gst-plugins-bad). Conversation audio "
-                    "will loop back through the laptop mic — use a "
-                    "headset to work around it.",
-                    name,
-                )
-                return False
-
-        self.logger.warning(
-            "No XVF3800 audio board detected — enabling software AEC "
-            "(webrtcdsp + webrtcechoprobe). Quality is best-effort; for "
-            "production voice loops use the ReSpeaker USB dongle or a "
-            "Wireless robot with the XMOS AEC loopback."
-        )
-        return True
-
-    def _make_aec_capsfilter(self) -> Gst.Element:
-        """Force ``webrtcdsp``-friendly caps (S16LE interleaved, 16 kHz).
-
-        ``webrtcdsp`` accepts ``S16LE/interleaved`` or
-        ``F32LE/non-interleaved``; the rest of our pipeline uses
-        ``F32LE/interleaved``, so we pin S16LE on the AEC link and
-        let the surrounding ``audioconvert`` elements bridge the
-        format gap on both sides.
-
-        The dsp and the probe MUST agree on rate and channel count,
-        so we canonicalise both sides to the same ``SAMPLE_RATE`` /
-        ``CHANNELS`` values that drive the rest of the backend.
-        """
-        capsfilter = Gst.ElementFactory.make("capsfilter")
-        capsfilter.set_property(
-            "caps",
-            Gst.Caps.from_string(
-                "audio/x-raw,"
-                "format=S16LE,"
-                "layout=interleaved,"
-                f"rate={self.SAMPLE_RATE},"
-                f"channels={self.CHANNELS}"
-            ),
-        )
-        return capsfilter
 
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
@@ -300,16 +218,11 @@ class GStreamerAudio(AudioBase):
             # accept and which they need to share on both ends), let
             # the dsp filter the mic stream, then convert back to
             # F32LE for the appsink. `audiobuffersplit` is not
-            # required — the dsp re-chunks to its own 10 ms frames
+            # required - the dsp re-chunks to its own 10 ms frames
             # internally via GstAdapter.
-            capsfilter = self._make_aec_capsfilter()
-            dsp = Gst.ElementFactory.make("webrtcdsp")
-            dsp.set_property("probe", self._AEC_PROBE_NAME)
-            dsp.set_property("delay-agnostic", True)
-            dsp.set_property("extended-filter", True)
-            ac_post_dsp = Gst.ElementFactory.make("audioconvert")
-            if not all([capsfilter, dsp, ac_post_dsp]):
-                raise RuntimeError("Failed to create AEC DSP elements")
+            capsfilter, dsp, ac_post_dsp = build_aec_dsp_chain(
+                sample_rate=self.SAMPLE_RATE, channels=self.CHANNELS
+            )
             pipeline.add(capsfilter)
             pipeline.add(dsp)
             pipeline.add(ac_post_dsp)
@@ -494,7 +407,7 @@ class GStreamerAudio(AudioBase):
         if self._sw_aec_enabled:
             # Software AEC reference: drop the probe inline between
             # the appsrc and the tee. The probe is a passthrough
-            # element — anything pushed through reaches the tee (and
+            # element - anything pushed through reaches the tee (and
             # therefore both the speaker and wobbler branches) while
             # a copy is registered as the AEC reference. No parallel
             # tee branch / fakesink is needed.
@@ -504,12 +417,9 @@ class GStreamerAudio(AudioBase):
             # `playbin`-driven tee bin used by `play_sound`:
             # sound-file beeps are short and would otherwise collide
             # on the probe's process-wide name.
-            ac_pre_probe = Gst.ElementFactory.make("audioconvert")
-            capsfilter_probe = self._make_aec_capsfilter()
-            probe = Gst.ElementFactory.make("webrtcechoprobe")
-            probe.set_property("name", self._AEC_PROBE_NAME)
-            if not all([ac_pre_probe, capsfilter_probe, probe]):
-                raise RuntimeError("Failed to create AEC probe elements")
+            ac_pre_probe, capsfilter_probe, probe = build_aec_probe_chain(
+                sample_rate=self.SAMPLE_RATE, channels=self.CHANNELS
+            )
             pipeline.add(ac_pre_probe)
             pipeline.add(capsfilter_probe)
             pipeline.add(probe)

@@ -1,9 +1,11 @@
-"""Unit tests for the shared appsrc PTS helper."""
+"""Unit tests for the shared appsrc PTS helper and the SW AEC detection."""
 
+import logging
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import patch
 
+from reachy_mini.media.audio_aec import resolve_sw_aec_enabled
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.audio_gstreamer import GStreamerAudio
 
@@ -61,36 +63,32 @@ def test_compute_pts_resets_after_large_gap() -> None:
     assert next_pts_ns == 1_450_000_000
 
 
-# ─── Software AEC auto-detection ─────────────────────────────────────────
+# --- Software AEC auto-detection ---------------------------------------
+#
+# These tests cover the shared helper in `reachy_mini.media.audio_aec`,
+# which is consumed by both `GStreamerAudio` (LOCAL Python SDK audio
+# backend) and `GstMediaServer` (WebRTC daemon pipeline). The helper is
+# a pure function so we hit it directly instead of going through one of
+# the two backends.
 
 
-def _fake_aec_self() -> GStreamerAudio:
-    """Return a stand-in with just what `_resolve_sw_aec_enabled` reads.
-
-    The method only needs `self.logger`, so a `SimpleNamespace`
-    with a no-op logger is sufficient — no need to spin up the
-    GStreamer pipelines.
-    """
-
-    class _DummyLogger:
-        def info(self, *_a, **_kw) -> None:  # noqa: D401
-            """Silence info logs in tests."""
-
-        def warning(self, *_a, **_kw) -> None:  # noqa: D401
-            """Silence warnings in tests."""
-
-    return cast(GStreamerAudio, SimpleNamespace(logger=_DummyLogger()))
+def _silent_logger() -> logging.Logger:
+    """Return a logger that swallows everything during the unit test."""
+    logger = logging.getLogger("reachy_mini.test.audio_aec")
+    logger.addHandler(logging.NullHandler())
+    logger.setLevel(logging.CRITICAL + 1)
+    return logger
 
 
 def test_auto_disabled_when_asoundrc_present() -> None:
     """Wireless `.asoundrc` always wins (XMOS loopback handles AEC)."""
     with patch(
-        "reachy_mini.media.audio_gstreamer.has_reachymini_asoundrc",
+        "reachy_mini.media.audio_aec.has_reachymini_asoundrc",
         return_value=True,
     ), patch(
-        "reachy_mini.media.audio_gstreamer.get_audio_device"
+        "reachy_mini.media.audio_aec.get_audio_device"
     ) as get_dev:
-        result = GStreamerAudio._resolve_sw_aec_enabled(_fake_aec_self())
+        result = resolve_sw_aec_enabled(_silent_logger())
 
     assert result is False
     # No reason to keep poking the device monitor once we know XMOS
@@ -101,46 +99,46 @@ def test_auto_disabled_when_asoundrc_present() -> None:
 def test_auto_disabled_when_respeaker_card_detected() -> None:
     """ReSpeaker USB dongle present (Lite happy path) skips SW AEC."""
     with patch(
-        "reachy_mini.media.audio_gstreamer.has_reachymini_asoundrc",
+        "reachy_mini.media.audio_aec.has_reachymini_asoundrc",
         return_value=False,
     ), patch(
-        "reachy_mini.media.audio_gstreamer.get_audio_device",
+        "reachy_mini.media.audio_aec.get_audio_device",
         return_value="reachy-mini-audio-id",
     ):
-        result = GStreamerAudio._resolve_sw_aec_enabled(_fake_aec_self())
+        result = resolve_sw_aec_enabled(_silent_logger())
 
     assert result is False
 
 
 def test_auto_enabled_when_no_hardware_and_plugins_present() -> None:
-    """Sim / dev box: no hardware AEC, plugins available → enable SW AEC."""
+    """Sim / dev box: no hardware AEC, plugins available -> enable SW AEC."""
     with patch(
-        "reachy_mini.media.audio_gstreamer.has_reachymini_asoundrc",
+        "reachy_mini.media.audio_aec.has_reachymini_asoundrc",
         return_value=False,
     ), patch(
-        "reachy_mini.media.audio_gstreamer.get_audio_device",
+        "reachy_mini.media.audio_aec.get_audio_device",
         return_value=None,
     ), patch(
-        "reachy_mini.media.audio_gstreamer.Gst.ElementFactory.find",
+        "reachy_mini.media.audio_aec.Gst.ElementFactory.find",
         return_value=object(),
     ):
-        result = GStreamerAudio._resolve_sw_aec_enabled(_fake_aec_self())
+        result = resolve_sw_aec_enabled(_silent_logger())
 
     assert result is True
 
 
 def test_auto_disabled_when_no_hardware_but_plugins_missing() -> None:
-    """No hardware AND no `webrtcdsp` packaged → fall back to no AEC (warn only)."""
+    """No hardware AND no `webrtcdsp` packaged -> fall back to no AEC (warn only)."""
     with patch(
-        "reachy_mini.media.audio_gstreamer.has_reachymini_asoundrc",
+        "reachy_mini.media.audio_aec.has_reachymini_asoundrc",
         return_value=False,
     ), patch(
-        "reachy_mini.media.audio_gstreamer.get_audio_device",
+        "reachy_mini.media.audio_aec.get_audio_device",
         return_value=None,
     ), patch(
-        "reachy_mini.media.audio_gstreamer.Gst.ElementFactory.find",
+        "reachy_mini.media.audio_aec.Gst.ElementFactory.find",
         return_value=None,
     ):
-        result = GStreamerAudio._resolve_sw_aec_enabled(_fake_aec_self())
+        result = resolve_sw_aec_enabled(_silent_logger())
 
     assert result is False
