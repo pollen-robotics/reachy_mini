@@ -86,30 +86,27 @@ export interface ScaledDurationPreset {
 }
 
 /**
- * Default tuning, mirrored from RemiFabre's test bench
- * (`reachy-mini-js-practices`, May 2026) — the slider defaults he
- * validated on a real Reachy Mini.
+ * Default tuning, calibrated on a real Reachy Mini via the
+ * `reachy-mini-js-practices` bench (May 2026).
  *
  * Per-channel rationale:
- *   - **head**: 0.02 s per "magic-mm" (translation_mm + rotation_deg).
- *     Same constant as `utils/interpolation.py:distance_between_poses`
- *     daemon-side.
+ *   - **head**: 0.015 s per "magic-mm" (translation_mm + rotation_deg).
+ *     0.02 reads as noticeably slow on the head.
  *   - **antenna**: 0.005 s/°. Antennas are light, but the mechanical
  *     resonance window (~PR #952) penalises overly fast moves.
  *   - **body_yaw**: 0.015 s/°. Body sits between head (heavy) and
  *     antennas (light).
- *
- * Hard bounds `[0.2, 1.5]` match the host shell's leave-protocol
- * budget, so `safelyReturnToPose` finishes within the iframe's
- * `pagehide` window.
+ *   - **min/max**: 0.01 / 1.5 s. The low floor matters for in-app
+ *     interactions — at 0.2 s, every tiny correction takes 200 ms
+ *     minimum and reads as sluggish.
  *
  * Frozen so apps can't mutate the shared instance. Spread to derive
  * a custom preset: `{ ...DEFAULT_SCALED_DURATION_PRESET, headSecPerMagicMm: 0.03 }`.
  */
 export const DEFAULT_SCALED_DURATION_PRESET: Readonly<ScaledDurationPreset> = Object.freeze({
-    headSecPerMagicMm: 0.02,
+    headSecPerMagicMm: 0.015,
     antennaSecPerDeg: 0.005,
     bodyYawSecPerDeg: 0.015,
-    minDurationSec: 0.2,
+    minDurationSec: 0.01,
     maxDurationSec: 1.5,
 });
