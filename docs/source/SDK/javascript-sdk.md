@@ -3,7 +3,7 @@
 > **Building a Reachy Mini JS app?** The single source of truth is
 > [`ts/APP_CREATION_GUIDE.md`](../../../ts/APP_CREATION_GUIDE.md) at
 > the repo root. It covers scaffolding, `public/icon.svg`, the host
-> shell, `sdk: static` (default) / `sdk: docker` (fallback) deploy,
+> shell, `sdk: static` deploy,
 > `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host
 > ↔ embed contract. **Pin the SDK to
 > `@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c`** (the

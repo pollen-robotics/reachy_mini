@@ -10,7 +10,7 @@
  *     animation; `signed-out` so we don't auto-relogin after a
  *     user-initiated logout).
  *
- * Storage rules (APP_CREATION_GUIDE §14.5.2 hash-only creds):
+ * Storage rules (APP_CREATION_GUIDE §13.5.2 hash-only creds):
  *  - HF token + user name live in `sessionStorage` (tab-scoped,
  *    wiped on close). The Reachy Mini SDK reads them from
  *    `hf_token` / `hf_username` / `hf_token_expires`.
@@ -183,7 +183,7 @@ export function isUserSignedOut(): boolean {
 
 /** Wipe HF token keys from sessionStorage. Called by the embed
  *  on `host:leaving` before the iframe unmounts
- *  (APP_CREATION_GUIDE §14.5.2). */
+ *  (APP_CREATION_GUIDE §13.5.2). */
 export function wipeHfSessionStorage(): void {
   try {
     window.sessionStorage.removeItem(SESSION_KEY_TOKEN);

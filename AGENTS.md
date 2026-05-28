@@ -131,7 +131,7 @@ See and run `examples/minimal_demo.py` - demonstrates connection, head motion, a
 
 > ### START HERE: [`ts/APP_CREATION_GUIDE.md`](ts/APP_CREATION_GUIDE.md)
 >
-> That guide is the **single source of truth** for building a Reachy Mini JS app: scaffolding, `public/icon.svg`, host shell, deploy `sdk: static` (default) and `sdk: docker` (fallback), `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host ↔ embed architecture reference. Everything that used to live in `SPEC.md` and `APP_AUTHOR_GUIDE.md` is folded in.
+> That guide is the **single source of truth** for building a Reachy Mini JS app: scaffolding, `public/icon.svg`, host shell, `sdk: static` deploy, `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host ↔ embed architecture reference. Everything that used to live in `SPEC.md` and `APP_AUTHOR_GUIDE.md` is folded in.
 >
 > **Today's SDK pin** (used by all three reference apps): `@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c`. See [§10 SDK version pinning](ts/APP_CREATION_GUIDE.md#10-sdk-version-pinning).
 

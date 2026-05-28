@@ -45,18 +45,17 @@ app's UI** and nothing else.
 8. [Cleaning up on leave](#8-cleaning-up-on-leave)
 9. [Local dev: HF token vs OAuth redirect](#9-local-dev)
 10. [SDK version pinning](#10-sdk-version-pinning)
-11. [Deploying: `sdk: static` (default)](#11-deploying-sdk-static-default)
-12. [Deploying: `sdk: docker` (fallback)](#12-deploying-sdk-docker-fallback)
-13. [FAQ and common pitfalls](#13-faq-and-common-pitfalls)
-14. [Architecture reference (host ↔ embed contract)](#14-architecture-reference-host--embed-contract)
-    1. [Roles: app · host · embed](#141-roles-app--host--embed)
-    2. [App identity & official apps](#142-app-identity--official-apps)
-    3. [Two boot modes, one URL surface](#143-two-boot-modes-one-url-surface)
-    4. [Host phase state machine + handoff sequence](#144-host-phase-state-machine--handoff-sequence)
-    5. [Engineering invariants](#145-engineering-invariants)
-    6. [Protocol v1 messages](#146-protocol-v1-messages)
-    7. [Non-goals](#147-non-goals)
-    8. [Threat model](#148-threat-model)
+11. [Deploying to Hugging Face Spaces](#11-deploying-to-hugging-face-spaces)
+12. [FAQ and common pitfalls](#12-faq-and-common-pitfalls)
+13. [Architecture reference (host ↔ embed contract)](#13-architecture-reference-host--embed-contract)
+    1. [Roles: app · host · embed](#131-roles-app--host--embed)
+    2. [App identity & official apps](#132-app-identity--official-apps)
+    3. [Two boot modes, one URL surface](#133-two-boot-modes-one-url-surface)
+    4. [Host phase state machine + handoff sequence](#134-host-phase-state-machine--handoff-sequence)
+    5. [Engineering invariants](#135-engineering-invariants)
+    6. [Protocol v1 messages](#136-protocol-v1-messages)
+    7. [Non-goals](#137-non-goals)
+    8. [Threat model](#138-threat-model)
 
 ---
 
@@ -85,8 +84,6 @@ What **you** write:
   live `ReachyMini` SDK handle and render whatever you want.
 - `public/icon.svg` - one SVG that powers the top bar, the mobile
   catalog tile, and the favicon.
-- A `Dockerfile` *only* if you fall back to `sdk: docker`
-  ([§12](#12-deploying-sdk-docker-fallback)).
 
 You can use **any framework** inside your `embed` entry: React,
 Svelte, Vue, vanilla TS. The host runs outside your iframe and
@@ -122,12 +119,10 @@ the same RC version in their `package.json` - see [§10 SDK version pinning](#10
 
 ## 3. The app-author contract
 
-For a static deployment (the default - see [§11](#11-deploying-sdk-static-default)),
-exactly **three source files** are the entire integration surface,
+Exactly **three source files** are the entire integration surface,
 plus `public/icon.svg`, a `package.json` (for the Vite build + the
-SDK npm dep), and the Space `README.md` frontmatter. A `Dockerfile`
-becomes a 4th source file only when you fall back to `sdk: docker`
-([§12](#12-deploying-sdk-docker-fallback)).
+SDK npm dep), and the Space `README.md` frontmatter
+(see [§11 Deploying](#11-deploying-to-hugging-face-spaces)).
 
 Don't add mandatory files outside this list - keep apps
 interchangeable.
@@ -172,14 +167,11 @@ the jsDelivr branch / cache-purge friction we used to live with.
     </script>
 
     <!-- HF Spaces helper variables.
-         - In `sdk: static` Spaces, HF substitutes these placeholders at
-           file-serve time when `hf_oauth: true` is set.
-         - In `sdk: docker` Spaces, `docker-entrypoint.d/10-inject-hf-vars.sh`
-           patches them at container start (HF only exposes the vars
-           server-side for docker, never client-side).
-         - In `npm run dev`, placeholders stay untouched; we detect that
-           and drop `window.huggingface` so the SDK falls back to the
-           clientId you supplied via `mountHost({ clientId })`. -->
+         - In production, HF substitutes these placeholders at file-
+           serve time when `hf_oauth: true` is set on the Space.
+         - In `npm run dev`, placeholders stay untouched; we detect
+           that and drop `window.huggingface` so the SDK falls back to
+           the clientId you supplied via `mountHost({ clientId })`. -->
     <script>
       (function () {
         var clientId = "__OAUTH_CLIENT_ID__";
@@ -296,15 +288,6 @@ for the resolution path and PNG fallback notes.
 `npm`-managed; only mandatory bits are the Vite build script and the
 SDK pin. See [§10 SDK version pinning](#10-sdk-version-pinning) for
 the exact version string.
-
-### 3.6 `Dockerfile` (only for `sdk: docker`)
-
-A `Dockerfile` is **not** required when you deploy as `sdk: static`
-(the default - see [§11](#11-deploying-sdk-static-default)). It only
-appears when you fall back to `sdk: docker`
-([§12](#12-deploying-sdk-docker-fallback)) - in which case copy
-`reachy_mini_emotions/Dockerfile` verbatim; the only thing to
-customise is the app name in comments.
 
 ---
 
@@ -462,9 +445,8 @@ the host and the mobile catalog read from them:
    ---
    ```
 
-   See [§11.1](#11-deploying-sdk-static-default) for the full static
-   frontmatter and [§12.1](#12-deploying-sdk-docker-fallback) for the
-   docker variant.
+   See [§11.1](#111-required-frontmatter) for the full annotated
+   frontmatter.
 
    - `title` is the app name in the mobile catalog (the in-iframe
      top bar uses `appName` from `mountHost()` instead).
@@ -476,7 +458,7 @@ the host and the mobile catalog read from them:
      the mobile catalog. The catalog API filters on this exact
      string. Don't remove it.
    - `hf_oauth: true` makes HF auto-provision an OAuth client and
-     inject the ID at container start.
+     inject the ID at file-serve time.
 
 ### Icon design recommendations
 
@@ -672,14 +654,12 @@ intentionally, and re-test against a live robot before shipping.
 
 ---
 
-## 11. Deploying: `sdk: static` (default)
+## 11. Deploying to Hugging Face Spaces
 
-> **Static is the default and recommended deployment.** HF serves the
-> Vite build straight from its CDN, replaces `__OAUTH_CLIENT_ID__` and
-> friends at file-serve time (because `hf_oauth: true` is set), and
-> there's no container to cold-start. The three reference apps still
-> ship a `Dockerfile` for historical reasons - you can drop it on your
-> fork.
+> Reachy Mini JS apps ship as **`sdk: static`** Hugging Face Spaces.
+> HF serves the Vite build straight from its CDN and replaces
+> `__OAUTH_CLIENT_ID__` and friends at file-serve time, because
+> `hf_oauth: true` is set in the README frontmatter.
 
 ### 11.1 Required frontmatter
 
@@ -704,7 +684,7 @@ tags:
 - The **`reachy_mini_js_app` tag is mandatory** for mobile-catalog
   discovery. The catalog API filters on this exact string.
 - Apps in the `pollen-robotics/*` namespace are automatically tagged
-  as "official" in the catalog (see [§14.2 App identity & official apps](#142-app-identity--official-apps)); no extra config.
+  as "official" in the catalog (see [§13.2 App identity & official apps](#132-app-identity--official-apps)); no extra config.
 
 ### 11.2 Build and push
 
@@ -758,75 +738,7 @@ git commit --allow-empty -m "chore: bust HF Spaces cache" && git push
 
 ---
 
-## 12. Deploying: `sdk: docker` (fallback)
-
-Use this when:
-
-- You can't run the Vite build locally (e.g. CI-only release flow).
-- You need server-side processing inside the Space (proxy, custom
-  routing, an extra Python service alongside the static frontend).
-
-Otherwise, prefer [§11 static](#11-deploying-sdk-static-default). The
-deployable surface is bigger (you maintain a `Dockerfile` and an
-nginx entrypoint), and cold starts are slower.
-
-### 12.1 Required frontmatter
-
-```yaml
----
-title: My Reachy Mini App
-emoji: 🤖
-colorFrom: yellow
-colorTo: red
-sdk: docker
-app_port: 7860
-pinned: false
-hf_oauth: true
-short_description: One-line description shown in the mobile catalog.
-tags:
-  - reachy_mini
-  - reachy_mini_js_app
----
-```
-
-### 12.2 The `Dockerfile`
-
-Copy `reachy_mini_emotions/Dockerfile` verbatim. The multi-stage
-build is:
-
-1. `node:20-alpine` builder: `npm ci && npm run build`.
-2. `nginx:1.27-alpine` runtime: serves `dist/` on port 7860 and runs
-   `docker-entrypoint.d/10-inject-hf-vars.sh` at container start to
-   patch the `__OAUTH_CLIENT_ID__` / `__SPACE_HOST__` / `__SPACE_ID__`
-   placeholders into the served `index.html`.
-
-The entrypoint script is **what makes OAuth work in docker Spaces** -
-HF only exposes the OAuth variables server-side for `sdk: docker`,
-unlike `sdk: static` where the substitution is done by HF itself at
-file-serve time. Don't skip it.
-
-### 12.3 Push
-
-```bash
-hf repos create my-app --repo-type space --space-sdk docker
-git remote add space git@hf.co:spaces/<your-username>/my-app
-git push space main
-```
-
-HF builds the `Dockerfile`, runs the entrypoint, and serves nginx on
-`app_port: 7860`.
-
-### 12.4 Cache busting
-
-Same as static - push an empty commit:
-
-```bash
-git commit --allow-empty -m "chore: bust HF Spaces cache" && git push space main
-```
-
----
-
-## 13. FAQ and common pitfalls
+## 12. FAQ and common pitfalls
 
 ### "I see a `Robot is busy` error even though no one is using the robot"
 
@@ -836,7 +748,7 @@ doesn't, the central sees two peers with the same `appName` and
 rejects the embed.
 
 This is handled automatically by `@pollen-robotics/reachy-mini-sdk/host`
-(see [§14.5.1 Single live SDK per tab](#1451-single-live-sdk-per-tab)).
+(see [§13.5.1 Single live SDK per tab](#1351-single-live-sdk-per-tab)).
 If you see this in dev, you likely have **two tabs** open on the
 same Space - that's expected behaviour.
 
@@ -904,11 +816,11 @@ Check the three sources in priority order (§6):
 
 If 1 + 2 + 3 are correct and it still fails, file a bug.
 
-### "My static Space serves the bundle but the OAuth login redirects loop"
+### "My Space serves the bundle but the OAuth login redirects loop"
 
-For `sdk: static`, HF only substitutes `__OAUTH_CLIENT_ID__` when
-`hf_oauth: true` is set in the README frontmatter **and** when the
-file is HTML. Common mistakes:
+HF only substitutes `__OAUTH_CLIENT_ID__` when `hf_oauth: true` is
+set in the README frontmatter **and** the file is HTML. Common
+mistakes:
 
 - `hf_oauth: true` missing → placeholder stays as literal
   `"__OAUTH_CLIENT_ID__"`; the SDK falls back to no client ID and
@@ -918,7 +830,7 @@ file is HTML. Common mistakes:
   some bundler hardcoded the value). HF only substitutes
   `__...__` literals; if the file already has a real ID baked in
   for a different OAuth client, the redirect targets the wrong app.
-- The static Space pre-dates the `hf_oauth` substitution (very old
+- The Space pre-dates the `hf_oauth` substitution (very old
   Spaces). Re-create the Space.
 
 ### "My app doesn't appear in the mobile catalog"
@@ -926,7 +838,7 @@ file is HTML. Common mistakes:
 Three things must be true simultaneously:
 
 1. The Space tags include the exact string `reachy_mini_js_app` (see
-   §11.1 / §12.1 frontmatter examples).
+   the [§11.1 frontmatter](#111-required-frontmatter)).
 2. `public/icon.svg` exists in the **committed repo tree** (not just
    in `dist/`). The catalog probe inspects `siblings`, which is a
    listing of committed files, not served URLs.
@@ -940,9 +852,8 @@ Three places, in order:
 2. Browser console of the iframe (embed errors). The embed
    `postMessage`s any boot error back to the host as
    `embed:error` - the host surfaces fatal ones via a banner.
-3. HF Space "Logs" tab. For `sdk: static`, only build-time errors
-   show up here. For `sdk: docker`, runtime nginx + entrypoint logs
-   are visible too.
+3. HF Space "Logs" tab - only build-time errors show up here for
+   static Spaces (no runtime container).
 
 ### "How do I test the mobile-handoff mode locally?"
 
@@ -955,19 +866,19 @@ http://localhost:5173/?embedded=1#creds=<base64({"hfToken":"hf_xxx","userName":"
 The dispatcher will skip the shell and go straight to your embed.
 Useful for testing the embed path without spinning up the mobile
 app. The exact bundle shape is documented at
-[§14.3 Two boot modes](#143-two-boot-modes-one-url-surface).
+[§13.3 Two boot modes](#133-two-boot-modes-one-url-surface).
 
 ---
 
-## 14. Architecture reference (host ↔ embed contract)
+## 13. Architecture reference (host ↔ embed contract)
 
-> **You don't need this section to ship an app.** §1-§13 above are
+> **You don't need this section to ship an app.** §1-§12 above are
 > enough. This appendix is the canonical contract between the **app**,
 > the **host shell**, and the **embed adapter** - useful when you're
 > debugging a weird boot, considering an unusual deployment, or
 > contributing to the host shell itself.
 
-### 14.1 Roles: app · host · embed
+### 13.1 Roles: app · host · embed
 
 Three actors, one app repository:
 
@@ -997,7 +908,7 @@ built with **React 19 + MUI 7 + Emotion**.
 The trade-off favours **fast host iteration + tech freedom for
 apps** over a slimmer host shell.
 
-### 14.2 App identity & official apps
+### 13.2 App identity & official apps
 
 A Reachy Mini app is uniquely identified by its **Hugging Face Space
 ID**, of the form `owner/space` (e.g. `pollen-robotics/emotions`).
@@ -1021,7 +932,7 @@ entire qualification. Where the distinction surfaces:
 | Website `/api/js-apps` | Returns `isOfficial: true` for `pollen-robotics/*`              |
 | Host shell             | **No notion of "official"**. Renders the app the same way always |
 
-### 14.3 Two boot modes, one URL surface
+### 13.3 Two boot modes, one URL surface
 
 The same `index.html` is served for both modes. The dispatcher
 (`src/dispatch.ts`) picks between them based on the URL.
@@ -1063,7 +974,7 @@ The bundle has the shape:
 The hash is **never sent to a server**. The embed wipes it with
 `history.replaceState` on the very first synchronous tick of
 `connectToHost()`, **before any `await`** - see
-[§14.5.2 Hash-only creds + immediate wipe](#1452-hash-only-creds--immediate-wipe).
+[§13.5.2 Hash-only creds + immediate wipe](#1352-hash-only-creds--immediate-wipe).
 
 #### Mode A standalone flow (the long story)
 
@@ -1119,7 +1030,7 @@ directly. **No host shell is mounted.** The user sees:
 There is **no end-session button** in Mode B. Closing the WebView
 triggers `pagehide`, which fires `onLeave` and stops the session.
 
-### 14.4 Host phase state machine + handoff sequence
+### 13.4 Host phase state machine + handoff sequence
 
 #### Host phase machine (Mode A only)
 
@@ -1151,7 +1062,7 @@ stateDiagram-v2
 #### Handoff sequence (host → embed)
 
 Showcases the single-SDK-per-tab invariant
-([§14.5.1](#1451-single-live-sdk-per-tab)).
+([§13.5.1](#1351-single-live-sdk-per-tab)).
 
 ```mermaid
 sequenceDiagram
@@ -1166,7 +1077,7 @@ sequenceDiagram
     H->>H: phase = handing-off, mount iframe
     E->>E: parse #creds, replaceState wipe
     E->>H: embed:ready
-    H->>HS: disconnect() [§14.5.1]
+    H->>HS: disconnect() [§13.5.1]
     H->>E: host:init
     E->>ES: connect() → startSession() → ensureAwake()
     ES->>C: claim robot
@@ -1175,13 +1086,13 @@ sequenceDiagram
     H->>H: hide ConnectingView overlay
 ```
 
-### 14.5 Engineering invariants
+### 13.5 Engineering invariants
 
 Four hard invariants. A failure here is a regression in the host
 shell - it must produce a defined observable behaviour and must
 stay covered by tests.
 
-#### 14.5.1 Single live SDK per tab
+#### 13.5.1 Single live SDK per tab
 
 **Contract**: at any instant, exactly one SDK instance per tab is
 registered at the central.
@@ -1201,7 +1112,7 @@ at the central; the embed keeps the clean `appName`. This protects
 the narrow window where both SDKs overlap (between `embed:ready`
 and `disconnect()`).
 
-#### 14.5.2 Hash-only creds + immediate wipe
+#### 13.5.2 Hash-only creds + immediate wipe
 
 **Contract**: HF tokens never appear in URL search, never in
 referer, never in HF Spaces access logs.
@@ -1217,7 +1128,7 @@ referer, never in HF Spaces access logs.
 **Token TTL**: `hf_token_expires` is set to **15 min** at seed
 time. The SDK refreshes on demand.
 
-#### 14.5.3 Bundle and SDK pinning
+#### 13.5.3 Bundle and SDK pinning
 
 **Contract**: a fix in the host reaches every Space within one
 cache cycle, with no per-app rebuild. A fix in the SDK can be
@@ -1236,7 +1147,7 @@ On detected mismatch (e.g. unknown protocol version, structurally
 invalid `host:init`), the host's `ErrorView` primary button calls
 `window.location.reload(true)` to bypass any intermediary cache.
 
-#### 14.5.4 React Strict Mode safety
+#### 13.5.4 React Strict Mode safety
 
 **Contract**: every effect in the host package survives a double
 mount in `<React.StrictMode>` without doubling network I/O, SDK
@@ -1263,7 +1174,7 @@ the central; in Mode B as two competing WebRTC peer connections.
   `bootPromiseRef` returns the same promise for a second call,
   rather than re-running the handshake.
 
-### 14.6 Protocol v1 messages
+### 13.6 Protocol v1 messages
 
 Full type definitions in
 [`ts/host/src/lib/protocol.ts`](./host/src/lib/protocol.ts).
@@ -1308,7 +1219,7 @@ Intentionally **not** in the v1 protocol:
 - `host:init` may arrive twice (rare: bridge re-arm); the embed
   treats the latest as authoritative and re-applies theme / config.
 
-### 14.7 Non-goals
+### 13.7 Non-goals
 
 To stay simple and auditable, the host shell explicitly does NOT do:
 
@@ -1334,14 +1245,14 @@ To stay simple and auditable, the host shell explicitly does NOT do:
 - **Imposing a framework on app authors**. Apps inside the iframe
   are completely free of framework constraints.
 
-### 14.8 Threat model
+### 13.8 Threat model
 
 The host runs in a HF Spaces container; the embed runs in a
 same-origin iframe within the same Space.
 
 | Asset                    | Threat                                   | Mitigation                                     |
 |--------------------------|------------------------------------------|------------------------------------------------|
-| HF bearer token          | Leak via URL log / referer               | Hash-only + immediate wipe (§14.5.2), 15 min TTL |
+| HF bearer token          | Leak via URL log / referer               | Hash-only + immediate wipe (§13.5.2), 15 min TTL |
 | HF bearer token          | Leak via sessionStorage to other origin  | Same-origin embed, no cross-origin postMessage |
 | `config` payload         | Attacker controls URL → malformed JSON   | App MUST validate at the boundary (typed cast is not enough) |
 | postMessage channel      | Random extension posts a forged message  | Receivers check `source === 'reachy-mini'` AND `event.origin === window.location.origin` |

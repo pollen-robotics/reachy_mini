@@ -98,7 +98,7 @@ See the JSDoc header in [`reachy-mini-sdk.js`](./reachy-mini-sdk.js) for the ful
 
 For Hugging Face Spaces apps that need OAuth + a robot picker + iframe lifecycle management:
 
-- **[`APP_CREATION_GUIDE.md`](./APP_CREATION_GUIDE.md)** — single source of truth for app authors (scaffold, deploy static/docker, host ↔ embed contract, invariants). Today's SDK pin: `1.8.0-rc1-main.fd4354c`.
+- **[`APP_CREATION_GUIDE.md`](./APP_CREATION_GUIDE.md)** — single source of truth for app authors (scaffold, `sdk: static` deploy, host ↔ embed contract, invariants). Today's SDK pin: `1.8.0-rc1-main.fd4354c`.
 - [`host/README.md`](./host/README.md) — one-page tour of the host package layout
 
 ## Migration from `@pollen-robotics/reachy-mini-host`

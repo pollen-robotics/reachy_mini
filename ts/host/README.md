@@ -19,7 +19,7 @@ Subpath exports of [`@pollen-robotics/reachy-mini-sdk`](https://www.npmjs.com/pa
 - **`connectToHost()`** — the vanilla-JS client that runs inside the iframe and
   hands your app a fully-connected `ReachyMini` SDK instance.
 
-Two boot modes are supported (cf. [`APP_CREATION_GUIDE.md` §14.3](../APP_CREATION_GUIDE.md#143-two-boot-modes-one-url-surface)):
+Two boot modes are supported (cf. [`APP_CREATION_GUIDE.md` §13.3](../APP_CREATION_GUIDE.md#133-two-boot-modes-one-url-surface)):
 
 | Mode | Entry point | Use case |
 |------|-------------|----------|
@@ -32,11 +32,11 @@ The same app code works in both modes; only the entry point differs.
 
 | Document | Audience | Read it when… |
 |----------|----------|----------------|
-| **[`../APP_CREATION_GUIDE.md`](../APP_CREATION_GUIDE.md)** | app authors **and** host maintainers | Single source of truth: scaffold, deploy static/docker, host ↔ embed contract, invariants, protocol v1. Today's SDK pin: `1.8.0-rc1-main.fd4354c`. |
+| **[`../APP_CREATION_GUIDE.md`](../APP_CREATION_GUIDE.md)** | app authors **and** host maintainers | Single source of truth: scaffold, `sdk: static` deploy, host ↔ embed contract, invariants, protocol v1. Today's SDK pin: `1.8.0-rc1-main.fd4354c`. |
 
 App authors and library maintainers both start with the
-**[App Creation Guide](../APP_CREATION_GUIDE.md)**: §1-§13 are the
-app-author recipe, §14 is the host ↔ embed architecture reference.
+**[App Creation Guide](../APP_CREATION_GUIDE.md)**: §1-§12 are the
+app-author recipe, §13 is the host ↔ embed architecture reference.
 
 ## Installation
 
@@ -136,7 +136,7 @@ with every release:
 
 App authors are free to use any UI framework they want inside the iframe; the
 host doesn't care. This is a hard design rule, not an accident
-(see [`APP_CREATION_GUIDE.md` §14.1](../APP_CREATION_GUIDE.md#141-roles-app--host--embed)
+(see [`APP_CREATION_GUIDE.md` §13.1](../APP_CREATION_GUIDE.md#131-roles-app--host--embed)
 "Why React + MUI for the host (and only the host)").
 
 ## Versioning
@@ -146,7 +146,7 @@ version with the SDK and the Reachy Mini Python daemon (a single source of
 truth, enforced by the npm publish CI). The major version of the **wire
 protocol** is tracked separately in `PROTOCOL_VERSION` and bumped only on
 incompatible postMessage changes
-(see [`APP_CREATION_GUIDE.md` §14.6](../APP_CREATION_GUIDE.md#146-protocol-v1-messages)).
+(see [`APP_CREATION_GUIDE.md` §13.6](../APP_CREATION_GUIDE.md#136-protocol-v1-messages)).
 
 App authors should **pin to the exact prerelease build that the
 reference apps use** - today `1.8.0-rc1-main.fd4354c`, see

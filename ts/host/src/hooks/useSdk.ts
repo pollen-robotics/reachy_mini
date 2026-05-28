@@ -2,7 +2,7 @@
  * Single-instance SDK provisioning for the host shell.
  *
  * Invariant: at most one `ReachyMini` instance ever lives on
- * `window` (APP_CREATION_GUIDE §14.5.1 single live SDK per tab).
+ * `window` (APP_CREATION_GUIDE §13.5.1 single live SDK per tab).
  * The host shell only uses the SDK for
  * OAuth (`authenticate()`, `login()`, `logout()`) — it never
  * calls `connect()`, so no SSE is ever opened from the host.

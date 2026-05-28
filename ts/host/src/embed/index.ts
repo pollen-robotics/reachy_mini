@@ -13,7 +13,7 @@
  *   handle.reachy.setHeadRpyDeg(0, 10, 0);
  *
  * Boot sequence (canonical reference: APP_CREATION_GUIDE
- * §14.4 handoff sequence + §14.6 protocol v1):
+ * §13.4 handoff sequence + §13.6 protocol v1):
  *  1. Read `#creds=<base64>` synchronously and wipe the hash
  *     with `history.replaceState`.
  *  2. Wait for `window.ReachyMini` (8 s timeout).
@@ -27,7 +27,7 @@
  *     `embed:app-state` at each step.
  *  7. Resolve `connectToHost()` with the live SDK handle.
  *
- * Strict Mode safety (APP_CREATION_GUIDE §14.5.4): the function is idempotent
+ * Strict Mode safety (APP_CREATION_GUIDE §13.5.4): the function is idempotent
  * across multiple awaits via a module-level promise. Calling
  * `connectToHost()` twice returns the same in-flight promise;
  * a single SDK instance is created, a single `embed:ready` is
