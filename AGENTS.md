@@ -171,8 +171,9 @@ Once `connectToHost()` resolves you get a live `ReachyMini` instance (`handle.re
 - **Media flow**: `<video>` passed to `reachy.attachVideo()` receives the **robot's** camera/mic over WebRTC. Do NOT call `navigator.mediaDevices.getUserMedia()` to read robot media - that grabs the user's *own* laptop camera. Bidirectional audio is automatic when `enableMicrophone: true` is passed to `mountHost()`.
 - **Events**: `connected`, `disconnected`, `robotsChanged`, `streaming`, `sessionStopped`, `sessionRejected` (robot busy - inspect `e.detail.activeApp`), `state` (every ~500 ms), `videoTrack`, `micSupported`, `error`.
 - **Math utilities**: `rpyToMatrix`, `matrixToRpy`, `degToRad`, `radToDeg`.
+- **Motion utilities** (subpath `@pollen-robotics/reachy-mini-sdk/animation`): `Pose` / `PartialPose` types, `INIT_POSE` safe-rest constant, `distanceBetweenPoses` (per-channel raw distance, head in magic-mm), `scaledDuration` → `{ duration, limiter, perChannel }` (synchronous client-side duration math, mirrors the daemon so you can sync audio cues without an RPC), `safelyReturnToPose(reachy)` (canonical `onLeave` one-liner: enables torque safely, computes scaled duration, dispatches goto to `INIT_POSE`, returns synchronously after dispatch), `installShutdownHandler(reachy)` (**standalone apps only** - host-shell apps use `handle.onLeave()` instead, mixing both double-fires the goto). Full recipe and anti-patterns: [§14 of the JS App Creation Guide](ts/APP_CREATION_GUIDE.md#14-robotics-best-practices).
 
-**The host owns all teardown** - never call `reachy.stopSession()` yourself, register an `onLeave` callback instead.
+**The host owns all teardown** - never call `reachy.stopSession()` yourself, register an `onLeave` callback instead. For the canonical `onLeave` body, see [§14.3](ts/APP_CREATION_GUIDE.md#143-safe-return-to-home-pose-safelyreturntopose).
 
 ### Legacy: minimal CDN-only path (`webrtc_example`)
 

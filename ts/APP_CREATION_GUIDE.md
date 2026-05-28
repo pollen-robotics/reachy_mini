@@ -56,6 +56,13 @@ app's UI** and nothing else.
     6. [Protocol v1 messages](#136-protocol-v1-messages)
     7. [Non-goals](#137-non-goals)
     8. [Threat model](#138-threat-model)
+14. [Robotics best practices](#14-robotics-best-practices) - `@pollen-robotics/reachy-mini-sdk/animation`
+    1. [Pose types: `Pose` vs `PartialPose`](#141-pose-types-pose-vs-partialpose)
+    2. [Distance & scaled duration](#142-distance--scaled-duration)
+    3. [Safe return to home pose (`safelyReturnToPose`)](#143-safe-return-to-home-pose-safelyreturntopose)
+    4. [Standalone exit hooks (`installShutdownHandler`)](#144-standalone-exit-hooks-installshutdownhandler)
+    5. [Daemon parity warning](#145-daemon-parity-warning)
+    6. [Anti-patterns](#146-anti-patterns)
 
 ---
 
@@ -540,13 +547,21 @@ In all three cases your `onLeave` callbacks fire. You have **~1.5-2 s**
 before the host force-unmounts the iframe; use that to:
 
 ```ts
+import { safelyReturnToPose } from "@pollen-robotics/reachy-mini-sdk/animation";
+
 handle.onLeave(async () => {
-  player.cancel();        // stop streaming motion frames
-  audioCtx?.close();      // release audio
-  ws?.close();            // close any side channels
-  await flushTelemetry(); // your async hooks
+  safelyReturnToPose(handle.reachy); // canonical safe-rest one-liner, see §14.3
+  player.cancel();                   // stop streaming motion frames
+  audioCtx?.close();                 // release audio
+  ws?.close();                       // close any side channels
+  await flushTelemetry();            // your async hooks
 });
 ```
+
+`safelyReturnToPose` is the recommended first call in every `onLeave` -
+it re-enables torque, computes a scaled duration, and dispatches a
+goto to `INIT_POSE`. Full recipe in
+[§14.3](#143-safe-return-to-home-pose-safelyreturntopose).
 
 You do **not** need to call `reachy.stopSession()` yourself - the
 host does. You also don't need to navigate away; the iframe is
@@ -872,11 +887,11 @@ app. The exact bundle shape is documented at
 
 ## 13. Architecture reference (host ↔ embed contract)
 
-> **You don't need this section to ship an app.** §1-§12 above are
-> enough. This appendix is the canonical contract between the **app**,
-> the **host shell**, and the **embed adapter** - useful when you're
-> debugging a weird boot, considering an unusual deployment, or
-> contributing to the host shell itself.
+> **You don't need this section to ship an app.** §1-§12 plus §14
+> (Robotics best practices) are enough. This appendix is the canonical
+> contract between the **app**, the **host shell**, and the **embed
+> adapter** - useful when you're debugging a weird boot, considering an
+> unusual deployment, or contributing to the host shell itself.
 
 ### 13.1 Roles: app · host · embed
 
@@ -1263,3 +1278,221 @@ same-origin iframe within the same Space.
   We trust apps published under the `pollen-robotics/*` namespace.
 - Defence against a compromised central. The signaling URL is
   configurable per-Space; the central is the trust root.
+
+---
+
+## 14. Robotics best practices
+
+Subpath import: `@pollen-robotics/reachy-mini-sdk/animation`
+
+Pure-TypeScript helpers that every Reachy Mini JS app used to copy-paste
+from RemiFabre's [`reachy-mini-js-practices`](https://github.com/pollen-robotics/reachy-mini-js-practices)
+bench. **No daemon changes** - everything routes through existing
+data-channel commands (`setMotorMode`, `setTarget`, `gotoTarget`). Three
+concrete callers today (`reachy_mini_emotions`, `reachy_mini_marionette`
+v1 + v2) still carry their own copies and are being migrated off as
+follow-up PRs.
+
+See [`ts/animation/DESIGN.md`](./animation/DESIGN.md) for the two-phase
+roadmap: Phase 1 (everything below) ships now; Phase 2 is the video-game-style
+animation graph (named layers, masking, crossfades, procedural clips) - not
+in this release.
+
+### 14.1 Pose types: `Pose` vs `PartialPose`
+
+```ts
+import type { Pose, PartialPose } from "@pollen-robotics/reachy-mini-sdk/animation";
+
+interface Pose         { head: number[]; antennas: [number, number]; body_yaw: number }
+interface PartialPose  { head?: number[]; antennas?: [number, number] | number[]; body_yaw?: number }
+```
+
+- **`Pose`**: all three channels required. Use for hand-authored targets
+  where you want the type system to nag if you forget a channel.
+- **`PartialPose`**: any subset. Matches the SDK's `setTarget` /
+  `gotoTarget` partial-update semantics, and is the shape of
+  `reachy.robotState` (fields appear only after the daemon has emitted
+  them).
+
+Wire-format units, everywhere: `head` is a flat 16-float row-major 4×4
+homogeneous matrix, `antennas` is `[right, left]` in **radians**,
+`body_yaw` is a scalar in **radians**.
+
+> Avoid carrying degrees around in your motion code. Convert at the UI
+> boundary (`degToRad` / `radToDeg` from the SDK root) so everything
+> below the boundary speaks wire units. Apps that drift between deg and
+> rad ship subtle off-by-57 bugs.
+
+### 14.2 Distance & scaled duration
+
+The pure math behind "how big is this move" and "how long should it
+take", computed **synchronously client-side** so apps can sync audio
+cues, schedule streamer ticks, and live-tune constants without an extra
+round-trip to the daemon.
+
+```ts
+import {
+    distanceBetweenPoses,
+    scaledDuration,
+    DEFAULT_SCALED_DURATION_PRESET,
+} from "@pollen-robotics/reachy-mini-sdk/animation";
+
+const dist = distanceBetweenPoses(reachy.robotState, target);
+// { head?: number /* magic-mm */,
+//   antennas?: { right: number, left: number } /* deg */,
+//   body_yaw?: number /* deg */ }
+
+const plan = scaledDuration(reachy.robotState, target);
+// { duration: number,
+//   limiter: "head"|"antennaR"|"antennaL"|"body_yaw"|null,
+//   perChannel: { head?, antennaR?, antennaL?, body_yaw? } }
+
+reachy.gotoTarget({ ...target, duration: plan.duration });
+```
+
+The head metric is **magic-mm** - `translation_mm + rotation_deg` fused
+into a single scalar that's monotonic with "how big does this move
+feel". Mirror of the daemon's
+`utils/interpolation.distance_between_poses`.
+
+**Log `plan.limiter` in your motion paths.** It answers "why does the
+home return take 1.2 s?" instantly without bisecting through three
+channels by hand.
+
+The default preset is calibrated on a real Reachy Mini (May 2026 bench):
+
+| Field | Default | Rationale |
+|---|---|---|
+| `headSecPerMagicMm` | `0.015` | 0.02 reads as noticeably slow on the head. |
+| `antennaSecPerDeg` | `0.005` | Antennas are light; PR [#952](https://github.com/pollen-robotics/reachy_mini/pull/952) resonance window penalises too-fast moves. |
+| `bodyYawSecPerDeg` | `0.015` | Body sits between head (heavy) and antennas (light). |
+| `minDurationSec` | `0.01` | Low floor so small in-app corrections feel snappy. |
+| `maxDurationSec` | `1.5` | Matches the host shell's leave-protocol budget so `safelyReturnToPose` fits inside `onLeave`. |
+
+Derive a custom preset by spreading (don't mutate - the constant is
+deep-frozen):
+
+```ts
+const SLOWER_HEAD = {
+    ...DEFAULT_SCALED_DURATION_PRESET,
+    headSecPerMagicMm: 0.03,
+};
+const plan = scaledDuration(current, target, SLOWER_HEAD);
+```
+
+Edge case: when no channel overlaps between `current` and `target`,
+`scaledDuration` returns `{ duration: minDurationSec, limiter: null,
+perChannel: {} }`. The resulting `gotoTarget` is a safe no-op held over
+the minimum dwell. Pass an explicit `duration` if you need a longer
+dwell.
+
+### 14.3 Safe return to home pose (`safelyReturnToPose`)
+
+The canonical "return to safe rest" recipe in one call. Use it as your
+`onLeave` body (see [§8 Cleaning up on leave](#8-cleaning-up-on-leave)):
+
+```ts
+import { safelyReturnToPose } from "@pollen-robotics/reachy-mini-sdk/animation";
+
+handle.onLeave(() => safelyReturnToPose(handle.reachy));
+```
+
+What it does, in order:
+
+1. `reachy.setMotorMode("enabled")` - safe since daemon PR
+   [#1138](https://github.com/pollen-robotics/reachy_mini/pull/1138)
+   (torque-on now pins all targets to the present pose before flipping).
+2. Reads `reachy.robotState` for the current pose snapshot.
+3. Computes `scaledDuration(current, target, preset)`.
+4. Dispatches `reachy.gotoTarget({ ...target, duration })`.
+
+Returns the `ScaledDurationResult` **synchronously after dispatching** -
+does NOT await completion. If you need to await the motion finishing,
+subscribe to the `state` event or `await sleep(plan.duration * 1000)`.
+
+Default target is `INIT_POSE`:
+
+```ts
+import { INIT_POSE } from "@pollen-robotics/reachy-mini-sdk/animation";
+
+// INIT_POSE.head     : identity 4×4 matrix (np.eye(4) in daemon parlance)
+// INIT_POSE.antennas : [-0.1745, 0.1745]  ≈  ±10° outward (anti-resonance offset, PR #952)
+// INIT_POSE.body_yaw : 0
+```
+
+Override for app-specific rest poses:
+
+```ts
+handle.onLeave(() =>
+    safelyReturnToPose(handle.reachy, {
+        target: { head: customHeadMatrix, antennas: [0, 0], body_yaw: 0 },
+    })
+);
+```
+
+**Safe to call when the data channel is closed.** Every underlying SDK
+call swallows "channel closed" errors silently; the planned
+`ScaledDurationResult` is still returned so you can log the move that
+would have happened.
+
+### 14.4 Standalone exit hooks (`installShutdownHandler`)
+
+> **Host-shell apps: stop. Use `handle.onLeave()` from `connectToHost()`
+> instead** - it integrates with the host's leave-protocol budget and
+> avoids double-firing. Mixing the two dispatches `safelyReturnToPose`
+> twice on close.
+
+`installShutdownHandler` is for **standalone apps** (test benches,
+custom dashboards, anything that doesn't go through `mountHost()`):
+
+```ts
+import { installShutdownHandler } from "@pollen-robotics/reachy-mini-sdk/animation";
+
+const reachy = new ReachyMini({ appName: "my-bench" });
+await reachy.authenticate();
+await reachy.connect();
+// ...pick robot, startSession...
+installShutdownHandler(reachy);
+```
+
+What it does:
+
+- Wires `pagehide` AND `beforeunload`. Both can fire on a real tab
+  close, but in different scenarios - mobile Safari only fires
+  `pagehide`. Wiring both is necessary for cross-browser coverage.
+- Reentry-guards so `safelyReturnToPose` doesn't dispatch twice when
+  both handlers fire on the same close.
+- Defaults to `onlyWhenStreaming: true`: skips the goto when no session
+  is live, so a stale tab where the user never picked a robot doesn't
+  command anything on close.
+
+### 14.5 Daemon parity warning
+
+`INIT_POSE` and the magic-mm head coefficient mirror constants in the
+**Python daemon**:
+
+- `INIT_POSE.head` ↔ `Backend.INIT_HEAD_POSE` (`np.eye(4)`) in
+  `src/reachy_mini/daemon/backend/abstract.py`.
+- `INIT_POSE.antennas` ↔ `Backend.INIT_ANTENNAS_JOINT_POSITIONS`
+  (`[-0.1745, 0.1745]`).
+- The magic-mm head distance ↔
+  `src/reachy_mini/daemon/utils/interpolation.py:distance_between_poses`.
+
+**If a daemon PR changes any of these, the JS side must follow in the
+same release.** `ts/animation/presets.ts` calls this out at the top of
+each constant; respect it. Both `INIT_POSE` and
+`DEFAULT_SCALED_DURATION_PRESET` are deep-frozen on the JS side so apps
+can't accidentally drift via `INIT_POSE.head[0] = 0` (mutations throw in
+strict mode, silently no-op otherwise).
+
+### 14.6 Anti-patterns
+
+| Don't | Do |
+|---|---|
+| Re-implement `distanceBetweenPoses` / `scaledDuration` in your app. | Import from `/animation`. The lib exists exactly because three apps did this and drifted. |
+| Mix `installShutdownHandler` and `onLeave` in a host-shell app. | `onLeave` only. They both dispatch `safelyReturnToPose` and step on each other. |
+| Call `reachy.stopSession()` inside your `onLeave`. | Let the host tear down. Do app-specific cleanup (return-to-pose, close audio, close sockets) and return. |
+| Mutate `INIT_POSE` or `DEFAULT_SCALED_DURATION_PRESET`. | They're deep-frozen; spread to derive a variant. |
+| `await safelyReturnToPose(...)` expecting the move to complete. | It resolves after **dispatch**, not after motion finishes. `await sleep(plan.duration * 1000)` or subscribe to `state` if you need to wait. |
+| Carry degrees through your motion code. | Convert at the UI boundary; speak radians + magic-mm everywhere below it. |
+| Pass `null` head / antennas / body_yaw to opt a channel out of a `gotoTarget`. | Use `PartialPose` and **omit** the channel. The SDK treats omission as "hold previous target". |
