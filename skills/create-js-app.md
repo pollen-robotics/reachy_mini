@@ -69,12 +69,14 @@ contract - your app is agnostic of everything else.
 
 ## Procedure
 
-### Step 1: Write `plan.md` first
+### Step 1: Align on the goal (plan optional)
 
-Before any code, create `plan.md` in the app directory: what the user
-wants, your robot choreography (which gestures map to which states), the
-UI, and any open questions. Wait for answers before scaffolding. (Same
-rule as Python apps.)
+Make sure you understand what the user wants, the robot choreography
+(which gestures map to which states), and the UI. For anything beyond a
+trivial app, jotting a short `plan.md` and confirming open questions
+before scaffolding is helpful - but it's optional, not a gate. If the
+ask is clear or the user just wants to vibe-code, skip the plan and go
+straight to scaffolding.
 
 ### Step 2: Pick the path
 
@@ -207,7 +209,6 @@ Never commit `dist/`. Full deploy details + FAQ: guide §11.
 
 ## Definition of Done
 
-- [ ] `plan.md` written and approved before coding.
 - [ ] `npm run build` passes clean (no TS errors).
 - [ ] App goes through `mountHost` / `connectToHost` - zero auth/picker code.
 - [ ] `onLeave` registered with `safelyReturnToPose`.
