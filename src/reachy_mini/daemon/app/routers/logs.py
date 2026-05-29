@@ -8,6 +8,8 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from reachy_mini.daemon import log_stream
+
 router = APIRouter(prefix="/logs")
 logger = logging.getLogger(__name__)
 
@@ -82,15 +84,27 @@ async def websocket_daemon_logs(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
     except FileNotFoundError:
-        # journalctl not available
-        error_msg = (
-            "ERROR: journalctl command not found. This feature requires systemd."
-        )
-        logger.error(error_msg)
+        # No journalctl on this host (developer machine, desktop or mockup
+        # daemon, any non-systemd Linux). Fall back to the daemon's
+        # in-process log buffer so the feature still works off-robot.
+        logger.info("journalctl unavailable; streaming in-memory daemon logs instead")
         try:
-            await websocket.send_text(error_msg)
-        except Exception:
-            pass
+            async for line in log_stream.stream(idle_keepalive=1.0):
+                # Keepalive ticks (None) double as a disconnect probe.
+                try:
+                    await websocket.send_text(line if line is not None else "")
+                except Exception:
+                    break
+        except RuntimeError:
+            # Buffer was never installed: preserve the historical message.
+            error_msg = (
+                "ERROR: journalctl command not found. This feature requires systemd."
+            )
+            logger.error(error_msg)
+            try:
+                await websocket.send_text(error_msg)
+            except Exception:
+                pass
     except Exception as e:
         error_msg = f"ERROR: Failed to stream logs: {str(e)}"
         logger.error(error_msg)

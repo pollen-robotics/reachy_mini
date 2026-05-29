@@ -24,6 +24,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
+from reachy_mini.daemon import log_stream
 from reachy_mini.io.protocol import (
     AnyCommand,
     AppendRecordCmd,
@@ -1836,9 +1837,11 @@ class Backend:
                     stderr=asyncio.subprocess.STDOUT,
                 )
             except FileNotFoundError:
-                send_response(
-                    LogStreamErrorMsg(error="journalctl not found").model_dump()
-                )
+                # No journalctl on this host (developer machine, desktop or
+                # mockup daemon, any non-systemd Linux). Fall back to the
+                # daemon's in-process log buffer so the feature still works
+                # off-robot. See reachy_mini.daemon.log_stream.
+                await self._stream_in_memory_logs(send_response)
                 return
 
             assert process.stdout is not None
@@ -1878,6 +1881,27 @@ class Backend:
                 except asyncio.TimeoutError:
                     process.kill()
                     await process.wait()
+
+    async def _stream_in_memory_logs(
+        self,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Stream the daemon's in-process log buffer (no-journalctl fallback).
+
+        Used on hosts without systemd. Lines are formatted identically to
+        the journalctl path (ISO timestamp split off the rest of the line).
+        """
+        try:
+            async for line in log_stream.stream():
+                ts, sep, rest = line.partition(" ")
+                if not sep:
+                    ts, rest = "", line
+                send_response(LogLineMsg(timestamp=ts, line=rest).model_dump())
+        except asyncio.CancelledError:
+            raise
+        except RuntimeError:
+            # Buffer never installed: preserve the historical error.
+            send_response(LogStreamErrorMsg(error="journalctl not found").model_dump())
 
     async def _async_goto(
         self,
