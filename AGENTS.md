@@ -144,6 +144,8 @@ Browser apps that drive a Reachy Mini over WebRTC, deployed as Hugging Face Spac
 - **Bidirectional media** - robot camera/mic → browser; optionally user's mic → robot speaker.
 - **Free OAuth + robot picker + top bar + leave flow** via the host shell (`@pollen-robotics/reachy-mini-sdk/host`). You only write the app's UI; use any framework you want inside the iframe.
 
+> **Agent shortcut**: to scaffold a JS app fast (any author profile, "vibe coding"), read [`skills/create-js-app.md`](skills/create-js-app.md) first - it gives the golden path, the Always/Ask-First/Never boundaries, a copy-paste scaffold with animation best-practices pre-wired, and a definition of done. Use [`ts/APP_CREATION_GUIDE.md`](ts/APP_CREATION_GUIDE.md) as the deep reference it points into.
+
 ### Clone a reference app and trim
 
 | Reference app | Stack | Use it for |
@@ -270,7 +272,8 @@ Read these files in `skills/` when you need detailed knowledge:
 | Skill | When to use |
 |-------|-------------|
 | **setup-environment.md** | First session, no `agents.local.md` exists |
-| **create-app.md** | Creating a new app with `reachy-mini-app-assistant` |
+| **create-js-app.md** | Creating a browser/JS app (HF Space, host shell + SDK) - the agent-first golden path for vibe-coding shareable apps |
+| **create-app.md** | Creating a new on-robot Python app with `reachy-mini-app-assistant` |
 | **control-loops.md** | Building real-time reactive apps (tracking, games) |
 | **motion-philosophy.md** | Choosing between `goto_target` and `set_target` |
 | **safe-torque.md** | Enabling/disabling motors without jerky motion |
