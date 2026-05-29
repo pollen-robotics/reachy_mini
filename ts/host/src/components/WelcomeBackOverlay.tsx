@@ -31,6 +31,14 @@ import { DURATION, FONT_WEIGHT, TYPO } from '../lib/tokens';
  *  celebratory beat land before the picker takes over. */
 const VISIBLE_MS = 3400;
 
+/** Reserved height of the content block BELOW the logo ("Hello, X" +
+ *  subtitle here, heading + spinner in `PostOAuthSplash`). Both
+ *  overlays pin the SAME value and centre their content within it, so
+ *  the logo above sits at the exact same Y in both and does NOT jump
+ *  at the splash → welcome cut. KEEP IN LOCKSTEP with
+ *  `PostOAuthSplash`'s constant. */
+const CONTENT_MIN_HEIGHT = 72;
+
 /** Pop-in keyframes used to stagger the entrance of the logo and
  *  headline. Slight overshoot via the cubic-bezier gives the
  *  motion an "earned" feel rather than a dry fade. */
@@ -103,10 +111,20 @@ export function WelcomeBackOverlay({
             height: 72,
             mb: 3,
             display: 'block',
-            animation: `${popInKeyframes} 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both`,
+            // Intentionally NOT animated. This overlay takes over from
+            // `PostOAuthSplash`, which already shows the SAME logo at the
+            // SAME size and position. Replaying an entrance animation here
+            // makes the logo visibly "re-pop" at the hand-off; keeping it
+            // static reads as one continuous logo while only the text
+            // (below) swaps in. The entrance motion lives on the text.
           }}
         />
-        <Stack alignItems="center" spacing={0.5}>
+        <Stack
+          alignItems="center"
+          justifyContent="center"
+          spacing={0.5}
+          sx={{ minHeight: CONTENT_MIN_HEIGHT }}
+        >
           <Typography
             component="h1"
             sx={{
