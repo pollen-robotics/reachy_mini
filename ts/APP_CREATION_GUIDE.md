@@ -46,6 +46,11 @@ app's UI** and nothing else.
 9. [Local dev: HF token vs OAuth redirect](#9-local-dev)
 10. [SDK version pinning](#10-sdk-version-pinning)
 11. [Deploying to Hugging Face Spaces](#11-deploying-to-hugging-face-spaces)
+    1. [Required frontmatter](#111-required-frontmatter)
+    2. [Build and push](#112-build-and-push)
+    3. [What HF does on build + serve](#113-what-hf-does-on-build--serve)
+    4. [Cache busting](#114-cache-busting)
+    5. [Alternative: bare HTML + CDN, no bundler](#115-alternative-bare-html--cdn-no-bundler)
 12. [FAQ and common pitfalls](#12-faq-and-common-pitfalls)
 13. [Architecture reference (host ↔ embed contract)](#13-architecture-reference-host--embed-contract)
     1. [Roles: app · host · embed](#131-roles-app--host--embed)
@@ -104,7 +109,7 @@ Pick the reference closest to your needs and clone its repo from Hugging Face:
 
 | Reference app                       | Stack                       | Use it for                                  |
 |-------------------------------------|-----------------------------|---------------------------------------------|
-| [`pollen-robotics/reachy_mini_minimal_conversation`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation) | **Vanilla TS + Vite**       | Smallest runtime, no framework              |
+| [`pollen-robotics/reachy_mini_minimal_conversation`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation) | **Vanilla TS + Vite**       | Smallest bundled runtime, no framework      |
 | [`pollen-robotics/reachy_mini_emotions`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions)                         | React 19 + MUI 7 + Vite     | UI-rich app with rich components / theming  |
 | [`pollen-robotics/reachy_mini_telepresence`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence)                 | React 19 + MUI 7 + Vite     | App with camera / media streams             |
 
@@ -121,6 +126,10 @@ npm run dev
 
 All three reference apps pin `@pollen-robotics/reachy-mini-sdk` to
 the same RC version in their `package.json` - see [§10 SDK version pinning](#10-sdk-version-pinning).
+
+> **Prefer a no-build path?** You can also ship the app as a single
+> `index.html` with the SDK loaded from a CDN. No `package.json`, no
+> build step. See [§11.5](#115-alternative-bare-html--cdn-no-bundler).
 
 ---
 
@@ -672,9 +681,22 @@ intentionally, and re-test against a live robot before shipping.
 ## 11. Deploying to Hugging Face Spaces
 
 > Reachy Mini JS apps ship as **`sdk: static`** Hugging Face Spaces.
-> HF serves the Vite build straight from its CDN and replaces
-> `__OAUTH_CLIENT_ID__` and friends at file-serve time, because
-> `hf_oauth: true` is set in the README frontmatter.
+> Two equally valid paths, pick based on your needs:
+>
+> 1. **Bundled (Vite + TypeScript, HF-side build)** - §11.1-§11.4. The
+>    default for production. You push source only; HF runs
+>    `app_build_command` on its builder, serves the resulting `app_file`
+>    from its CDN, and replaces `__OAUTH_CLIENT_ID__` and friends at
+>    file-serve time (because `hf_oauth: true`).
+> 2. **Bare HTML + CDN (no bundler, no Node toolchain)** - §11.5. The
+>    fastest path for prototypes, learners, and single-file UIs. One
+>    `index.html`, SDK imported from jsDelivr, three files total.
+>
+> Both end up as `sdk: static` Spaces with `hf_oauth: true`. The host
+> shell, the `connectToHost()` API, and the OAuth substitution work
+> identically in both. Pick whichever fits your project; the rest of
+> this guide focuses on the bundled path because it's what production
+> apps standardise on.
 
 ### 11.1 Required frontmatter
 
@@ -685,6 +707,8 @@ emoji: 🤖
 colorFrom: yellow
 colorTo: red
 sdk: static
+app_build_command: npm ci && npm run build   # HF runs this on its builder
+app_file: dist/index.html                     # HF serves the build output as entry
 pinned: false
 hf_oauth: true
 short_description: One-line description shown in the mobile catalog.
@@ -694,53 +718,110 @@ tags:
 ---
 ```
 
-- `sdk: static` is what makes HF serve your `dist/` from its CDN.
-- `hf_oauth: true` is what triggers `__OAUTH_CLIENT_ID__` substitution.
+- `sdk: static` is the HF Space type. Combined with `app_build_command`
+  it triggers a one-shot build container on every push.
+- `app_build_command` is the shell command HF runs on its builder. The
+  canonical value is `npm ci && npm run build`. Build logs are visible
+  in the Space's "Logs" tab.
+- `app_file` tells HF which file to serve as the entry point **after the
+  build completes**. For a Vite-built SPA that's `dist/index.html`.
+- `hf_oauth: true` is what triggers `__OAUTH_CLIENT_ID__` substitution
+  inside HTML files in the served output (post-build).
 - The **`reachy_mini_js_app` tag is mandatory** for mobile-catalog
   discovery. The catalog API filters on this exact string.
 - Apps in the `pollen-robotics/*` namespace are automatically tagged
   as "official" in the catalog (see [§13.2 App identity & official apps](#132-app-identity--official-apps)); no extra config.
 
-### 11.2 Build and push
+> **`short_description` is hard-capped at 60 characters** by the Hub's
+> YAML validator. The pre-receive hook rejects the push with a clear
+> error if you overshoot; trim and re-commit.
 
-```bash
-# 1. Build locally
-npm install
-npm run build
-# → dist/  (contains index.html with the __OAUTH_CLIENT_ID__ placeholder
-#    intact, your bundled JS, and dist/icon.svg copied from public/)
+**Minimum `.gitignore` for a Space repo.** Because the build runs on
+HF, the source tree must NOT commit build artifacts:
 
-# 2. Create the Space and clone it next to your source tree
-hf repos create <app-name> --repo-type space --space-sdk static
-git clone https://huggingface.co/spaces/<username>/<app-name> ../<app-name>-space
-
-# 3. Stage the Space contents:
-#    - README.md (the frontmatter)
-#    - dist/...  (served at the Space root by HF's CDN)
-#    - public/icon.svg duplicated at the repo path the mobile catalog
-#      API matches (HF's `siblings` listing only sees committed files,
-#      not the Vite-emitted dist/icon.svg).
-cp README.md ../<app-name>-space/
-cp -R dist/. ../<app-name>-space/
-mkdir -p ../<app-name>-space/public
-cp public/icon.svg ../<app-name>-space/public/
-# (also cp public/icon.png if you ship a raster fallback)
-
-# 4. Push
-cd ../<app-name>-space
-git add -A && git commit -m "Initial deploy" && git push
+```
+node_modules/
+dist/
+.env
+.env.local
+.DS_Store
 ```
 
-### 11.3 What HF does at serve time
+> The legacy two-folder, "build-locally-and-push-dist" pattern (one
+> source repo + one separate `*-space` clone) is **deprecated**.
+> Source-only push is now the supported path. The reference apps
+> already follow it.
 
-- Substitutes `__OAUTH_CLIENT_ID__`, `__OAUTH_SCOPES__`,
-  `__SPACE_HOST__`, and `__SPACE_ID__` inside any `.html` file at the
-  Space root (because `hf_oauth: true`).
-- Serves the rest of `dist/` as static assets via its CDN (immutable
-  caching honours the hashed filenames Vite emits).
-- Indexes `siblings` for the mobile catalog probe (which is why you
-  need `public/icon.svg` committed at the repo path, not just inside
-  `dist/`).
+### 11.2 Build and push
+
+Your source tree IS your Space repo. One folder, one git history.
+
+```bash
+# 1. Sanity-check that the build works locally before pushing.
+#    HF will replay this exact command on its builder.
+npm ci
+npm run build
+# → dist/ contains the build output. It stays gitignored.
+
+# 2. Create the Space (idempotent; skip on "already exists").
+hf repos create <app-name> --repo-type space --space-sdk static
+
+# 3. Add the Space as a git remote and push the source tree.
+git init -b main             # if your source tree isn't a git repo yet
+git remote add space git@hf.co:spaces/<username>/<app-name>
+git add -A
+git commit -m "feat: initial deploy"
+git push -u space main
+```
+
+What you just pushed:
+
+- `README.md` (the frontmatter, including `app_build_command` + `app_file`).
+- `index.html` (the source entry, references `/src/dispatch.ts`).
+- `package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts`.
+- `src/` (your `dispatch.ts`, `embed.{ts,tsx}`, styles, helpers).
+- `public/icon.svg` (and optional `public/icon.png` fallback).
+
+What HF does on receive:
+
+1. Runs `npm ci && npm run build` in a one-shot build container.
+2. Captures the build output at `dist/`.
+3. Substitutes `__OAUTH_CLIENT_ID__` and friends in any `.html` inside the
+   served output (because `hf_oauth: true`).
+4. Serves `dist/index.html` as the entry point at the Space root URL;
+   serves the rest of `dist/` (the hashed bundles in `dist/assets/`) as
+   static assets via the CDN.
+
+Build logs are streamed to the Space's "Logs" tab. If the build fails,
+the Space stays on the previous successful build.
+
+> **Don't commit `dist/`.** If you push a stale local build, HF still
+> runs `app_build_command` and overwrites it - but you've polluted the
+> git history with megabytes of build artifacts. Keep `dist/` gitignored.
+
+### 11.3 What HF does on build + serve
+
+On `git push`, HF runs (in this order):
+
+1. **Build step**: spins up a one-shot Node container, runs
+   `app_build_command` (the canonical `npm ci && npm run build`) on
+   the committed source tree. The container is discarded on completion;
+   only the build output survives, captured at the path your build tool
+   emits (`dist/` for Vite).
+2. **OAuth placeholder substitution**: in every `.html` file inside the
+   served output, replaces `__OAUTH_CLIENT_ID__`, `__OAUTH_SCOPES__`,
+   `__SPACE_HOST__`, and `__SPACE_ID__` with the values HF provisioned
+   for the Space (because `hf_oauth: true`).
+3. **CDN serve**: serves `app_file` (typically `dist/index.html`) as
+   the Space root URL; serves the rest of the build output as static
+   assets (immutable caching honours the hashed filenames Vite emits).
+4. **Catalog indexing**: indexes the committed `siblings` (the source
+   files in git, NOT the build output) for the mobile-catalog probe.
+   That's why `public/icon.svg` must be committed at the source repo
+   path - the catalog API lists git-tracked files, not the CDN.
+
+Build failures don't take down a working Space: HF keeps serving the
+previous successful build until a new build succeeds.
 
 ### 11.4 Cache busting
 
@@ -750,6 +831,201 @@ re-resolve the Space:
 ```bash
 git commit --allow-empty -m "chore: bust HF Spaces cache" && git push
 ```
+
+### 11.5 Alternative: bare HTML + CDN, no bundler
+
+If you don't want a Node toolchain, prefer plain JS, or are shipping a
+one-off prototype, you can deploy a single `index.html` that imports
+the SDK from a CDN. No `package.json`, no `app_build_command`, no
+build step. HF serves the repo root as-is.
+
+**Trade-off summary**
+
+| | Bundled (default, §11.1-§11.4) | Bare HTML + CDN |
+|---|---|---|
+| Toolchain on your machine | Node + npm | Browser only |
+| TypeScript | Yes | No (or self-hosted `tsc` build) |
+| Cold start | Faster (pre-bundled, hashed CDN cache) | Slower (jsDelivr bundles JS on first hit) |
+| Iteration loop in prod | `git push` -> wait for HF build (~30-60 s) | `git push` -> live immediately |
+| Best for | Production, multi-file TS apps, npm deps | Prototypes, learners, single-file UIs, demos |
+
+**Two sub-variants of the bare-HTML path**
+
+There are two patterns in the wild, both `sdk: static`, both no-build:
+
+| Sub-variant | SDK import | Host shell | OAuth handled by |
+|---|---|---|---|
+| **Modern (recommended for new apps)** | `cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@<sha>/+esm` - same npm package as the bundled path, just served from the CDN | Yes (`mountHost` + `connectToHost`) | The host shell (sign-in, picker, top bar, end-session - all free) |
+| **Legacy single-file (pre-host-shell)** | `cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@<tag>/js/reachy-mini.js` - single-file SDK bundle from a GitHub tag | No | The SDK itself (`robot.login()` / `robot.authenticate()`) plus your own picker and gate UI |
+
+Both sub-variants share **everything that matters at runtime** - the
+motion API (`setTarget`, `setMotorMode`, `gotoTarget`, `setHeadRpyDeg`,
+`setAntennasDeg`, etc.), the WebRTC media flow, the OAuth scopes -
+because they target the same robot daemon over the same data-channel
+protocol. They differ only in who renders the sign-in screen, the
+robot picker, and the top bar: the host shell does it for you on the
+modern sub-variant; you draw it yourself on the legacy sub-variant.
+
+For **new** apps, default to the modern sub-variant: less code, free
+top bar, mobile-catalog ready out of the box. The legacy sub-variant
+remains valid if you want full control over the pre-session UI
+(custom welcome screen, animated splash, branded gate, etc.) and are
+willing to maintain that surface yourself.
+
+**Minimum frontmatter** (drop `app_build_command` and `app_file`):
+
+```yaml
+---
+title: My Bare App
+emoji: 🤖
+colorFrom: yellow
+colorTo: red
+sdk: static
+pinned: false
+hf_oauth: true
+short_description: Reachy Mini app, no bundler.
+tags:
+  - reachy_mini
+  - reachy_mini_js_app
+---
+```
+
+**Minimum file layout** (3 files):
+
+```
+my-bare-app/
+├── README.md         # frontmatter above
+├── index.html        # your app
+└── style.css         # optional
+```
+
+**Importing the SDK from a CDN**
+
+Pin to an exact build SHA - **the same string you would use in
+`package.json`** (see [§10 SDK version pinning](#10-sdk-version-pinning)).
+jsDelivr's `/+esm` suffix tells the CDN to bundle the package to ESM at
+the edge:
+
+```html
+<script type="module">
+  import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c/+esm";
+  import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c/host/dist/entry/auto.js";
+  import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c/host/dist/entry/embed.js";
+
+  window.ReachyMini = ReachyMini;
+  window.dispatchEvent(new Event("reachymini:ready"));
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("embedded") === "1") {
+    const handle = await connectToHost();
+    /* render your app, use handle.reachy.setHeadRpyDeg(...) etc. */
+  } else {
+    mountHost({ appName: "My Bare App", appEmoji: "🤖" });
+  }
+</script>
+```
+
+Pair with `<link rel="modulepreload" href="...">` tags in `<head>` for
+both module URLs to warmup the CDN fetch during HTML parse. This shaves
+a few hundred ms off cold-start on mobile networks.
+
+The `__OAUTH_CLIENT_ID__` substitution block from
+[§3.1](#31-indexhtml) is **still required** in your `index.html` -
+that's what wires HF OAuth into the SDK at runtime. The host shell
+(when reached via `mountHost`) handles the rest of the OAuth flow
+identically to the bundled path.
+
+**Scaling up without a bundler**
+
+When a single-file `index.html` becomes hard to navigate, split your
+code into local ES modules under `lib/` and/or `views/` and let the
+browser resolve the `import` graph natively. Common, lightweight
+patterns that scale well at this size:
+
+- A tiny custom state store (`state.js` exposing a mutable object plus
+  a `render()` pointer the views call after mutating it) - avoids
+  pulling in a framework just for re-render.
+- Factory functions that close over a shared SDK handle
+  (`createMotorSubsystem(robot)`, `createGate({ robot })`, etc.) so
+  views don't have to thread the handle through props.
+- `IndexedDB` for any persistence the app needs (recorded moves,
+  user settings); no Node deps required.
+- The `@huggingface/hub` ESM build from jsDelivr if you want Hub
+  dataset upload / download without npm.
+
+No transpile, no bundle, just static `import` statements between
+sibling files. The architecture transfers cleanly between the two
+sub-variants - swap the SDK import URL and route through
+`connectToHost` instead of instantiating the SDK directly (see the
+migration recipe below).
+
+**Migrating a legacy single-file SDK app to the modern host shell**
+
+If your existing app imports the SDK as
+`https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@<tag>/js/reachy-mini.js`
+and rolls its own sign-in and picker UI, you can graduate to the host
+shell without touching your motion code. The four-step recipe:
+
+1. **Swap the SDK import URL.** Replace your `/gh/.../js/reachy-mini.js`
+   import with the npm-CDN equivalent, and add the two host imports:
+
+   ```js
+   // BEFORE (legacy single-file)
+   import { ReachyMini } from "https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@v1.7.2/js/reachy-mini.js";
+
+   // AFTER (modern host shell, same SDK runtime API)
+   import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c/+esm";
+   import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c/host/dist/entry/auto.js";
+   import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c/host/dist/entry/embed.js";
+   ```
+
+2. **Branch on `?embedded=1`.** Wrap your existing app boot in:
+
+   ```js
+   window.ReachyMini = ReachyMini;
+   window.dispatchEvent(new Event("reachymini:ready"));
+
+   if (new URLSearchParams(location.search).get("embedded") === "1") {
+     // Inside the host iframe: the robot is already authenticated,
+     // picked, and streaming. Skip your own gate / picker entirely.
+     const handle = await connectToHost();
+     const robot = handle.reachy;          // same object your app already uses
+     // ...rest of your app code, unchanged
+     handle.onLeave(() => { /* your cleanup */ });
+   } else {
+     // Standalone visit: render the shell. It will iframe this same
+     // page with ?embedded=1 once the user picks a robot.
+     mountHost({ appName: "Your App", appEmoji: "🤖" });
+   }
+   ```
+
+3. **Delete the dead UI**: your sign-in card, your robot picker, any
+   "Sign out" / "End session" affordance, any `robotsChanged` listener
+   that drove a picker list. The host shell renders all of these
+   outside your iframe.
+
+4. **Keep your motion code exactly as-is.** `robot.setTarget(...)`,
+   `robot.setMotorMode(...)`, `robot.gotoTarget(...)`, `robot.setHeadRpyDeg(...)`,
+   `robot.setAntennasDeg(...)` - identical method signatures on both
+   SDKs. The recorded-move API (`playMove`, `uploadAudio`, `cancelMove`)
+   only exists on the modern SDK; if you weren't using it, nothing
+   changes. If you reached into private fields like `robot._pc`
+   (RTCPeerConnection), prefer the public alternatives:
+   `robot.attachVideo(videoEl)` for video, `enableMicrophone: true` on
+   `mountHost` for bidirectional audio.
+
+Your `README.md` frontmatter doesn't need any changes: `sdk: static`
+and `hf_oauth: true` work for both variants. You can still skip
+`app_build_command` / `app_file` since you're not adding a build step.
+
+**When to graduate to Vite + TS (§11.1-§11.4)**
+
+Switch to the bundled path when any of these become true:
+- You want TypeScript with strict checks.
+- The app loads more than ~10 source files (the CDN waterfall adds up).
+- You want hot reload in dev (`npm run dev`).
+- You need npm packages other than the SDK (jsDelivr doesn't ship every package well).
+- Page-weight matters and you want tree-shaking + Brotli on hashed bundles.
 
 ---
 
@@ -858,6 +1134,25 @@ Three things must be true simultaneously:
    in `dist/`). The catalog probe inspects `siblings`, which is a
    listing of committed files, not served URLs.
 3. The Space is public (or the requesting user has access).
+
+### "My HF build failed - where are the logs?"
+
+The Space's **Logs** tab. With `sdk: static` + `app_build_command`, HF
+streams the build container's stdout/stderr there in real time. Common
+failures and where to look:
+
+- **`npm ci` peer / lockfile mismatch**: regenerate `package-lock.json`
+  locally (`rm package-lock.json && npm install`), commit, push again.
+- **`tsc` errors**: same TS errors as `npm run build` locally - reproduce
+  by running the exact `app_build_command` on your laptop.
+- **Missing `app_file` after build**: HF can't find what you told it to
+  serve. Verify `app_file: dist/index.html` matches your Vite output
+  path; if you customised `build.outDir`, update `app_file` too.
+- **`short_description` over 60 chars**: rejected by the pre-receive
+  hook before the build even starts. Trim and re-push.
+
+While the build is failing, HF keeps serving the **previous** successful
+build. Your URL doesn't 404 unless you've never successfully built.
 
 ### "Where do I see if my app crashed at boot?"
 

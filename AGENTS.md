@@ -144,6 +144,8 @@ Browser apps that drive a Reachy Mini over WebRTC, deployed as Hugging Face Spac
 - **Bidirectional media** - robot camera/mic → browser; optionally user's mic → robot speaker.
 - **Free OAuth + robot picker + top bar + leave flow** via the host shell (`@pollen-robotics/reachy-mini-sdk/host`). You only write the app's UI; use any framework you want inside the iframe.
 
+> **Agent shortcut**: to scaffold a JS app fast (any author profile, "vibe coding"), read [`skills/create-js-app.md`](skills/create-js-app.md) first - it gives the golden path, the Always/Ask-First/Never boundaries, a copy-paste scaffold with animation best-practices pre-wired, and a definition of done. Use [`ts/APP_CREATION_GUIDE.md`](ts/APP_CREATION_GUIDE.md) as the deep reference it points into.
+
 ### Clone a reference app and trim
 
 | Reference app | Stack | Use it for |
@@ -175,11 +177,16 @@ Once `connectToHost()` resolves you get a live `ReachyMini` instance (`handle.re
 
 **The host owns all teardown** - never call `reachy.stopSession()` yourself, register an `onLeave` callback instead. For the canonical `onLeave` body, see [§14.3](ts/APP_CREATION_GUIDE.md#143-safe-return-to-home-pose-safelyreturntopose).
 
-### Legacy: minimal CDN-only path (`webrtc_example`)
+### Alternative: bare HTML + CDN (no bundler)
 
-Before the host shell, JS apps were `sdk: static` HF Spaces with a single `index.html` importing the SDK directly from jsDelivr and reimplementing OAuth + picker + session lifecycle by hand. The canonical example is [`cduss/webrtc_example`](https://huggingface.co/spaces/cduss/webrtc_example).
+For prototypes, learners, or anyone who'd rather not run `npm install`, a JS app can ship as a single `index.html` that imports the SDK from jsDelivr. No `package.json`, no `app_build_command`, no build step. Two sub-variants exist in the wild:
 
-**Use this only** for one-off prototypes that don't need the host shell's surface (no top bar, no picker, no theme propagation, no mobile-catalog tile). For anything you'd share, **start from a reference app instead** - you get OAuth, picker, mobile-catalog discovery, mode-B handoff, and the entire `connectToHost()` API for free.
+- **Modern (recommended for new apps)**: import the npm SDK from `cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@<sha>/+esm` and use the host shell (`mountHost` + `connectToHost`). Same OAuth / picker / top bar / mode-B handoff as the bundled path - the host shell is identical, just loaded from the CDN instead of npm.
+- **Legacy single-file (pre-host-shell)**: import the SDK bundle from `cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@<tag>/js/reachy-mini.js`, instantiate `new ReachyMini(...)` directly, render your own picker / gate / top bar. Useful when you want full control over the pre-session UI; otherwise prefer the modern variant.
+
+The two variants are interoperable at the daemon level - they hit the same REST + WebRTC surface, so the motion API (`setTarget`, `setMotorMode`, `gotoTarget`, `setHeadRpyDeg`, `setAntennasDeg`, etc.) is identical on both. Migrating an existing legacy app to the modern host shell is a four-step swap that leaves motion code untouched.
+
+Full recipe (frontmatter, CDN imports, scaling guidance, when to graduate to Vite, legacy -> modern migration): [§11.5 of the App Creation Guide](ts/APP_CREATION_GUIDE.md#115-alternative-bare-html--cdn-no-bundler).
 
 ---
 
@@ -265,7 +272,8 @@ Read these files in `skills/` when you need detailed knowledge:
 | Skill | When to use |
 |-------|-------------|
 | **setup-environment.md** | First session, no `agents.local.md` exists |
-| **create-app.md** | Creating a new app with `reachy-mini-app-assistant` |
+| **create-js-app.md** | Creating a browser/JS app (HF Space, host shell + SDK) - the agent-first golden path for vibe-coding shareable apps |
+| **create-app.md** | Creating a new on-robot Python app with `reachy-mini-app-assistant` |
 | **control-loops.md** | Building real-time reactive apps (tracking, games) |
 | **motion-philosophy.md** | Choosing between `goto_target` and `set_target` |
 | **safe-torque.md** | Enabling/disabling motors without jerky motion |
