@@ -80,11 +80,22 @@ rule as Python apps.)
 
 | Path | Use when | Deploy |
 |------|----------|--------|
-| **TS + Vite (default)** | Almost always. Production apps, TypeScript, npm deps. | `sdk: static` + `app_build_command`, HF builds on push |
+| **TS + Vite (default)** | New app, almost always. Production, TypeScript, npm deps. | `sdk: static` + `app_build_command`, HF builds on push |
 | Bare HTML + CDN | Trivial prototype, no Node toolchain wanted | `sdk: static`, no build. See guide §11.5 |
 | Docker | Need a server / secrets / Python | Ask first. `sdk: docker`. See guide |
 
-Default to **TS + Vite** unless the user explicitly wants otherwise.
+Default to **TS + Vite** for a NEW app unless the user explicitly wants otherwise.
+
+> **Migrating an existing app? Do NOT force it onto Vite.** If the app
+> already runs as bare HTML + CDN (e.g. a single `index.html` importing
+> the SDK from jsDelivr, with its own `lib/` modules and no bundler),
+> keep it bundler-free. Adopting the host shell is a CDN-to-CDN URL swap,
+> not a rewrite: the `README.md` frontmatter stays `sdk: static` with no
+> `app_build_command` / `app_file`, the existing ES-module architecture
+> is untouched, and the motion code is unchanged. Follow the four-step
+> "Migrating a legacy single-file SDK app to the modern host shell"
+> recipe in guide §11.5. Only move to Vite later if the author actually
+> wants TypeScript, hot reload, or npm deps (see §11.5 "when to graduate").
 
 ### Step 3: Scaffold (TS + Vite golden path)
 
