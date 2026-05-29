@@ -7,9 +7,14 @@ Includes a fixed NoInputNoOutput agent for automatic Just Works pairing.
 
 import fcntl
 import hashlib
+import json
 import logging
 import os
 import subprocess
+import threading
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Callable
 
@@ -749,6 +754,34 @@ class BluetoothCommandService:
             self._journal_buffer = ""
             logger.info("Journal streaming stopped")
 
+    def _emit_update_response(self, text: str) -> bool:
+        """Push a result over the RESPONSE characteristic. Runs on the mainloop."""
+        try:
+            self.app.services[0].response_char.send_notification(text)
+        except Exception as e:
+            logger.error(f"Failed to emit BLE notification: {e}")
+        return False  # GLib.idle_add: run once
+
+    def _run_update_async(self, fn: "Callable[[], str]") -> None:
+        """Run a blocking daemon-API call off the BLE mainloop.
+
+        The dbus/GLib mainloop must never block: querying available versions
+        hits the network and ``/update/start`` proxies over HTTP. We run the
+        urllib work on a worker thread and deliver the result via a RESPONSE
+        notification (marshalled back onto the mainloop with GLib.idle_add).
+        WriteValue returns an immediate ``OK: working`` ack; the client awaits
+        the real result on the RESPONSE characteristic.
+        """
+
+        def worker() -> None:
+            try:
+                result = fn()
+            except Exception as e:
+                result = f"ERROR: {e}"
+            GLib.idle_add(self._emit_update_response, result)
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _handle_command(self, value: bytes) -> str:
         command_str = value.decode("utf-8").strip()
         if command_str.upper() != "JOURNAL_READ":
@@ -778,6 +811,33 @@ class BluetoothCommandService:
                 return "OK: Connected"
             else:
                 return "ERROR: Incorrect PIN"
+
+        # Daemon software update over BLE. Proxies to the daemon's existing
+        # /update/* API on localhost (no logic duplicated). Updating the
+        # daemon is privileged, so all three require a prior PIN auth. They
+        # run OFF the mainloop via _run_update_async and deliver the real
+        # result over the RESPONSE notification; WriteValue returns the
+        # "OK: working" ack immediately. Unlike CMD_*, they do NOT reset
+        # self.connected, so a client can chain check -> start -> poll info.
+        # NB: /update/start-from-ref (arbitrary git ref) is intentionally NOT
+        # exposed over BLE — it's a much larger attack surface than updating
+        # to the official published release.
+        elif command_str.upper() == "UPDATE_CHECK":
+            if not self.connected:
+                return "ERROR: Not connected. Please authenticate first."
+            self._run_update_async(_update_check)
+            return "OK: working"
+        elif command_str.upper() == "UPDATE_START":
+            if not self.connected:
+                return "ERROR: Not connected. Please authenticate first."
+            self._run_update_async(_update_start)
+            return "OK: working"
+        elif command_str.upper().startswith("UPDATE_INFO "):
+            if not self.connected:
+                return "ERROR: Not connected. Please authenticate first."
+            job_id = command_str[len("UPDATE_INFO ") :].strip()
+            self._run_update_async(lambda: _update_info(job_id))
+            return "OK: working"
 
         # else if command starts with "CMD_xxxxx" check if  commands directory contains the said named script command xxxx.sh and run its, show output or/and send to read
         elif command_str.startswith("CMD_"):
@@ -968,6 +1028,110 @@ def get_hotspot_ip() -> str:
         except (IndexError, AttributeError):
             return "0.0.0.0"
     return "0.0.0.0"
+
+
+# =======================
+# Daemon software update over BLE  (proxy to the daemon's /update/* API)
+# =======================
+# This service runs under the SYSTEM python (see install_service_bluetooth.sh),
+# not the daemon venv, so it stays stdlib-only (`urllib`) and duplicates no
+# update logic — it relays to the daemon's existing /update/* routes on
+# localhost. Helpers are `_update`-prefixed so this can land as its own PR
+# without colliding with other BLE-proxy features.
+
+_UPDATE_DAEMON_URL = "http://127.0.0.1:8000"
+# /update/available hits the network (PyPI), so allow a generous timeout.
+_UPDATE_HTTP_TIMEOUT_S = 30.0
+
+
+def _update_request(
+    method: str,
+    path: str,
+    params: "dict[str, str] | None" = None,
+    timeout: float = _UPDATE_HTTP_TIMEOUT_S,
+):
+    """Local HTTP request to the daemon /update API; return parsed JSON (or str/None)."""
+    url = _UPDATE_DAEMON_URL + path
+    if params:
+        url = url + "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw = resp.read()
+        if not raw:
+            return None
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except json.JSONDecodeError:
+            return raw.decode("utf-8", errors="replace")
+
+
+def _update_check() -> str:
+    """Report whether a daemon update is available (compact JSON for BLE)."""
+    try:
+        data = _update_request("GET", "/update/available", {"pre_release": "false"})
+        rm = (data or {}).get("update", {}).get("reachy_mini", {})
+        compact = {
+            "available": rm.get("is_available"),
+            "current": rm.get("current_version"),
+            "latest": rm.get("available_version"),
+        }
+        return json.dumps(compact, separators=(",", ":"), ensure_ascii=False)
+    except urllib.error.HTTPError as e:
+        if e.code == 400:
+            return "ERROR: Update in progress"
+        return "ERROR: Check failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _update_start() -> str:
+    """Trigger the daemon update (latest published release). Returns the job id."""
+    try:
+        data = _update_request("POST", "/update/start", {"pre_release": "false"})
+        job_id = (data or {}).get("job_id") if isinstance(data, dict) else None
+        if not job_id:
+            return "ERROR: Start failed"
+        # Poll UPDATE_INFO <job_id> to follow progress.
+        return f"OK: Update started {job_id}"
+    except urllib.error.HTTPError as e:
+        # The daemon returns 400 for "No update available" / "already in progress".
+        if e.code == 400:
+            return "ERROR: No update available or already in progress"
+        return "ERROR: Start failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _update_info(job_id: str) -> str:
+    """Report the status of an update job (compact; full logs stay off BLE)."""
+    job_id = job_id.strip()
+    if not job_id:
+        return "ERROR: Missing job_id"
+    try:
+        data = _update_request("GET", "/update/info", {"job_id": job_id})
+        if not isinstance(data, dict):
+            return "ERROR: Unknown job"
+        logs = data.get("logs") or []
+        compact = {
+            "status": data.get("status"),
+            "lines": len(logs),
+            # Only the last line — the full log can be large; use the
+            # daemon's /update/ws/logs websocket for the live stream.
+            "last": (logs[-1] if logs else "")[:160],
+        }
+        return json.dumps(compact, separators=(",", ":"), ensure_ascii=False)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return "ERROR: Unknown job"
+        return "ERROR: Info failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
 
 
 # =======================
