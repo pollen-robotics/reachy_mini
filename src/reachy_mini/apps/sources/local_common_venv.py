@@ -497,22 +497,10 @@ async def install_package(
             # Download the space
             logger.info("Attempting to download all files from space...")
 
-            # On Windows, there is a chance snapshot_download triggers an uncaught symlink
-            # exception (are_symlinks_supported falsely returns True). This is a workaround to
-            # make sure are_symlinks_supported consistently returns False before snapshot_download.
+            # On Windows, snapshot_download may attempt symlinks and fail
+            # HF_HUB_DISABLE_SYMLINKS prevents this
             if _is_windows():
-                from huggingface_hub import constants as hf_hub_constants
-                from huggingface_hub.file_download import (
-                    are_symlinks_supported,
-                    repo_folder_name,
-                )
-
-                storage_folder = os.path.join(
-                    hf_hub_constants.HF_HUB_CACHE,
-                    repo_folder_name(repo_id=repo_id, repo_type="space"),
-                )
-                os.makedirs(storage_folder, exist_ok=True)
-                are_symlinks_supported(storage_folder)
+                os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
 
             # For private spaces, we need to be careful about missing files like .gitattributes
             # snapshot_download can fail on 404 for optional git metadata files
@@ -525,7 +513,6 @@ async def install_package(
                     ".gitattributes",
                     ".gitignore",
                 ],  # Skip git metadata that may 404
-                allow_patterns=None,  # Download all other files
             )
             logger.info(f"Downloaded to: {target}")
 
