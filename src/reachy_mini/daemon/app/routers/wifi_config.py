@@ -295,7 +295,13 @@ def _current_provisioning_pubkey() -> tuple[str, str]:
     global _prov_priv, _prov_kid, _prov_created_at
     with _prov_key_lock:
         now = time.monotonic()
-        if _prov_priv is None or (now - _prov_created_at) > _PROV_KEY_TTL_S:
+        # Include `_prov_kid is None` so that after this block mypy can narrow
+        # BOTH globals to non-None (they are always set together).
+        if (
+            _prov_priv is None
+            or _prov_kid is None
+            or (now - _prov_created_at) > _PROV_KEY_TTL_S
+        ):
             _prov_priv = X25519PrivateKey.generate()
             _prov_kid = base64.urlsafe_b64encode(os.urandom(6)).decode().rstrip("=")
             _prov_created_at = now
