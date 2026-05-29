@@ -1,12 +1,25 @@
 """WiFi Configuration Routers."""
 
+import base64
 import logging
+import os
+import time
 from enum import Enum
 from threading import Lock, Thread
 
 import nmcli
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric.x25519 import (
+    X25519PrivateKey,
+    X25519PublicKey,
+)
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+from reachy_mini.utils.hardware_id import get_pin
 
 HOTSPOT_SSID = "reachy-mini-ap"
 HOTSPOT_PASSWORD = "reachy-mini"
@@ -222,6 +235,151 @@ def forget_all_wifi_networks() -> None:
                 logger.error(f"Failed to forget networks: {e}")
 
     Thread(target=forget_all).start()
+
+
+# =======================
+# Sealed WiFi provisioning over BLE
+# =======================
+# The mobile app provisions WiFi over Bluetooth without ever joining the
+# robot hotspot. The BLE service (a separate systemd unit, system Python)
+# relays opaque bytes to these routes; ALL crypto happens here, where
+# `cryptography` is available in the daemon venv.
+#
+# The WiFi password is never transmitted in cleartext over BLE (a hard
+# requirement for App Store review). Wire scheme `x25519-hkdf-sha256-aesgcm`:
+#
+#   1. Phone fetches the robot's ephemeral X25519 public key (`/wifi/prov_key`).
+#   2. Phone generates its own ephemeral X25519 keypair, does ECDH, and
+#      derives an AES-256-GCM key via HKDF-SHA256 with:
+#         salt = device PIN (the 5-char serial suffix the user already types)
+#         info = b"reachy-mini-wifi-psk-v1"
+#   3. Phone seals the PSK: AES-GCM(nonce, psk, aad=ssid) and sends
+#      {ssid, kid, epk, nonce, ct} to `/wifi/connect_sealed`.
+#   4. Daemon repeats the ECDH+HKDF (it computes the same PIN locally via
+#      get_pin()) and decrypts.
+#
+# Mixing the PIN into HKDF authenticates the channel: BLE pairing is
+# Just-Works (NoInputNoOutput hardware → no MITM-protected pairing
+# possible), so an active MITM who relays the handshake but does not know
+# the PIN cannot derive the key. Because the key ALSO depends on the ECDH
+# secret, the low-entropy PIN is not offline-brute-forceable from a passive
+# capture. AAD=ssid binds the sealed PSK to its target network (no replay
+# onto a different SSID).
+
+# Rotate the provisioning keypair periodically; an ephemeral key has no
+# long-term value, and a provisioning flow completes in seconds. A `kid`
+# mismatch (e.g. rotation mid-flow) returns 400 so the phone re-fetches.
+_PROV_KEY_TTL_S = 600.0
+_prov_key_lock = Lock()
+_prov_priv: X25519PrivateKey | None = None
+_prov_kid: str | None = None
+_prov_created_at: float = 0.0
+
+
+class SealedConnect(BaseModel):
+    """Sealed WiFi-connect payload (base64 fields, see scheme above)."""
+
+    ssid: str
+    kid: str
+    epk: str  # phone ephemeral X25519 public key, raw 32B
+    nonce: str  # AES-GCM nonce, 12B
+    ct: str  # AES-GCM ciphertext with appended 16B tag; AAD = ssid
+
+
+class _SealError(Exception):
+    """Raised when a sealed payload cannot be opened (bad enc / wrong PIN)."""
+
+
+def _current_provisioning_pubkey() -> tuple[str, str]:
+    """Return (base64 public key, kid), rotating the keypair past its TTL."""
+    global _prov_priv, _prov_kid, _prov_created_at
+    with _prov_key_lock:
+        now = time.monotonic()
+        if _prov_priv is None or (now - _prov_created_at) > _PROV_KEY_TTL_S:
+            _prov_priv = X25519PrivateKey.generate()
+            _prov_kid = base64.urlsafe_b64encode(os.urandom(6)).decode().rstrip("=")
+            _prov_created_at = now
+        pub = _prov_priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+        return base64.b64encode(pub).decode(), _prov_kid
+
+
+def _open_sealed_psk(payload: SealedConnect) -> str:
+    """Decrypt a sealed PSK. Raises _SealError on any failure."""
+    with _prov_key_lock:
+        if _prov_priv is None or payload.kid != _prov_kid:
+            raise _SealError("unknown or expired kid")
+        priv = _prov_priv
+    try:
+        epk = X25519PublicKey.from_public_bytes(base64.b64decode(payload.epk))
+        nonce = base64.b64decode(payload.nonce)
+        ct = base64.b64decode(payload.ct)
+    except Exception as e:
+        raise _SealError(f"bad encoding: {e}")
+    shared = priv.exchange(epk)
+    key = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=get_pin().encode("utf-8"),
+        info=b"reachy-mini-wifi-psk-v1",
+    ).derive(shared)
+    try:
+        psk = AESGCM(key).decrypt(nonce, ct, payload.ssid.encode("utf-8"))
+    except Exception:
+        # Wrong PIN, tampered ciphertext, or MITM without the PIN.
+        raise _SealError("authentication failed")
+    return psk.decode("utf-8")
+
+
+@router.get("/prov_key")
+def get_provisioning_key() -> dict[str, str]:
+    """Return the robot's ephemeral X25519 public key for sealed provisioning.
+
+    Public on purpose: a bare public key is useless to an attacker who does
+    not also know the device PIN (which is mixed into the key derivation).
+    """
+    pk_b64, kid = _current_provisioning_pubkey()
+    return {"kid": kid, "pk": pk_b64, "alg": "x25519-hkdf-sha256-aesgcm"}
+
+
+@router.post("/connect_sealed")
+def connect_to_wifi_network_sealed(payload: SealedConnect) -> None:
+    """Connect to a WiFi network using an encrypted password.
+
+    The plaintext password never crosses BLE or the local HTTP hop — it is
+    AES-GCM-sealed by the phone and opened here. See the scheme comment above.
+    """
+    logger.warning(f"Sealed connect request for WiFi network '{payload.ssid}'.")
+
+    if busy_lock.locked():
+        raise HTTPException(status_code=409, detail="Another operation is in progress.")
+
+    try:
+        password = _open_sealed_psk(payload)
+    except _SealError as e:
+        # 400 → BLE layer maps to "wrong PIN / bad credentials".
+        raise HTTPException(status_code=400, detail=f"decrypt_failed: {e}")
+
+    ssid = payload.ssid
+
+    def connect() -> None:
+        global error
+        with busy_lock:
+            try:
+                error = None
+                setup_wifi_connection(name=ssid, ssid=ssid, password=password)
+            except Exception as e:
+                error = e
+                logger.error(f"Failed to connect to WiFi network '{ssid}': {e}")
+                logger.info("Reverting to hotspot...")
+                remove_connection(name=ssid)
+                setup_wifi_connection(
+                    name="Hotspot",
+                    ssid=HOTSPOT_SSID,
+                    password=HOTSPOT_PASSWORD,
+                    is_hotspot=True,
+                )
+
+    Thread(target=connect).start()
 
 
 # NMCLI WRAPPERS
