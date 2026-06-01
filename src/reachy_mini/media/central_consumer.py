@@ -4,9 +4,17 @@ Counterpart to :mod:`reachy_mini.media.central_signaling_relay` — the
 daemon-side *producer* — this module is the *consumer*: a hardware-free
 client that subscribes to the central HF Space at
 ``https://pollen-robotics-reachy-mini-central.hf.space``, negotiates
-WebRTC with one robot, and exposes the decoded video frames as numpy
-arrays plus a thread-safe ``send_command`` for the bidirectional ``data``
-channel the daemon offers.
+WebRTC with one robot, and exposes:
+
+* decoded **video** frames as numpy arrays (:meth:`latest_frame`);
+* bidirectional **audio** — the robot mic decoded to mono float32 via an
+  ``on_pcm`` callback, and an outbound ``out_track`` whose audio plays out
+  the robot speaker (the daemon advertises audio as ``sendrecv``);
+* a thread-safe ``send_command`` for the ``data`` channel the daemon offers,
+  plus an ``on_command_ready`` hook for one-shot setup once it opens.
+
+All audio/command extras are optional — with none of them set this behaves
+exactly as the original video-only consumer.
 
 Use this from any cloud backend (HF Space, Cloud Run, etc.) that needs to
 read a Reachy Mini's camera and/or drive the robot via the visitor's HF
@@ -76,8 +84,10 @@ import os
 from typing import Awaitable, Callable, List, Optional, Tuple
 
 import aiohttp
+import av
 import numpy as np
 from aiortc import (
+    MediaStreamTrack,
     RTCConfiguration,
     RTCIceServer,
     RTCPeerConnection,
@@ -90,6 +100,58 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_CENTRAL_URL = "https://pollen-robotics-reachy-mini-central.hf.space"
+# Sample rate incoming mic audio is resampled to before ``on_pcm`` (mono
+# float32). 24 kHz suits most speech models; override via ``audio_sample_rate``.
+DEFAULT_AUDIO_SAMPLE_RATE = 24000
+
+
+def _patch_aiortc_dtls_ciphers() -> None:
+    """Append a cipher the robot's GStreamer ``webrtcsink`` accepts.
+
+    aiortc's default DTLS cipher list shares no cipher with the robot
+    daemon's GStreamer ``webrtcsink``, so DTLS never completes and the
+    peer connection never reaches "connected". We wrap
+    ``RTCCertificate._create_ssl_context`` to add
+    ``ECDHE-RSA-AES128-GCM-SHA256``.
+
+    Upstream fix tracked in aiortc PR #1392
+    (https://github.com/aiortc/aiortc/pull/1392); remove this shim once a
+    released aiortc negotiates a compatible cipher by default.
+    """
+    try:
+        from aiortc.rtcdtlstransport import RTCCertificate
+    except Exception as e:  # pragma: no cover
+        logger.warning("[reachy] dtls-patch: aiortc import failed: %r", e)
+        return
+    if getattr(RTCCertificate, "_reachy_cipher_patched", False):
+        return
+    try:
+        _orig = RTCCertificate._create_ssl_context
+    except AttributeError as e:
+        logger.warning("[reachy] dtls-patch: _create_ssl_context not found: %r", e)
+        return
+    ciphers = (
+        b"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:"
+        b"ECDHE-ECDSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA:"
+        b"ECDHE-RSA-AES128-GCM-SHA256"
+    )
+
+    def _patched(self, srtp_profiles):
+        ctx = _orig(self, srtp_profiles)
+        try:
+            ctx.set_cipher_list(ciphers)
+        except Exception as e:  # pragma: no cover
+            logger.warning("[reachy] dtls-patch: set_cipher_list failed: %r", e)
+        return ctx
+
+    RTCCertificate._create_ssl_context = _patched
+    RTCCertificate._reachy_cipher_patched = True
+    logger.info("[reachy] DTLS cipher list extended (+ECDHE-RSA-AES128-GCM-SHA256)")
+
+
+# Applied once at import: harmless and idempotent, and required for the
+# robot leg to complete DTLS.
+_patch_aiortc_dtls_ciphers()
 
 
 class ReachyCentralConsumer:
@@ -105,7 +167,25 @@ class ReachyCentralConsumer:
             Callable[[], Awaitable[List[RTCIceServer]]]
         ] = None,
         consumer_label: str = "reachy-mini-consumer",
+        on_pcm: Optional[Callable[[np.ndarray], None]] = None,
+        out_track: Optional[MediaStreamTrack] = None,
+        on_command_ready: Optional[Callable[[], None]] = None,
+        audio_sample_rate: int = DEFAULT_AUDIO_SAMPLE_RATE,
     ):
+        """Args (audio additions; all optional — video behaviour unchanged):
+
+        on_pcm: called with each decoded chunk of the robot's microphone as a
+            mono float32 ndarray (shape ``(n,)``) resampled to
+            ``audio_sample_rate``. When ``None``, inbound audio is ignored.
+        out_track: an :class:`aiortc.MediaStreamTrack` (``kind == "audio"``)
+            whose frames are sent to the robot speaker. Added to the peer
+            connection on the robot's sendrecv audio m-line before
+            ``createAnswer``. When ``None``, we send no audio.
+        on_command_ready: called (no args) once the robot ``data`` channel
+            opens, so callers can send one-shot setup commands — e.g.
+            ``send_command({"type": "set_wobbling", "enabled": True})``.
+        audio_sample_rate: rate the mic audio is resampled to for ``on_pcm``.
+        """
         if not hf_token:
             raise ValueError("hf_token is required for ReachyCentralConsumer")
         self._hf_token = hf_token
@@ -113,6 +193,11 @@ class ReachyCentralConsumer:
         self._robot_name = robot_name
         self._consumer_label = consumer_label
         self._ice_servers_provider = ice_servers_provider
+        self._on_pcm = on_pcm
+        self._out_track = out_track
+        self._out_track_added = False
+        self._on_command_ready = on_command_ready
+        self._audio_sample_rate = int(audio_sample_rate)
 
         # ``_target_peer_id_pinned`` is the value supplied at construction
         # (or via env). When set we never auto-rediscover. When unset we
@@ -147,6 +232,11 @@ class ReachyCentralConsumer:
         # (width, height) of the source frames as the daemon's webrtcsink
         # emits them — None until the first frame arrives.
         self._source_size: Optional[Tuple[int, int]] = None
+
+        # Inbound-audio diagnostics: decoded mic frames + total samples
+        # handed to ``on_pcm`` (at ``audio_sample_rate``, mono).
+        self._audio_frames = 0
+        self._pcm_samples = 0
 
         # Robot-side data channel ("data"), captured via pc.on("datachannel")
         # when the daemon's offer arrives. Sendrecv; we only send commands.
@@ -194,6 +284,15 @@ class ReachyCentralConsumer:
             # Loop closed mid-send; treat as channel closed.
             return False
 
+    def _on_cmd_ready(self) -> None:
+        """Robot ``data`` channel just opened — fire the caller's hook so it
+        can send one-shot setup (e.g. enable head wobbling)."""
+        if self._on_command_ready is not None:
+            try:
+                self._on_command_ready()
+            except Exception as e:
+                logger.warning("[reachy] on_command_ready hook failed: %r", e)
+
     def latest_frame(self) -> Optional[Tuple[int, np.ndarray]]:
         """Return ``(frame_id, ndarray)`` or ``None`` if no frame yet.
 
@@ -211,6 +310,8 @@ class ReachyCentralConsumer:
             "session_id": self._session_id,
             "pc_state": pc_state,
             "frames": self._frame_counter,
+            "audio_frames": self._audio_frames,
+            "pcm_samples": self._pcm_samples,
         }
 
     async def start(self) -> None:
@@ -610,9 +711,10 @@ class ReachyCentralConsumer:
         @pc.on("track")
         def _on_track(track):
             print(f"[reachy] received remote track kind={track.kind}")
-            if track.kind != "video":
-                return
-            asyncio.create_task(self._consume_video(track))
+            if track.kind == "video":
+                asyncio.create_task(self._consume_video(track))
+            elif track.kind == "audio" and self._on_pcm is not None:
+                asyncio.create_task(self._consume_audio(track))
 
         @pc.on("datachannel")
         def _on_datachannel(channel):
@@ -632,11 +734,13 @@ class ReachyCentralConsumer:
             print(f"[reachy] robot data channel attached (state={channel.readyState})")
             if channel.readyState == "open":
                 self._cmd_channel_open = True
+                self._on_cmd_ready()
 
             @channel.on("open")
             def _open():
                 self._cmd_channel_open = True
                 print("[reachy] robot data channel open")
+                self._on_cmd_ready()
 
             @channel.on("close")
             def _close():
@@ -665,6 +769,7 @@ class ReachyCentralConsumer:
 
         self._pc = pc
         self._remote_desc_set = False
+        self._out_track_added = False
         self._pending_remote_ice = []
 
     async def _fetch_ice_servers(self) -> List[RTCIceServer]:
@@ -690,6 +795,17 @@ class ReachyCentralConsumer:
         offer = RTCSessionDescription(sdp=sdp_text, type=sdp_type)
         await self._pc.setRemoteDescription(offer)
         self._remote_desc_set = True
+        # Attach our outbound audio track to the audio transceiver the robot's
+        # (sendrecv) offer just created — after setRemoteDescription and before
+        # createAnswer so it lands on the existing m-line instead of spawning a
+        # second one.
+        if self._out_track is not None and not self._out_track_added:
+            try:
+                self._pc.addTrack(self._out_track)
+                self._out_track_added = True
+                print("[reachy] added outbound audio track")
+            except Exception as e:
+                logger.warning("[reachy] addTrack(out) failed: %r", e)
         # Drain any ICE candidates that arrived before the offer.
         pending, self._pending_remote_ice = self._pending_remote_ice, []
         for c in pending:
@@ -784,6 +900,43 @@ class ReachyCentralConsumer:
             raise
         except Exception as e:
             print(f"[reachy] video consumer error: {e!r}")
+
+    async def _consume_audio(self, track) -> None:
+        """Decode the robot mic track to mono float32 at ``audio_sample_rate``
+        and hand each chunk to ``on_pcm``.
+
+        aiortc delivers Opus as 48 kHz s16 ``av.AudioFrame``s; the resampler
+        downmixes to mono and converts to ``flt`` at the requested rate.
+        """
+        resampler = av.audio.resampler.AudioResampler(
+            format="flt", layout="mono", rate=self._audio_sample_rate,
+        )
+        try:
+            while True:
+                try:
+                    frame = await track.recv()
+                except MediaStreamError:
+                    print("[reachy] audio track ended (MediaStreamError)")
+                    return
+                try:
+                    for out in resampler.resample(frame):
+                        # "flt"/mono → ndarray shape (1, samples); flatten.
+                        pcm = out.to_ndarray().reshape(-1).astype(
+                            np.float32, copy=False,
+                        )
+                        if pcm.size == 0:
+                            continue
+                        self._audio_frames += 1
+                        self._pcm_samples += int(pcm.size)
+                        if self._on_pcm is not None:
+                            self._on_pcm(pcm)
+                except Exception as e:
+                    print(f"[reachy] audio frame decode failed: {e!r}")
+                    continue
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"[reachy] audio consumer error: {e!r}")
 
     # ----------------------------------------------------------- teardown
 
