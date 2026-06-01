@@ -46,6 +46,7 @@ import { EmbedFrame } from './EmbedFrame';
 import { ErrorView } from './ErrorView';
 import { LeavingView } from './LeavingView';
 import { PickerView } from './PickerView';
+import { PostOAuthSplash } from './PostOAuthSplash';
 import { SignInView } from './SignInView';
 import { TopBar, type HostPhase } from './TopBar';
 import { WelcomeBackOverlay } from './WelcomeBackOverlay';
@@ -519,7 +520,7 @@ function ReachyHostShellNormal({
             />
           )}
 
-          {hostPhase === 'signing-in' && (
+          {hostPhase === 'signing-in' && !isPostOauthReturn && (
             <SignInView
               appName={appName}
               isLocalDevMissingConfig={isLocalDevMissingConfig}
@@ -559,6 +560,15 @@ function ReachyHostShellNormal({
             )}
         </Box>
       </Stack>
+
+      {/* OAuth return leg: cover the screen the moment we know we
+       *  came back from a redirect, so the "Continue with Hugging
+       *  Face" button never flashes while `authenticate()` resolves
+       *  the cached token. Hands off to WelcomeBackOverlay (zIndex
+       *  1300) once the username lands. */}
+      {hostPhase === 'signing-in' && isPostOauthReturn && !welcomeBackShown && (
+        <PostOAuthSplash />
+      )}
 
       {welcomeBackShown && (
         <WelcomeBackOverlay
