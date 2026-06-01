@@ -95,6 +95,12 @@ reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
 reachy-mini-app-assistant = "reachy_mini.apps.app:main"
 reachy-mini-reflash-motors = "reachy_mini.tools.reflash_motors:main"
 
+[tool.uv]
+exclude-newer = "7 days"
+
+[tool.uv.exclude-newer-package]
+"pollen_BMI088_imu_library"  = false
+
 [tool.setuptools]
 package-dir = { "" = "src" }
 include-package-data = true
