@@ -172,7 +172,10 @@ class ReachyCentralConsumer:
         on_command_ready: Optional[Callable[[], None]] = None,
         audio_sample_rate: int = DEFAULT_AUDIO_SAMPLE_RATE,
     ):
-        """Args (audio additions; all optional — video behaviour unchanged):
+        """Build a single-robot consumer.
+
+        Audio/command arguments are all optional; with none set this behaves
+        exactly as the original video-only consumer.
 
         on_pcm: called with each decoded chunk of the robot's microphone as a
             mono float32 ndarray (shape ``(n,)``) resampled to
@@ -285,8 +288,7 @@ class ReachyCentralConsumer:
             return False
 
     def _on_cmd_ready(self) -> None:
-        """Robot ``data`` channel just opened — fire the caller's hook so it
-        can send one-shot setup (e.g. enable head wobbling)."""
+        """Fire the caller's ``on_command_ready`` hook (one-shot setup on open)."""
         if self._on_command_ready is not None:
             try:
                 self._on_command_ready()
@@ -901,15 +903,16 @@ class ReachyCentralConsumer:
         except Exception as e:
             print(f"[reachy] video consumer error: {e!r}")
 
-    async def _consume_audio(self, track) -> None:
-        """Decode the robot mic track to mono float32 at ``audio_sample_rate``
-        and hand each chunk to ``on_pcm``.
+    async def _consume_audio(self, track: MediaStreamTrack) -> None:
+        """Decode the robot mic to mono float32 and hand chunks to ``on_pcm``.
 
         aiortc delivers Opus as 48 kHz s16 ``av.AudioFrame``s; the resampler
-        downmixes to mono and converts to ``flt`` at the requested rate.
+        downmixes to mono and converts to ``flt`` at ``audio_sample_rate``.
         """
         resampler = av.audio.resampler.AudioResampler(
-            format="flt", layout="mono", rate=self._audio_sample_rate,
+            format="flt",
+            layout="mono",
+            rate=self._audio_sample_rate,
         )
         try:
             while True:
@@ -921,9 +924,8 @@ class ReachyCentralConsumer:
                 try:
                     for out in resampler.resample(frame):
                         # "flt"/mono → ndarray shape (1, samples); flatten.
-                        pcm = out.to_ndarray().reshape(-1).astype(
-                            np.float32, copy=False,
-                        )
+                        arr = out.to_ndarray().reshape(-1)
+                        pcm = arr.astype(np.float32, copy=False)
                         if pcm.size == 0:
                             continue
                         self._audio_frames += 1
