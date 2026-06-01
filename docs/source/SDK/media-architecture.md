@@ -33,7 +33,14 @@ The SDK `MediaManager` selects the backend automatically:
 
 ### Web Access
 
-Thanks to WebRTC, the audio and video streams can also be accessed directly from a web browser. For instance the [desktop application](../platforms/reachy_mini_lite/get_started.md#3--download-reachy-mini-control) uses this feature.
+Thanks to WebRTC, the audio and video streams can be consumed directly from a web browser — no native client required. Two channels are involved:
+
+- **Signaling** runs through a central signaling server hosted on a Hugging Face Space: HF OAuth sign-in, listing the robots you can reach, and the SDP/ICE handshake that sets up the connection.
+- **Media** is a direct **WebRTC peer-to-peer** connection from the robot. The browser decodes **h264** video and **opus** audio locally.
+
+Browser apps build on the [`@pollen-robotics/reachy-mini-sdk`](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk) package, which ships the `ReachyMini` browser SDK plus an optional **host shell** (`./host`). The host shell provides the HF OAuth sign-in, a robot picker, and a top bar, and runs the user app in an iframe that loads the SDK — so app code only owns its own UI. Both the [Reachy Mini Control desktop app](../platforms/reachy_mini_lite/get_started.md#3--download-reachy-mini-control) and Hugging Face Spaces apps use this path.
+
+See the [JavaScript SDK runtime reference](./javascript-sdk.md) for the API, and the [App Creation Guide](https://github.com/pollen-robotics/reachy_mini/blob/main/ts/APP_CREATION_GUIDE.md) for building and deploying a JS app.
 
 [![Reachy Mini Media Web](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/reachymini_media_web.png)]()
 
