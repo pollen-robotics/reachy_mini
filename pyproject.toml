@@ -100,8 +100,6 @@ exclude-newer = "7 days"
 
 [tool.uv.exclude-newer-package]
 "pollen_BMI088_imu_library"  = false
-"gradio-client" = false
-"huggingface-hub" = false
 
 [tool.setuptools]
 package-dir = { "" = "src" }

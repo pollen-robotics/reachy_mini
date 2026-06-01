@@ -12,8 +12,6 @@ exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
 pollen-bmi088-imu-library = false
-gradio-client = false
-huggingface-hub = false
 
 [[package]]
 name = "absl-py"
