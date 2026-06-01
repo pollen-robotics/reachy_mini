@@ -6,8 +6,8 @@
 > shell, `sdk: static` deploy,
 > `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host
 > ↔ embed contract. **Pin the SDK to
-> `@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c`** (the
-> version validated against the host shell + daemon).
+> `@pollen-robotics/reachy-mini-sdk@1.8.0`** (the stable release
+> validated against the host shell + daemon).
 >
 > **This file** is the runtime API surface of the `ReachyMini` class
 > you receive from `handle.reachy` once `connectToHost()` resolves:
