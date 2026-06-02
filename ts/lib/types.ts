@@ -334,6 +334,8 @@ export interface ReachyMiniInstance extends EventTarget {
     sendRaw(data: unknown): boolean;
     /** Play a sound file on the robot's speakers (basename). */
     playSound(file: string): boolean;
+    /** Drop incoming audio queued for the robot speaker (barge-in). */
+    clearIncomingAudio(): boolean;
 
     setAudioMuted(muted: boolean): void;
     setMicMuted(muted: boolean): void;

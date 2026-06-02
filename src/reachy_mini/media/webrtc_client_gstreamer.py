@@ -35,6 +35,7 @@ Example usage via MediaManager::
 """
 
 import os
+import warnings
 from threading import Thread
 from typing import Iterator, Optional
 
@@ -465,9 +466,42 @@ class GstWebRTCClient(CameraBase, AudioBase):
             except Exception as e:
                 self.logger.warning(f"Failed to stop daemon sound: {e}")
 
+    def clear_player(self) -> None:
+        """Drop queued playback audio during barge-in.
+
+        Flushes the local audio *send* chain so any not-yet-sent samples
+        are dropped, then asks the daemon to flush the audio it has
+        already received and queued for the robot's speaker (where the
+        bulk of buffered audio actually sits).
+        """
+        #     Flush only the audio send branch on the SHARED pipeline.
+        #     Send flush events on self._appsrc directly — do NOT pause or
+        #     flush _pipeline_record (it also carries video + recording).
+        if self._appsrc is not None:
+            self._appsrc.send_event(Gst.Event.new_flush_start())
+            self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=False))
+            self._appsrc_pts = -1  # re-anchor PTS on next push
+            self.logger.info("Cleared player queue (WebRTC send chain flushed)")
+        else:
+            self.logger.warning("Audio send chain not ready; nothing to flush.")
+
+        if self.daemon_url:
+            try:
+                _requests.post(
+                    f"{self.daemon_url}/api/media/clear_incoming_audio",
+                    timeout=5,
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to clear daemon incoming audio: {e}")
+
     def clear_output_buffer(self) -> None:
-        """No-op (WebRTC send chain does not buffer significantly)."""
-        pass
+        """Deprecated — use :meth:`clear_player` instead. Does nothing."""
+        warnings.warn(
+            "clear_output_buffer() is deprecated; use clear_player().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.logger.warning("clear_output_buffer() is deprecated; use clear_player().")
 
     def _push_buffer(self, data: npt.NDArray[np.float32]) -> None:
         """Single push of one F32LE chunk with gap-aware PTS."""
