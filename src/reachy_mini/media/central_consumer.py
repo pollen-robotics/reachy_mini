@@ -81,14 +81,25 @@ import asyncio
 import json
 import logging
 import os
-from typing import Awaitable, Callable, List, Optional, Tuple
+from typing import (
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    List,
+    Optional,
+    Tuple,
+    cast,
+)
 
 import aiohttp
 import av
 import numpy as np
+import numpy.typing as npt
 from aiortc import (
     MediaStreamTrack,
     RTCConfiguration,
+    RTCDataChannel,
     RTCIceServer,
     RTCPeerConnection,
     RTCSessionDescription,
@@ -136,7 +147,7 @@ def _patch_aiortc_dtls_ciphers() -> None:
         b"ECDHE-RSA-AES128-GCM-SHA256"
     )
 
-    def _patched(self, srtp_profiles):
+    def _patched(self: Any, srtp_profiles: Any) -> Any:
         ctx = _orig(self, srtp_profiles)
         try:
             ctx.set_cipher_list(ciphers)
@@ -167,7 +178,7 @@ class ReachyCentralConsumer:
             Callable[[], Awaitable[List[RTCIceServer]]]
         ] = None,
         consumer_label: str = "reachy-mini-consumer",
-        on_pcm: Optional[Callable[[np.ndarray], None]] = None,
+        on_pcm: Optional[Callable[[npt.NDArray[np.float32]], None]] = None,
         out_track: Optional[MediaStreamTrack] = None,
         on_command_ready: Optional[Callable[[], None]] = None,
         audio_sample_rate: int = DEFAULT_AUDIO_SAMPLE_RATE,
@@ -209,20 +220,20 @@ class ReachyCentralConsumer:
         self._target_peer_id: Optional[str] = robot_peer_id
 
         self._http: Optional[aiohttp.ClientSession] = None
-        self._task: Optional[asyncio.Task] = None
-        self._discovery_task: Optional[asyncio.Task] = None
-        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._task: Optional[asyncio.Task[None]] = None
+        self._discovery_task: Optional[asyncio.Task[None]] = None
+        self._heartbeat_task: Optional[asyncio.Task[None]] = None
         self._stopping = False
         # The live SSE response, so other tasks can force a reconnect by
         # closing it (e.g. when central has deregistered our peer).
-        self._sse_resp = None
+        self._sse_resp: Optional[aiohttp.ClientResponse] = None
         self._heartbeat_interval = 10.0  # refreshed from welcome lease
 
         self._self_peer_id: Optional[str] = None
         self._session_id: Optional[str] = None
         self._starting_session = False
         self._pc: Optional[RTCPeerConnection] = None
-        self._pending_remote_ice: List[dict] = []
+        self._pending_remote_ice: List[dict[str, Any]] = []
         self._remote_desc_set = False
         self._pc_connected = False
 
@@ -230,7 +241,7 @@ class ReachyCentralConsumer:
         # reader gets a consistent pair under the GIL — assigning a tuple is
         # an atomic reference swap. The id lets pollers detect new frames
         # without relying on object identity (CPython recycles ids).
-        self._latest: Optional[Tuple[int, np.ndarray]] = None
+        self._latest: Optional[Tuple[int, npt.NDArray[np.uint8]]] = None
         self._frame_counter = 0
         # (width, height) of the source frames as the daemon's webrtcsink
         # emits them — None until the first frame arrives.
@@ -246,7 +257,7 @@ class ReachyCentralConsumer:
         # aiortc's RTCDataChannel.send() is not thread-safe — we marshal
         # every send through ``_cmd_loop.call_soon_threadsafe`` so worker
         # threads can use ``send_command`` safely.
-        self._cmd_channel = None  # type: ignore[assignment]
+        self._cmd_channel: Optional[RTCDataChannel] = None
         self._cmd_channel_open = False
         self._cmd_loop: Optional[asyncio.AbstractEventLoop] = None
         self._cmd_sent = 0
@@ -255,23 +266,27 @@ class ReachyCentralConsumer:
     # ------------------------------------------------------------------ API
 
     def is_connected(self) -> bool:
+        """Return True while the peer connection is in the "connected" state."""
         return self._pc_connected
 
     def is_command_ready(self) -> bool:
+        """Return True once the robot's ``data`` channel is open for commands."""
         return self._cmd_channel_open and self._cmd_channel is not None
 
-    def send_command(self, envelope: dict) -> bool:
-        """JSON-encode ``envelope`` and write it to the robot's data
-        channel. Thread-safe: schedules the actual ``send()`` on the
-        event loop that owns the aiortc peer connection. Returns True
-        if the send was queued, False if the channel isn't open."""
+    def send_command(self, envelope: dict[str, Any]) -> bool:
+        """Write ``envelope`` to the robot's data channel as JSON.
+
+        Thread-safe: schedules the actual ``send()`` on the event loop that
+        owns the aiortc peer connection. Returns True if the send was
+        queued, False if the channel isn't open.
+        """
         ch = self._cmd_channel
         loop = self._cmd_loop
         if ch is None or not self._cmd_channel_open or loop is None:
             return False
         payload = json.dumps(envelope)
 
-        def _do_send():
+        def _do_send() -> None:
             try:
                 ch.send(payload)
             except Exception as e:
@@ -295,7 +310,7 @@ class ReachyCentralConsumer:
             except Exception as e:
                 logger.warning("[reachy] on_command_ready hook failed: %r", e)
 
-    def latest_frame(self) -> Optional[Tuple[int, np.ndarray]]:
+    def latest_frame(self) -> Optional[Tuple[int, npt.NDArray[np.uint8]]]:
         """Return ``(frame_id, ndarray)`` or ``None`` if no frame yet.
 
         ``frame_id`` is a monotonically increasing counter — pollers can
@@ -303,7 +318,8 @@ class ReachyCentralConsumer:
         """
         return self._latest
 
-    def status(self) -> dict:
+    def status(self) -> dict[str, Any]:
+        """Return a snapshot of connection/session state for diagnostics."""
         pc_state = self._pc.connectionState if self._pc is not None else None
         return {
             "connected": self._pc_connected,
@@ -317,6 +333,7 @@ class ReachyCentralConsumer:
         }
 
     async def start(self) -> None:
+        """Open the HTTP session and launch the background connect loop."""
         if self._task is not None and not self._task.done():
             return
         self._stopping = False
@@ -324,6 +341,7 @@ class ReachyCentralConsumer:
         self._task = asyncio.create_task(self._run_forever(), name="reachy-consumer")
 
     async def stop(self) -> None:
+        """Cancel background tasks, end the session, and close the HTTP session."""
         self._stopping = True
         for attr in ("_heartbeat_task", "_discovery_task", "_task"):
             t = getattr(self, attr)
@@ -404,7 +422,9 @@ class ReachyCentralConsumer:
                 pass
 
     @staticmethod
-    async def _iter_sse_events(resp):
+    async def _iter_sse_events(
+        resp: aiohttp.ClientResponse,
+    ) -> AsyncIterator[dict[str, Any]]:
         """Yield decoded JSON dicts from an SSE response."""
         data_lines: List[str] = []
         while True:
@@ -429,7 +449,7 @@ class ReachyCentralConsumer:
 
     # --------------------------------------------------------------- events
 
-    async def _handle_event(self, msg: dict) -> None:
+    async def _handle_event(self, msg: dict[str, Any]) -> None:
         t = msg.get("type")
         if t == "welcome":
             self._self_peer_id = msg.get("peerId")
@@ -450,14 +470,14 @@ class ReachyCentralConsumer:
             # no inbound /send within the lease (SSE pings don't refresh
             # it), which otherwise leaves a zombie SSE + startSession 400s.
             self._ensure_heartbeat_task()
-            # Discovery is handled solely by the HTTP-poll loop
-            # (_discovery_loop) — central's SSE `list` push is unreliable
-            # for already-online producers. Having two paths call
-            # startSession races and causes central to kill one session.
+            # Session establishment is handled solely by the HTTP-poll loop
+            # (_discovery_loop), for both pinned and auto-picked targets.
+            # central's SSE `list` push is unreliable for already-online
+            # producers, and routing startSession through the loop keeps it
+            # off the SSE-read path — so a failed startSession (e.g. the
+            # producer restarted with a new peerId) is retried gracefully
+            # instead of tearing down the SSE connection.
             self._ensure_discovery_task()
-            if self._target_peer_id is not None:
-                # Only when explicitly pinned via REACHY_ROBOT_PEER_ID.
-                await self._start_session()
         elif t == "list":
             producers = msg.get("producers") or []
             names = [(p.get("meta") or {}).get("name") for p in producers]
@@ -495,7 +515,7 @@ class ReachyCentralConsumer:
     def _canonical_name(name: Optional[str]) -> str:
         return (name or "").lower().replace("_", "").replace("-", "").replace(" ", "")
 
-    def _auto_pick_producer(self, producers: list) -> None:
+    def _auto_pick_producer(self, producers: list[dict[str, Any]]) -> None:
         target = self._canonical_name(self._robot_name)
         # Canonicalised name match — "reachy_mini", "reachy-mini",
         # "ReachyMini" all match "reachymini".
@@ -563,16 +583,20 @@ class ReachyCentralConsumer:
     # ----------------------------------------------------------- discovery
 
     def _ensure_discovery_task(self) -> None:
-        """Start the HTTP-poll discovery loop once per SSE connection."""
-        if self._target_peer_id is not None:
-            return
+        """Start the HTTP-poll discovery loop once per SSE connection.
+
+        Runs for pinned targets too: the loop skips the robot-status poll
+        while a target is set and goes straight to startSession, but it can
+        also re-discover by name if that target turns out to be stale (e.g.
+        the robot restarted with a new peerId).
+        """
         if self._discovery_task is not None and not self._discovery_task.done():
             return
         self._discovery_task = asyncio.create_task(
             self._discovery_loop(), name="reachy-discovery"
         )
 
-    async def _robot_status(self) -> list:
+    async def _robot_status(self) -> list[dict[str, Any]]:
         """GET {central}/api/robot-status — the reliable producer list.
 
         The SSE `list` push only re-fires on producer status *changes*, so
@@ -591,9 +615,14 @@ class ReachyCentralConsumer:
         return payload.get("robots") or []
 
     @staticmethod
-    def _normalize_robot_status(robots: list) -> list:
-        """Map /api/robot-status entries to the SSE `list` producer shape
-        ({id, meta}) so `_auto_pick_producer` can consume either source."""
+    def _normalize_robot_status(
+        robots: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Normalise /api/robot-status entries to the SSE `list` shape.
+
+        Maps each entry to ``{id, meta}`` so `_auto_pick_producer` can
+        consume either source.
+        """
         out = []
         for r in robots:
             meta = r.get("meta") or {}
@@ -635,7 +664,7 @@ class ReachyCentralConsumer:
 
     # --------------------------------------------------------------- POSTs
 
-    async def _post(self, body: dict) -> Optional[dict]:
+    async def _post(self, body: dict[str, Any]) -> Optional[dict[str, Any]]:
         url = f"{self._central_url}/send"
         headers = {
             "Authorization": f"Bearer {self._hf_token}",
@@ -657,7 +686,7 @@ class ReachyCentralConsumer:
                         self._force_sse_reconnect("peer deregistered")
                     return None
                 try:
-                    return await resp.json()
+                    return cast("Optional[dict[str, Any]]", await resp.json())
                 except Exception:
                     return None
         except Exception as e:
@@ -680,18 +709,25 @@ class ReachyCentralConsumer:
                 "peerId": self._target_peer_id,
             })
             if resp is None:
+                # Transient (central unreachable / deregistered our peer).
+                # Keep the target and let the discovery loop retry it.
                 raise RuntimeError("startSession: no response from central")
-            t = resp.get("type")
-            if t == "sessionRejected":
-                raise RuntimeError(
-                    f"startSession rejected: {resp.get('reason')} "
-                    f"(activeApp={resp.get('activeApp')})"
-                )
-            if t != "sessionStarted":
-                raise RuntimeError(f"startSession: unexpected response {resp!r}")
-            self._session_id = resp.get("sessionId")
-            print(f"[reachy] sessionStarted sessionId={self._session_id}")
-            # The robot will now push an SDP offer to us via SSE.
+            if resp.get("type") == "sessionStarted":
+                self._session_id = resp.get("sessionId")
+                print(f"[reachy] sessionStarted sessionId={self._session_id}")
+                # The robot will now push an SDP offer to us via SSE.
+                return
+            # Any other response means the producer we targeted is unusable:
+            # gone (robot restarted with a new peerId), busy, or rejected.
+            # Drop the stale target so the discovery loop re-picks the robot
+            # by name on its next poll instead of hammering a dead peerId
+            # forever. Not raised — a stale pin is a recoverable condition.
+            detail = resp.get("reason") or resp.get("details") or resp.get("type")
+            print(
+                f"[reachy] startSession failed (peerId={self._target_peer_id} "
+                f"reason={detail!r}); re-discovering by name"
+            )
+            self._target_peer_id = None
         finally:
             self._starting_session = False
 
@@ -710,16 +746,16 @@ class ReachyCentralConsumer:
         config = RTCConfiguration(iceServers=ice_servers)
         pc = RTCPeerConnection(configuration=config)
 
-        @pc.on("track")
-        def _on_track(track):
+        @pc.on("track")  # type: ignore[misc]  # pyee .on() is untyped
+        def _on_track(track: MediaStreamTrack) -> None:
             print(f"[reachy] received remote track kind={track.kind}")
             if track.kind == "video":
                 asyncio.create_task(self._consume_video(track))
             elif track.kind == "audio" and self._on_pcm is not None:
                 asyncio.create_task(self._consume_audio(track))
 
-        @pc.on("datachannel")
-        def _on_datachannel(channel):
+        @pc.on("datachannel")  # type: ignore[misc]  # pyee .on() is untyped
+        def _on_datachannel(channel: RTCDataChannel) -> None:
             # The robot daemon offers a "data" channel for JSON command
             # envelopes (set_full_target / goto_target / ...). We capture
             # it and expose send_command(); we don't read telemetry yet.
@@ -738,35 +774,40 @@ class ReachyCentralConsumer:
                 self._cmd_channel_open = True
                 self._on_cmd_ready()
 
-            @channel.on("open")
-            def _open():
+            @channel.on("open")  # type: ignore[misc]  # pyee .on() is untyped
+            def _open() -> None:
                 self._cmd_channel_open = True
                 print("[reachy] robot data channel open")
                 self._on_cmd_ready()
 
-            @channel.on("close")
-            def _close():
+            @channel.on("close")  # type: ignore[misc]  # pyee .on() is untyped
+            def _close() -> None:
                 self._cmd_channel_open = False
 
-            @channel.on("message")
-            def _msg(_m):
+            @channel.on("message")  # type: ignore[misc]  # pyee .on() is untyped
+            def _msg(_m: Any) -> None:
                 # Telemetry from the robot (state snapshots). Ignored for now.
                 pass
 
-        @pc.on("connectionstatechange")
-        async def _on_state():
+        @pc.on("connectionstatechange")  # type: ignore[misc]  # pyee .on() is untyped
+        async def _on_state() -> None:
             st = pc.connectionState
             print(f"[reachy] pc state: {st}")
             self._pc_connected = (st == "connected")
             if st == "failed":
-                raise RuntimeError("pc connection failed")
+                # Exceptions raised inside an aiortc event handler don't
+                # propagate to _connect_once/_run_forever, so we can't just
+                # raise to trigger a reconnect. Instead break the SSE read
+                # loop: _connect_once returns, _run_forever tears down this
+                # dead pc and reconnects, and a fresh welcome re-negotiates.
+                self._force_sse_reconnect("pc connection failed")
 
-        @pc.on("iceconnectionstatechange")
-        async def _on_ice_state():
+        @pc.on("iceconnectionstatechange")  # type: ignore[misc]  # pyee .on() is untyped
+        async def _on_ice_state() -> None:
             print(f"[reachy] ice state: {pc.iceConnectionState}")
 
-        @pc.on("icegatheringstatechange")
-        async def _on_ice_gather_state():
+        @pc.on("icegatheringstatechange")  # type: ignore[misc]  # pyee .on() is untyped
+        async def _on_ice_gather_state() -> None:
             print(f"[reachy] ice gathering: {pc.iceGatheringState}")
 
         self._pc = pc
@@ -785,7 +826,7 @@ class ReachyCentralConsumer:
         # Fallback to the same STUN the JS SDK uses.
         return [RTCIceServer(urls=["stun:stun.l.google.com:19302"])]
 
-    async def _handle_remote_sdp(self, sdp_msg: dict) -> None:
+    async def _handle_remote_sdp(self, sdp_msg: dict[str, Any]) -> None:
         sdp_type = sdp_msg.get("type")
         sdp_text = sdp_msg.get("sdp")
         if not sdp_text or sdp_type != "offer":
@@ -818,7 +859,6 @@ class ReachyCentralConsumer:
         # SDP carries all of our candidates. We don't trickle outbound ICE.
         local_sdp = self._pc.localDescription.sdp
         self._log_candidate_types("local", local_sdp)
-        self._remote_sdp_for_log = sdp_text
         self._log_candidate_types("remote", sdp_text)
         await self._post({
             "type": "peer",
@@ -839,13 +879,13 @@ class ReachyCentralConsumer:
         n = sum(types.values())
         print(f"[reachy] {label} ICE candidates: {n} total by type {dict(types) or '{}'}")
 
-    async def _handle_remote_ice(self, ice: dict) -> None:
+    async def _handle_remote_ice(self, ice: dict[str, Any]) -> None:
         if not self._remote_desc_set or self._pc is None:
             self._pending_remote_ice.append(ice)
             return
         await self._add_remote_ice(ice)
 
-    async def _add_remote_ice(self, ice: dict) -> None:
+    async def _add_remote_ice(self, ice: dict[str, Any]) -> None:
         cand_str = (ice.get("candidate") or "").strip()
         if not cand_str:
             return  # end-of-candidates marker; aiortc doesn't need it
@@ -869,7 +909,7 @@ class ReachyCentralConsumer:
             logger.warning("[reachy] addIceCandidate failed: %r (cand=%r)",
                            e, cand_str)
 
-    async def _consume_video(self, track) -> None:
+    async def _consume_video(self, track: MediaStreamTrack) -> None:
         try:
             while True:
                 try:
@@ -967,6 +1007,12 @@ class ReachyCentralConsumer:
         self._remote_desc_set = False
         self._pending_remote_ice = []
         self._pc_connected = False
+        # Drop the last decoded frame so latest_frame() doesn't keep
+        # handing out a stale image that looks live after a disconnect.
+        # frame_id keeps climbing across reconnects, so pollers still see
+        # fresh ids once a new session delivers frames.
+        self._latest = None
+        self._source_size = None
         if self._pc is not None:
             try:
                 await self._pc.close()

@@ -105,7 +105,7 @@ _ice_cache: dict[str, Any] = {"servers": [], "ts": 0.0}
 _ice_lock = Lock()
 
 
-def _fetch_central_ice_servers() -> list[dict]:
+def _fetch_central_ice_servers() -> list[dict[str, Any]]:
     """Fetch ICE servers (STUN + Cloudflare TURN) for our offer, cached.
 
     Uses the daemon's HF token to authenticate to the TURN proxy. Returns
@@ -151,7 +151,7 @@ def _fetch_central_ice_servers() -> list[dict]:
             return cached
 
 
-def _ice_servers_to_turn_uris(servers: list[dict]) -> list[str]:
+def _ice_servers_to_turn_uris(servers: list[dict[str, Any]]) -> list[str]:
     """Convert ICE-server dicts to webrtcbin ``turn(s)://user:pass@host:port`` URIs."""
     from urllib.parse import quote
 

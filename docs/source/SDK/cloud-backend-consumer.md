@@ -71,9 +71,6 @@ async def main():
 asyncio.run(main())
 ```
 
-The full runnable demo (with brightness logging + a head nod) lives at
-[`examples/central_consumer_cloud_backend.py`](../../../examples/central_consumer_cloud_backend.py).
-
 ## Per-visitor isolation
 
 A typical HF Space serving many visitors should build **one consumer
