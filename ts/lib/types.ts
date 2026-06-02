@@ -221,6 +221,25 @@ export interface ErrorEventDetail {
     source: 'signaling' | 'webrtc' | 'robot';
     error: Error | string;
 }
+/**
+ * Granular ICE-state transition. Fires on every change of
+ * `_pc.iceConnectionState`. Transient `disconnected` is debounced
+ * internally before escalating to `error`; subscribe here for finer
+ * UX (e.g. a transient "Reconnecting…" badge).
+ */
+export interface IceStateChangeEventDetail { state: RTCIceConnectionState; }
+/**
+ * Forwarded from `navigator.connection.change` on browsers that ship
+ * the NetworkInformation API (Chrome, Android WebView). Fires on
+ * transport swaps (Wi-Fi → 4G, AP roam) without going through
+ * `offline`. All fields are best-effort and may be undefined.
+ */
+export interface NetworkChangeEventDetail {
+    effectiveType?: string;
+    downlink?: number;
+    rtt?: number;
+    saveData?: boolean;
+}
 
 /** Map of event names to their detail shapes. */
 export interface ReachyMiniEventMap {
@@ -234,6 +253,10 @@ export interface ReachyMiniEventMap {
     videoTrack: CustomEvent<VideoTrackEventDetail>;
     micSupported: CustomEvent<MicSupportedEventDetail>;
     error: CustomEvent<ErrorEventDetail>;
+    iceStateChange: CustomEvent<IceStateChangeEventDetail>;
+    networkOnline: CustomEvent<Record<string, never>>;
+    networkOffline: CustomEvent<Record<string, never>>;
+    networkChange: CustomEvent<NetworkChangeEventDetail>;
 }
 
 /** Public surface of a ReachyMini SDK instance. */
