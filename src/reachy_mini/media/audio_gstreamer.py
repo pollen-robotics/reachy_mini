@@ -432,7 +432,7 @@ class GStreamerAudio(AudioBase):
             self._playbin = None
 
     def clear_output_buffer(self) -> None:
-        """Deprecated — use :meth:`clear_player` instead. Does nothing."""
+        """Use :meth:`clear_player` instead. Deprecated; does nothing."""
         warnings.warn(
             "clear_output_buffer() is deprecated; use clear_player().",
             DeprecationWarning,
