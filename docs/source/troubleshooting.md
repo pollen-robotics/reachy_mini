@@ -909,17 +909,29 @@ If a part is broken/malfunctioning, Pollen's after-sales team will determine if 
 
 On a 4GB CM4 Wireless unit the daemon can climb to around 1.8GB RSS within a few hours, push the Pi into swap, and trigger a watchdog restart loop. Two settings keep it under control.
 
-First, if you are not using the Hugging Face App Store remote view, stop the signaling relay. When the HF signaling endpoint is unreachable (stale token, rate limit, region policy), `central_signaling_relay` retries about once a second, which was seen at over 17,000 reconnects per boot. Move the token aside so the relay never starts:
+First, if you are not using the Hugging Face App Store remote view, stop the signaling relay. When the HF signaling endpoint is unreachable (stale token, rate limit, region policy), `central_signaling_relay` retries about once a second, which was seen at over 17,000 reconnects per boot. The relay does not start without a token, so moving it aside disables it. This is reversible: keep the `.bak` and move it back to re-enable the remote view.
 
 ```bash
 mv ~/.cache/huggingface/token ~/.cache/huggingface/token.bak
+sudo systemctl restart reachy-mini-daemon
 ```
 
-Second, cap glibc memory arenas. A quad core Pi 4 defaults to many arenas, and a multithreaded daemon fills them over time. Add a systemd drop-in for the daemon:
+Second, cap glibc memory arenas. A quad core Pi 4 defaults to many arenas, and a multithreaded daemon fills them over time. Add a systemd drop-in for the daemon service:
+
+```bash
+sudo systemctl edit reachy-mini-daemon
+```
 
 ```ini
 [Service]
 Environment=MALLOC_ARENA_MAX=2
+```
+
+Then apply it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart reachy-mini-daemon
 ```
 
 On one unit after both changes, daemon RSS went from 1791MB to 178MB, available memory from 762MB to 2612MB, and reconnects per boot from over 17,000 to zero. The watchdog loop went from roughly 15 minutes to several hours.
