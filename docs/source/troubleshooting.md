@@ -909,7 +909,7 @@ If a part is broken/malfunctioning, Pollen's after-sales team will determine if 
 
 On a 4GB CM4 Wireless unit the daemon can climb to around 1.8GB RSS within a few hours, push the Pi into swap, and trigger a watchdog restart loop. Two settings keep it under control.
 
-First, if you are not using the Hugging Face App Store remote view, stop the signaling relay. When the HF signaling endpoint is unreachable (stale token, rate limit, region policy), `central_signaling_relay` retries about once a second, which was seen at over 17,000 reconnects per boot. The relay does not start without a token, so moving it aside disables it. This is reversible: keep the `.bak` and move it back to re-enable the remote view.
+First, if you are not using the Hugging Face App Store remote view, stop the signaling relay. When the HF signaling endpoint is unreachable (stale token, rate limit, region policy), `central_signaling_relay` retries about once a second, which was seen at over 17,000 reconnects per boot. The relay reads the token through `huggingface_hub.get_token()`, so it picks up the cached file or the `HF_TOKEN` environment variable. Moving the cached file aside disables the relay as long as no `HF_TOKEN` is exported for the daemon (check the service environment if the relay keeps reconnecting). This is reversible: keep the `.bak` and move it back to re-enable the remote view.
 
 ```bash
 mv ~/.cache/huggingface/token ~/.cache/huggingface/token.bak
