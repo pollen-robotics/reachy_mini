@@ -437,7 +437,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
         silence_queue = Gst.ElementFactory.make("queue", "send_silence_queue")
 
         audiomixer = Gst.ElementFactory.make("audiomixer", "send_mixer")
-        audiomixer.set_property("latency", 50 * Gst.MSECOND)
 
         # Pin the mixer output to our rate/channels so opusenc/rtpopuspay
         # advertise sprop-maxcapturerate=SAMPLE_RATE and stereo encoding-params,
