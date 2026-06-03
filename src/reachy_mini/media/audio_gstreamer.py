@@ -96,6 +96,11 @@ class GStreamerAudio(AudioBase):
     PLAYBACK_SINK_BUFFER_TIME_US = 50_000
     PLAYBACK_SINK_LATENCY_TIME_US = 5_000
 
+    # webrtcdsp/webrtcechoprobe only accept S16LE at a fixed set of rates
+    # (8000/16000/32000/48000). They must share a probe name to be paired.
+    AEC_RATE = 48_000
+    AEC_PROBE_NAME = "reachymini_aec_probe"
+
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize recording and playback pipelines.
 
@@ -114,20 +119,19 @@ class GStreamerAudio(AudioBase):
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
-        self._pipeline_record = Gst.Pipeline.new("audio_recorder")
-        self._init_pipeline_record(self._pipeline_record)
-        self._bus_record = self._pipeline_record.get_bus()
-        self._bus_record.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_record
-        )
+        self._webrtcechoprobe: Optional[Gst.Element] = None
+
+        # Single pipeline holds both record and playback chains so that
+        # webrtcdsp + webrtcechoprobe share a clock (required by the
+        # GStreamer webrtcdsp docs to align the far-end reference with
+        # the mic capture).
+        self._pipeline = Gst.Pipeline.new("reachymini_audio")
+        self._init_pipeline_record(self._pipeline)
+        self._bus = self._pipeline.get_bus()
+        self._bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline)
 
         self._playbin: Optional[Gst.Element] = None
-        self._pipeline_playback = Gst.Pipeline.new("audio_player")
-        self._init_pipeline_playback(self._pipeline_playback)
-        self._bus_playback = self._pipeline_playback.get_bus()
-        self._bus_playback.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_playback
-        )
+        self._init_pipeline_playback(self._pipeline)
 
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
@@ -139,6 +143,7 @@ class GStreamerAudio(AudioBase):
         self._appsink_audio.set_property("max-buffers", 200)
 
         audiosrc: Optional[Gst.Element] = None
+        webrtcdsp: Optional[Gst.Element] = None
 
         if has_reachymini_asoundrc():
             # Wireless CM4: use the preconfigured .asoundrc ALSA devices
@@ -151,9 +156,15 @@ class GStreamerAudio(AudioBase):
 
             if id_audio_card is None:
                 self.logger.warning(
-                    "No specific audio card found, using default audio source."
+                    "No specific audio card found, using default audio source. Enabling webrtcdsp."
                 )
                 audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
+                self._webrtcechoprobe = Gst.ElementFactory.make("webrtcechoprobe")
+                webrtcdsp = Gst.ElementFactory.make("webrtcdsp")
+                # Pair probe ↔ dsp so the playback signal is used as the
+                # far-end reference for echo cancellation on the mic path.
+                self._webrtcechoprobe.set_property("name", self.AEC_PROBE_NAME)
+                webrtcdsp.set_property("probe", self.AEC_PROBE_NAME)
             elif platform.system() == "Windows":
                 audiosrc = Gst.ElementFactory.make("wasapi2src")
                 audiosrc.set_property("device", id_audio_card)
@@ -177,7 +188,29 @@ class GStreamerAudio(AudioBase):
         pipeline.add(audioresample)
         pipeline.add(self._appsink_audio)
 
-        audiosrc.link(queue)
+        if webrtcdsp:
+            # webrtcdsp requires S16LE at 8/16/32/48 kHz — convert/resample
+            # in, then convert back to F32LE at SAMPLE_RATE for the appsink.
+            ac_in = Gst.ElementFactory.make("audioconvert")
+            ar_in = Gst.ElementFactory.make("audioresample")
+            cf_in = Gst.ElementFactory.make("capsfilter")
+            cf_in.set_property(
+                "caps",
+                Gst.Caps.from_string(
+                    f"audio/x-raw,format=S16LE,rate={self.AEC_RATE},"
+                    f"channels={self.CHANNELS},layout=interleaved"
+                ),
+            )
+            for el in (ac_in, ar_in, cf_in, webrtcdsp):
+                pipeline.add(el)
+            audiosrc.link(ac_in)
+            ac_in.link(ar_in)
+            ar_in.link(cf_in)
+            cf_in.link(webrtcdsp)
+            webrtcdsp.link(queue)
+        else:
+            audiosrc.link(queue)
+
         queue.link(audioconvert)
         audioconvert.link(audioresample)
         audioresample.link(self._appsink_audio)
@@ -315,6 +348,9 @@ class GStreamerAudio(AudioBase):
 
     def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
         self._appsrc = Gst.ElementFactory.make("appsrc")
+        # We stamp the first buffer of each utterance ourselves (DISCONT +
+        # running-time PTS) and leave follow-up buffers with no timestamp
+        # so the audiomixer places them contiguously by byte offset.
         self._appsrc.set_property("do-timestamp", False)
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
@@ -323,12 +359,24 @@ class GStreamerAudio(AudioBase):
         )
         self._appsrc.set_property("caps", caps)
 
-        # Always build tee so wobbling can be enabled/disabled at runtime.
-        # Per-branch audioconvert+audioresample so the wobbler appsink's
-        # F32LE/1/16000 caps don't drag the audiosink branch into a rate
-        # the device can't accept (e.g. wireless XMOS PCM falls back to
-        # IEC958 at non-native rates). The appsink with drop=True has
-        # negligible overhead when no wobbler is connected.
+        mixer = Gst.ElementFactory.make("audiomixer")
+        appsrc_queue = Gst.ElementFactory.make("queue")
+
+        silence = Gst.ElementFactory.make("audiotestsrc")
+        silence.set_property("is-live", True)
+        silence.set_property("wave", 4)  # silence
+        # Pin silence caps to the appsrc format so audiomixer sees matching
+        # inputs (it can't aggregate F32LE@N and S16@44100 together).
+        silence_caps = Gst.ElementFactory.make("capsfilter")
+        silence_caps.set_property(
+            "caps",
+            Gst.Caps.from_string(
+                f"audio/x-raw,format=F32LE,channels={self.CHANNELS},"
+                f"rate={self.SAMPLE_RATE},layout=interleaved"
+            ),
+        )
+        silence_queue = Gst.ElementFactory.make("queue")
+
         tee = Gst.ElementFactory.make("tee")
         queue_speaker = Gst.ElementFactory.make("queue")
         ac_speaker = Gst.ElementFactory.make("audioconvert")
@@ -341,6 +389,11 @@ class GStreamerAudio(AudioBase):
 
         for el in (
             self._appsrc,
+            appsrc_queue,
+            silence,
+            silence_caps,
+            silence_queue,
+            mixer,
             tee,
             queue_speaker,
             ac_speaker,
@@ -353,7 +406,34 @@ class GStreamerAudio(AudioBase):
         ):
             pipeline.add(el)
 
-        self._appsrc.link(tee)
+        self._appsrc.link(appsrc_queue)
+        appsrc_queue.link(mixer)
+        silence.link(silence_caps)
+        silence_caps.link(silence_queue)
+        silence_queue.link(mixer)
+
+        if self._webrtcechoprobe is not None:
+            # webrtcechoprobe requires S16LE at 8/16/32/48 kHz.
+            ac_probe = Gst.ElementFactory.make("audioconvert")
+            ar_probe = Gst.ElementFactory.make("audioresample")
+            cf_probe = Gst.ElementFactory.make("capsfilter")
+            cf_probe.set_property(
+                "caps",
+                Gst.Caps.from_string(
+                    f"audio/x-raw,format=S16LE,rate={self.AEC_RATE},"
+                    f"channels={self.CHANNELS},layout=interleaved"
+                ),
+            )
+            for el in (ac_probe, ar_probe, cf_probe, self._webrtcechoprobe):
+                pipeline.add(el)
+            mixer.link(ac_probe)
+            ac_probe.link(ar_probe)
+            ar_probe.link(cf_probe)
+            cf_probe.link(self._webrtcechoprobe)
+            self._webrtcechoprobe.link(tee)
+        else:
+            mixer.link(tee)
+
         tee.link(queue_speaker)
         queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
@@ -372,23 +452,23 @@ class GStreamerAudio(AudioBase):
 
     def _dump_latency(self) -> None:
         query = Gst.Query.new_latency()
-        self._pipeline_playback.query(query)
+        self._pipeline.query(query)
         self.logger.info(f"Audio pipeline latency {query.parse_latency()}")
 
     def start_recording(self) -> None:
         """Start capturing audio from the microphone."""
-        self._pipeline_record.set_state(Gst.State.PLAYING)
+        self._pipeline.set_state(Gst.State.PLAYING)
 
     def stop_recording(self) -> None:
         """Stop the recording pipeline."""
-        self._pipeline_record.set_state(Gst.State.NULL)
+        self._pipeline.set_state(Gst.State.NULL)
 
     def start_playing(self) -> None:
         """Start the playback pipeline so ``push_audio_sample`` can feed data."""
         if self._head_wobbler is not None:
             self._head_wobbler.start()
         self._appsrc_pts = -1
-        self._pipeline_playback.set_state(Gst.State.PLAYING)
+        self._pipeline.set_state(Gst.State.PLAYING)
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
@@ -406,15 +486,26 @@ class GStreamerAudio(AudioBase):
             )
             return
 
-        pts_ns, duration_ns, self._appsrc_pts = self._compute_pts(
-            int(data.shape[0]),
-            self._appsrc.get_current_running_time(),
-            self._appsrc_pts,
-        )
+        # Gap-aware PTS for audiomixer: the first buffer of a new utterance
+        # (gap > GAP_RESET_NS) carries DISCONT + a running-time PTS so the
+        # mixer aligns it on the current timeline. Follow-up buffers are
+        # untimestamped (CLOCK_TIME_NONE) so the mixer places them
+        # contiguously by byte offset — avoids drift from per-buffer
+        # stamping that the mixer would otherwise treat as "late".
+        running_time = self._appsrc.get_current_running_time()
+        duration_ns = (int(data.shape[0]) * Gst.SECOND) // self.SAMPLE_RATE
+        new_cue = running_time > self._appsrc_pts + self.GAP_RESET_NS
+
         buf = Gst.Buffer.new_wrapped(data.tobytes())
-        buf.pts = pts_ns
-        buf.dts = pts_ns
-        buf.duration = duration_ns
+        if new_cue:
+            buf.set_flags(Gst.BufferFlags.DISCONT)
+            buf.pts = running_time
+            buf.dts = running_time
+            self._appsrc_pts = running_time + duration_ns
+        else:
+            self._appsrc_pts += duration_ns
+        # Do not set buf.duration; the mixer derives it from size + caps.
+
         ret = self._appsrc.push_buffer(buf)
         if ret != Gst.FlowReturn.OK:
             self.logger.warning(f"push_buffer dropped: {ret}")
@@ -424,7 +515,7 @@ class GStreamerAudio(AudioBase):
         if self._head_wobbler is not None:
             self._head_wobbler.stop()
         self._appsrc_pts = -1
-        self._pipeline_playback.set_state(Gst.State.NULL)
+        self._pipeline.set_state(Gst.State.NULL)
         if self._playbin is not None:
             self._playbin.set_state(Gst.State.NULL)
             self._playbin = None
@@ -444,10 +535,10 @@ class GStreamerAudio(AudioBase):
             self._head_wobbler.reset()
         if self._appsrc is not None:
             self._appsrc_pts = -1
-            self._pipeline_playback.set_state(Gst.State.PAUSED)
+            self._pipeline.set_state(Gst.State.PAUSED)
             self._appsrc.send_event(Gst.Event.new_flush_start())
             self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=True))
-            self._pipeline_playback.set_state(Gst.State.PLAYING)
+            self._pipeline.set_state(Gst.State.PLAYING)
             self.logger.info("Cleared player queue")
         else:
             self.logger.warning(
@@ -573,5 +664,4 @@ class GStreamerAudio(AudioBase):
         """Ensure GStreamer resources are released."""
         self.cleanup()
         self._loop.quit()
-        self._bus_record.remove_watch()
-        self._bus_playback.remove_watch()
+        self._bus.remove_watch()
