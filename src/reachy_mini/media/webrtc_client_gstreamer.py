@@ -572,7 +572,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         running_time = self._appsrc.get_current_running_time()
         duration_ns = (int(data.shape[0]) * Gst.SECOND) // self.SAMPLE_RATE
-        new_cue = running_time > self._appsrc_pts + self.GAP_RESET_NS
+        new_cue = (
+            self._appsrc_pts < 0 or running_time > self._appsrc_pts + self.GAP_RESET_NS
+        )
 
         buf = Gst.Buffer.new_wrapped(data.tobytes())
         if new_cue:

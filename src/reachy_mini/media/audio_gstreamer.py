@@ -158,15 +158,25 @@ class GStreamerAudio(AudioBase):
 
             if id_audio_card is None:
                 self.logger.warning(
-                    "No specific audio card found, using default audio source. Enabling webrtcdsp."
+                    "No specific audio card found, using default audio source."
                 )
                 audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
                 self._webrtcechoprobe = Gst.ElementFactory.make("webrtcechoprobe")
                 webrtcdsp = Gst.ElementFactory.make("webrtcdsp")
-                # Pair probe ↔ dsp so the playback signal is used as the
-                # far-end reference for echo cancellation on the mic path.
-                self._webrtcechoprobe.set_property("name", self.AEC_PROBE_NAME)
-                webrtcdsp.set_property("probe", self.AEC_PROBE_NAME)
+                if self._webrtcechoprobe is None or webrtcdsp is None:
+                    self.logger.warning(
+                        "Cannot enable webrtcdsp. Check if gst-plugins-bad are available."
+                    )
+                    # Drop both so the playback chain doesn't wire a probe
+                    # without a matching DSP (or vice versa).
+                    self._webrtcechoprobe = None
+                    webrtcdsp = None
+                else:
+                    # Pair probe ↔ dsp so the playback signal is used as the
+                    # far-end reference for echo cancellation on the mic path.
+                    self._webrtcechoprobe.set_property("name", self.AEC_PROBE_NAME)
+                    webrtcdsp.set_property("probe", self.AEC_PROBE_NAME)
+                    self.logger.info("Enabling webRTC echo cancellation.")
             elif platform.system() == "Windows":
                 audiosrc = Gst.ElementFactory.make("wasapi2src")
                 audiosrc.set_property("device", id_audio_card)
@@ -496,7 +506,9 @@ class GStreamerAudio(AudioBase):
         # stamping that the mixer would otherwise treat as "late".
         running_time = self._appsrc.get_current_running_time()
         duration_ns = (int(data.shape[0]) * Gst.SECOND) // self.SAMPLE_RATE
-        new_cue = running_time > self._appsrc_pts + self.GAP_RESET_NS
+        new_cue = (
+            self._appsrc_pts < 0 or running_time > self._appsrc_pts + self.GAP_RESET_NS
+        )
 
         buf = Gst.Buffer.new_wrapped(data.tobytes())
         if new_cue:
