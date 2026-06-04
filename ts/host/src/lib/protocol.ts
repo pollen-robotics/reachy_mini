@@ -3,7 +3,7 @@
  * exposed via `@pollen-robotics/reachy-mini-sdk/host`) and an
  * embedded Reachy Mini app (iframe).
  *
- * Canonical reference: SPEC.md §6.
+ * Canonical reference: APP_CREATION_GUIDE §13.6 (Protocol v1).
  *
  * Contract identity
  * ─────────────────
@@ -28,10 +28,10 @@
  * 3. Config & theme: opaque `config` payload + theme push.
  * 4. Error: `embed:error` for tear-down on app failure.
  *
- * Intentionally NOT in v1 (see SPEC §6 and §11):
+ * Intentionally NOT in v1 (see APP_CREATION_GUIDE §13.6):
  * - No `host:custom` / `embed:custom` free-form channel.
  * - No `embed:request-config-update` (apps don't push config).
- * - No heartbeat / ping-pong (backlog).
+ * - No heartbeat / ping-pong.
  */
 
 /** Protocol version. Bump on breaking changes. */

@@ -95,6 +95,22 @@ async def stop_sound(
     return {"status": "ok"}
 
 
+@router.post("/clear_incoming_audio")
+async def clear_incoming_audio(
+    daemon: Daemon = Depends(get_daemon),
+) -> dict[str, str]:
+    """Drop audio received from WebRTC clients that is queued for the speaker.
+
+    Used for barge-in so the robot stops speaking already-buffered audio.
+    """
+    backend = daemon.backend
+    if backend is None or not backend.ready.is_set():
+        raise HTTPException(status_code=503, detail="Backend not running")
+
+    backend.clear_incoming_audio()
+    return {"status": "ok"}
+
+
 @router.post("/wobbling/enable")
 async def enable_wobbling(
     daemon: Daemon = Depends(get_daemon),

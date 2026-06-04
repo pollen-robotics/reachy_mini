@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 import aiohttp
 from huggingface_hub import HfApi, get_token, login, logout, whoami
-from huggingface_hub.utils import HfHubHTTPError  # type: ignore
+from huggingface_hub.errors import HfHubHTTPError
 
 logger = logging.getLogger(__name__)
 

@@ -54,6 +54,7 @@ Example usage via MediaManager::
 import os
 import platform
 import time
+import warnings
 from collections.abc import Callable
 from threading import Thread
 from typing import Optional
@@ -84,12 +85,13 @@ from gi.repository import GLib, Gst  # noqa: E402
 class GStreamerAudio(AudioBase):
     """Audio implementation using GStreamer.
 
-    Extends ``AudioBase`` with two GStreamer-specific helpers:
+    Extends ``AudioBase`` with a GStreamer-specific helper:
 
-    - ``clear_output_buffer()``: flush queued playback data without stopping
-      the pipeline (no-op by default; useful before refilling the buffer).
     - ``clear_player()``: flush the playback appsrc immediately via GStreamer
       flush events, dropping any queued audio.
+
+    (``clear_output_buffer()`` is deprecated and does nothing; use
+    ``clear_player()`` instead.)
 
     """
 
@@ -521,13 +523,13 @@ class GStreamerAudio(AudioBase):
             self._playbin = None
 
     def clear_output_buffer(self) -> None:
-        """Flush queued playback data so it is not played.
-
-        A low ``set_max_output_buffers`` value may make this unnecessary
-        for most use-cases.
-
-        """
-        pass  # subclasses or future implementations can override
+        """Use :meth:`clear_player` instead. Deprecated; does nothing."""
+        warnings.warn(
+            "clear_output_buffer() is deprecated; use clear_player().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.logger.warning("clear_output_buffer() is deprecated; use clear_player().")
 
     def clear_player(self) -> None:
         """Flush the player's appsrc to drop any queued audio immediately."""

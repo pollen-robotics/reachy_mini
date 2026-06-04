@@ -266,6 +266,9 @@ src/reachy_mini/tools/camera_calibration/*.yaml
 ts/node_modules/
 ts/dist/
 ts/host/dist/
+# Static build of the host dev harness (vite.harness.config.ts output),
+# deployed to a Space - a build artefact, never committed.
+ts/host/dist-harness/
 ts/.vite/
 # The unanchored `lib/` rule above (Python template, intended for
 # root-level build artefacts) also matches `ts/host/src/lib/` and
