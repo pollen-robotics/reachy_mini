@@ -22,6 +22,7 @@ from reachy_mini.media.device_detection import (
     DeviceInfo,
     find_audio_device,
     find_video_device,
+    get_video_device,
     parse_gst_device_monitor_output,
 )
 
@@ -331,6 +332,19 @@ class TestFindVideoDevice:
         assert path == "/dev/video0"
         assert isinstance(specs, ArducamSpecs)
 
+    def test_linux_device_path_fallback(self) -> None:
+        """Linux V4L2 devices may expose device.path instead of api.v4l2.path."""
+        devices = [
+            DeviceInfo(
+                display_name="Reachy Mini Camera",
+                device_class="Video/Source",
+                properties={"device.path": "/dev/video9"},
+            )
+        ]
+        path, specs = find_video_device(devices, "Linux")
+        assert path == "/dev/video9"
+        assert isinstance(specs, ReachyMiniLiteCamSpecs)
+
     def test_empty_device_list(self) -> None:
         path, specs = find_video_device([], "Linux")
         assert path == ""
@@ -360,3 +374,45 @@ class TestFindVideoDevice:
         path, specs = find_video_device(devices, "Linux")
         assert path == "imx708"
         assert specs is not None
+
+    def test_get_video_device_uses_v4l2_provider_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Fallback to the direct V4L2 provider when DeviceMonitor has no path."""
+
+        def fake_monitor_devices(filter_class: str) -> List[DeviceInfo]:
+            assert filter_class == "Video/Source"
+            return [
+                DeviceInfo(
+                    display_name="Reachy Mini Camera",
+                    device_class="Video/Source",
+                    properties={},
+                )
+            ]
+
+        def fake_v4l2_devices() -> List[DeviceInfo]:
+            return [
+                DeviceInfo(
+                    display_name="Reachy Mini Camera",
+                    device_class="Video/Source",
+                    properties={"device.path": "/dev/video9"},
+                )
+            ]
+
+        monkeypatch.setattr(
+            "reachy_mini.media.device_detection.platform.system",
+            lambda: "Linux",
+        )
+        monkeypatch.setattr(
+            "reachy_mini.media.device_detection.gst_monitor_devices",
+            fake_monitor_devices,
+        )
+        monkeypatch.setattr(
+            "reachy_mini.media.device_detection.gst_v4l2_devices",
+            fake_v4l2_devices,
+        )
+
+        path, specs = get_video_device()
+
+        assert path == "/dev/video9"
+        assert isinstance(specs, ReachyMiniLiteCamSpecs)
