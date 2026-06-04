@@ -54,13 +54,11 @@ Example usage via MediaManager::
 import os
 import platform
 import time
-import warnings
 from collections.abc import Callable
 from threading import Thread
 from typing import Optional
 
 import numpy as np
-import numpy.typing as npt
 
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
@@ -483,47 +481,6 @@ class GStreamerAudio(AudioBase):
         self._pipeline.set_state(Gst.State.PLAYING)
         GLib.timeout_add_seconds(5, self._dump_latency)
 
-    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push audio data to the speaker.
-
-        Args:
-            data: Audio samples as a float32 array.  Shape should be
-                ``(num_samples, 2)`` for stereo or ``(num_samples,)`` for
-                mono (the caller is responsible for channel adaptation).
-
-        """
-        if self._appsrc is None:
-            self.logger.warning(
-                "AppSrc is not initialized. Call start_playing() first."
-            )
-            return
-
-        # Gap-aware PTS for audiomixer: the first buffer of a new utterance
-        # (gap > GAP_RESET_NS) carries DISCONT + a running-time PTS so the
-        # mixer aligns it on the current timeline. Follow-up buffers are
-        # untimestamped (CLOCK_TIME_NONE) so the mixer places them
-        # contiguously by byte offset — avoids drift from per-buffer
-        # stamping that the mixer would otherwise treat as "late".
-        running_time = self._appsrc.get_current_running_time()
-        duration_ns = (int(data.shape[0]) * Gst.SECOND) // self.SAMPLE_RATE
-        new_cue = (
-            self._appsrc_pts < 0 or running_time > self._appsrc_pts + self.GAP_RESET_NS
-        )
-
-        buf = Gst.Buffer.new_wrapped(data.tobytes())
-        if new_cue:
-            buf.set_flags(Gst.BufferFlags.DISCONT)
-            buf.pts = running_time
-            buf.dts = running_time
-            self._appsrc_pts = running_time + duration_ns
-        else:
-            self._appsrc_pts += duration_ns
-        # Do not set buf.duration; the mixer derives it from size + caps.
-
-        ret = self._appsrc.push_buffer(buf)
-        if ret != Gst.FlowReturn.OK:
-            self.logger.warning(f"push_buffer dropped: {ret}")
-
     def stop_playing(self) -> None:
         """Stop the playback pipeline."""
         if self._head_wobbler is not None:
@@ -533,15 +490,6 @@ class GStreamerAudio(AudioBase):
         if self._playbin is not None:
             self._playbin.set_state(Gst.State.NULL)
             self._playbin = None
-
-    def clear_output_buffer(self) -> None:
-        """Use :meth:`clear_player` instead. Deprecated; does nothing."""
-        warnings.warn(
-            "clear_output_buffer() is deprecated; use clear_player().",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        self.logger.warning("clear_output_buffer() is deprecated; use clear_player().")
 
     def clear_player(self) -> None:
         """Flush the player's appsrc to drop any queued audio immediately."""
