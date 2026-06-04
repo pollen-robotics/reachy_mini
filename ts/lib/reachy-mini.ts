@@ -1128,6 +1128,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         return this._sendCommand({ type: 'play_sound', file });
     }
 
+    clearIncomingAudio(): boolean {
+        return this._sendCommand({ type: 'clear_incoming_audio' });
+    }
+
     setMotorMode(mode: 'enabled' | 'disabled' | 'gravity_compensation'): boolean {
         return this._sendCommand({ type: 'set_motor_mode', mode });
     }

@@ -11,6 +11,7 @@ Subclasses must implement:
 - ``start_recording()``, ``stop_recording()``
 - ``start_playing()``, ``stop_playing()``
 - ``push_audio_sample()``
+- ``clear_player()``
 - ``play_sound()``
 
 """
@@ -216,6 +217,11 @@ class AudioBase(ABC):
     @abstractmethod
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output."""
+        ...
+
+    @abstractmethod
+    def clear_player(self) -> None:
+        """Drop any queued playback audio immediately (barge-in)."""
         ...
 
     @abstractmethod

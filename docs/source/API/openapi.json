@@ -1314,6 +1314,29 @@
         }
       }
     },
+    "/api/media/clear_incoming_audio": {
+      "post": {
+        "summary": "Clear Incoming Audio",
+        "description": "Drop audio received from WebRTC clients that is queued for the speaker.\n\nUsed for barge-in so the robot stops speaking already-buffered audio.",
+        "operationId": "clear_incoming_audio_api_media_clear_incoming_audio_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Clear Incoming Audio Api Media Clear Incoming Audio Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/media/wobbling/enable": {
       "post": {
         "summary": "Enable Wobbling",
