@@ -39,6 +39,12 @@ from reachy_mini.daemon.utils import (
     SimulationMode,
     is_local_camera_available,
 )
+from reachy_mini.media.audio_aec import (
+    build_aec_dsp_chain,
+    build_aec_probe_chain,
+    make_aec_probe,
+    resolve_sw_aec_enabled,
+)
 from reachy_mini.media.audio_control_utils import init_respeaker_usb
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.camera_constants import (
@@ -168,6 +174,34 @@ class GstMediaServer:
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
+
+        # Software AEC fallback decision is cached once at startup: the
+        # outcome depends on audio hardware presence (XVF3800 board /
+        # ReSpeaker USB / `.asoundrc` loopback) plus the availability of
+        # the `webrtcdsp` / `webrtcechoprobe` GStreamer elements. None of
+        # those change for the lifetime of the daemon, so we evaluate it
+        # once - and log it once - rather than on every pipeline rebuild.
+        # When enabled, ``_configure_audio`` (capture path) inserts a
+        # ``webrtcdsp`` between the platform mic and ``webrtcsink``, and
+        # ``_on_consumer_pad_added`` (peer playback path) inserts a
+        # paired ``webrtcechoprobe`` between ``opusdec`` and the tee feeding
+        # the laptop speaker. Together they prevent the mobile-app
+        # conversation loop from hearing itself when no hardware AEC
+        # board is in the audio path.
+        self._sw_aec_enabled = resolve_sw_aec_enabled(self._logger)
+        # The probe must be alive in the process-wide GStreamer registry
+        # by the time the sender pipeline (with the paired ``webrtcdsp``)
+        # transitions to PLAYING, otherwise the dsp fails to start with
+        # "No echo probe with name X found." The probe registers itself
+        # at ``set_property('name', ...)`` time, before reaching any
+        # pipeline, so we eagerly create it here and only attach it to
+        # the per-peer playback pipeline later in
+        # ``_on_consumer_pad_added``. Keeping a long-lived Python
+        # reference also keeps the registry entry alive across peer
+        # reconnects.
+        self._aec_probe: Optional[Gst.Element] = (
+            make_aec_probe() if self._sw_aec_enabled else None
+        )
 
         match sim_mode:
             case SimulationMode.MUJOCO:
@@ -436,7 +470,43 @@ class GstMediaServer:
             self._pipeline_playback.add(elem)
         appsrc.link(rtpopusdepay)
         rtpopusdepay.link(opusdec)
-        opusdec.link(tee)
+
+        if self._sw_aec_enabled and self._aec_probe is not None:
+            # Software AEC reference: drop the probe inline between
+            # `opusdec` and the tee. The probe is a passthrough
+            # element - every speaker sample reaches the tee (and so
+            # both the speaker and wobbler branches) while a copy is
+            # registered as the AEC reference signal that the paired
+            # `webrtcdsp` (in `_configure_audio`) subtracts from the
+            # mic stream. The matching is keyed by ``AEC_PROBE_NAME``.
+            #
+            # The probe element is created once in ``__init__`` and
+            # reused across peer reconnects. If it was previously
+            # parented to another (now-NULL) playback pipeline we
+            # must unparent it before adding it to the new one - an
+            # element can only be in one parent at a time.
+            previous_parent = self._aec_probe.get_parent()
+            if previous_parent is not None:
+                self._aec_probe.set_state(Gst.State.NULL)
+                previous_parent.remove(self._aec_probe)
+            ac_pre_probe, capsfilter_probe, _ = build_aec_probe_chain(
+                probe=self._aec_probe
+            )
+            self._pipeline_playback.add(ac_pre_probe)
+            self._pipeline_playback.add(capsfilter_probe)
+            self._pipeline_playback.add(self._aec_probe)
+            opusdec.link(ac_pre_probe)
+            ac_pre_probe.link(capsfilter_probe)
+            capsfilter_probe.link(self._aec_probe)
+            self._aec_probe.link(tee)
+            self._logger.info(
+                "Inserted software AEC reference (webrtcechoprobe) "
+                "between opusdec and tee for peer %s.",
+                peer_id,
+            )
+        else:
+            opusdec.link(tee)
+
         tee.link(queue_speaker)
         queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
@@ -964,7 +1034,37 @@ class GstMediaServer:
         pipeline.add(audiosrc)
         pipeline.add(queue)
         audiosrc.link(queue)
-        queue.link(webrtcsink)
+
+        if self._sw_aec_enabled:
+            # Insert the software AEC stage: mic → audioconvert →
+            # audioresample → capsfilter(S16LE/16k/2ch) → webrtcdsp →
+            # audioconvert → webrtcsink. The pre-dsp resample is
+            # mandatory because `webrtcdsp` only accepts a fixed
+            # 16 kHz internally, and `audioconvert` upstream handles
+            # the format / layout conversion to S16LE interleaved.
+            ac_pre = Gst.ElementFactory.make("audioconvert", "aec_ac_pre")
+            ar_pre = Gst.ElementFactory.make("audioresample", "aec_ar_pre")
+            capsfilter, dsp, ac_post = build_aec_dsp_chain()
+            if not all([ac_pre, ar_pre]):
+                raise RuntimeError(
+                    "Failed to create AEC pre-stage elements (audioconvert/audioresample)"
+                )
+            pipeline.add(ac_pre)
+            pipeline.add(ar_pre)
+            pipeline.add(capsfilter)
+            pipeline.add(dsp)
+            pipeline.add(ac_post)
+            queue.link(ac_pre)
+            ac_pre.link(ar_pre)
+            ar_pre.link(capsfilter)
+            capsfilter.link(dsp)
+            dsp.link(ac_post)
+            ac_post.link(webrtcsink)
+            self._logger.info(
+                "Inserted software AEC (webrtcdsp) between mic and webrtcsink."
+            )
+        else:
+            queue.link(webrtcsink)
 
     def _build_audio_source(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio source element.

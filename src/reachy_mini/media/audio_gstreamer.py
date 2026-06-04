@@ -25,6 +25,30 @@ Platform audio sources / sinks are discovered at runtime:
 The "Reachy Mini Audio" card is located by name via ``Gst.DeviceMonitor``.
 If no matching card is found the platform default is used instead.
 
+Software acoustic echo cancellation (no-board fallback)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When no XVF3800 audio board is in the audio path (no Wireless
+``~/.asoundrc`` AND no ReSpeaker USB dongle detected), the backend
+falls back to the platform default mic + speaker. Without the
+hardware AEC of the XMOS chip the OpenAI Realtime / conversation
+loop hears its own voice through the laptop speakers and collapses
+on feedback. This typically happens in simulation mode
+(``--sim`` / ``--mockup-sim``) and on developer workstations.
+
+To keep that workflow usable, this backend inserts a ``webrtcdsp``
++ ``webrtcechoprobe`` pair (from ``gst-plugins-bad``) inline on the
+record / playback pipelines. Detection re-uses the same audio
+device parsing the rest of the backend relies on:
+
+* If ``has_reachymini_asoundrc()`` is true → no extra processing
+  (Wireless XMOS handles AEC).
+* If ``get_audio_device("Source")`` finds a ReSpeaker card → no
+  extra processing (USB XVF3800 handles AEC).
+* Otherwise → enable the software AEC stage, provided the
+  ``webrtcdsp`` / ``webrtcechoprobe`` plugins are present in the
+  GStreamer build.
+
 Note:
     This class is typically used internally by ``MediaManager`` when the
     ``LOCAL`` backend is selected.  Direct usage is possible but usually
@@ -62,6 +86,11 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
+from reachy_mini.media.audio_aec import (
+    build_aec_dsp_chain,
+    build_aec_probe_chain,
+    resolve_sw_aec_enabled,
+)
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
@@ -115,6 +144,8 @@ class GStreamerAudio(AudioBase):
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
+
+        self._sw_aec_enabled = resolve_sw_aec_enabled(self.logger)
 
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._init_pipeline_record(self._pipeline_record)
@@ -182,7 +213,27 @@ class GStreamerAudio(AudioBase):
         audiosrc.link(queue)
         queue.link(audioconvert)
         audioconvert.link(audioresample)
-        audioresample.link(self._appsink_audio)
+
+        if self._sw_aec_enabled:
+            # Software AEC fallback: pin S16LE @ 16 kHz / 2 channels
+            # (the format both `webrtcdsp` and `webrtcechoprobe`
+            # accept and which they need to share on both ends), let
+            # the dsp filter the mic stream, then convert back to
+            # F32LE for the appsink. `audiobuffersplit` is not
+            # required - the dsp re-chunks to its own 10 ms frames
+            # internally via GstAdapter.
+            capsfilter, dsp, ac_post_dsp = build_aec_dsp_chain(
+                sample_rate=self.SAMPLE_RATE, channels=self.CHANNELS
+            )
+            pipeline.add(capsfilter)
+            pipeline.add(dsp)
+            pipeline.add(ac_post_dsp)
+            audioresample.link(capsfilter)
+            capsfilter.link(dsp)
+            dsp.link(ac_post_dsp)
+            ac_post_dsp.link(self._appsink_audio)
+        else:
+            audioresample.link(self._appsink_audio)
 
     def _build_audiosink_element(self) -> Gst.Element:
         """Create a platform-appropriate audio sink element."""
@@ -355,7 +406,32 @@ class GStreamerAudio(AudioBase):
         ):
             pipeline.add(el)
 
-        self._appsrc.link(tee)
+        if self._sw_aec_enabled:
+            # Software AEC reference: drop the probe inline between
+            # the appsrc and the tee. The probe is a passthrough
+            # element - anything pushed through reaches the tee (and
+            # therefore both the speaker and wobbler branches) while
+            # a copy is registered as the AEC reference. No parallel
+            # tee branch / fakesink is needed.
+            #
+            # The probe is only attached to the appsrc-driven
+            # conversation pipeline (this one), NOT to the
+            # `playbin`-driven tee bin used by `play_sound`:
+            # sound-file beeps are short and would otherwise collide
+            # on the probe's process-wide name.
+            ac_pre_probe, capsfilter_probe, probe = build_aec_probe_chain(
+                sample_rate=self.SAMPLE_RATE, channels=self.CHANNELS
+            )
+            pipeline.add(ac_pre_probe)
+            pipeline.add(capsfilter_probe)
+            pipeline.add(probe)
+            self._appsrc.link(ac_pre_probe)
+            ac_pre_probe.link(capsfilter_probe)
+            capsfilter_probe.link(probe)
+            probe.link(tee)
+        else:
+            self._appsrc.link(tee)
+
         tee.link(queue_speaker)
         queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
