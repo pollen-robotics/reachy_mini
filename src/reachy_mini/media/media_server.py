@@ -145,6 +145,14 @@ class GstMediaServer:
     # end-to-end latency is the metric we watch closest.
     RX_JITTER_LATENCY_MS = 300
 
+    # Send-side Opus loss resilience for the robot mic -> phone leg (the
+    # audio that feeds the realtime backend / STT). webrtcsink builds the
+    # opusenc with defaults (inband-fec off, packet-loss-percentage 0), so
+    # a dropped mic packet on a jittery Wi-Fi link can only be concealed by
+    # the browser decoder, never reconstructed. We enable in-band FEC and
+    # tell the encoder to budget for this much loss so it ships redundancy.
+    TX_OPUS_FEC_LOSS_PERC = 20
+
     def __init__(
         self,
         log_level: str = "INFO",
@@ -273,10 +281,45 @@ class GstMediaServer:
 
         webrtcsink.connect("consumer-added", self._consumer_added)
         webrtcsink.connect("consumer-removed", self._consumer_removed)
+        # Tune the auto-created Opus encoder for the mic->phone leg
+        # (in-band FEC). See `_encoder_setup` / `TX_OPUS_FEC_LOSS_PERC`.
+        webrtcsink.connect("encoder-setup", self._encoder_setup)
 
         pipeline.add(webrtcsink)
 
         return webrtcsink
+
+    def _encoder_setup(
+        self,
+        webrtcsink: Gst.Element,
+        consumer_id: str,
+        pad_name: str,
+        encoder: Gst.Element,
+    ) -> bool:
+        """Configure webrtcsink's auto-created encoder before it runs.
+
+        Fired by ``webrtcsink`` once per consumer encoder. We only touch
+        the Opus audio encoder (the robot mic uplink): enable in-band FEC
+        and budget for packet loss so the encoder ships redundancy that
+        the browser can use to reconstruct dropped mic packets instead of
+        merely concealing them. Returning ``False`` keeps webrtcsink's own
+        default configuration (notably its congestion-controlled bitrate),
+        which does not otherwise touch these two properties.
+        """
+        factory = encoder.get_factory()
+        factory_name = factory.get_name() if factory else ""
+        if factory_name == "opusenc":
+            if encoder.find_property("inband-fec") is not None:
+                encoder.set_property("inband-fec", True)
+            if encoder.find_property("packet-loss-percentage") is not None:
+                encoder.set_property(
+                    "packet-loss-percentage", self.TX_OPUS_FEC_LOSS_PERC
+                )
+            self._logger.info(
+                f"opusenc tuned for {consumer_id}: inband-fec=True, "
+                f"packet-loss-percentage={self.TX_OPUS_FEC_LOSS_PERC}"
+            )
+        return False
 
     def _consumer_added(
         self,
