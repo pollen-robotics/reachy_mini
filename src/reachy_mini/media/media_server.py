@@ -153,6 +153,10 @@ class GstMediaServer:
     # tell the encoder to budget for this much loss so it ships redundancy.
     TX_OPUS_FEC_LOSS_PERC = 20
 
+    # Name of the appsrc feeding the incoming-audio playback pipeline; used
+    # both when building the pipeline and when flushing it (clear_incoming_audio).
+    INCOMING_AUDIO_SRC_NAME = "audio_in"
+
     def __init__(
         self,
         log_level: str = "INFO",
@@ -444,7 +448,7 @@ class GstMediaServer:
         self._pipeline_playback.use_clock(sender_clock)
         self._pipeline_playback.set_start_time(Gst.CLOCK_TIME_NONE)
 
-        appsrc = Gst.ElementFactory.make("appsrc", "audio_in")
+        appsrc = Gst.ElementFactory.make("appsrc", self.INCOMING_AUDIO_SRC_NAME)
         appsrc.set_property("format", Gst.Format.TIME)
         appsrc.set_property("is-live", True)
         appsrc.set_property("caps", caps)
@@ -567,6 +571,32 @@ class GstMediaServer:
         if playback_pipe is not None:
             playback_pipe.set_state(Gst.State.NULL)
         self._logger.info(f"Cleaned up incoming audio for peer {peer_id}")
+
+    def clear_incoming_audio(self) -> None:
+        """Flush queued/rendering audio in the incoming-audio playback pipeline.
+
+        Used for barge-in: drops audio already received from a WebRTC client
+        and queued for the robot's speaker so the robot stops speaking promptly.
+
+        The playback pipeline shares the sender clock + base-time, so incoming
+        buffer PTS live in that shared running-time; we flush with
+        ``reset_time=False`` to keep the timeline intact (``reset_time=True``
+        would strand future-stamped buffers and stall playback). The pad probe
+        keeps pushing new RTP buffers into the appsrc, which resume in sync.
+        """
+        pipeline = self._pipeline_playback
+        if pipeline is None:
+            self._logger.info("No incoming-audio pipeline to clear.")
+            return
+        appsrc = pipeline.get_by_name(self.INCOMING_AUDIO_SRC_NAME)
+        if appsrc is None:
+            self._logger.warning("Incoming-audio appsrc not found; nothing to flush.")
+            return
+        appsrc.send_event(Gst.Event.new_flush_start())
+        appsrc.send_event(Gst.Event.new_flush_stop(reset_time=False))
+        if self._head_wobbler is not None:
+            self._head_wobbler.reset()
+        self._logger.info("Flushed incoming audio playback")
 
     @property
     def resolution(self) -> tuple[int, int]:

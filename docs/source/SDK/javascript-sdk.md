@@ -109,6 +109,7 @@ new ReachyMini({
 | `setAntennasDeg(right, left)` | `boolean` | Set antenna positions in degrees (wraps `setTarget`) |
 | `setBodyYawDeg(yaw)` | `boolean` | Set body yaw in degrees (wraps `setTarget`) |
 | `playSound(filename)` | `boolean` | Play a sound file on the robot |
+| `clearIncomingAudio()` | `boolean` | Drop audio queued for the robot speaker (barge-in) |
 | `sendRaw(data)` | `boolean` | Send arbitrary JSON via data channel |
 | `requestState()` | `boolean` | Request a state snapshot |
 | `setAudioMuted(muted)` | — | Mute/unmute robot speaker (local) |

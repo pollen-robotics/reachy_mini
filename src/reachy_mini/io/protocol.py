@@ -12,7 +12,7 @@ Client->Server command types:
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
     play_uploaded_move, cancel_move,
-    play_uploaded_audio, cancel_audio,
+    play_uploaded_audio, cancel_audio, clear_incoming_audio,
     apply_audio_config, read_audio_parameter
 
 Server->Client message types:
@@ -644,6 +644,17 @@ class CancelAudioCmd(BaseModel):
     upload_id: str
 
 
+class ClearIncomingAudioCmd(BaseModel):
+    """Drop incoming WebRTC audio queued for the speaker (barge-in). Fire-and-forget.
+
+    Flushes the daemon's incoming-audio playback pipeline so audio already
+    received from a WebRTC client stops playing promptly. No-op if no audio
+    is currently being received.
+    """
+
+    type: Literal["clear_incoming_audio"] = "clear_incoming_audio"
+
+
 AnyCommand = Annotated[
     SetTargetCmd
     | SetHeadJointsCmd
@@ -684,6 +695,7 @@ AnyCommand = Annotated[
     | CancelMoveCmd
     | PlayUploadedAudioCmd
     | CancelAudioCmd
+    | ClearIncomingAudioCmd
     | ApplyAudioConfigCmd
     | ReadAudioParameterCmd,
     Field(discriminator="type"),
