@@ -17,10 +17,11 @@ dependencies = [
     "jinja2",
     "uvicorn[standard]",
     "fastapi",
+    "pydantic>=2.12.5,<3.0.0",
     "python-multipart",
-    "starlette<1.0.0",                           #Fix: for starlette >= 1.0.0, we need to implement TemplateResponse(request, name, context)
+    "starlette<1.0.0", # TODO: update TemplateResponse(request, name, context) before allowing Starlette 1.x
     "pyserial",
-    "huggingface-hub==1.17.0",
+    "huggingface-hub>=1.17.0,<2.0.0",
     "reachy-mini-rust-kinematics>=1.0.3",
     "asgiref",
     "aiohttp",
@@ -34,13 +35,10 @@ dependencies = [
     "toml",
     "rustypot>=1.4.2",
     "pyyaml>=6.0",
-    "requests>=2.28.0",
+    "requests>=2.33.0",
     "zeroconf>=0.131,<1",
     "pycaw>=20240210; sys_platform == 'win32'",
     "pulsectl>=24.1.0; sys_platform == 'linux'",
-
-    "tornado>=6.5.5",   # fix security issue of this subdependency
-    "requests>=2.33.0", # fix security issue of this subdependency
 
     "gstreamer-bundle==1.28.3; sys_platform != 'linux'",
     # OS-specific: use PyGObject for Linux
@@ -57,7 +55,10 @@ examples = [
 ]
 mujoco = ["mujoco==3.3.0"]
 nn_kinematics = ["onnxruntime==1.22.1"]
-placo_kinematics = ["placo==0.9.14; sys_platform != 'win32'"]
+placo_kinematics = [
+    "placo==0.9.14; sys_platform != 'win32'",
+    "tornado>=6.5.5; sys_platform != 'win32'", # security floor for meshcat transitive dependency
+]
 rerun = ["rerun-sdk>=0.29.0,<=0.31.3"]
 wireless-version = [
     "semver>=3,<4",

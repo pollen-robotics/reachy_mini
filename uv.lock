@@ -3312,6 +3312,7 @@ dependencies = [
     { name = "psutil" },
     { name = "pulsectl", marker = "sys_platform == 'linux'" },
     { name = "pycaw", marker = "sys_platform == 'win32'" },
+    { name = "pydantic" },
     { name = "pygobject", marker = "sys_platform == 'linux'" },
     { name = "pyserial" },
     { name = "python-multipart" },
@@ -3327,7 +3328,6 @@ dependencies = [
     { name = "scipy", version = "1.17.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "starlette" },
     { name = "toml" },
-    { name = "tornado" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "websockets" },
     { name = "zeroconf" },
@@ -3349,6 +3349,7 @@ all = [
     { name = "rerun-sdk" },
     { name = "semver" },
     { name = "soundfile" },
+    { name = "tornado", marker = "sys_platform != 'win32'" },
 ]
 examples = [
     { name = "cv2-enumerate-cameras" },
@@ -3369,6 +3370,7 @@ opencv = [
 ]
 placo-kinematics = [
     { name = "placo", marker = "sys_platform != 'win32'" },
+    { name = "tornado", marker = "sys_platform != 'win32'" },
 ]
 rerun = [
     { name = "rerun-sdk" },
@@ -3404,7 +3406,7 @@ requires-dist = [
     { name = "gpiozero", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=2.0.0" },
     { name = "gradio-client", marker = "extra == 'examples'" },
     { name = "gstreamer-bundle", marker = "sys_platform != 'linux'", specifier = "==1.28.3" },
-    { name = "huggingface-hub", specifier = "==1.17.0" },
+    { name = "huggingface-hub", specifier = ">=1.17.0,<2.0.0" },
     { name = "jinja2" },
     { name = "lgpio", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=0.2.2.0" },
     { name = "libusb-package", specifier = ">=1.0.26.3" },
@@ -3421,6 +3423,7 @@ requires-dist = [
     { name = "psutil" },
     { name = "pulsectl", marker = "sys_platform == 'linux'", specifier = ">=24.1.0" },
     { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20240210" },
+    { name = "pydantic", specifier = ">=2.12.5,<3.0.0" },
     { name = "pygobject", marker = "sys_platform == 'linux'", specifier = ">=3.42.2,<=3.46.0" },
     { name = "pynput", marker = "extra == 'examples'" },
     { name = "pyserial" },
@@ -3437,7 +3440,6 @@ requires-dist = [
     { name = "reachy-mini", extras = ["wireless-version"], marker = "extra == 'all'" },
     { name = "reachy-mini-motor-controller", specifier = ">=1.5.5" },
     { name = "reachy-mini-rust-kinematics", specifier = ">=1.0.3" },
-    { name = "requests", specifier = ">=2.28.0" },
     { name = "requests", specifier = ">=2.33.0" },
     { name = "rerun-sdk", marker = "extra == 'rerun'", specifier = ">=0.29.0,<=0.31.3" },
     { name = "rich" },
@@ -3447,7 +3449,7 @@ requires-dist = [
     { name = "soundfile", marker = "extra == 'examples'" },
     { name = "starlette", specifier = "<1.0.0" },
     { name = "toml" },
-    { name = "tornado", specifier = ">=6.5.5" },
+    { name = "tornado", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = ">=6.5.5" },
     { name = "uvicorn", extras = ["standard"] },
     { name = "websockets", specifier = ">=12,<16" },
     { name = "zeroconf", specifier = ">=0.131,<1" },
@@ -4104,9 +4106,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/34/01/74e034a30ef59afb4097ef8659515e96a39d910b712a89af76f5e4e1f93c/tornado-6.5.5-cp39-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:435319e9e340276428bbdb4e7fa732c2d399386d1de5686cb331ec8eee754f07", size = 448192, upload-time = "2026-03-10T21:30:51.22Z" },
     { url = "https://files.pythonhosted.org/packages/be/00/fe9e02c5a96429fce1a1d15a517f5d8444f9c412e0bb9eadfbe3b0fc55bf/tornado-6.5.5-cp39-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:3f54aa540bdbfee7b9eb268ead60e7d199de5021facd276819c193c0fb28ea4e", size = 448039, upload-time = "2026-03-10T21:30:53.52Z" },
     { url = "https://files.pythonhosted.org/packages/82/9e/656ee4cec0398b1d18d0f1eb6372c41c6b889722641d84948351ae19556d/tornado-6.5.5-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:36abed1754faeb80fbd6e64db2758091e1320f6bba74a4cf8c09cd18ccce8aca", size = 447445, upload-time = "2026-03-10T21:30:55.541Z" },
-    { url = "https://files.pythonhosted.org/packages/5a/76/4921c00511f88af86a33de770d64141170f1cfd9c00311aea689949e274e/tornado-6.5.5-cp39-abi3-win32.whl", hash = "sha256:dd3eafaaeec1c7f2f8fdcd5f964e8907ad788fe8a5a32c4426fbbdda621223b7", size = 448582, upload-time = "2026-03-10T21:30:57.142Z" },
-    { url = "https://files.pythonhosted.org/packages/2c/23/f6c6112a04d28eed765e374435fb1a9198f73e1ec4b4024184f21faeb1ad/tornado-6.5.5-cp39-abi3-win_amd64.whl", hash = "sha256:6443a794ba961a9f619b1ae926a2e900ac20c34483eea67be4ed8f1e58d3ef7b", size = 448990, upload-time = "2026-03-10T21:30:58.857Z" },
-    { url = "https://files.pythonhosted.org/packages/b7/c8/876602cbc96469911f0939f703453c1157b0c826ecb05bdd32e023397d4e/tornado-6.5.5-cp39-abi3-win_arm64.whl", hash = "sha256:2c9a876e094109333f888539ddb2de4361743e5d21eece20688e3e351e4990a6", size = 448016, upload-time = "2026-03-10T21:31:00.43Z" },
 ]
 
 [[package]]
