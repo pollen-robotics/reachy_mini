@@ -138,6 +138,13 @@ class GstMediaServer:
     # converts whatever the source produces down to this rate before delivery.
     WOBBLER_SAMPLE_RATE = 16_000
 
+    # Receive-side jitter buffer depth (ms) for the consumer `webrtcbin`,
+    # i.e. the phone->robot voice leg. Default webrtcbin latency (200ms)
+    # underruns on a jittery Wi-Fi link and the speaker stutters. We trade
+    # a little latency for a steady buffer, capped at 300ms because
+    # end-to-end latency is the metric we watch closest.
+    RX_JITTER_LATENCY_MS = 300
+
     def __init__(
         self,
         log_level: str = "INFO",
@@ -287,6 +294,13 @@ class GstMediaServer:
 
         self._setup_data_channel(peer_id, webrtcbin)
 
+        # Deepen this consumer's receive jitter buffer before media flows
+        # so transient Wi-Fi jitter on the phone->robot voice leg doesn't
+        # starve the speaker. Must be set on `webrtcbin` here, while it is
+        # still being negotiated, for the internal jitterbuffer to pick it
+        # up. See `RX_JITTER_LATENCY_MS`.
+        webrtcbin.set_property("latency", self.RX_JITTER_LATENCY_MS)
+
         # Make audio bidirectional before SDP offer is generated
         self._enable_audio_receive(webrtcbin)
 
@@ -394,6 +408,17 @@ class GstMediaServer:
 
         rtpopusdepay = Gst.ElementFactory.make("rtpopusdepay")
         opusdec = Gst.ElementFactory.make("opusdec")
+        # Wi-Fi resilience on the phone->robot voice leg. The browser
+        # encoder emits Opus in-band FEC (a redundant copy of the
+        # previous frame piggybacked on the next packet) and ramps it
+        # with the loss it sees over RTCP; without these two properties
+        # the decoder silently ignores that redundancy and we glitch on
+        # every dropped packet. `use-inband-fec` reconstructs the lost
+        # frame from the next one (one packet of look-ahead, so the
+        # latency cost is ~one frame); `plc` conceals whatever FEC can't
+        # recover. This is the cheapest robustness win on this path.
+        opusdec.set_property("use-inband-fec", True)
+        opusdec.set_property("plc", True)
 
         audiosink = self._build_audiosink_element()
         if audiosink is None:
