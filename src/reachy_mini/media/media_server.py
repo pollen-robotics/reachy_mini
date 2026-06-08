@@ -138,6 +138,21 @@ class GstMediaServer:
     # converts whatever the source produces down to this rate before delivery.
     WOBBLER_SAMPLE_RATE = 16_000
 
+    # Receive-side jitter buffer depth (ms) for the consumer `webrtcbin`,
+    # i.e. the phone->robot voice leg. Default webrtcbin latency (200ms)
+    # underruns on a jittery Wi-Fi link and the speaker stutters. We trade
+    # a little latency for a steady buffer, capped at 300ms because
+    # end-to-end latency is the metric we watch closest.
+    RX_JITTER_LATENCY_MS = 300
+
+    # Send-side Opus loss resilience for the robot mic -> phone leg (the
+    # audio that feeds the realtime backend / STT). webrtcsink builds the
+    # opusenc with defaults (inband-fec off, packet-loss-percentage 0), so
+    # a dropped mic packet on a jittery Wi-Fi link can only be concealed by
+    # the browser decoder, never reconstructed. We enable in-band FEC and
+    # tell the encoder to budget for this much loss so it ships redundancy.
+    TX_OPUS_FEC_LOSS_PERC = 20
+
     # Name of the appsrc feeding the incoming-audio playback pipeline; used
     # both when building the pipeline and when flushing it (clear_incoming_audio).
     INCOMING_AUDIO_SRC_NAME = "audio_in"
@@ -270,10 +285,45 @@ class GstMediaServer:
 
         webrtcsink.connect("consumer-added", self._consumer_added)
         webrtcsink.connect("consumer-removed", self._consumer_removed)
+        # Tune the auto-created Opus encoder for the mic->phone leg
+        # (in-band FEC). See `_encoder_setup` / `TX_OPUS_FEC_LOSS_PERC`.
+        webrtcsink.connect("encoder-setup", self._encoder_setup)
 
         pipeline.add(webrtcsink)
 
         return webrtcsink
+
+    def _encoder_setup(
+        self,
+        webrtcsink: Gst.Element,
+        consumer_id: str,
+        pad_name: str,
+        encoder: Gst.Element,
+    ) -> bool:
+        """Configure webrtcsink's auto-created encoder before it runs.
+
+        Fired by ``webrtcsink`` once per consumer encoder. We only touch
+        the Opus audio encoder (the robot mic uplink): enable in-band FEC
+        and budget for packet loss so the encoder ships redundancy that
+        the browser can use to reconstruct dropped mic packets instead of
+        merely concealing them. Returning ``False`` keeps webrtcsink's own
+        default configuration (notably its congestion-controlled bitrate),
+        which does not otherwise touch these two properties.
+        """
+        factory = encoder.get_factory()
+        factory_name = factory.get_name() if factory else ""
+        if factory_name == "opusenc":
+            if encoder.find_property("inband-fec") is not None:
+                encoder.set_property("inband-fec", True)
+            if encoder.find_property("packet-loss-percentage") is not None:
+                encoder.set_property(
+                    "packet-loss-percentage", self.TX_OPUS_FEC_LOSS_PERC
+                )
+            self._logger.info(
+                f"opusenc tuned for {consumer_id}: inband-fec=True, "
+                f"packet-loss-percentage={self.TX_OPUS_FEC_LOSS_PERC}"
+            )
+        return False
 
     def _consumer_added(
         self,
@@ -290,6 +340,13 @@ class GstMediaServer:
         GLib.timeout_add_seconds(5, self._dump_latency)
 
         self._setup_data_channel(peer_id, webrtcbin)
+
+        # Deepen this consumer's receive jitter buffer before media flows
+        # so transient Wi-Fi jitter on the phone->robot voice leg doesn't
+        # starve the speaker. Must be set on `webrtcbin` here, while it is
+        # still being negotiated, for the internal jitterbuffer to pick it
+        # up. See `RX_JITTER_LATENCY_MS`.
+        webrtcbin.set_property("latency", self.RX_JITTER_LATENCY_MS)
 
         # Make audio bidirectional before SDP offer is generated
         self._enable_audio_receive(webrtcbin)
@@ -398,6 +455,17 @@ class GstMediaServer:
 
         rtpopusdepay = Gst.ElementFactory.make("rtpopusdepay")
         opusdec = Gst.ElementFactory.make("opusdec")
+        # Wi-Fi resilience on the phone->robot voice leg. The browser
+        # encoder emits Opus in-band FEC (a redundant copy of the
+        # previous frame piggybacked on the next packet) and ramps it
+        # with the loss it sees over RTCP; without these two properties
+        # the decoder silently ignores that redundancy and we glitch on
+        # every dropped packet. `use-inband-fec` reconstructs the lost
+        # frame from the next one (one packet of look-ahead, so the
+        # latency cost is ~one frame); `plc` conceals whatever FEC can't
+        # recover. This is the cheapest robustness win on this path.
+        opusdec.set_property("use-inband-fec", True)
+        opusdec.set_property("plc", True)
 
         audiosink = self._build_audiosink_element()
         if audiosink is None:
