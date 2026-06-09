@@ -671,6 +671,18 @@ class BluetoothCommandService:
     # forever (the PIN is a short proximity secret printed on the device).
     SESSION_TTL_S = 300
 
+    # Wrong-PIN throttle. The PIN is only a few characters, so unmetered
+    # guessing over BLE would brute-force it quickly. The first
+    # PIN_FREE_ATTEMPTS misses are free (fat-finger tolerance); every miss
+    # after that locks the PIN_ command for an exponentially growing window
+    # (PIN_LOCKOUT_BASE_S, doubling each time, capped at PIN_LOCKOUT_MAX_S).
+    # The counter is robot-global and deliberately SURVIVES BLE disconnects
+    # (see _on_central_disconnected) so an attacker cannot reset it by
+    # reconnecting; a correct PIN clears it.
+    PIN_FREE_ATTEMPTS = 3
+    PIN_LOCKOUT_BASE_S = 5
+    PIN_LOCKOUT_MAX_S = 300
+
     def __init__(self, device_name="ReachyMini", pin_code="00000"):
         """Initialize the Bluetooth Command Service."""
         self.device_name = device_name
@@ -678,6 +690,11 @@ class BluetoothCommandService:
         self.connected = False
         # monotonic deadline for the TTL-bounded WiFi session (see _is_authed).
         self._authed_until = 0.0
+        # Wrong-PIN throttle state (see PIN_* constants and _handle_command).
+        # Both deliberately persist across disconnects so reconnecting does
+        # not reset an in-progress lockout.
+        self._pin_failures = 0
+        self._pin_locked_until = 0.0
         self.bus = None
         self.app = None
         self.adv = None
@@ -774,6 +791,39 @@ class BluetoothCommandService:
         """Return whether the TTL-bounded authenticated session is still valid."""
         return self._authed_until > time.monotonic()
 
+    def _pin_lockout_remaining(self) -> float:
+        """Seconds left on the wrong-PIN lockout (0.0 if not locked).
+
+        Touched only from the GLib mainloop thread (WriteValue and the
+        disconnect handler both run there), so no lock is needed.
+        """
+        return max(0.0, self._pin_locked_until - time.monotonic())
+
+    def _register_pin_failure(self) -> None:
+        """Record a wrong PIN and arm the next lockout window.
+
+        Misses beyond PIN_FREE_ATTEMPTS lock the PIN_ command for
+        PIN_LOCKOUT_BASE_S, doubling per consecutive miss, capped at
+        PIN_LOCKOUT_MAX_S.
+        """
+        self._pin_failures += 1
+        over = self._pin_failures - self.PIN_FREE_ATTEMPTS
+        if over > 0:
+            delay = min(
+                self.PIN_LOCKOUT_MAX_S,
+                self.PIN_LOCKOUT_BASE_S * (2 ** (over - 1)),
+            )
+            self._pin_locked_until = time.monotonic() + delay
+            logger.warning(
+                f"Wrong PIN ({self._pin_failures} consecutive). "
+                f"PIN locked for {delay}s."
+            )
+
+    def _reset_pin_throttle(self) -> None:
+        """Clear the wrong-PIN counter and lockout after a successful auth."""
+        self._pin_failures = 0
+        self._pin_locked_until = 0.0
+
     def _emit_response(self, text: str) -> bool:
         """Push a result over the RESPONSE characteristic. Runs on the mainloop."""
         try:
@@ -827,14 +877,24 @@ class BluetoothCommandService:
             self._stop_journal()
             return "OK: Journal streaming stopped"
         elif command_str.startswith("PIN_"):
+            remaining = self._pin_lockout_remaining()
+            if remaining > 0:
+                # Locked out: reject WITHOUT comparing the PIN, so a correct
+                # guess landed mid-spree doesn't win and the lockout window is
+                # the real bottleneck. int()+1 rounds up so we never show "0s".
+                return (
+                    f"ERROR: Too many attempts. Try again in {int(remaining) + 1}s."
+                )
             pin = command_str[4:].strip()
             if pin == self.pin_code:
+                self._reset_pin_throttle()
                 self.connected = True
                 # Open a TTL-bounded session for the WiFi commands so the
                 # client can chain scan → connect → status without re-auth.
                 self._authed_until = time.monotonic() + self.SESSION_TTL_S
                 return "OK: Connected"
             else:
+                self._register_pin_failure()
                 return "ERROR: Incorrect PIN"
 
         # WiFi provisioning over BLE. All of these proxy to the daemon and may
@@ -990,6 +1050,10 @@ class BluetoothCommandService:
         stops any journal stream the dropped client left running, and
         re-asserts advertising so the robot is immediately reconnectable
         rather than relying on BlueZ to auto-resume.
+
+        The wrong-PIN throttle (_pin_failures / _pin_locked_until) is
+        deliberately NOT reset here: otherwise an attacker could wipe an
+        in-progress lockout just by dropping and re-opening the link.
         """
         self.connected = False
         self._authed_until = 0.0
