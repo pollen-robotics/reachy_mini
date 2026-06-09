@@ -49,6 +49,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 
 import { reachyHeadSvg } from '../assets';
+import { IdentityChipBar } from '../ui/design/IdentityChipBar';
 
 export type HostPhase =
   | 'signing-in'
@@ -71,6 +72,13 @@ export interface TopBarProps {
    *  flight / failed. The chip falls back to a first-letter glyph. */
   avatarUrl?: string | null;
   selectedRobotName?: string | null;
+  /** Physical transport of the selected robot (`wifi` / `usb` / …),
+   *  surfaced as the Lite/Wireless tag on the in-session identity
+   *  sub-line. `null` when no robot is selected. */
+  selectedRobotTransport?: string | null;
+  /** Rolling-min RTT (ms) the embed reports once live, or `null` while
+   *  not yet measured. Drives the latency pill on the sub-line. */
+  linkRttMs?: number | null;
   onSignOut(): void;
   onEndSession(): void;
 }
@@ -82,7 +90,9 @@ export function TopBar({
   hostPhase,
   userName,
   avatarUrl = null,
-  selectedRobotName: _selectedRobotName,
+  selectedRobotName = null,
+  selectedRobotTransport = null,
+  linkRttMs = null,
   onSignOut,
   onEndSession,
 }: TopBarProps): JSX.Element {
@@ -154,6 +164,24 @@ export function TopBar({
           >
             {appName}
           </Typography>
+          {/* In-session identity sub-line: the running app is the
+              headline (above); the robot it's driving + its link
+              facts (Lite/Wireless, live latency) read as the smaller
+              context line, mirroring the mobile app overlay. Only the
+              embed measures the live RTT (the host handed off its
+              WebRTC slot), so the latency pill is gated on a reported
+              value to avoid a misleading `0 ms`. */}
+          {sessionOpen && selectedRobotName && (
+            <Box sx={{ mt: 0.25 }}>
+              <IdentityChipBar
+                robotName={selectedRobotName}
+                transport={selectedRobotTransport}
+                linkRttMs={linkRttMs}
+                showLatency={linkRttMs !== null}
+                variant="secondary"
+              />
+            </Box>
+          )}
         </Box>
 
         {showEndSession && (
