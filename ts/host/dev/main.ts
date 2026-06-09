@@ -86,11 +86,19 @@ async function bootEmbed(): Promise<void> {
   const { connectToHost } = await import('@/embed');
 
   const root = document.getElementById('root') ?? document.body;
+  // Still intentionally minimal, but now it FEELS like a real app:
+  // the robot's live camera fills the view instead of a text stub.
+  // Everything else (auto-wake on connect, runtime sleep + torque
+  // release on leave) is handled by `connectToHost()` / the leave
+  // contract - this page only has to render the stream the SDK
+  // already negotiated.
   root.innerHTML = `
     <main style="font-family:system-ui,sans-serif;display:flex;flex-direction:column;
                  align-items:center;justify-content:center;height:100%;gap:16px;padding:24px;
-                 text-align:center;color:#111">
-      <h1 style="margin:0;font-size:1.25rem">Minimal embed</h1>
+                 text-align:center;color:#111;box-sizing:border-box">
+      <video id="robot-video" autoplay playsinline
+             style="width:100%;max-width:640px;aspect-ratio:16/9;border-radius:12px;
+                    background:#000;object-fit:cover;display:none"></video>
       <p id="status" style="margin:0;opacity:.7">Connecting…</p>
       <button id="leave" type="button" hidden
               style="padding:8px 16px;border-radius:8px;border:1px solid #999;cursor:pointer">
@@ -107,6 +115,16 @@ async function bootEmbed(): Promise<void> {
     const handle = await connectToHost();
     setStatus('Live — robot awake. End the session (top bar) to test the leave contract.');
 
+    // Show the live camera: the SDK finished the WebRTC handshake
+    // before this page mounted, so `media.attachVideo` replays the
+    // already-arrived tracks into the element immediately.
+    const video = document.getElementById('robot-video') as HTMLVideoElement | null;
+    let detachVideo: (() => void) | null = null;
+    if (video) {
+      video.style.display = 'block';
+      detachVideo = handle.media.attachVideo(video);
+    }
+
     const leaveBtn = document.getElementById('leave') as HTMLButtonElement | null;
     if (leaveBtn) {
       leaveBtn.hidden = false;
@@ -116,6 +134,8 @@ async function bootEmbed(): Promise<void> {
     handle.onLeave(() => {
       // App's OWN cleanup only - per the leave contract the runtime
       // sleeps the robot and releases the torque for us.
+      detachVideo?.();
+      if (video) video.style.display = 'none';
       setStatus('onLeave fired — app cleaning up; runtime is sleeping the robot.');
     });
   } catch (err) {
