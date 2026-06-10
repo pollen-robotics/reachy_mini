@@ -135,7 +135,12 @@ const MOCK_ROBOTS: RobotInfo[] = [
 export function ReachyHostShell(
   props: ReachyHostShellProps,
 ): JSX.Element {
-  const previewPhase = readPreviewPhase();
+  // Preview harness is a DEV-only affordance. Gating on
+  // `import.meta.env.DEV` lets the bundler tree-shake the whole
+  // preview branch (ReachyHostShellPreview + MOCK_ROBOTS) out of the
+  // production build, so a deployed Space can't be flipped into the
+  // mock view via `?host-preview=...`.
+  const previewPhase = import.meta.env.DEV ? readPreviewPhase() : null;
   if (previewPhase) {
     return <ReachyHostShellPreview phase={previewPhase} {...props} />;
   }
