@@ -489,11 +489,6 @@ def test_public_notify_schedules_work_on_relay_loop() -> None:
     assert journal.sent[0]["reason"] == "ice_negotiation_timeout"
 
 
-# ---------------------------------------------------------------------------
-# _run_loop backoff
-# ---------------------------------------------------------------------------
-
-
 def test_run_loop_backs_off_when_connect_returns_in_error_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
