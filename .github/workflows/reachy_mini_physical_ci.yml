@@ -6,19 +6,57 @@ on:
 jobs:
   linux_wireless:
     runs-on: ci-runner-linux
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      UPDATE_REF: 10de4b99a96d706ac421809fd9402f2eeb02d467
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      - name: Create virtual environment
-        run: python3 -m venv .venv
-
-      - name: Install dependencies
+      - name: Validate update ref on GitHub
         run: |
-          source .venv/bin/activate
-          : > install.log
-          python3 -m pip install --upgrade pip 2>&1 | tee -a install.log
-          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467 2>&1 | tee -a install.log
+          echo "Validating ref $UPDATE_REF..."
+          RESPONSE=$(curl -s "http://reachy-mini-ci.local:8000/api/update/validate-ref?git_ref=$UPDATE_REF")
+          echo "Response: $RESPONSE"
+          VALID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('valid'))")
+          if [ "$VALID" != "True" ]; then
+            echo "[ERROR] Ref $UPDATE_REF not found on GitHub"
+            exit 1
+          fi
+          echo "[OK] Ref $UPDATE_REF is valid"
+
+      - name: Update wireless to target ref
+        run: |
+          echo "Starting update to $UPDATE_REF..."
+          RESPONSE=$(curl -sX POST "http://reachy-mini-ci.local:8000/api/update/start-from-ref?git_ref=$UPDATE_REF")
+          echo "Update response: $RESPONSE"
+          JOB_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['job_id'])")
+          echo "Update job ID: $JOB_ID"
+          for i in {1..60}; do
+            STATE=$(curl -s "http://reachy-mini-ci.local:8000/api/update/info?job_id=$JOB_ID" | python3 -c "import sys, json; print(json.load(sys.stdin).get('status'))" 2>/dev/null || echo "")
+            echo "Attempt $i: update status = $STATE"
+            case "$STATE" in
+              done) echo "[OK] Update completed"; exit 0 ;;
+              failed) echo "[ERROR] Update failed"; exit 1 ;;
+            esac
+            sleep 5
+          done
+          echo "[ERROR] Update timed out after 300s"
+          exit 1
+
+      - name: Wait for daemon ready after update
+        run: |
+          echo "Waiting for daemon HTTP to respond after restart..."
+          for i in {1..30}; do
+            STATUS=$(curl -s --max-time 5 http://reachy-mini-ci.local:8000/api/daemon/status 2>/dev/null | grep -o '"state":"[^"]*"' | cut -d'"' -f4 || echo "")
+            echo "Attempt $i: Daemon status is '$STATUS'"
+            if [ -n "$STATUS" ]; then
+              echo "[OK] Daemon HTTP is reachable (state: $STATUS)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "[ERROR] Daemon did not come back up after 150s"
+          exit 1
 
       - name: Start Reachy Mini Wireless daemon
         run: |
@@ -46,23 +84,46 @@ jobs:
           echo "Stopping Wireless daemon..."
           curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon"
 
+      - name: Fetch daemon logs via WebSocket
+        if: always()
+        run: |
+          python3 -m venv /tmp/ws-venv
+          /tmp/ws-venv/bin/pip install --quiet websockets
+          /tmp/ws-venv/bin/python - > daemon.log <<'PYEOF'
+          import asyncio, websockets
+          async def main():
+              uri = "ws://reachy-mini-ci.local:8000/api/logs/ws/daemon"
+              try:
+                  async with websockets.connect(uri, open_timeout=10) as ws:
+                      while True:
+                          try:
+                              msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
+                              if msg.strip():
+                                  print(msg, flush=True)
+                          except asyncio.TimeoutError:
+                              break
+                          except websockets.exceptions.ConnectionClosed:
+                              break
+              except Exception as e:
+                  print(f"[CI] Failed to fetch logs: {e}", flush=True)
+          asyncio.run(main())
+          PYEOF
+          echo "Fetched $(wc -l < daemon.log) lines"
+          rm -rf /tmp/ws-venv
+
       - name: Write step summary
         if: always()
         run: |
           {
             echo ""
-            echo "<details><summary>Install log</summary>"
+            echo "<details><summary>Daemon log</summary>"
             echo ""
             echo '```'
-            cat install.log 2>/dev/null || echo "(no install log)"
+            cat daemon.log 2>/dev/null || echo "(no daemon log)"
             echo '```'
             echo ""
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Cleanup virtual environment
-        if: always()
-        run: rm -rf .venv
 
   linux_lite:
     needs: linux_wireless
@@ -349,30 +410,72 @@ jobs:
     needs: [linux_wireless, windows_lite]
     if: always()
     runs-on: ci-runner-windows
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      UPDATE_REF: 10de4b99a96d706ac421809fd9402f2eeb02d467
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      - name: Create virtual environment
-        shell: powershell
-        run: python -m venv .venv
-
-      - name: Install dependencies
+      - name: Validate update ref on GitHub
         shell: powershell
         run: |
-          $ErrorActionPreference = 'Continue'
-          .venv\Scripts\Activate.ps1
-          "" | Out-File -FilePath install.log -Encoding utf8
-          python -m pip install --upgrade pip 2>&1 | ForEach-Object {
-            Write-Host $_
-            Add-Content -Path install.log -Value "$_" -Encoding utf8
+          Write-Host "Validating ref $env:UPDATE_REF..."
+          $response = Invoke-RestMethod -Uri "http://reachy-mini-ci.local:8000/api/update/validate-ref?git_ref=$env:UPDATE_REF" -Method Get
+          Write-Host "Response: $($response | ConvertTo-Json -Compress)"
+          if ($response.valid -ne $true) {
+            Write-Host "[ERROR] Ref $env:UPDATE_REF not found on GitHub"
+            exit 1
           }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pip install --force-reinstall "git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | ForEach-Object {
-            Write-Host $_
-            Add-Content -Path install.log -Value "$_" -Encoding utf8
+          Write-Host "[OK] Ref $env:UPDATE_REF is valid"
+
+      - name: Update wireless to target ref
+        shell: powershell
+        run: |
+          Write-Host "Starting update to $env:UPDATE_REF..."
+          $startResp = Invoke-RestMethod -Uri "http://reachy-mini-ci.local:8000/api/update/start-from-ref?git_ref=$env:UPDATE_REF" -Method Post
+          $jobId = $startResp.job_id
+          Write-Host "Update job ID: $jobId"
+          for ($i = 1; $i -le 60; $i++) {
+            try {
+              $info = Invoke-RestMethod -Uri "http://reachy-mini-ci.local:8000/api/update/info?job_id=$jobId" -Method Get
+              $state = $info.status
+              Write-Host "Attempt $i : update status = $state"
+              if ($state -eq "done") {
+                Write-Host "[OK] Update completed"
+                exit 0
+              }
+              if ($state -eq "failed") {
+                Write-Host "[ERROR] Update failed"
+                exit 1
+              }
+            } catch {
+              Write-Host "Attempt $i : Failed to get update info (daemon may be restarting)"
+            }
+            Start-Sleep -Seconds 5
           }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "[ERROR] Update timed out after 300s"
+          exit 1
+
+      - name: Wait for daemon ready after update
+        shell: powershell
+        run: |
+          Write-Host "Waiting for daemon HTTP to respond after restart..."
+          for ($i = 1; $i -le 30; $i++) {
+            try {
+              $response = Invoke-RestMethod -Uri "http://reachy-mini-ci.local:8000/api/daemon/status" -Method Get -TimeoutSec 5
+              $status = $response.state
+              Write-Host "Attempt $i : Daemon status is '$status'"
+              if ($status) {
+                Write-Host "[OK] Daemon HTTP is reachable (state: $status)"
+                exit 0
+              }
+            } catch {
+              Write-Host "Attempt $i : Daemon unreachable (restarting?)"
+            }
+            Start-Sleep -Seconds 5
+          }
+          Write-Host "[ERROR] Daemon did not come back up after 150s"
+          exit 1
 
       - name: Start Reachy Mini Wireless daemon
         shell: powershell
@@ -382,6 +485,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             Write-Host "Daemon may already be running"
           }
+          $global:LASTEXITCODE = 0
 
       - name: Wait for Wireless daemon to be running
         shell: powershell
@@ -415,24 +519,54 @@ jobs:
           }
           $global:LASTEXITCODE = 0
 
+      - name: Fetch daemon logs via WebSocket
+        if: always()
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          python -m venv $env:TEMP\ws-venv
+          & "$env:TEMP\ws-venv\Scripts\python.exe" -m pip install --quiet websockets
+          $script = @'
+          import asyncio, websockets
+          async def main():
+              uri = "ws://reachy-mini-ci.local:8000/api/logs/ws/daemon"
+              try:
+                  async with websockets.connect(uri, open_timeout=10) as ws:
+                      while True:
+                          try:
+                              msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
+                              if msg.strip():
+                                  print(msg, flush=True)
+                          except asyncio.TimeoutError:
+                              break
+                          except websockets.exceptions.ConnectionClosed:
+                              break
+              except Exception as e:
+                  print(f"[CI] Failed to fetch logs: {e}", flush=True)
+          asyncio.run(main())
+          '@
+          $scriptPath = "$env:TEMP\fetch_logs.py"
+          $script | Out-File -FilePath $scriptPath -Encoding utf8
+          & "$env:TEMP\ws-venv\Scripts\python.exe" $scriptPath | Out-File -FilePath daemon.log -Encoding utf8
+          if (Test-Path daemon.log) {
+            Write-Host "Fetched $((Get-Content daemon.log).Count) lines"
+          }
+          Remove-Item -Recurse -Force $env:TEMP\ws-venv -ErrorAction SilentlyContinue
+          Remove-Item -Force $scriptPath -ErrorAction SilentlyContinue
+
       - name: Write step summary
         if: always()
         shell: powershell
         run: |
           $p = $env:GITHUB_STEP_SUMMARY
           "" | Add-Content -Path $p -Encoding utf8
-          "<details><summary>Install log</summary>" | Add-Content -Path $p -Encoding utf8
+          "<details><summary>Daemon log</summary>" | Add-Content -Path $p -Encoding utf8
           "" | Add-Content -Path $p -Encoding utf8
           '```' | Add-Content -Path $p -Encoding utf8
-          if (Test-Path install.log) { Get-Content install.log | Add-Content -Path $p -Encoding utf8 } else { "(no install log)" | Add-Content -Path $p -Encoding utf8 }
+          if (Test-Path daemon.log) { Get-Content daemon.log | Add-Content -Path $p -Encoding utf8 } else { "(no daemon log)" | Add-Content -Path $p -Encoding utf8 }
           '```' | Add-Content -Path $p -Encoding utf8
           "" | Add-Content -Path $p -Encoding utf8
           "</details>" | Add-Content -Path $p -Encoding utf8
-
-      - name: Cleanup virtual environment
-        if: always()
-        shell: powershell
-        run: Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
 
   windows_sim:
     needs: windows_wireless
@@ -725,19 +859,57 @@ jobs:
     needs: [linux_wireless, windows_wireless, mac_lite]
     if: always()
     runs-on: ci-runner-mac
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      UPDATE_REF: 10de4b99a96d706ac421809fd9402f2eeb02d467
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      - name: Create virtual environment
-        run: python3.12 -m venv .venv
-
-      - name: Install dependencies
+      - name: Validate update ref on GitHub
         run: |
-          source .venv/bin/activate
-          : > install.log
-          python3.12 -m pip install --upgrade pip 2>&1 | tee -a install.log
-          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467 2>&1 | tee -a install.log
+          echo "Validating ref $UPDATE_REF..."
+          RESPONSE=$(curl -s "http://reachy-mini-ci.local:8000/api/update/validate-ref?git_ref=$UPDATE_REF")
+          echo "Response: $RESPONSE"
+          VALID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('valid'))")
+          if [ "$VALID" != "True" ]; then
+            echo "[ERROR] Ref $UPDATE_REF not found on GitHub"
+            exit 1
+          fi
+          echo "[OK] Ref $UPDATE_REF is valid"
+
+      - name: Update wireless to target ref
+        run: |
+          echo "Starting update to $UPDATE_REF..."
+          RESPONSE=$(curl -sX POST "http://reachy-mini-ci.local:8000/api/update/start-from-ref?git_ref=$UPDATE_REF")
+          echo "Update response: $RESPONSE"
+          JOB_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['job_id'])")
+          echo "Update job ID: $JOB_ID"
+          for i in {1..60}; do
+            STATE=$(curl -s "http://reachy-mini-ci.local:8000/api/update/info?job_id=$JOB_ID" | python3 -c "import sys, json; print(json.load(sys.stdin).get('status'))" 2>/dev/null || echo "")
+            echo "Attempt $i: update status = $STATE"
+            case "$STATE" in
+              done) echo "[OK] Update completed"; exit 0 ;;
+              failed) echo "[ERROR] Update failed"; exit 1 ;;
+            esac
+            sleep 5
+          done
+          echo "[ERROR] Update timed out after 300s"
+          exit 1
+
+      - name: Wait for daemon ready after update
+        run: |
+          echo "Waiting for daemon HTTP to respond after restart..."
+          for i in {1..30}; do
+            STATUS=$(curl -s --max-time 5 http://reachy-mini-ci.local:8000/api/daemon/status 2>/dev/null | grep -o '"state":"[^"]*"' | cut -d'"' -f4 || echo "")
+            echo "Attempt $i: Daemon status is '$STATUS'"
+            if [ -n "$STATUS" ]; then
+              echo "[OK] Daemon HTTP is reachable (state: $STATUS)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "[ERROR] Daemon did not come back up after 150s"
+          exit 1
 
       - name: Start Reachy Mini Wireless daemon
         run: |
@@ -756,7 +928,8 @@ jobs:
             fi
             sleep 5
           done
-          echo "[ERROR] Wireless daemon failed to start after 60 seconds"
+          echo "[ERROR] Wireless daemon failed to start after 300s"
+          exit 1
 
       - name: Stop Reachy Mini Wireless daemon
         if: always()
@@ -764,20 +937,43 @@ jobs:
           echo "Stopping Wireless daemon..."
           curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon"
 
+      - name: Fetch daemon logs via WebSocket
+        if: always()
+        run: |
+          python3.12 -m venv /tmp/ws-venv
+          /tmp/ws-venv/bin/pip install --quiet websockets
+          /tmp/ws-venv/bin/python - > daemon.log <<'PYEOF'
+          import asyncio, websockets
+          async def main():
+              uri = "ws://reachy-mini-ci.local:8000/api/logs/ws/daemon"
+              try:
+                  async with websockets.connect(uri, open_timeout=10) as ws:
+                      while True:
+                          try:
+                              msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
+                              if msg.strip():
+                                  print(msg, flush=True)
+                          except asyncio.TimeoutError:
+                              break
+                          except websockets.exceptions.ConnectionClosed:
+                              break
+              except Exception as e:
+                  print(f"[CI] Failed to fetch logs: {e}", flush=True)
+          asyncio.run(main())
+          PYEOF
+          echo "Fetched $(wc -l < daemon.log) lines"
+          rm -rf /tmp/ws-venv
+
       - name: Write step summary
         if: always()
         run: |
           {
             echo ""
-            echo "<details><summary>Install log</summary>"
+            echo "<details><summary>Daemon log</summary>"
             echo ""
             echo '```'
-            cat install.log 2>/dev/null || echo "(no install log)"
+            cat daemon.log 2>/dev/null || echo "(no daemon log)"
             echo '```'
             echo ""
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Cleanup virtual environment
-        if: always()
-        run: rm -rf .venv
