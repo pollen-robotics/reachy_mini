@@ -12,38 +12,29 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      - name: Validate update ref on GitHub
+      - name: Show robot install before
         run: |
-          echo "Validating ref $UPDATE_REF..."
-          RESPONSE=$(curl -s "http://reachy-mini-ci.local:8000/update/validate-ref?git_ref=$UPDATE_REF")
-          echo "Response: $RESPONSE"
-          VALID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('valid'))")
-          if [ "$VALID" != "True" ]; then
-            echo "[ERROR] Ref $UPDATE_REF not found on GitHub"
-            exit 1
-          fi
-          echo "[OK] Ref $UPDATE_REF is valid"
-
-      - name: Show current robot install
-        run: |
-          echo "Current robot install:"
-          curl -s "http://reachy-mini-ci.local:8000/update/install-source"
+          curl -s --max-time 30 http://reachy-mini-ci.local:8000/update/install-source || echo "no response"
           echo ""
 
-      - name: Trigger update
+      - name: Update wireless via SSH
         run: |
-          echo "Triggering update to $UPDATE_REF..."
-          RESPONSE=$(curl -sX POST "http://reachy-mini-ci.local:8000/update/start-from-ref?git_ref=$UPDATE_REF")
-          echo "Trigger response: $RESPONSE"
+          ssh -i ~/.ssh/reachy_ci_robot \
+              -o StrictHostKeyChecking=accept-new \
+              pollen@reachy-mini-ci.local "
+            set -e
+            sudo systemctl stop reachy-mini-daemon
+            /venvs/mini_daemon/bin/pip install --force-reinstall --upgrade \"reachy-mini[wireless-version] @ git+https://github.com/pollen-robotics/reachy_mini.git@$UPDATE_REF\"
+            sudo systemctl start reachy-mini-daemon
+          "
 
       - name: Wait until robot is on target ref
         run: |
           SHORT_REF=$(echo "$UPDATE_REF" | cut -c1-8)
           echo "Polling install-source until commit == $SHORT_REF (max 5min)..."
           for i in {1..60}; do
-            INFO=$(curl -s --max-time 10 "http://reachy-mini-ci.local:8000/update/install-source" 2>/dev/null || echo "")
-            COMMIT=$(echo "$INFO" | python3 -c "import sys, json; print(json.load(sys.stdin).get('commit', ''))" 2>/dev/null || echo "")
-            echo "Attempt $i: commit=$COMMIT (full: $INFO)"
+            COMMIT=$(curl -s --max-time 30 "http://reachy-mini-ci.local:8000/update/install-source" 2>/dev/null | grep -o '"commit":"[^"]*"' | cut -d'"' -f4)
+            echo "Attempt $i: commit=$COMMIT"
             if [ "$COMMIT" = "$SHORT_REF" ]; then
               echo "[OK] Robot is on $UPDATE_REF"
               exit 0
