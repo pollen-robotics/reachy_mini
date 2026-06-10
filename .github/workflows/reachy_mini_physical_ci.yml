@@ -95,14 +95,17 @@ jobs:
       - name: Fetch daemon logs via WebSocket
         if: always()
         run: |
+          sleep 5
           python3 -m venv /tmp/ws-venv
           /tmp/ws-venv/bin/pip install --quiet websockets
           /tmp/ws-venv/bin/python - > daemon.log <<'PYEOF'
           import asyncio, websockets
           async def main():
               uri = "ws://reachy-mini-ci.local:8000/logs/ws/daemon"
+              print(f"[CI] Connecting to {uri}", flush=True)
               try:
-                  async with websockets.connect(uri, open_timeout=10) as ws:
+                  async with websockets.connect(uri, open_timeout=30, ping_interval=None) as ws:
+                      print("[CI] WS connected, reading messages...", flush=True)
                       while True:
                           try:
                               msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
@@ -113,7 +116,7 @@ jobs:
                           except websockets.exceptions.ConnectionClosed:
                               break
               except Exception as e:
-                  print(f"[CI] Failed to fetch logs: {e}", flush=True)
+                  print(f"[CI] Failed to fetch logs: {type(e).__name__}: {e}", flush=True)
           asyncio.run(main())
           PYEOF
           echo "Fetched $(wc -l < daemon.log) lines"
@@ -531,14 +534,17 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Continue'
+          Start-Sleep -Seconds 5
           python -m venv $env:TEMP\ws-venv
           & "$env:TEMP\ws-venv\Scripts\python.exe" -m pip install --quiet websockets
           $script = @'
           import asyncio, websockets
           async def main():
               uri = "ws://reachy-mini-ci.local:8000/logs/ws/daemon"
+              print(f"[CI] Connecting to {uri}", flush=True)
               try:
-                  async with websockets.connect(uri, open_timeout=10) as ws:
+                  async with websockets.connect(uri, open_timeout=30, ping_interval=None) as ws:
+                      print("[CI] WS connected, reading messages...", flush=True)
                       while True:
                           try:
                               msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
@@ -549,7 +555,7 @@ jobs:
                           except websockets.exceptions.ConnectionClosed:
                               break
               except Exception as e:
-                  print(f"[CI] Failed to fetch logs: {e}", flush=True)
+                  print(f"[CI] Failed to fetch logs: {type(e).__name__}: {e}", flush=True)
           asyncio.run(main())
           '@
           $scriptPath = "$env:TEMP\fetch_logs.py"
@@ -955,14 +961,17 @@ jobs:
       - name: Fetch daemon logs via WebSocket
         if: always()
         run: |
+          sleep 5
           python3.12 -m venv /tmp/ws-venv
           /tmp/ws-venv/bin/pip install --quiet websockets
           /tmp/ws-venv/bin/python - > daemon.log <<'PYEOF'
           import asyncio, websockets
           async def main():
               uri = "ws://reachy-mini-ci.local:8000/logs/ws/daemon"
+              print(f"[CI] Connecting to {uri}", flush=True)
               try:
-                  async with websockets.connect(uri, open_timeout=10) as ws:
+                  async with websockets.connect(uri, open_timeout=30, ping_interval=None) as ws:
+                      print("[CI] WS connected, reading messages...", flush=True)
                       while True:
                           try:
                               msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
@@ -973,7 +982,7 @@ jobs:
                           except websockets.exceptions.ConnectionClosed:
                               break
               except Exception as e:
-                  print(f"[CI] Failed to fetch logs: {e}", flush=True)
+                  print(f"[CI] Failed to fetch logs: {type(e).__name__}: {e}", flush=True)
           asyncio.run(main())
           PYEOF
           echo "Fetched $(wc -l < daemon.log) lines"
