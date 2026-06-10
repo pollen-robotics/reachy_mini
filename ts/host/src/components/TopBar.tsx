@@ -222,10 +222,6 @@ export function TopBar({
               fontWeight: 600,
               py: 0.5,
               px: 1.25,
-              // Lock the horizontal footprint to the widest label
-              // ("End session") so swapping in the shorter "Ending…"
-              // copy doesn't visibly shrink the chip mid-teardown.
-              minWidth: 116,
               borderRadius: 999,
               textTransform: 'none',
               lineHeight: 1.1,
@@ -235,7 +231,12 @@ export function TopBar({
           </Button>
         )}
 
-        {isSignedIn && (
+        {/* Account menu (avatar + sign-out) is a PICKER-only affordance:
+            sign-out lives in the robot list, not mid-session. Once a
+            session is open we swap it for the "End session" button
+            above, so the right cluster shows exactly one primary action
+            for the current phase. */}
+        {isSignedIn && !showEndSession && (
           <AccountMenu
             username={userName}
             avatarUrl={avatarUrl}
