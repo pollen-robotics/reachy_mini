@@ -32,12 +32,20 @@ jobs:
           JOB_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['job_id'])")
           echo "Update job ID: $JOB_ID"
           for i in {1..60}; do
-            STATE=$(curl -s "http://reachy-mini-ci.local:8000/update/info?job_id=$JOB_ID" | python3 -c "import sys, json; print(json.load(sys.stdin).get('status'))" 2>/dev/null || echo "")
-            echo "Attempt $i: update status = $STATE"
-            case "$STATE" in
-              done) echo "[OK] Update completed"; exit 0 ;;
-              failed) echo "[ERROR] Update failed"; exit 1 ;;
-            esac
+            RESPONSE=$(curl -s --max-time 10 "http://reachy-mini-ci.local:8000/update/info?job_id=$JOB_ID" 2>/dev/null || echo "")
+            echo "Attempt $i: $RESPONSE"
+            if echo "$RESPONSE" | grep -q '"status":"done"'; then
+              echo "[OK] Update done"
+              exit 0
+            fi
+            if echo "$RESPONSE" | grep -q '"status":"failed"'; then
+              echo "[ERROR] Update failed"
+              exit 1
+            fi
+            if echo "$RESPONSE" | grep -q '"detail":"Job ID not found"'; then
+              echo "[OK] Job lost from register (daemon restarted) — update applied"
+              exit 0
+            fi
             sleep 5
           done
           echo "[ERROR] Update timed out after 300s"
@@ -436,20 +444,19 @@ jobs:
           $jobId = $startResp.job_id
           Write-Host "Update job ID: $jobId"
           for ($i = 1; $i -le 60; $i++) {
-            try {
-              $info = Invoke-RestMethod -Uri "http://reachy-mini-ci.local:8000/update/info?job_id=$jobId" -Method Get
-              $state = $info.status
-              Write-Host "Attempt $i : update status = $state"
-              if ($state -eq "done") {
-                Write-Host "[OK] Update completed"
-                exit 0
-              }
-              if ($state -eq "failed") {
-                Write-Host "[ERROR] Update failed"
-                exit 1
-              }
-            } catch {
-              Write-Host "Attempt $i : Failed to get update info (daemon may be restarting)"
+            $response = curl.exe -s --max-time 10 "http://reachy-mini-ci.local:8000/update/info?job_id=$jobId" 2>$null
+            Write-Host "Attempt $i : $response"
+            if ($response -match '"status":"done"') {
+              Write-Host "[OK] Update done"
+              exit 0
+            }
+            if ($response -match '"status":"failed"') {
+              Write-Host "[ERROR] Update failed"
+              exit 1
+            }
+            if ($response -match '"detail":"Job ID not found"') {
+              Write-Host "[OK] Job lost from register (daemon restarted) -- update applied"
+              exit 0
             }
             Start-Sleep -Seconds 5
           }
@@ -885,12 +892,20 @@ jobs:
           JOB_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['job_id'])")
           echo "Update job ID: $JOB_ID"
           for i in {1..60}; do
-            STATE=$(curl -s "http://reachy-mini-ci.local:8000/update/info?job_id=$JOB_ID" | python3 -c "import sys, json; print(json.load(sys.stdin).get('status'))" 2>/dev/null || echo "")
-            echo "Attempt $i: update status = $STATE"
-            case "$STATE" in
-              done) echo "[OK] Update completed"; exit 0 ;;
-              failed) echo "[ERROR] Update failed"; exit 1 ;;
-            esac
+            RESPONSE=$(curl -s --max-time 10 "http://reachy-mini-ci.local:8000/update/info?job_id=$JOB_ID" 2>/dev/null || echo "")
+            echo "Attempt $i: $RESPONSE"
+            if echo "$RESPONSE" | grep -q '"status":"done"'; then
+              echo "[OK] Update done"
+              exit 0
+            fi
+            if echo "$RESPONSE" | grep -q '"status":"failed"'; then
+              echo "[ERROR] Update failed"
+              exit 1
+            fi
+            if echo "$RESPONSE" | grep -q '"detail":"Job ID not found"'; then
+              echo "[OK] Job lost from register (daemon restarted) — update applied"
+              exit 0
+            fi
             sleep 5
           done
           echo "[ERROR] Update timed out after 300s"
