@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  linux_wireless:
+  wireless_update:
     runs-on: ci-runner-linux
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       UPDATE_REF: 10de4b99a96d706ac421809fd9402f2eeb02d467
     steps:
@@ -24,47 +24,41 @@ jobs:
           fi
           echo "[OK] Ref $UPDATE_REF is valid"
 
-      - name: Update wireless to target ref
+      - name: Show current robot install
         run: |
-          echo "Starting update to $UPDATE_REF..."
+          echo "Current robot install:"
+          curl -s "http://reachy-mini-ci.local:8000/update/install-source"
+          echo ""
+
+      - name: Trigger update
+        run: |
+          echo "Triggering update to $UPDATE_REF..."
           RESPONSE=$(curl -sX POST "http://reachy-mini-ci.local:8000/update/start-from-ref?git_ref=$UPDATE_REF")
-          echo "Update response: $RESPONSE"
-          JOB_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['job_id'])")
-          echo "Update job ID: $JOB_ID"
+          echo "Trigger response: $RESPONSE"
+
+      - name: Wait until robot is on target ref
+        run: |
+          SHORT_REF=$(echo "$UPDATE_REF" | cut -c1-8)
+          echo "Polling install-source until commit == $SHORT_REF (max 5min)..."
           for i in {1..60}; do
-            RESPONSE=$(curl -s --max-time 10 "http://reachy-mini-ci.local:8000/update/info?job_id=$JOB_ID" 2>/dev/null || echo "")
-            echo "Attempt $i: $RESPONSE"
-            if echo "$RESPONSE" | grep -q '"status":"done"'; then
-              echo "[OK] Update done"
-              exit 0
-            fi
-            if echo "$RESPONSE" | grep -q '"status":"failed"'; then
-              echo "[ERROR] Update failed"
-              exit 1
-            fi
-            if echo "$RESPONSE" | grep -q '"detail":"Job ID not found"'; then
-              echo "[OK] Job lost from register (daemon restarted) — update applied"
+            INFO=$(curl -s --max-time 10 "http://reachy-mini-ci.local:8000/update/install-source" 2>/dev/null || echo "")
+            COMMIT=$(echo "$INFO" | python3 -c "import sys, json; print(json.load(sys.stdin).get('commit', ''))" 2>/dev/null || echo "")
+            echo "Attempt $i: commit=$COMMIT (full: $INFO)"
+            if [ "$COMMIT" = "$SHORT_REF" ]; then
+              echo "[OK] Robot is on $UPDATE_REF"
               exit 0
             fi
             sleep 5
           done
-          echo "[ERROR] Update timed out after 300s"
+          echo "[ERROR] Robot did not reach $UPDATE_REF after 5min"
           exit 1
 
-      - name: Wait for daemon ready after update
-        run: |
-          echo "Waiting for daemon HTTP to respond after restart..."
-          for i in {1..30}; do
-            STATUS=$(curl -s --max-time 5 http://reachy-mini-ci.local:8000/api/daemon/status 2>/dev/null | grep -o '"state":"[^"]*"' | cut -d'"' -f4 || echo "")
-            echo "Attempt $i: Daemon status is '$STATUS'"
-            if [ -n "$STATUS" ]; then
-              echo "[OK] Daemon HTTP is reachable (state: $STATUS)"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "[ERROR] Daemon did not come back up after 150s"
-          exit 1
+  linux_wireless:
+    needs: wireless_update
+    runs-on: ci-runner-linux
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Start Reachy Mini Wireless daemon
         run: |
@@ -419,73 +413,11 @@ jobs:
 
   windows_wireless:
     needs: [linux_wireless, windows_lite]
-    if: always()
+    if: ${{ always() && needs.linux_wireless.result == 'success' }}
     runs-on: ci-runner-windows
-    timeout-minutes: 15
-    env:
-      UPDATE_REF: 10de4b99a96d706ac421809fd9402f2eeb02d467
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Validate update ref on GitHub
-        shell: powershell
-        run: |
-          Write-Host "Validating ref $env:UPDATE_REF..."
-          $response = Invoke-RestMethod -Uri "http://reachy-mini-ci.local:8000/update/validate-ref?git_ref=$env:UPDATE_REF" -Method Get
-          Write-Host "Response: $($response | ConvertTo-Json -Compress)"
-          if ($response.valid -ne $true) {
-            Write-Host "[ERROR] Ref $env:UPDATE_REF not found on GitHub"
-            exit 1
-          }
-          Write-Host "[OK] Ref $env:UPDATE_REF is valid"
-
-      - name: Update wireless to target ref
-        shell: powershell
-        run: |
-          Write-Host "Starting update to $env:UPDATE_REF..."
-          $startResp = Invoke-RestMethod -Uri "http://reachy-mini-ci.local:8000/update/start-from-ref?git_ref=$env:UPDATE_REF" -Method Post
-          $jobId = $startResp.job_id
-          Write-Host "Update job ID: $jobId"
-          for ($i = 1; $i -le 60; $i++) {
-            $response = curl.exe -s --max-time 10 "http://reachy-mini-ci.local:8000/update/info?job_id=$jobId" 2>$null
-            Write-Host "Attempt $i : $response"
-            if ($response -match '"status":"done"') {
-              Write-Host "[OK] Update done"
-              exit 0
-            }
-            if ($response -match '"status":"failed"') {
-              Write-Host "[ERROR] Update failed"
-              exit 1
-            }
-            if ($response -match '"detail":"Job ID not found"') {
-              Write-Host "[OK] Job lost from register (daemon restarted) -- update applied"
-              exit 0
-            }
-            Start-Sleep -Seconds 5
-          }
-          Write-Host "[ERROR] Update timed out after 300s"
-          exit 1
-
-      - name: Wait for daemon ready after update
-        shell: powershell
-        run: |
-          Write-Host "Waiting for daemon HTTP to respond after restart..."
-          for ($i = 1; $i -le 30; $i++) {
-            try {
-              $response = Invoke-RestMethod -Uri "http://reachy-mini-ci.local:8000/api/daemon/status" -Method Get -TimeoutSec 5
-              $status = $response.state
-              Write-Host "Attempt $i : Daemon status is '$status'"
-              if ($status) {
-                Write-Host "[OK] Daemon HTTP is reachable (state: $status)"
-                exit 0
-              }
-            } catch {
-              Write-Host "Attempt $i : Daemon unreachable (restarting?)"
-            }
-            Start-Sleep -Seconds 5
-          }
-          Write-Host "[ERROR] Daemon did not come back up after 150s"
-          exit 1
 
       - name: Start Reachy Mini Wireless daemon
         shell: powershell
@@ -870,67 +802,11 @@ jobs:
 
   mac_wireless:
     needs: [linux_wireless, windows_wireless, mac_lite]
-    if: always()
+    if: ${{ always() && needs.windows_wireless.result == 'success' }}
     runs-on: ci-runner-mac
-    timeout-minutes: 15
-    env:
-      UPDATE_REF: 10de4b99a96d706ac421809fd9402f2eeb02d467
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Validate update ref on GitHub
-        run: |
-          echo "Validating ref $UPDATE_REF..."
-          RESPONSE=$(curl -s "http://reachy-mini-ci.local:8000/update/validate-ref?git_ref=$UPDATE_REF")
-          echo "Response: $RESPONSE"
-          VALID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('valid'))")
-          if [ "$VALID" != "True" ]; then
-            echo "[ERROR] Ref $UPDATE_REF not found on GitHub"
-            exit 1
-          fi
-          echo "[OK] Ref $UPDATE_REF is valid"
-
-      - name: Update wireless to target ref
-        run: |
-          echo "Starting update to $UPDATE_REF..."
-          RESPONSE=$(curl -sX POST "http://reachy-mini-ci.local:8000/update/start-from-ref?git_ref=$UPDATE_REF")
-          echo "Update response: $RESPONSE"
-          JOB_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['job_id'])")
-          echo "Update job ID: $JOB_ID"
-          for i in {1..60}; do
-            RESPONSE=$(curl -s --max-time 10 "http://reachy-mini-ci.local:8000/update/info?job_id=$JOB_ID" 2>/dev/null || echo "")
-            echo "Attempt $i: $RESPONSE"
-            if echo "$RESPONSE" | grep -q '"status":"done"'; then
-              echo "[OK] Update done"
-              exit 0
-            fi
-            if echo "$RESPONSE" | grep -q '"status":"failed"'; then
-              echo "[ERROR] Update failed"
-              exit 1
-            fi
-            if echo "$RESPONSE" | grep -q '"detail":"Job ID not found"'; then
-              echo "[OK] Job lost from register (daemon restarted) — update applied"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "[ERROR] Update timed out after 300s"
-          exit 1
-
-      - name: Wait for daemon ready after update
-        run: |
-          echo "Waiting for daemon HTTP to respond after restart..."
-          for i in {1..30}; do
-            STATUS=$(curl -s --max-time 5 http://reachy-mini-ci.local:8000/api/daemon/status 2>/dev/null | grep -o '"state":"[^"]*"' | cut -d'"' -f4 || echo "")
-            echo "Attempt $i: Daemon status is '$STATUS'"
-            if [ -n "$STATUS" ]; then
-              echo "[OK] Daemon HTTP is reachable (state: $STATUS)"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "[ERROR] Daemon did not come back up after 150s"
-          exit 1
 
       - name: Start Reachy Mini Wireless daemon
         run: |
