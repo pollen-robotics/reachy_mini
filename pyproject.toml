@@ -18,17 +18,17 @@ dependencies = [
     "uvicorn[standard]",
     "fastapi",
     "pydantic>=2.12.5,<3.0.0",
-    "python-multipart",
+    "python-multipart>=0.0.27",
     "starlette<1.0.0", # TODO: update TemplateResponse(request, name, context) before allowing Starlette 1.x
     "pyserial",
     "huggingface-hub>=1.17.0,<2.0.0",
     "reachy-mini-rust-kinematics>=1.0.3",
     "asgiref",
-    "aiohttp",
+    "aiohttp>=3.14.0",
     "log-throttling==0.0.3",
     "pyusb>=1.2.1",
     "libusb_package>=1.0.26.3",
-    "pip>=25",
+    "pip>=26.1",
     "rich",
     "questionary",
     "websockets>=12,<16",
@@ -36,7 +36,7 @@ dependencies = [
     "rustypot>=1.4.2",
     "pyyaml>=6.0",
     "requests>=2.33.0",
-    "zeroconf>=0.131,<1",
+    "zeroconf>=0.149.7,<1",
     "pycaw>=20240210; sys_platform == 'win32'",
     "pulsectl>=24.1.0; sys_platform == 'linux'",
 
@@ -80,7 +80,7 @@ all = [
 
 [dependency-groups]
 dev = [
-    "pytest",
+    "pytest>=9.0.3",
     "pytest-asyncio",
     "ruff==0.12.0",
     "onshape-to-robot==1.7.6",
