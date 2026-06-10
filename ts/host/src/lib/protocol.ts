@@ -187,6 +187,20 @@ export interface EmbedAppStateMsg {
   connectingStep?: AppConnectingStep | null;
   /** Optional human-readable hint shown in the overlay caption. */
   message?: string | null;
+  /**
+   * Rolling-min round-trip time (ms) on the embed's own WebRTC
+   * candidate pair, sampled from `sdk._pc.getStats()`. Additive
+   * field (no version bump): emitted periodically once `phase ===
+   * 'live'` so a host shell that has handed its session off to this
+   * iframe (mobile app) can still surface a TRUE link latency -
+   * the host itself no longer holds a connection to measure.
+   *
+   * `null` (or omitted) when the platform doesn't expose RTT (iOS
+   * WKWebView) or no pair is nominated yet. Hosts that don't care
+   * (the standalone web shell, which measures its own link) simply
+   * ignore it.
+   */
+  rttMs?: number | null;
 }
 
 /** App requests to leave (user clicked an in-app exit, error,
