@@ -259,13 +259,20 @@ def forget_all_wifi_networks() -> None:
 #   4. Daemon repeats the ECDH+HKDF (it computes the same PIN locally via
 #      get_pin()) and decrypts.
 #
-# Mixing the PIN into HKDF authenticates the channel: BLE pairing is
-# Just-Works (NoInputNoOutput hardware → no MITM-protected pairing
-# possible), so an active MITM who relays the handshake but does not know
-# the PIN cannot derive the key. Because the key ALSO depends on the ECDH
-# secret, the low-entropy PIN is not offline-brute-forceable from a passive
-# capture. AAD=ssid binds the sealed PSK to its target network (no replay
-# onto a different SSID).
+# AAD=ssid binds the sealed PSK to its target network (no replay onto a
+# different SSID).
+#
+# Security scope (see BLE_WIFI_PROVISIONING.md "Security properties"):
+# this protects the PSK against a PASSIVE eavesdropper — without an ECDH
+# private key there is no shared secret to feed HKDF, so the password stays
+# sealed. It does NOT defend against an ACTIVE man-in-the-middle. BLE pairing
+# is Just-Works (NoInputNoOutput hardware → no MITM-protected pairing), and
+# the phone does not verify it's talking to the real robot, so a MITM can
+# answer KEYEX with its own pubkey, learn the ECDH secret, capture the sealed
+# blob, and brute-force the 5-char PIN OFFLINE to open it. The wrong-PIN
+# throttle only gates ONLINE guesses and does not help here. Closing this gap
+# requires a PAKE (CPace/SPAKE2) that feeds the PIN into the key agreement —
+# tracked as follow-up work.
 
 # Rotate the provisioning keypair periodically; an ephemeral key has no
 # long-term value, and a provisioning flow completes in seconds. A `kid`

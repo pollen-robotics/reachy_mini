@@ -58,7 +58,12 @@ key is useless without the PIN.
 The WiFi password is **never** transmitted in cleartext (App-Store-review
 requirement). BLE pairing here is Just-Works (the robot is `NoInputNoOutput`
 hardware, so MITM-protected pairing isn't possible) — so we encrypt at the
-application layer and **authenticate the channel with the device PIN**.
+application layer and mix the device PIN into the key derivation.
+
+> **Threat model in one line:** this scheme protects the PSK against a
+> **passive** eavesdropper, but **not** against an **active** man-in-the-middle
+> present during the brief setup exchange. See "Security properties" below —
+> closing the active-MITM gap requires a PAKE and is tracked as follow-up work.
 
 Wire flow:
 
@@ -77,18 +82,56 @@ Wire flow:
 5. Daemon repeats ECDH+HKDF (it computes the **same** PIN locally), decrypts,
    and connects via `nmcli`.
 
-Why this is safe with Just-Works pairing:
+### Security properties
+
+What this scheme **does** give you:
+
 - **Passive sniffer** sees only public keys + ciphertext → can't recover the
-  PSK (no ECDH private key).
-- **Active MITM** can substitute its own pubkey but can't derive the key
-  without the PIN (it's in the HKDF). Because the key *also* depends on the
-  ECDH secret, the low-entropy PIN is **not** offline-brute-forceable from a
-  passive capture — it only has to resist online guessing (the PIN-attempt
-  gate handles that).
-- **AAD = ssid** binds the sealed PSK to its target network (no replay onto a
-  different SSID).
-- Wrong PIN / tampered ciphertext → AES-GCM auth fails → daemon returns 400 →
-  BLE returns `ERROR: Bad credentials (wrong PIN?)`.
+  PSK. Without an ECDH private key there is no shared secret to feed HKDF, so
+  the PIN salt is irrelevant and the password stays sealed. This is the
+  property the cleartext-avoidance requirement actually cares about, and it
+  holds.
+- **AAD = ssid** binds the sealed PSK to its target network — a captured blob
+  can't be replayed to seal-connect a *different* SSID.
+- **Tamper / wrong PIN at the robot** → AES-GCM auth fails → daemon returns
+  400 → BLE returns `ERROR: Bad credentials (wrong PIN?)`. Online PIN guessing
+  against the robot is separately rate-limited (see "Auth / session" and the
+  wrong-PIN throttle in `bluetooth_service.py`).
+
+> ### ⚠️ Known limitation — active MITM can recover the PSK (offline PIN brute-force)
+>
+> **This scheme does NOT defend against an active man-in-the-middle** within
+> BLE range during the few seconds of setup. Mixing a low-entropy PIN into an
+> otherwise-unauthenticated key exchange is not enough. The attack:
+>
+> 1. The phone never verifies it's talking to the *real* robot (Just-Works, no
+>    device identity key). On `WIFI_KEYEX` the MITM answers with **its own**
+>    X25519 pubkey.
+> 2. The phone now shares an ECDH secret with the **attacker**, who therefore
+>    knows that secret in full.
+> 3. The phone seals the PSK with `HKDF(ecdh_secret, salt = PIN)` and sends it;
+>    the MITM captures the ciphertext.
+> 4. The only unknown left is the **5-char PIN**. The attacker brute-forces it
+>    **offline** on their own machine — for each candidate PIN, re-derive the
+>    key and try to open the AES-GCM tag. ~10⁵ guesses is a fraction of a
+>    second, and it never touches the robot again, so the wrong-PIN throttle
+>    (which only gates *online* guesses) does **not** help here.
+>
+> Net: an attacker present during provisioning can recover the home WiFi
+> password — the exact thing this feature is meant to prevent. The earlier
+> "active MITM can't derive the key without the PIN" claim was **wrong** and
+> has been removed.
+>
+> **Fix (tracked as follow-up):** replace the ECDH-then-flavor-with-PIN step
+> with a **PAKE** (Password-Authenticated Key Exchange, e.g. CPace or SPAKE2)
+> that feeds the PIN *into* the key agreement. A party that doesn't know the
+> PIN ends up with a useless key and **cannot** test guesses offline — every
+> guess becomes a fresh live attempt the robot can see and throttle. The rest
+> of the scheme is unaffected: keep AES-GCM sealing the PSK and the SSID as
+> AAD, and only swap the key-agreement half. The PIN already exists and is
+> printed on the robot, so no new manufacturing or backend infrastructure is
+> needed. (An alternative — a permanent factory device identity key the phone
+> pins — also closes the gap but does require manufacturing changes.)
 
 ### iOS reference client (CryptoKit — no third-party deps)
 
