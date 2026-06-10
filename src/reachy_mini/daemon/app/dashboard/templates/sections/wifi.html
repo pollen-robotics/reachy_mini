@@ -9,6 +9,10 @@
 
     <div class="flex flex-col p-4 gap-4">
         <div id="wifi-status" class="wifi-status-info w-full">Checking WiFi configuration...</div>
+        <div id="wifi-connected" class="hidden wifi-status-info w-full">
+            Network: <span id="wifi-network" class="font-medium"></span>
+            <div>IP: <span id="wifi-ip"></span></div>
+        </div>
         <div id="known-networks" class="wifi-status-info hidden w-full">
             Known Networks:
             <ul id="known-networks-list" class="list-disc list-inside px-4"></ul>
@@ -42,5 +46,70 @@
                 </form>
             </div>
         </div>
+    </div>
+</div>
+
+<div class="app-section mt-6">
+    <div class="flex flex-row items-center gap-2">
+        <div class="app-section-title">Secondary WiFi (wlan1)</div>
+        <button id="refresh-wifi2" title="Refresh" class="p-1 rounded hover:bg-gray-200 focus:outline-none"
+            onclick="cleanAndRefresh2()">
+            🔄
+        </button>
+    </div>
+
+    <div class="flex flex-col p-4 gap-4">
+        <div id="wifi2-status" class="wifi-status-info w-full">Checking WiFi configuration...</div>
+        <div id="wifi2-connected" class="hidden wifi-status-info w-full">
+            Network: <span id="wifi2-network" class="font-medium"></span>
+            <div>IP: <span id="wifi2-ip"></span></div>
+            <div class="mt-2">
+                <button onclick="disconnectWifi2()"
+                    class="text-white bg-red-600 hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-4 py-2">
+                    Disconnect
+                </button>
+            </div>
+        </div>
+        <div id="known-networks2" class="wifi-status-info hidden w-full">
+            Known Networks:
+            <ul id="known-networks-list2" class="list-disc list-inside px-4"></ul>
+        </div>
+    </div>
+    <div id="add-wifi2" class="hidden">
+        <div class="py-4 flex flex-col max-w-md">
+            <div class="app-section-title mb-2">Add new WiFi</div>
+
+            <div class="flex flex-row p-4">
+                <form id="wifi-form2" class="max-w-md" onsubmit="return false;">
+                    <div class="mb-4">
+                        <label for="ssid2" class="block mb-2 text-sm">SSID</label>
+                        <select id="ssid2" name="ssid2"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                            required>
+                            <option value="" disabled selected>Select your WiFi network</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label for="password2" class="block mb-2 text-sm">Password</label>
+                        <input type="password" id="password2" name="password2"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                            required>
+                    </div>
+                    <div class="">
+                        <input type="button" onclick="connectToWifi2(event)" target="_blank" formtarget="_blank"
+                            value="Connect"
+                            class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm w-full sm:w-auto px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="wifi2-no-adapter" class="hidden px-4 pb-4">
+        <p class="text-sm text-gray-500 mb-2">wlan1 interface not found.</p>
+        <button onclick="createWlan1()"
+            class="text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-300 font-medium rounded-lg text-sm px-4 py-2">
+            Create Interface
+        </button>
     </div>
 </div>

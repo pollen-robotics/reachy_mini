@@ -1,6 +1,7 @@
 """WiFi Configuration Routers."""
 
 import logging
+import subprocess
 from enum import Enum
 from threading import Lock, Thread
 
@@ -10,6 +11,7 @@ from pydantic import BaseModel
 
 HOTSPOT_SSID = "reachy-mini-ap"
 HOTSPOT_PASSWORD = "reachy-mini"
+NMCLI_COMMAND_TIMEOUT = 10  # Timeout in seconds for nmcli/iw commands
 
 
 router = APIRouter(
@@ -17,6 +19,7 @@ router = APIRouter(
 )
 
 busy_lock = Lock()
+busy_lock2 = Lock()
 error: Exception | None = None
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,37 @@ class WifiStatus(BaseModel):
     mode: WifiMode
     known_networks: list[str]
     connected_network: str | None
+    ip_address: str | None
+
+
+class SecondaryWifiStatus(BaseModel):
+    """Secondary WiFi adapter (wlan1) status."""
+
+    exists: bool
+    connected: bool
+    ssid: str | None
+    ip_address: str | None
+    known_networks: list[str]
+    busy: bool
+
+
+def _get_iface_ip(iface: str) -> str | None:
+    """Get IP address of a network interface."""
+    try:
+        result = subprocess.run(
+            ["ip", "-4", "addr", "show", iface],
+            capture_output=True, text=True,
+            timeout=NMCLI_COMMAND_TIMEOUT,
+        )
+        if result.returncode != 0:
+            return None
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("inet "):
+                return line.split()[1].split("/")[0]
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logger.error(f"Failed to get IP for {iface}: {e}")
+    return None
 
 
 def get_current_wifi_mode() -> WifiMode:
@@ -46,7 +80,7 @@ def get_current_wifi_mode() -> WifiMode:
     conn = get_wifi_connections()
     if check_if_connection_active("Hotspot"):
         return WifiMode.HOTSPOT
-    elif any(c.device != "--" for c in conn):
+    elif any(c.device == "wlan0" for c in conn):
         return WifiMode.WLAN
     else:
         return WifiMode.DISCONNECTED
@@ -58,14 +92,17 @@ def get_wifi_status() -> WifiStatus:
     mode = get_current_wifi_mode()
 
     connections = get_wifi_connections()
-    known_networks = [c.name for c in connections if c.name != "Hotspot"]
+    # Filter to wlan0 connections only (exclude wlan1 secondary adapter)
+    known_networks = [c.name for c in connections if c.name != "Hotspot" and not c.name.endswith("-wlan1")]
 
-    connected_network = next((c.name for c in connections if c.device != "--"), None)
+    connected_network = next((c.name for c in connections if c.device == "wlan0"), None)
+    ip_address = _get_iface_ip("wlan0") if connected_network else None
 
     return WifiStatus(
         mode=mode,
         known_networks=known_networks,
         connected_network=connected_network,
+        ip_address=ip_address,
     )
 
 
@@ -222,6 +259,280 @@ def forget_all_wifi_networks() -> None:
                 logger.error(f"Failed to forget networks: {e}")
 
     Thread(target=forget_all).start()
+
+
+# --- Secondary WiFi (wlan1) endpoints ---
+
+
+def _wlan1_exists() -> bool:
+    """Check if wlan1 interface exists."""
+    try:
+        result = subprocess.run(
+            ["ip", "link", "show", "wlan1"],
+            capture_output=True, text=True,
+            timeout=NMCLI_COMMAND_TIMEOUT,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logger.error(f"Failed to check wlan1 existence: {e}")
+        return False
+
+
+def _get_wlan1_ip() -> str | None:
+    """Get IP address of wlan1."""
+    return _get_iface_ip("wlan1")
+
+
+def _get_wlan1_active_connection() -> str | None:
+    """Get the active NM connection name on wlan1."""
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,DEVICE", "con", "show", "--active"],
+            capture_output=True, text=True,
+            timeout=NMCLI_COMMAND_TIMEOUT,
+        )
+        if result.returncode != 0:
+            return None
+        for line in result.stdout.splitlines():
+            parts = line.split(":")
+            if len(parts) >= 2 and parts[-1] == "wlan1":
+                return parts[0]
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logger.error(f"Failed to get wlan1 active connection: {e}")
+    return None
+
+
+def _get_wlan1_ssid() -> str | None:
+    """Get the SSID that wlan1 is connected to."""
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "DEVICE,ACTIVE,SSID", "dev", "wifi"],
+            capture_output=True, text=True,
+            timeout=NMCLI_COMMAND_TIMEOUT,
+        )
+        if result.returncode != 0:
+            return None
+        for line in result.stdout.splitlines():
+            parts = line.split(":")
+            if len(parts) >= 3 and parts[0] == "wlan1" and parts[1] == "yes":
+                return parts[2]
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logger.error(f"Failed to get wlan1 SSID: {e}")
+    return None
+
+
+def _get_wlan1_known_networks() -> list[str]:
+    """Get saved NM connection profiles bound to wlan1."""
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "con", "show"],
+            capture_output=True, text=True,
+            timeout=NMCLI_COMMAND_TIMEOUT,
+        )
+        if result.returncode != 0:
+            return []
+        networks = []
+        for line in result.stdout.splitlines():
+            parts = line.split(":")
+            if len(parts) >= 3 and parts[1] == "802-11-wireless" and parts[2] == "wlan1":
+                networks.append(parts[0])
+        return networks
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logger.error(f"Failed to get wlan1 known networks: {e}")
+        return []
+
+
+def _ensure_wlan1() -> bool:
+    """Create wlan1 virtual interface if it doesn't exist. Returns True if exists/created."""
+    if _wlan1_exists():
+        return True
+    logger.info("Creating wlan1 virtual interface...")
+    try:
+        subprocess.run(
+            ["sudo", "iw", "dev", "wlan0", "interface", "add", "wlan1", "type", "managed"],
+            capture_output=True, text=True,
+            timeout=NMCLI_COMMAND_TIMEOUT,
+            check=True,
+        )
+        subprocess.run(
+            ["sudo", "ip", "link", "set", "wlan1", "up"],
+            capture_output=True, text=True,
+            timeout=NMCLI_COMMAND_TIMEOUT,
+        )
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to create wlan1: {e.stderr}")
+        return False
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logger.error(f"Failed to create wlan1: {e}")
+        return False
+
+
+@router.get("/status2")
+def get_secondary_wifi_status() -> SecondaryWifiStatus:
+    """Get secondary WiFi adapter (wlan1) status."""
+    if not _wlan1_exists():
+        return SecondaryWifiStatus(
+            exists=False, connected=False, ssid=None, ip_address=None,
+            known_networks=[], busy=busy_lock2.locked(),
+        )
+
+    ssid = _get_wlan1_ssid()
+    ip_addr = _get_wlan1_ip()
+    connected = ssid is not None and ip_addr is not None
+    known = _get_wlan1_known_networks()
+
+    return SecondaryWifiStatus(
+        exists=True,
+        connected=connected,
+        ssid=ssid,
+        ip_address=ip_addr,
+        known_networks=known,
+        busy=busy_lock2.locked(),
+    )
+
+
+@router.post("/scan2")
+def scan_secondary_wifi() -> list[str]:
+    """Scan for networks visible from wlan1."""
+    if not _wlan1_exists():
+        raise HTTPException(status_code=404, detail="wlan1 interface does not exist.")
+
+    try:
+        subprocess.run(
+            ["nmcli", "dev", "wifi", "rescan", "ifname", "wlan1"],
+            capture_output=True, text=True,
+            timeout=NMCLI_COMMAND_TIMEOUT,
+        )
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "SSID,SIGNAL", "dev", "wifi", "list", "ifname", "wlan1"],
+            capture_output=True, text=True,
+            timeout=NMCLI_COMMAND_TIMEOUT,
+        )
+        if result.returncode != 0:
+            return []
+
+        seen = set()
+        ssids = []
+        for line in result.stdout.splitlines():
+            parts = line.rsplit(":", 1)
+            ssid = parts[0].strip()
+            if ssid and ssid not in seen:
+                seen.add(ssid)
+                ssids.append(ssid)
+        return ssids
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logger.error(f"Failed to scan wlan1 networks: {e}")
+        return []
+
+
+@router.post("/connect2")
+def connect_secondary_wifi(ssid: str, password: str) -> None:
+    """Connect wlan1 to a network."""
+    if busy_lock2.locked():
+        raise HTTPException(status_code=409, detail="Another operation is in progress on wlan1.")
+
+    def connect() -> None:
+        with busy_lock2:
+            try:
+                if not _ensure_wlan1():
+                    logger.error("Cannot create wlan1 interface")
+                    return
+
+                con_name = f"{ssid}-wlan1"
+
+                # Check if connection profile already exists
+                check = subprocess.run(
+                    ["nmcli", "-t", "-f", "NAME", "con", "show"],
+                    capture_output=True, text=True,
+                    timeout=NMCLI_COMMAND_TIMEOUT,
+                )
+                profile_exists = con_name in check.stdout.splitlines()
+
+                if profile_exists:
+                    # Update password and bring up
+                    subprocess.run(
+                        ["nmcli", "con", "modify", con_name,
+                         "wifi-sec.key-mgmt", "wpa-psk",
+                         "wifi-sec.psk", password],
+                        capture_output=True, text=True,
+                        timeout=NMCLI_COMMAND_TIMEOUT,
+                    )
+                    result = subprocess.run(
+                        ["nmcli", "con", "up", con_name],
+                        capture_output=True, text=True,
+                        timeout=NMCLI_COMMAND_TIMEOUT,
+                    )
+                else:
+                    # Create new connection profile
+                    result = subprocess.run(
+                        ["nmcli", "con", "add",
+                         "type", "wifi",
+                         "ifname", "wlan1",
+                         "con-name", con_name,
+                         "ssid", ssid,
+                         "wifi-sec.key-mgmt", "wpa-psk",
+                         "wifi-sec.psk", password],
+                        capture_output=True, text=True,
+                        timeout=NMCLI_COMMAND_TIMEOUT,
+                    )
+                    if result.returncode != 0:
+                        logger.error(f"Failed to create connection for {ssid}: {result.stderr}")
+                        return
+
+                    result = subprocess.run(
+                        ["nmcli", "con", "up", con_name],
+                        capture_output=True, text=True,
+                        timeout=NMCLI_COMMAND_TIMEOUT,
+                    )
+
+                if result.returncode != 0:
+                    logger.error(f"Failed to connect wlan1 to {ssid}: {result.stderr}")
+                else:
+                    logger.info(f"wlan1 connected to {ssid}")
+
+            except Exception as e:
+                logger.error(f"Error connecting wlan1 to {ssid}: {e}")
+
+    Thread(target=connect).start()
+
+
+@router.post("/disconnect2")
+def disconnect_secondary_wifi() -> None:
+    """Disconnect wlan1."""
+    if busy_lock2.locked():
+        raise HTTPException(status_code=409, detail="Another operation is in progress on wlan1.")
+
+    con_name = _get_wlan1_active_connection()
+    if not con_name:
+        raise HTTPException(status_code=400, detail="wlan1 has no active connection.")
+
+    def disconnect() -> None:
+        with busy_lock2:
+            try:
+                subprocess.run(
+                    ["nmcli", "con", "down", con_name],
+                    capture_output=True, text=True,
+                    timeout=NMCLI_COMMAND_TIMEOUT,
+                    check=True,
+                )
+                logger.info(f"wlan1 disconnected from {con_name}")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Failed to disconnect wlan1: {e.stderr}")
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                logger.error(f"Error disconnecting wlan1: {e}")
+
+    Thread(target=disconnect).start()
+
+
+@router.post("/create_interface")
+def create_secondary_interface() -> dict[str, str]:
+    """Create wlan1 virtual interface if missing."""
+    if _wlan1_exists():
+        return {"status": "already_exists"}
+    if _ensure_wlan1():
+        return {"status": "created"}
+    raise HTTPException(status_code=500, detail="Failed to create wlan1 interface.")
 
 
 # NMCLI WRAPPERS
