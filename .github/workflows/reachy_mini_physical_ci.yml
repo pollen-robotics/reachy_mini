@@ -16,8 +16,9 @@ jobs:
       - name: Install dependencies
         run: |
           source .venv/bin/activate
-          python3 -m pip install --upgrade pip
-          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467
+          : > install.log
+          python3 -m pip install --upgrade pip 2>&1 | tee -a install.log
+          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467 2>&1 | tee -a install.log
 
       - name: Start Reachy Mini Wireless daemon
         run: |
@@ -45,12 +46,31 @@ jobs:
           echo "Stopping Wireless daemon..."
           curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon"
 
+      - name: Write step summary
+        if: always()
+        run: |
+          EMOJI="🟢"
+          [ "${{ job.status }}" != "success" ] && EMOJI="🔴"
+          {
+            echo ""
+            echo "## $EMOJI linux_wireless"
+            echo ""
+            echo "<details><summary>📦 Install log</summary>"
+            echo ""
+            echo '```'
+            cat install.log 2>/dev/null || echo "(no install log)"
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Cleanup virtual environment
         if: always()
         run: rm -rf .venv
 
   linux_lite:
     needs: linux_wireless
+    if: always()
     runs-on: ci-runner-linux
     timeout-minutes: 10
     steps:
@@ -62,14 +82,15 @@ jobs:
       - name: Install dependencies
         run: |
           source .venv/bin/activate
-          python3 -m pip install --upgrade pip
-          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467
+          : > install.log
+          python3 -m pip install --upgrade pip 2>&1 | tee -a install.log
+          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467 2>&1 | tee -a install.log
 
       - name: Start Reachy Mini Lite daemon
         run: |
           echo "Starting Reachy Mini Lite daemon..."
           source .venv/bin/activate
-          reachy-mini-daemon --robot-name reachy_mini_lite --serialport auto --localhost-only &
+          reachy-mini-daemon --robot-name reachy_mini_lite --serialport auto --localhost-only > daemon.log 2>&1 &
           echo $! > lite_daemon.pid
           echo "Daemon PID: $(cat lite_daemon.pid)"
 
@@ -99,12 +120,39 @@ jobs:
             rm lite_daemon.pid
           fi
 
+      - name: Write step summary
+        if: always()
+        run: |
+          EMOJI="🟢"
+          [ "${{ job.status }}" != "success" ] && EMOJI="🔴"
+          {
+            echo ""
+            echo "## $EMOJI linux_lite"
+            echo ""
+            echo "<details><summary>📦 Install log</summary>"
+            echo ""
+            echo '```'
+            cat install.log 2>/dev/null || echo "(no install log)"
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+            echo "<details><summary>🤖 Daemon log</summary>"
+            echo ""
+            echo '```'
+            cat daemon.log 2>/dev/null || echo "(no daemon log)"
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Cleanup virtual environment
         if: always()
         run: rm -rf .venv
 
   linux_sim:
     needs: linux_lite
+    if: always()
     runs-on: ci-runner-linux
     timeout-minutes: 10
     steps:
@@ -116,14 +164,15 @@ jobs:
       - name: Install dependencies with MuJoCo
         run: |
           source .venv/bin/activate
-          python3 -m pip install --upgrade pip
-          pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467"
+          : > install.log
+          python3 -m pip install --upgrade pip 2>&1 | tee -a install.log
+          pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | tee -a install.log
 
       - name: Start Reachy Mini Simulation daemon
         run: |
           echo "Starting Reachy Mini Simulation daemon..."
           source .venv/bin/activate
-          reachy-mini-daemon --robot-name reachy_mini_sim --sim --headless --localhost-only &
+          reachy-mini-daemon --robot-name reachy_mini_sim --sim --headless --localhost-only > daemon.log 2>&1 &
           echo $! > sim_daemon.pid
           echo "Daemon PID: $(cat sim_daemon.pid)"
 
@@ -153,6 +202,32 @@ jobs:
             rm sim_daemon.pid
           fi
 
+      - name: Write step summary
+        if: always()
+        run: |
+          EMOJI="🟢"
+          [ "${{ job.status }}" != "success" ] && EMOJI="🔴"
+          {
+            echo ""
+            echo "## $EMOJI linux_sim"
+            echo ""
+            echo "<details><summary>📦 Install log</summary>"
+            echo ""
+            echo '```'
+            cat install.log 2>/dev/null || echo "(no install log)"
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+            echo "<details><summary>🤖 Daemon log</summary>"
+            echo ""
+            echo '```'
+            cat daemon.log 2>/dev/null || echo "(no daemon log)"
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Cleanup virtual environment
         if: always()
         run: rm -rf .venv
@@ -181,15 +256,16 @@ jobs:
         shell: powershell
         run: |
           .venv\Scripts\Activate.ps1
-          python -m pip install --upgrade pip
-          python -m pip install --force-reinstall "git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467"
+          "" | Out-File -FilePath install.log -Encoding utf8
+          python -m pip install --upgrade pip 2>&1 | Tee-Object -FilePath install.log -Append
+          python -m pip install --force-reinstall "git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | Tee-Object -FilePath install.log -Append
 
       - name: Start Reachy Mini Lite daemon
         shell: powershell
         run: |
           Write-Host "Starting Reachy Mini Lite daemon with detached process..."
           .venv\Scripts\Activate.ps1
-          cmd /c "start /B .venv\Scripts\reachy-mini-daemon.exe --robot-name reachy_mini_lite --serialport auto --localhost-only"
+          cmd /c "start /B .venv\Scripts\reachy-mini-daemon.exe --robot-name reachy_mini_lite --serialport auto --localhost-only > daemon.log 2>&1"
           Start-Sleep -Seconds 5
           Write-Host "Finding daemon PID..."
           $process = Get-Process | Where-Object {$_.ProcessName -eq "reachy-mini-daemon"} | Select-Object -First 1
@@ -244,6 +320,31 @@ jobs:
             Write-Host "No PID file found"
           }
 
+      - name: Write step summary
+        if: always()
+        shell: powershell
+        run: |
+          $emoji = if ('${{ job.status }}' -eq 'success') { '🟢' } else { '🔴' }
+          $p = $env:GITHUB_STEP_SUMMARY
+          "" | Add-Content -Path $p
+          "## $emoji windows_lite" | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          "<details><summary>📦 Install log</summary>" | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          '```' | Add-Content -Path $p
+          if (Test-Path install.log) { Get-Content install.log | Add-Content -Path $p } else { "(no install log)" | Add-Content -Path $p }
+          '```' | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          "</details>" | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          "<details><summary>🤖 Daemon log</summary>" | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          '```' | Add-Content -Path $p
+          if (Test-Path daemon.log) { Get-Content daemon.log | Add-Content -Path $p } else { "(no daemon log)" | Add-Content -Path $p }
+          '```' | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          "</details>" | Add-Content -Path $p
+
       - name: Cleanup virtual environment
         if: always()
         shell: powershell
@@ -251,6 +352,7 @@ jobs:
 
   windows_wireless:
     needs: [linux_wireless, windows_lite]
+    if: always()
     runs-on: ci-runner-windows
     timeout-minutes: 10
     steps:
@@ -264,8 +366,9 @@ jobs:
         shell: powershell
         run: |
           .venv\Scripts\Activate.ps1
-          python -m pip install --upgrade pip
-          python -m pip install --force-reinstall "git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467"
+          "" | Out-File -FilePath install.log -Encoding utf8
+          python -m pip install --upgrade pip 2>&1 | Tee-Object -FilePath install.log -Append
+          python -m pip install --force-reinstall "git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | Tee-Object -FilePath install.log -Append
 
       - name: Start Reachy Mini Wireless daemon
         shell: powershell
@@ -307,6 +410,23 @@ jobs:
             Write-Host "Failed to stop daemon"
           }
 
+      - name: Write step summary
+        if: always()
+        shell: powershell
+        run: |
+          $emoji = if ('${{ job.status }}' -eq 'success') { '🟢' } else { '🔴' }
+          $p = $env:GITHUB_STEP_SUMMARY
+          "" | Add-Content -Path $p
+          "## $emoji windows_wireless" | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          "<details><summary>📦 Install log</summary>" | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          '```' | Add-Content -Path $p
+          if (Test-Path install.log) { Get-Content install.log | Add-Content -Path $p } else { "(no install log)" | Add-Content -Path $p }
+          '```' | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          "</details>" | Add-Content -Path $p
+
       - name: Cleanup virtual environment
         if: always()
         shell: powershell
@@ -314,6 +434,7 @@ jobs:
 
   windows_sim:
     needs: windows_wireless
+    if: always()
     runs-on: ci-runner-windows
     timeout-minutes: 10
     steps:
@@ -337,15 +458,16 @@ jobs:
         shell: powershell
         run: |
           .venv\Scripts\Activate.ps1
-          python -m pip install --upgrade pip
-          python -m pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467"
+          "" | Out-File -FilePath install.log -Encoding utf8
+          python -m pip install --upgrade pip 2>&1 | Tee-Object -FilePath install.log -Append
+          python -m pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | Tee-Object -FilePath install.log -Append
 
       - name: Start Reachy Mini Simulation daemon
         shell: powershell
         run: |
           Write-Host "Starting Reachy Mini Simulation daemon with detached process..."
           .venv\Scripts\Activate.ps1
-          cmd /c "start /B .venv\Scripts\reachy-mini-daemon.exe --robot-name reachy_mini_sim --sim --headless --localhost-only"
+          cmd /c "start /B .venv\Scripts\reachy-mini-daemon.exe --robot-name reachy_mini_sim --sim --headless --localhost-only > daemon.log 2>&1"
           Start-Sleep -Seconds 5
           Write-Host "Finding daemon PID..."
           $process = Get-Process | Where-Object {$_.ProcessName -eq "reachy-mini-daemon"} | Select-Object -First 1
@@ -400,6 +522,31 @@ jobs:
             Write-Host "No PID file found"
           }
 
+      - name: Write step summary
+        if: always()
+        shell: powershell
+        run: |
+          $emoji = if ('${{ job.status }}' -eq 'success') { '🟢' } else { '🔴' }
+          $p = $env:GITHUB_STEP_SUMMARY
+          "" | Add-Content -Path $p
+          "## $emoji windows_sim" | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          "<details><summary>📦 Install log</summary>" | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          '```' | Add-Content -Path $p
+          if (Test-Path install.log) { Get-Content install.log | Add-Content -Path $p } else { "(no install log)" | Add-Content -Path $p }
+          '```' | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          "</details>" | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          "<details><summary>🤖 Daemon log</summary>" | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          '```' | Add-Content -Path $p
+          if (Test-Path daemon.log) { Get-Content daemon.log | Add-Content -Path $p } else { "(no daemon log)" | Add-Content -Path $p }
+          '```' | Add-Content -Path $p
+          "" | Add-Content -Path $p
+          "</details>" | Add-Content -Path $p
+
       - name: Cleanup virtual environment
         if: always()
         shell: powershell
@@ -416,15 +563,16 @@ jobs:
 
       - name: Create virtual environment
         run: |
-          rm -rf .venv 
+          rm -rf .venv
           python3.12 -m venv .venv
 
       - name: Install dependencies with MuJoCo
         run: |
           source .venv/bin/activate
           which python
-          python3.12 -m pip install --upgrade pip
-          pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467"  
+          : > install.log
+          python3.12 -m pip install --upgrade pip 2>&1 | tee -a install.log
+          pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | tee -a install.log
 
       - name: Start Reachy Mini Simulation daemon
         run: |
@@ -460,12 +608,39 @@ jobs:
             rm sim_daemon.pid
           fi
 
+      - name: Write step summary
+        if: always()
+        run: |
+          EMOJI="🟢"
+          [ "${{ job.status }}" != "success" ] && EMOJI="🔴"
+          {
+            echo ""
+            echo "## $EMOJI mac_sim"
+            echo ""
+            echo "<details><summary>📦 Install log</summary>"
+            echo ""
+            echo '```'
+            cat install.log 2>/dev/null || echo "(no install log)"
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+            echo "<details><summary>🤖 Daemon log</summary>"
+            echo ""
+            echo '```'
+            cat daemon.log 2>/dev/null || echo "(no daemon log)"
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # - name: Cleanup virtual environment
       #   if: always()
       #   run: rm -rf .venv
 
   mac_lite:
     needs: mac_sim
+    if: always()
     runs-on: ci-runner-mac
     timeout-minutes: 10
     steps:
@@ -477,14 +652,15 @@ jobs:
       - name: Install dependencies
         run: |
           source .venv/bin/activate
-          python3.12 -m pip install --upgrade pip
-          uv pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467
+          : > install.log
+          python3.12 -m pip install --upgrade pip 2>&1 | tee -a install.log
+          uv pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467 2>&1 | tee -a install.log
 
       - name: Start Reachy Mini Lite daemon
         run: |
           echo "Starting Reachy Mini Lite daemon..."
           source .venv/bin/activate
-          uv run reachy-mini-daemon --robot-name reachy_mini_lite --serialport auto --localhost-only &
+          uv run reachy-mini-daemon --robot-name reachy_mini_lite --serialport auto --localhost-only > daemon.log 2>&1 &
           echo $! > lite_daemon.pid
           echo "Daemon PID: $(cat lite_daemon.pid)"
 
@@ -514,12 +690,39 @@ jobs:
             rm lite_daemon.pid
           fi
 
+      - name: Write step summary
+        if: always()
+        run: |
+          EMOJI="🟢"
+          [ "${{ job.status }}" != "success" ] && EMOJI="🔴"
+          {
+            echo ""
+            echo "## $EMOJI mac_lite"
+            echo ""
+            echo "<details><summary>📦 Install log</summary>"
+            echo ""
+            echo '```'
+            cat install.log 2>/dev/null || echo "(no install log)"
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+            echo "<details><summary>🤖 Daemon log</summary>"
+            echo ""
+            echo '```'
+            cat daemon.log 2>/dev/null || echo "(no daemon log)"
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Cleanup virtual environment
         if: always()
         run: rm -rf .venv
 
   mac_wireless:
     needs: [linux_wireless, windows_wireless, mac_lite]
+    if: always()
     runs-on: ci-runner-mac
     timeout-minutes: 10
     steps:
@@ -531,8 +734,9 @@ jobs:
       - name: Install dependencies
         run: |
           source .venv/bin/activate
-          python3.12 -m pip install --upgrade pip
-          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467
+          : > install.log
+          python3.12 -m pip install --upgrade pip 2>&1 | tee -a install.log
+          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467 2>&1 | tee -a install.log
 
       - name: Start Reachy Mini Wireless daemon
         run: |
@@ -558,6 +762,24 @@ jobs:
         run: |
           echo "Stopping Wireless daemon..."
           curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon"
+
+      - name: Write step summary
+        if: always()
+        run: |
+          EMOJI="🟢"
+          [ "${{ job.status }}" != "success" ] && EMOJI="🔴"
+          {
+            echo ""
+            echo "## $EMOJI mac_wireless"
+            echo ""
+            echo "<details><summary>📦 Install log</summary>"
+            echo ""
+            echo '```'
+            cat install.log 2>/dev/null || echo "(no install log)"
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Cleanup virtual environment
         if: always()
