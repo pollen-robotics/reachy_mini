@@ -492,15 +492,7 @@ def test_public_notify_schedules_work_on_relay_loop() -> None:
 def test_run_loop_backs_off_when_connect_returns_in_error_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A 401-style failure (ERROR state, no exception) still gets a backoff.
-
-    ``_handle_central_sse`` returns normally - without raising - when
-    central rejects the token (401) or returns a non-200 status, leaving
-    the relay in ``RelayState.ERROR``. Without the fix, ``_run_loop``
-    would treat that as a normal return and immediately retry, spinning a
-    tight reconnect loop against the local GStreamer signaling server on a
-    stale/invalid token.
-    """
+    """A 401-style failure (ERROR state, no exception) still gets a backoff."""
     monkeypatch.setattr(
         "reachy_mini.media.central_signaling_relay.RECONNECT_INTERVAL", 0.05
     )
