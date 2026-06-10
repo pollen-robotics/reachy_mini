@@ -49,13 +49,13 @@ jobs:
       - name: Write step summary
         if: always()
         run: |
-          EMOJI="🟢"
-          [ "${{ job.status }}" != "success" ] && EMOJI="🔴"
+          STATUS="✓"
+          [ "${{ job.status }}" != "success" ] && STATUS="✗"
           {
             echo ""
-            echo "## $EMOJI linux_wireless"
+            echo "<details><summary>linux_wireless $STATUS</summary>"
             echo ""
-            echo "<details><summary>📦 Install log</summary>"
+            echo "**Install log**"
             echo ""
             echo '```'
             cat install.log 2>/dev/null || echo "(no install log)"
@@ -123,21 +123,19 @@ jobs:
       - name: Write step summary
         if: always()
         run: |
-          EMOJI="🟢"
-          [ "${{ job.status }}" != "success" ] && EMOJI="🔴"
+          STATUS="✓"
+          [ "${{ job.status }}" != "success" ] && STATUS="✗"
           {
             echo ""
-            echo "## $EMOJI linux_lite"
+            echo "<details><summary>linux_lite $STATUS</summary>"
             echo ""
-            echo "<details><summary>📦 Install log</summary>"
+            echo "**Install log**"
             echo ""
             echo '```'
             cat install.log 2>/dev/null || echo "(no install log)"
             echo '```'
             echo ""
-            echo "</details>"
-            echo ""
-            echo "<details><summary>🤖 Daemon log</summary>"
+            echo "**Daemon log**"
             echo ""
             echo '```'
             cat daemon.log 2>/dev/null || echo "(no daemon log)"
@@ -205,21 +203,19 @@ jobs:
       - name: Write step summary
         if: always()
         run: |
-          EMOJI="🟢"
-          [ "${{ job.status }}" != "success" ] && EMOJI="🔴"
+          STATUS="✓"
+          [ "${{ job.status }}" != "success" ] && STATUS="✗"
           {
             echo ""
-            echo "## $EMOJI linux_sim"
+            echo "<details><summary>linux_sim $STATUS</summary>"
             echo ""
-            echo "<details><summary>📦 Install log</summary>"
+            echo "**Install log**"
             echo ""
             echo '```'
             cat install.log 2>/dev/null || echo "(no install log)"
             echo '```'
             echo ""
-            echo "</details>"
-            echo ""
-            echo "<details><summary>🤖 Daemon log</summary>"
+            echo "**Daemon log**"
             echo ""
             echo '```'
             cat daemon.log 2>/dev/null || echo "(no daemon log)"
@@ -255,10 +251,13 @@ jobs:
       - name: Install dependencies
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Continue'
           .venv\Scripts\Activate.ps1
           "" | Out-File -FilePath install.log -Encoding utf8
           python -m pip install --upgrade pip 2>&1 | Tee-Object -FilePath install.log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pip install --force-reinstall "git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | Tee-Object -FilePath install.log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Start Reachy Mini Lite daemon
         shell: powershell
@@ -319,31 +318,32 @@ jobs:
           } else {
             Write-Host "No PID file found"
           }
+          $global:LASTEXITCODE = 0
 
       - name: Write step summary
         if: always()
         shell: powershell
         run: |
-          $emoji = if ('${{ job.status }}' -eq 'success') { '🟢' } else { '🔴' }
+          $check = [char]0x2713
+          $cross = [char]0x2717
+          $status = if ('${{ job.status }}' -eq 'success') { $check } else { $cross }
           $p = $env:GITHUB_STEP_SUMMARY
-          "" | Add-Content -Path $p
-          "## $emoji windows_lite" | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          "<details><summary>📦 Install log</summary>" | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          '```' | Add-Content -Path $p
-          if (Test-Path install.log) { Get-Content install.log | Add-Content -Path $p } else { "(no install log)" | Add-Content -Path $p }
-          '```' | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          "</details>" | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          "<details><summary>🤖 Daemon log</summary>" | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          '```' | Add-Content -Path $p
-          if (Test-Path daemon.log) { Get-Content daemon.log | Add-Content -Path $p } else { "(no daemon log)" | Add-Content -Path $p }
-          '```' | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          "</details>" | Add-Content -Path $p
+          "" | Add-Content -Path $p -Encoding utf8
+          "<details><summary>windows_lite $status</summary>" | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          "**Install log**" | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          '```' | Add-Content -Path $p -Encoding utf8
+          if (Test-Path install.log) { Get-Content install.log | Add-Content -Path $p -Encoding utf8 } else { "(no install log)" | Add-Content -Path $p -Encoding utf8 }
+          '```' | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          "**Daemon log**" | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          '```' | Add-Content -Path $p -Encoding utf8
+          if (Test-Path daemon.log) { Get-Content daemon.log | Add-Content -Path $p -Encoding utf8 } else { "(no daemon log)" | Add-Content -Path $p -Encoding utf8 }
+          '```' | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          "</details>" | Add-Content -Path $p -Encoding utf8
 
       - name: Cleanup virtual environment
         if: always()
@@ -365,10 +365,13 @@ jobs:
       - name: Install dependencies
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Continue'
           .venv\Scripts\Activate.ps1
           "" | Out-File -FilePath install.log -Encoding utf8
           python -m pip install --upgrade pip 2>&1 | Tee-Object -FilePath install.log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pip install --force-reinstall "git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | Tee-Object -FilePath install.log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Start Reachy Mini Wireless daemon
         shell: powershell
@@ -409,23 +412,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             Write-Host "Failed to stop daemon"
           }
+          $global:LASTEXITCODE = 0
 
       - name: Write step summary
         if: always()
         shell: powershell
         run: |
-          $emoji = if ('${{ job.status }}' -eq 'success') { '🟢' } else { '🔴' }
+          $check = [char]0x2713
+          $cross = [char]0x2717
+          $status = if ('${{ job.status }}' -eq 'success') { $check } else { $cross }
           $p = $env:GITHUB_STEP_SUMMARY
-          "" | Add-Content -Path $p
-          "## $emoji windows_wireless" | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          "<details><summary>📦 Install log</summary>" | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          '```' | Add-Content -Path $p
-          if (Test-Path install.log) { Get-Content install.log | Add-Content -Path $p } else { "(no install log)" | Add-Content -Path $p }
-          '```' | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          "</details>" | Add-Content -Path $p
+          "" | Add-Content -Path $p -Encoding utf8
+          "<details><summary>windows_wireless $status</summary>" | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          "**Install log**" | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          '```' | Add-Content -Path $p -Encoding utf8
+          if (Test-Path install.log) { Get-Content install.log | Add-Content -Path $p -Encoding utf8 } else { "(no install log)" | Add-Content -Path $p -Encoding utf8 }
+          '```' | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          "</details>" | Add-Content -Path $p -Encoding utf8
 
       - name: Cleanup virtual environment
         if: always()
@@ -457,10 +463,13 @@ jobs:
       - name: Install dependencies with MuJoCo
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Continue'
           .venv\Scripts\Activate.ps1
           "" | Out-File -FilePath install.log -Encoding utf8
           python -m pip install --upgrade pip 2>&1 | Tee-Object -FilePath install.log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | Tee-Object -FilePath install.log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Start Reachy Mini Simulation daemon
         shell: powershell
@@ -521,31 +530,32 @@ jobs:
           } else {
             Write-Host "No PID file found"
           }
+          $global:LASTEXITCODE = 0
 
       - name: Write step summary
         if: always()
         shell: powershell
         run: |
-          $emoji = if ('${{ job.status }}' -eq 'success') { '🟢' } else { '🔴' }
+          $check = [char]0x2713
+          $cross = [char]0x2717
+          $status = if ('${{ job.status }}' -eq 'success') { $check } else { $cross }
           $p = $env:GITHUB_STEP_SUMMARY
-          "" | Add-Content -Path $p
-          "## $emoji windows_sim" | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          "<details><summary>📦 Install log</summary>" | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          '```' | Add-Content -Path $p
-          if (Test-Path install.log) { Get-Content install.log | Add-Content -Path $p } else { "(no install log)" | Add-Content -Path $p }
-          '```' | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          "</details>" | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          "<details><summary>🤖 Daemon log</summary>" | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          '```' | Add-Content -Path $p
-          if (Test-Path daemon.log) { Get-Content daemon.log | Add-Content -Path $p } else { "(no daemon log)" | Add-Content -Path $p }
-          '```' | Add-Content -Path $p
-          "" | Add-Content -Path $p
-          "</details>" | Add-Content -Path $p
+          "" | Add-Content -Path $p -Encoding utf8
+          "<details><summary>windows_sim $status</summary>" | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          "**Install log**" | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          '```' | Add-Content -Path $p -Encoding utf8
+          if (Test-Path install.log) { Get-Content install.log | Add-Content -Path $p -Encoding utf8 } else { "(no install log)" | Add-Content -Path $p -Encoding utf8 }
+          '```' | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          "**Daemon log**" | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          '```' | Add-Content -Path $p -Encoding utf8
+          if (Test-Path daemon.log) { Get-Content daemon.log | Add-Content -Path $p -Encoding utf8 } else { "(no daemon log)" | Add-Content -Path $p -Encoding utf8 }
+          '```' | Add-Content -Path $p -Encoding utf8
+          "" | Add-Content -Path $p -Encoding utf8
+          "</details>" | Add-Content -Path $p -Encoding utf8
 
       - name: Cleanup virtual environment
         if: always()
@@ -611,21 +621,19 @@ jobs:
       - name: Write step summary
         if: always()
         run: |
-          EMOJI="🟢"
-          [ "${{ job.status }}" != "success" ] && EMOJI="🔴"
+          STATUS="✓"
+          [ "${{ job.status }}" != "success" ] && STATUS="✗"
           {
             echo ""
-            echo "## $EMOJI mac_sim"
+            echo "<details><summary>mac_sim $STATUS</summary>"
             echo ""
-            echo "<details><summary>📦 Install log</summary>"
+            echo "**Install log**"
             echo ""
             echo '```'
             cat install.log 2>/dev/null || echo "(no install log)"
             echo '```'
             echo ""
-            echo "</details>"
-            echo ""
-            echo "<details><summary>🤖 Daemon log</summary>"
+            echo "**Daemon log**"
             echo ""
             echo '```'
             cat daemon.log 2>/dev/null || echo "(no daemon log)"
@@ -693,21 +701,19 @@ jobs:
       - name: Write step summary
         if: always()
         run: |
-          EMOJI="🟢"
-          [ "${{ job.status }}" != "success" ] && EMOJI="🔴"
+          STATUS="✓"
+          [ "${{ job.status }}" != "success" ] && STATUS="✗"
           {
             echo ""
-            echo "## $EMOJI mac_lite"
+            echo "<details><summary>mac_lite $STATUS</summary>"
             echo ""
-            echo "<details><summary>📦 Install log</summary>"
+            echo "**Install log**"
             echo ""
             echo '```'
             cat install.log 2>/dev/null || echo "(no install log)"
             echo '```'
             echo ""
-            echo "</details>"
-            echo ""
-            echo "<details><summary>🤖 Daemon log</summary>"
+            echo "**Daemon log**"
             echo ""
             echo '```'
             cat daemon.log 2>/dev/null || echo "(no daemon log)"
@@ -766,13 +772,13 @@ jobs:
       - name: Write step summary
         if: always()
         run: |
-          EMOJI="🟢"
-          [ "${{ job.status }}" != "success" ] && EMOJI="🔴"
+          STATUS="✓"
+          [ "${{ job.status }}" != "success" ] && STATUS="✗"
           {
             echo ""
-            echo "## $EMOJI mac_wireless"
+            echo "<details><summary>mac_wireless $STATUS</summary>"
             echo ""
-            echo "<details><summary>📦 Install log</summary>"
+            echo "**Install log**"
             echo ""
             echo '```'
             cat install.log 2>/dev/null || echo "(no install log)"
