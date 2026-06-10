@@ -686,6 +686,12 @@ class CentralSignalingRelay:
                             f"Connection failed after {self._connection_attempts} attempts: {e}",
                         )
 
+                if self._running and not had_exception and self._state == RelayState.ERROR:
+                    # Connect returned cleanly but left us in ERROR (e.g. a 401
+                    # from a stale token) - back off like a connection failure.
+                    had_exception = True
+                    self._connection_attempts += 1
+
                 if self._running and had_exception:
                     # Only wait after connection failures, not after normal returns
                     # (e.g., when token update triggered reconnection)

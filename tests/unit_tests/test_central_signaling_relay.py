@@ -23,6 +23,7 @@ from reachy_mini.media.central_signaling_relay import (
     HEARTBEAT_MAX_INTERVAL,
     HEARTBEAT_MIN_INTERVAL,
     CentralSignalingRelay,
+    RelayState,
     _clamp_heartbeat_interval,
 )
 
@@ -486,3 +487,51 @@ def test_public_notify_schedules_work_on_relay_loop() -> None:
     assert len(journal.sent) == 1
     assert journal.sent[0]["sessionId"] == "central-1"
     assert journal.sent[0]["reason"] == "ice_negotiation_timeout"
+
+
+# ---------------------------------------------------------------------------
+# _run_loop backoff
+# ---------------------------------------------------------------------------
+
+
+def test_run_loop_backs_off_when_connect_returns_in_error_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 401-style failure (ERROR state, no exception) still gets a backoff.
+
+    ``_handle_central_sse`` returns normally - without raising - when
+    central rejects the token (401) or returns a non-200 status, leaving
+    the relay in ``RelayState.ERROR``. Without the fix, ``_run_loop``
+    would treat that as a normal return and immediately retry, spinning a
+    tight reconnect loop against the local GStreamer signaling server on a
+    stale/invalid token.
+    """
+    monkeypatch.setattr(
+        "reachy_mini.media.central_signaling_relay.RECONNECT_INTERVAL", 0.05
+    )
+
+    relay = _make_relay()
+    relay._running = True
+
+    call_count = 0
+
+    async def fake_connect_and_relay() -> None:
+        nonlocal call_count
+        call_count += 1
+        relay._set_state(
+            RelayState.ERROR, "Authentication failed - token may be invalid"
+        )
+        if call_count >= 3:
+            # Stop before the post-call backoff bookkeeping for this
+            # iteration runs, mirroring `stop()` racing the next attempt.
+            relay._running = False
+
+    relay._connect_and_relay = fake_connect_and_relay  # type: ignore[method-assign]
+
+    start = time.monotonic()
+    asyncio.run(relay._run_loop())
+    elapsed = time.monotonic() - start
+
+    assert call_count == 3
+    assert relay._connection_attempts == 2
+    assert elapsed >= 0.1
