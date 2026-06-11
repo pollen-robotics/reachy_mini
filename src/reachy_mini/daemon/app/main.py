@@ -90,19 +90,27 @@ class Args:
 
     robot_name: str = "reachy_mini"
 
-    fastapi_host: str = "0.0.0.0"
+    # None means "auto": bind 0.0.0.0 on the wireless version (must be reachable
+    # over Wi-Fi) and 127.0.0.1 everywhere else. See _resolve_bind_host().
+    fastapi_host: str | None = None
     fastapi_port: int = 8000
 
-    localhost_only: bool | None = None
+
+def _resolve_bind_host(args: Args) -> str:
+    """Resolve the address the HTTP API binds to.
+
+    An explicit ``--fastapi-host`` always wins. Otherwise the daemon binds all
+    interfaces only on the wireless version (the robot has to be reachable on
+    the LAN); every other configuration (Lite, desktop, simulation) stays on
+    loopback so the unauthenticated API is not exposed to the network.
+    """
+    if args.fastapi_host:
+        return args.fastapi_host
+    return "0.0.0.0" if args.wireless_version else "127.0.0.1"
 
 
 def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
-    localhost_only = (
-        args.localhost_only
-        if args.localhost_only is not None
-        else (False if args.wireless_version else True)
-    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -166,7 +174,6 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     kinematics_engine=args.kinematics_engine,
                     check_collision=args.check_collision,
                     wake_up_on_start=args.wake_up_on_start,
-                    localhost_only=localhost_only,
                     hardware_config_filepath=args.hardware_config_filepath,
                 )
 
@@ -371,7 +378,7 @@ def run_app(args: Args) -> None:
 
         config = uvicorn.Config(
             app,
-            host=args.fastapi_host,
+            host=_resolve_bind_host(args),
             port=args.fastapi_port,
             log_config=None,  # Don't override Python logging configuration
         )
@@ -565,19 +572,6 @@ def main() -> None:
         dest="dataset_update_interval_hours",
         help="Interval in hours for background dataset update checks (default: 24.0, 0 to disable).",
     )
-    # Server options
-    parser.add_argument(
-        "--localhost-only",
-        action="store_true",
-        default=default_args.localhost_only,
-        help="Restrict the server to localhost only (default: True).",
-    )
-    parser.add_argument(
-        "--no-localhost-only",
-        action="store_false",
-        dest="localhost_only",
-        help="Allow the server to listen on all interfaces (default: False).",
-    )
     # Kinematics options
     parser.add_argument(
         "--check-collision",
@@ -598,6 +592,10 @@ def main() -> None:
         "--fastapi-host",
         type=str,
         default=default_args.fastapi_host,
+        help=(
+            "Address the HTTP API binds to. Default (unset): 0.0.0.0 on the "
+            "wireless version, 127.0.0.1 otherwise."
+        ),
     )
     parser.add_argument(
         "--fastapi-port",
