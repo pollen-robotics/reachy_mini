@@ -687,8 +687,7 @@ class CentralSignalingRelay:
                         )
 
                 if self._running and not had_exception and self._state == RelayState.ERROR:
-                    # Connect returned cleanly but left us in ERROR (e.g. a 401
-                    # from a stale token) - back off like a connection failure.
+                    # Clean return but ERROR (e.g. 401) - back off like a failure.
                     had_exception = True
                     self._connection_attempts += 1
 
