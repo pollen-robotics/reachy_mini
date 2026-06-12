@@ -224,7 +224,6 @@ class Daemon:
         mockup_sim: bool = False,
         serialport: str = "auto",
         scene: str = "empty",
-        localhost_only: bool = True,
         wake_up_on_start: bool = True,
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
@@ -239,7 +238,6 @@ class Daemon:
             mockup_sim (bool): If True, run in lightweight simulation mode (no MuJoCo). Defaults to False.
             serialport (str): Serial port for real motors. Defaults to "auto", which will try to find the port automatically.
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
-            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             check_collision (bool): If True, enable collision checking. Defaults to False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
@@ -256,7 +254,7 @@ class Daemon:
             return self._status.state
 
         self.logger.info(
-            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
+            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
         )
 
         # mockup-sim behaves exactly like a real robot for apps (they open webcam directly)
@@ -264,7 +262,9 @@ class Daemon:
         self._status.simulation_enabled = sim
         self._status.mockup_sim_enabled = mockup_sim
 
-        if not localhost_only:
+        # The wireless version binds all interfaces and advertises its LAN
+        # address; loopback-only configurations have no meaningful wlan_ip.
+        if self.wireless_version:
             self._status.wlan_ip = get_ip_address()
 
         # When no_media is set, override use_audio to False
@@ -277,7 +277,6 @@ class Daemon:
             "headless": headless,
             "use_audio": effective_use_audio,
             "scene": scene,
-            "localhost_only": localhost_only,
         }
 
         self.logger.info("Starting Reachy Mini daemon...")
@@ -469,7 +468,6 @@ class Daemon:
         scene: Optional[str] = None,
         headless: Optional[bool] = None,
         use_audio: Optional[bool] = None,
-        localhost_only: Optional[bool] = None,
         wake_up_on_start: Optional[bool] = None,
         goto_sleep_on_stop: Optional[bool] = None,
     ) -> "DaemonState":
@@ -482,7 +480,6 @@ class Daemon:
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to None (uses the previous value).
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to None (uses the previous value).
             use_audio (bool): If True, enable audio. Defaults to None (uses the previous value).
-            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to None (uses the previous value).
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to None (don't wake up).
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to None (don't go to sleep).
 
@@ -517,9 +514,6 @@ class Daemon:
                 "use_audio": use_audio
                 if use_audio is not None
                 else self._start_params["use_audio"],
-                "localhost_only": localhost_only
-                if localhost_only is not None
-                else self._start_params["localhost_only"],
                 "wake_up_on_start": wake_up_on_start
                 if wake_up_on_start is not None
                 else False,
