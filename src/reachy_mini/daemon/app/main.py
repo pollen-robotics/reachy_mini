@@ -259,9 +259,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             health_check_event.set()
             return {"status": "ok"}
 
+    # Restrict cross-origin access to local browser tooling; everything else is
+    # same-origin, native, or WebRTC.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # or restrict to your HF domain
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
         allow_methods=["*"],
         allow_headers=["*"],
     )
