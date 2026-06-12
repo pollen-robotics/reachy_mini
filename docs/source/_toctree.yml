@@ -61,6 +61,8 @@
       title: JavaScript SDK & Web Apps
     - local: SDK/media-architecture
       title: Media Architecture
+    - local: SDK/cloud-backend-consumer
+      title: Cloud-Backend Consumer
     - local: SDK/gstreamer-installation
       title: GStreamer Installation
   title: Software guide
