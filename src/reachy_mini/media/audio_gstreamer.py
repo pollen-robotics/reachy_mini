@@ -60,7 +60,7 @@ from typing import Optional
 
 import numpy as np
 
-from reachy_mini.media.audio_base import AudioBase
+from reachy_mini.media.audio_base import AEC_PROBE_NAME, AEC_RATE, AudioBase
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
@@ -95,11 +95,6 @@ class GStreamerAudio(AudioBase):
 
     PLAYBACK_SINK_BUFFER_TIME_US = 50_000
     PLAYBACK_SINK_LATENCY_TIME_US = 5_000
-
-    # webrtcdsp/webrtcechoprobe only accept S16LE at a fixed set of rates
-    # (8000/16000/32000/48000). They must share a probe name to be paired.
-    AEC_RATE = 48_000
-    AEC_PROBE_NAME = "reachymini_aec_probe"
 
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize recording and playback pipelines.
@@ -172,8 +167,8 @@ class GStreamerAudio(AudioBase):
                 else:
                     # Pair probe ↔ dsp so the playback signal is used as the
                     # far-end reference for echo cancellation on the mic path.
-                    self._webrtcechoprobe.set_property("name", self.AEC_PROBE_NAME)
-                    webrtcdsp.set_property("probe", self.AEC_PROBE_NAME)
+                    self._webrtcechoprobe.set_property("name", AEC_PROBE_NAME)
+                    webrtcdsp.set_property("probe", AEC_PROBE_NAME)
                     self.logger.info("Enabling webRTC echo cancellation.")
             elif platform.system() == "Windows":
                 audiosrc = Gst.ElementFactory.make("wasapi2src")
@@ -207,7 +202,7 @@ class GStreamerAudio(AudioBase):
             cf_in.set_property(
                 "caps",
                 Gst.Caps.from_string(
-                    f"audio/x-raw,format=S16LE,rate={self.AEC_RATE},"
+                    f"audio/x-raw,format=S16LE,rate={AEC_RATE},"
                     f"channels={self.CHANNELS},layout=interleaved"
                 ),
             )
@@ -430,7 +425,7 @@ class GStreamerAudio(AudioBase):
             cf_probe.set_property(
                 "caps",
                 Gst.Caps.from_string(
-                    f"audio/x-raw,format=S16LE,rate={self.AEC_RATE},"
+                    f"audio/x-raw,format=S16LE,rate={AEC_RATE},"
                     f"channels={self.CHANNELS},layout=interleaved"
                 ),
             )
