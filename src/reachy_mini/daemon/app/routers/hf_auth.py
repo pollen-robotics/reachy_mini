@@ -6,7 +6,7 @@ from typing import Any
 
 import aiohttp
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
 from reachy_mini.apps.sources import hf_auth
@@ -252,6 +252,28 @@ async def start_oauth(request: Request, use_localhost: bool = False) -> dict[str
     return result
 
 
+@router.get("/oauth/begin")
+async def begin_oauth(request: Request) -> RedirectResponse:
+    """One-shot OAuth entry point for the mobile setup flow.
+
+    Creates a session and 302-redirects the browser straight to Hugging Face's
+    authorize page, so the phone only has to open this single URL. The existing
+    /oauth/callback finishes the job (exchange → store token → start relay).
+    """
+    daemon = getattr(request.app.state, "daemon", None)
+    if daemon is not None:
+        wireless_version = bool(daemon.wireless_version)
+    else:
+        wireless_version = "reachy-mini.local" in request.headers.get("host", "")
+
+    result = hf_auth.create_oauth_session(
+        wireless_version=wireless_version, use_localhost=False
+    )
+    if result.get("status") == "error":
+        raise HTTPException(status_code=500, detail=result.get("message"))
+    return RedirectResponse(url=result["auth_url"])
+
+
 @router.get("/oauth/status/{session_id}")
 async def get_oauth_status(session_id: str) -> dict[str, Any]:
     """Poll for OAuth session status.
@@ -318,6 +340,17 @@ async def oauth_callback(
     )
 
     if result["status"] == "success":
+        # Bring the central relay up now. exchange_code_for_token() persisted
+        # the token and notified a *running* relay, but on a token-less boot
+        # there is no relay instance yet, so start one (idempotent). Without
+        # this the robot wouldn't register with central until a daemon restart.
+        daemon = getattr(request.app.state, "daemon", None)
+        if daemon is not None:
+            try:
+                await daemon._start_central_signaling_relay()
+            except Exception as e:
+                logger.warning("[oauth/callback] relay start failed: %r", e)
+
         return HTMLResponse(
             content=_oauth_result_page(
                 success=True,

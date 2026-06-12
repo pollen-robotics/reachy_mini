@@ -63,6 +63,10 @@ rerun = ["rerun-sdk>=0.29.0,<=0.31.3"]
 wireless-version = [
     "semver>=3,<4",
     "nmcli>=1.5; sys_platform == 'linux'",
+    # Sealed BLE WiFi provisioning (wifi_config.py) does X25519 + HKDF +
+    # AES-GCM to keep the WiFi password off the air in cleartext. Was only
+    # present transitively before; declared here now that it's a direct import.
+    "cryptography>=42.0",
     "pollen_BMI088_imu_library; sys_platform == 'linux'",
     "gpiozero>=2.0.0; sys_platform == 'linux'",
     "lgpio>=0.2.2.0; sys_platform == 'linux'",

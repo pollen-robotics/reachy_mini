@@ -7,9 +7,15 @@ Includes a fixed NoInputNoOutput agent for automatic Just Works pairing.
 
 import fcntl
 import hashlib
+import json
 import logging
 import os
 import subprocess
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Callable
 
@@ -321,7 +327,7 @@ class CommandCharacteristic(Characteristic):
             dbus.Byte(b) for b in response.encode("utf-8")
         ]
         cmd_str = command_bytes.decode("utf-8", errors="replace").strip()
-        if cmd_str.upper() != "JOURNAL_READ":
+        if cmd_str.upper() not in ("JOURNAL_READ", "WIFI_STATUS"):
             logger.info(f"Command received: {response}")
 
 
@@ -659,11 +665,36 @@ class Application(dbus.service.Object):
 class BluetoothCommandService:
     """Bluetooth Command Service."""
 
+    # An authenticated session stays valid for this long after a successful
+    # PIN, so a client can chain scan → connect → poll status without
+    # re-authing — but a stale/abandoned session does NOT stay privileged
+    # forever (the PIN is a short proximity secret printed on the device).
+    SESSION_TTL_S = 300
+
+    # Wrong-PIN throttle. The PIN is only a few characters, so unmetered
+    # guessing over BLE would brute-force it quickly. The first
+    # PIN_FREE_ATTEMPTS misses are free (fat-finger tolerance); every miss
+    # after that locks the PIN_ command for an exponentially growing window
+    # (PIN_LOCKOUT_BASE_S, doubling each time, capped at PIN_LOCKOUT_MAX_S).
+    # The counter is robot-global and deliberately SURVIVES BLE disconnects
+    # (see _on_central_disconnected) so an attacker cannot reset it by
+    # reconnecting; a correct PIN clears it.
+    PIN_FREE_ATTEMPTS = 3
+    PIN_LOCKOUT_BASE_S = 5
+    PIN_LOCKOUT_MAX_S = 300
+
     def __init__(self, device_name="ReachyMini", pin_code="00000"):
         """Initialize the Bluetooth Command Service."""
         self.device_name = device_name
         self.pin_code = pin_code
         self.connected = False
+        # monotonic deadline for the TTL-bounded WiFi session (see _is_authed).
+        self._authed_until = 0.0
+        # Wrong-PIN throttle state (see PIN_* constants and _handle_command).
+        # Both deliberately persist across disconnects so reconnecting does
+        # not reset an in-progress lockout.
+        self._pin_failures = 0
+        self._pin_locked_until = 0.0
         self.bus = None
         self.app = None
         self.adv = None
@@ -671,6 +702,13 @@ class BluetoothCommandService:
         self._journal_proc = None
         self._journal_watch_id = None
         self._journal_buffer = ""
+        # Advertising manager + the object path of the currently-connected
+        # central, populated in start() / the disconnect watcher. Used to
+        # re-assert advertising and reset session state when a central drops
+        # (incl. ungraceful drops like an app crash) — see
+        # _on_device_properties_changed.
+        self._ad_manager = None
+        self._connected_device_path = None
 
     def _start_journal(self) -> str:
         """Start journalctl -f and buffer output for poll-based reading."""
@@ -749,9 +787,76 @@ class BluetoothCommandService:
             self._journal_buffer = ""
             logger.info("Journal streaming stopped")
 
+    def _is_authed(self) -> bool:
+        """Return whether the TTL-bounded authenticated session is still valid."""
+        return self._authed_until > time.monotonic()
+
+    def _pin_lockout_remaining(self) -> float:
+        """Seconds left on the wrong-PIN lockout (0.0 if not locked).
+
+        Touched only from the GLib mainloop thread (WriteValue and the
+        disconnect handler both run there), so no lock is needed.
+        """
+        return max(0.0, self._pin_locked_until - time.monotonic())
+
+    def _register_pin_failure(self) -> None:
+        """Record a wrong PIN and arm the next lockout window.
+
+        Misses beyond PIN_FREE_ATTEMPTS lock the PIN_ command for
+        PIN_LOCKOUT_BASE_S, doubling per consecutive miss, capped at
+        PIN_LOCKOUT_MAX_S.
+        """
+        self._pin_failures += 1
+        over = self._pin_failures - self.PIN_FREE_ATTEMPTS
+        if over > 0:
+            delay = min(
+                self.PIN_LOCKOUT_MAX_S,
+                self.PIN_LOCKOUT_BASE_S * (2 ** (over - 1)),
+            )
+            self._pin_locked_until = time.monotonic() + delay
+            logger.warning(
+                f"Wrong PIN ({self._pin_failures} consecutive). "
+                f"PIN locked for {delay}s."
+            )
+
+    def _reset_pin_throttle(self) -> None:
+        """Clear the wrong-PIN counter and lockout after a successful auth."""
+        self._pin_failures = 0
+        self._pin_locked_until = 0.0
+
+    def _emit_response(self, text: str) -> bool:
+        """Push a result over the RESPONSE characteristic. Runs on the mainloop."""
+        try:
+            self.app.services[0].response_char.send_notification(text)
+        except Exception as e:
+            logger.error(f"Failed to emit BLE notification: {e}")
+        return False  # GLib.idle_add: run once
+
+    def _run_async(self, fn: Callable[[], str]) -> None:
+        """Run a blocking daemon-proxy command off the BLE mainloop.
+
+        The dbus/GLib mainloop must NEVER block: a synchronous 15s nmcli scan
+        inside WriteValue would freeze advertising, journal streaming, and all
+        other GATT I/O. We run the urllib work on a worker thread and marshal
+        the result back onto the mainloop via GLib.idle_add → notification.
+        The originating WriteValue returns an immediate "OK: working" ack; the
+        client awaits the real result on the RESPONSE characteristic.
+        """
+
+        def worker() -> None:
+            try:
+                result = fn()
+            except Exception as e:
+                result = f"ERROR: {e}"
+            GLib.idle_add(self._emit_response, result)
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _handle_command(self, value: bytes) -> str:
         command_str = value.decode("utf-8").strip()
-        if command_str.upper() != "JOURNAL_READ":
+        upper = command_str.upper()
+        # WIFI_STATUS and JOURNAL_READ are polled by clients; don't spam logs.
+        if upper not in ("JOURNAL_READ", "WIFI_STATUS"):
             logger.info(f"Received command: {command_str}")
         # Custom command handling
         if command_str.upper() == "PING":
@@ -772,12 +877,57 @@ class BluetoothCommandService:
             self._stop_journal()
             return "OK: Journal streaming stopped"
         elif command_str.startswith("PIN_"):
+            remaining = self._pin_lockout_remaining()
+            if remaining > 0:
+                # Locked out: reject WITHOUT comparing the PIN, so a correct
+                # guess landed mid-spree doesn't win and the lockout window is
+                # the real bottleneck. int()+1 rounds up so we never show "0s".
+                return (
+                    f"ERROR: Too many attempts. Try again in {int(remaining) + 1}s."
+                )
             pin = command_str[4:].strip()
             if pin == self.pin_code:
+                self._reset_pin_throttle()
                 self.connected = True
+                # Open a TTL-bounded session for the WiFi commands so the
+                # client can chain scan → connect → status without re-auth.
+                self._authed_until = time.monotonic() + self.SESSION_TTL_S
                 return "OK: Connected"
             else:
+                self._register_pin_failure()
                 return "ERROR: Incorrect PIN"
+
+        # WiFi provisioning over BLE. All of these proxy to the daemon and may
+        # block (nmcli rescan ~10s), so they run OFF the mainloop via
+        # _run_async and deliver their result over the RESPONSE notification;
+        # WriteValue returns the "OK: working" ack immediately. Mutating
+        # commands require a live TTL session (B2); WIFI_STATUS is public but
+        # withholds the saved-network list unless authed (B3); the password in
+        # WIFI_CONNECT_ENC is sealed end-to-end so it is never cleartext here.
+        elif upper == "WIFI_KEYEX":
+            self._run_async(_wifi_keyex)
+            return "OK: working"
+        elif upper == "WIFI_STATUS":
+            authed = self._is_authed()
+            self._run_async(lambda: _wifi_status(authed))
+            return "OK: working"
+        elif upper == "WIFI_SCAN":
+            if not self._is_authed():
+                return "ERROR: Not connected. Please authenticate first."
+            self._run_async(_wifi_scan)
+            return "OK: working"
+        elif upper.startswith("WIFI_CONNECT_ENC "):
+            if not self._is_authed():
+                return "ERROR: Not connected. Please authenticate first."
+            blob = command_str[len("WIFI_CONNECT_ENC ") :]
+            self._run_async(lambda: _wifi_connect_sealed(blob))
+            return "OK: working"
+        elif upper.startswith("WIFI_FORGET "):
+            if not self._is_authed():
+                return "ERROR: Not connected. Please authenticate first."
+            ssid = command_str[len("WIFI_FORGET ") :]
+            self._run_async(lambda: _wifi_forget(ssid))
+            return "OK: working"
 
         # else if command starts with "CMD_xxxxx" check if  commands directory contains the said named script command xxxx.sh and run its, show output or/and send to read
         elif command_str.startswith("CMD_"):
@@ -843,6 +993,7 @@ class BluetoothCommandService:
 
         # Register advertisement
         ad_manager = dbus.Interface(adapter, LE_ADVERTISING_MANAGER_IFACE)
+        self._ad_manager = ad_manager
         self.adv = Advertisement(self.bus, 0, "peripheral", self.device_name)
         # Only advertise main service UUID to avoid advertisement size limits
         # All services are still available when connected
@@ -856,10 +1007,84 @@ class BluetoothCommandService:
             ),
         )
 
+        # Watch for central connect/disconnect. BlueZ emits PropertiesChanged
+        # on org.bluez.Device1 with Connected=true/false. We use the false
+        # edge to clean up after a dropped client — crucially including
+        # UNGRACEFUL drops (app crash), where StopNotify may fire but session
+        # state isn't reset and advertising isn't re-asserted. The signal
+        # fires when BlueZ reaps the link (at the supervision timeout for an
+        # abrupt loss), so this makes the service deterministically reusable
+        # the moment BlueZ reports the drop.
+        self.bus.add_signal_receiver(
+            self._on_device_properties_changed,
+            dbus_interface=DBUS_PROP_IFACE,
+            signal_name="PropertiesChanged",
+            arg0="org.bluez.Device1",
+            path_keyword="path",
+        )
+
         # Setup periodic network status updates (every 10 seconds)
         GLib.timeout_add_seconds(10, self.app.reachy_status.update_network_status)
 
         logger.info(f"✓ Bluetooth service started as '{self.device_name}'")
+
+    def _on_device_properties_changed(self, interface, changed, invalidated, path=None):
+        """React to BlueZ Device1 connect/disconnect transitions."""
+        if interface != "org.bluez.Device1" or "Connected" not in changed:
+            return
+        if bool(changed["Connected"]):
+            self._connected_device_path = path
+            logger.info(f"BLE central connected: {path}")
+        else:
+            logger.info(f"BLE central disconnected: {path}")
+            # Only act on the device we tracked as connected, so a stale
+            # disconnect signal can't clobber a client that just reconnected.
+            if self._connected_device_path in (None, path):
+                self._connected_device_path = None
+                self._on_central_disconnected()
+
+    def _on_central_disconnected(self):
+        """Clean up after a central drops (graceful or crash).
+
+        Resets the PIN/TTL session so a new client must re-authenticate,
+        stops any journal stream the dropped client left running, and
+        re-asserts advertising so the robot is immediately reconnectable
+        rather than relying on BlueZ to auto-resume.
+
+        The wrong-PIN throttle (_pin_failures / _pin_locked_until) is
+        deliberately NOT reset here: otherwise an attacker could wipe an
+        in-progress lockout just by dropping and re-opening the link.
+        """
+        self.connected = False
+        self._authed_until = 0.0
+        self._stop_journal()
+        self._reassert_advertising()
+
+    def _reassert_advertising(self):
+        """Re-register the advertisement so the robot stays discoverable.
+
+        Belt-and-suspenders: BlueZ usually resumes a registered connectable
+        advert after a link drops, but that's version-dependent. Unregister
+        (best-effort) then register again; both errors are non-fatal (an
+        AlreadyExists on register just means it was still active).
+        """
+        if self._ad_manager is None or self.adv is None:
+            return
+        try:
+            self._ad_manager.UnregisterAdvertisement(self.adv.get_path())
+        except dbus.exceptions.DBusException:
+            pass  # not currently registered — fine
+        try:
+            self._ad_manager.RegisterAdvertisement(
+                self.adv.get_path(),
+                {},
+                reply_handler=lambda: logger.info("Advertisement re-asserted after disconnect"),
+                error_handler=lambda e: logger.warning(
+                    f"Re-assert advertisement failed (non-fatal): {e}"
+                ),
+            )
+        except dbus.exceptions.DBusException as e:
+            logger.warning(f"Re-assert advertisement raised (non-fatal): {e}")
 
     def _find_adapter(self):
         remote_om = dbus.Interface(
@@ -968,6 +1193,184 @@ def get_hotspot_ip() -> str:
         except (IndexError, AttributeError):
             return "0.0.0.0"
     return "0.0.0.0"
+
+
+# =======================
+# WiFi provisioning over BLE  (proxy to the daemon's /wifi/* routes)
+# =======================
+# This service runs under the SYSTEM python (see install_service_bluetooth.sh),
+# not the daemon venv — so it stays stdlib-only (`urllib`) and does NO crypto.
+# It relays opaque bytes to the daemon on localhost; the daemon owns nmcli AND
+# all the X25519/AES-GCM work (it has `cryptography`). See the daemon route
+# `wifi_config.connect_to_wifi_network_sealed` for the sealed-PSK scheme.
+#
+# The WiFi password is NEVER seen here in cleartext: the phone seals it and
+# the daemon opens it. `WIFI_CONNECT_ENC` carries only ciphertext.
+
+DAEMON_LOCAL_URL = "http://127.0.0.1:8000"
+WIFI_HTTP_TIMEOUT_S = 4.0
+WIFI_SCAN_HTTP_TIMEOUT_S = 15.0  # nmcli rescan is slow
+# Bound the scan reply by serialized BYTES (not item count): a single
+# notification must fit the negotiated ATT MTU. 180 bytes is safe even when
+# the phone never negotiates above the ~185-byte default.
+WIFI_SCAN_MTU_BUDGET = 180
+
+
+def _daemon_request(
+    method: str,
+    path: str,
+    params: "dict[str, str] | None" = None,
+    data: "dict | None" = None,
+    timeout: float = WIFI_HTTP_TIMEOUT_S,
+):
+    """Local HTTP request to the daemon; return parsed JSON (or str/None)."""
+    url = DAEMON_LOCAL_URL + path
+    if params:
+        url = url + "?" + urllib.parse.urlencode(params)
+    body = None
+    headers = {}
+    if data is not None:
+        body = json.dumps(data).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, method=method, data=body, headers=headers)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw = resp.read()
+        if not raw:
+            return None
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except json.JSONDecodeError:
+            return raw.decode("utf-8", errors="replace")
+
+
+def _wifi_status(authed: bool) -> str:
+    """Compact WiFi state for a BLE read/notify.
+
+    Shape: {"mode","connected","error"} plus {"known":[...]} ONLY when the
+    session is authenticated. The saved-network list is an owner-location
+    fingerprint, so it is never exposed to an unauthenticated peer.
+    """
+    try:
+        status = _daemon_request("GET", "/wifi/status") or {}
+        compact = {
+            "mode": status.get("mode"),
+            "connected": status.get("connected_network"),
+        }
+        if authed:
+            compact["known"] = status.get("known_networks", [])
+        err = _daemon_request("GET", "/wifi/error") or {}
+        compact["error"] = err.get("error")
+        return json.dumps(compact, separators=(",", ":"), ensure_ascii=False)
+    except urllib.error.URLError:
+        return json.dumps(
+            {"mode": None, "connected": None, "error": "daemon_unreachable"},
+            separators=(",", ":"),
+        )
+    except Exception as e:
+        return json.dumps(
+            {"mode": None, "connected": None, "error": str(e)},
+            separators=(",", ":"),
+        )
+
+
+def _wifi_keyex() -> str:
+    """Relay the daemon's ephemeral provisioning public key to the phone.
+
+    Returns the daemon's {"kid","pk","alg"} JSON verbatim (~110 bytes, fits a
+    single MTU). The phone uses `pk` to seal the PSK; see _wifi_connect_sealed.
+    """
+    try:
+        data = _daemon_request("GET", "/wifi/prov_key")
+        return json.dumps(data, separators=(",", ":"))
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _wifi_scan() -> str:
+    """Scan for SSIDs. JSON array bounded by serialized byte length, or ERROR."""
+    try:
+        ssids = _daemon_request(
+            "POST", "/wifi/scan_and_list", timeout=WIFI_SCAN_HTTP_TIMEOUT_S
+        )
+        if not isinstance(ssids, list):
+            return json.dumps([])
+        out: "list[str]" = []
+        seen: "set[str]" = set()
+        for s in ssids:
+            if not isinstance(s, str) or not s or s in seen:
+                continue
+            seen.add(s)
+            trial = out + [s]
+            encoded = json.dumps(trial, separators=(",", ":"), ensure_ascii=False)
+            if len(encoded.encode("utf-8")) > WIFI_SCAN_MTU_BUDGET:
+                break
+            out = trial
+        return json.dumps(out, separators=(",", ":"), ensure_ascii=False)
+    except urllib.error.HTTPError as e:
+        if e.code == 409:
+            return "ERROR: Busy"
+        return "ERROR: Scan failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _wifi_connect_sealed(blob: str) -> str:
+    """Relay a sealed connect blob to the daemon.
+
+    `blob` is the phone's JSON {"ssid","kid","epk","nonce","ct"} — all opaque
+    to this service (the password is sealed; only the daemon can open it).
+    """
+    try:
+        data = json.loads(blob)
+    except json.JSONDecodeError:
+        return "ERROR: Invalid payload (expected JSON)"
+    for field in ("ssid", "kid", "epk", "nonce", "ct"):
+        if not isinstance(data.get(field), str) or not data[field]:
+            return f"ERROR: Missing field {field}"
+    try:
+        # Clear any stale error so the client can observe THIS attempt.
+        try:
+            _daemon_request("POST", "/wifi/reset_error")
+        except Exception:
+            pass  # non-fatal; logged daemon-side
+        _daemon_request("POST", "/wifi/connect_sealed", data=data)
+        return f"OK: Connecting to {data['ssid']}"
+    except urllib.error.HTTPError as e:
+        if e.code == 400:
+            return "ERROR: Bad credentials (wrong PIN?)"
+        if e.code == 409:
+            return "ERROR: Busy"
+        return "ERROR: Connect request failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _wifi_forget(ssid: str) -> str:
+    """Forget a saved WiFi network (daemon falls back to hotspot if active)."""
+    ssid = ssid.strip()
+    if not ssid:
+        return "ERROR: Missing ssid"
+    try:
+        _daemon_request("POST", "/wifi/forget", params={"ssid": ssid})
+        return f"OK: Forgotten {ssid}"
+    except urllib.error.HTTPError as e:
+        if e.code == 400:
+            return "ERROR: Cannot forget hotspot"
+        if e.code == 404:
+            return "ERROR: Unknown ssid"
+        if e.code == 409:
+            return "ERROR: Busy"
+        return "ERROR: Forget failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
 
 
 # =======================
