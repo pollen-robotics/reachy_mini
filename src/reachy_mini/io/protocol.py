@@ -17,7 +17,8 @@ Client->Server command types:
 
 Server->Client message types:
     joint_positions, head_pose, imu_data, recorded_data,
-    daemon_status, task_progress
+    daemon_status, task_progress, log_line, log_stream_error,
+    update_progress
 """
 
 from datetime import datetime
@@ -801,6 +802,30 @@ class LogStreamErrorMsg(BaseModel):
 
 
 # ------------------------------------------------------------------
+# Update progress broadcast over the DataChannel.
+#
+# Unsolicited fan-out emitted while a `start_update` job runs, mirroring
+# the REST `WS /update/ws/logs` stream. One message per log line of the
+# underlying `update_reachy_mini` job (`status="in_progress"`), plus a
+# terminal `status="failed"` if the install raises before the restart.
+#
+# Note: a *successful* update ends with a `systemctl restart` that tears
+# the transport down, so `status="done"` is best-effort and usually
+# never arrives - consumers infer success from the channel teardown +
+# reconnect, exactly like the desktop app does with the REST WS close.
+# ------------------------------------------------------------------
+
+
+class UpdateProgressMsg(BaseModel):
+    """A progress event for an in-flight ``start_update`` job."""
+
+    type: Literal["update_progress"] = "update_progress"
+    status: Literal["in_progress", "done", "failed"]
+    line: str | None = None
+    error: str | None = None
+
+
+# ------------------------------------------------------------------
 # Task protocol
 # ------------------------------------------------------------------
 
@@ -855,7 +880,8 @@ AnyServerMsg = Annotated[
     | DaemonStatus
     | TaskProgress
     | LogLineMsg
-    | LogStreamErrorMsg,
+    | LogStreamErrorMsg
+    | UpdateProgressMsg,
     Field(discriminator="type"),
 ]
 server_msg_adapter: TypeAdapter[AnyServerMsg] = TypeAdapter(AnyServerMsg)
