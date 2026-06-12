@@ -40,6 +40,7 @@ from reachy_mini.daemon.utils import (
     is_local_camera_available,
 )
 from reachy_mini.media.audio_control_utils import init_respeaker_usb
+from reachy_mini.media.audio_gain import get_output_gain_linear
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.camera_constants import (
     CameraSpecs,
@@ -236,11 +237,22 @@ class GstMediaServer:
         self._playbin: Optional[Gst.Element] = None
         self._head_wobbler: Optional[HeadWobbler] = None
         self._pipeline_playback: Optional[Gst.Pipeline] = None
+        # All GStreamer volume elements managed by this server, keyed by
+        # a label ("playbin", peer_id, etc.). Allows runtime gain updates.
+        self._gain_elements: Dict[str, Gst.Element] = {}
 
         self._build_pipeline()
 
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
+        gain_linear = get_output_gain_linear()
+        if gain_linear != 1.0:
+            from reachy_mini.media.audio_gain import get_output_gain_db
+
+            self._logger.info(
+                f"Output gain configured: {get_output_gain_db():.1f} dB "
+                f"(linear {gain_linear:.3f})"
+            )
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
         self._bus_sender = self._pipeline_sender.get_bus()
         self._bus_sender.add_watch(
@@ -502,9 +514,18 @@ class GstMediaServer:
             appsink_wobbler,
         ]:
             self._pipeline_playback.add(elem)
+        volume = Gst.ElementFactory.make("volume", f"output_gain_{peer_id}")
+        volume.set_property("volume", get_output_gain_linear())
+        self._gain_elements[peer_id] = volume
+        limiter = Gst.ElementFactory.make("rglimiter", f"output_limiter_{peer_id}")
+        self._pipeline_playback.add(volume)
+        self._pipeline_playback.add(limiter)
+
         appsrc.link(rtpopusdepay)
         rtpopusdepay.link(opusdec)
-        opusdec.link(tee)
+        opusdec.link(volume)
+        volume.link(limiter)
+        limiter.link(tee)
         tee.link(queue_speaker)
         queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
@@ -570,6 +591,7 @@ class GstMediaServer:
         playback_pipe = info.get("playback_pipeline")
         if playback_pipe is not None:
             playback_pipe.set_state(Gst.State.NULL)
+        self._gain_elements.pop(peer_id, None)
         self._logger.info(f"Cleaned up incoming audio for peer {peer_id}")
 
     def clear_incoming_audio(self) -> None:
@@ -1262,10 +1284,16 @@ class GstMediaServer:
 
         The bin exposes a single ghost sink pad for use as a playbin audio-sink::
 
-            ghost_sink → tee ─┬→ queue → audioconvert → audioresample → audiosink
-                               └→ queue → audioconvert → audioresample → appsink
+            ghost_sink → volume → rglimiter → tee ─┬→ queue → audioconvert → audioresample → audiosink
+                                                    └→ queue → audioconvert → audioresample → appsink
         """
         audio_bin = Gst.Bin.new("audio_tee_bin")
+
+        volume = Gst.ElementFactory.make("volume", "output_gain")
+        volume.set_property("volume", get_output_gain_linear())
+        self._gain_elements["playbin"] = volume
+
+        limiter = Gst.ElementFactory.make("rglimiter", "output_limiter")
 
         tee = Gst.ElementFactory.make("tee")
         queue_speaker = Gst.ElementFactory.make("queue")
@@ -1278,6 +1306,8 @@ class GstMediaServer:
         appsink_wobbler = self._make_wobbler_appsink()
 
         for el in (
+            volume,
+            limiter,
             tee,
             queue_speaker,
             ac_speaker,
@@ -1290,6 +1320,8 @@ class GstMediaServer:
         ):
             audio_bin.add(el)
 
+        volume.link(limiter)
+        limiter.link(tee)
         tee.link(queue_speaker)
         queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
@@ -1300,10 +1332,21 @@ class GstMediaServer:
         ac_wobbler.link(ar_wobbler)
         ar_wobbler.link(appsink_wobbler)
 
-        ghost_pad = Gst.GhostPad.new("sink", tee.get_static_pad("sink"))
+        ghost_pad = Gst.GhostPad.new("sink", volume.get_static_pad("sink"))
         audio_bin.add_pad(ghost_pad)
 
         return audio_bin
+
+    def update_output_gain(self, linear: float) -> None:
+        """Update the gain on all active volume elements.
+
+        Args:
+            linear: Linear gain multiplier (1.0 = unity).
+
+        """
+        for key, elem in self._gain_elements.items():
+            elem.set_property("volume", linear)
+        self._logger.debug(f"Output gain updated to {linear:.3f} on {len(self._gain_elements)} element(s)")
 
     def enable_wobbling(self, callback: Callable[[SpeechOffsets], None]) -> None:
         """Enable head wobbling driven by audio playback.

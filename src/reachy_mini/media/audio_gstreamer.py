@@ -63,6 +63,7 @@ import numpy as np
 import numpy.typing as npt
 
 from reachy_mini.media.audio_base import AudioBase
+from reachy_mini.media.audio_gain import get_output_gain_linear
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
@@ -325,6 +326,13 @@ class GStreamerAudio(AudioBase):
         )
         self._appsrc.set_property("caps", caps)
 
+        # Output gain stage (shared with daemon media_server paths).
+        self._volume_element = Gst.ElementFactory.make("volume", "output_gain_local")
+        self._volume_element.set_property("volume", get_output_gain_linear())
+
+        # Brickwall limiter prevents clipping after gain boost.
+        limiter = Gst.ElementFactory.make("rglimiter", "output_limiter_local")
+
         # Always build tee so wobbling can be enabled/disabled at runtime.
         # Per-branch audioconvert+audioresample so the wobbler appsink's
         # F32LE/1/16000 caps don't drag the audiosink branch into a rate
@@ -343,6 +351,8 @@ class GStreamerAudio(AudioBase):
 
         for el in (
             self._appsrc,
+            self._volume_element,
+            limiter,
             tee,
             queue_speaker,
             ac_speaker,
@@ -355,7 +365,9 @@ class GStreamerAudio(AudioBase):
         ):
             pipeline.add(el)
 
-        self._appsrc.link(tee)
+        self._appsrc.link(self._volume_element)
+        self._volume_element.link(limiter)
+        limiter.link(tee)
         tee.link(queue_speaker)
         queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
