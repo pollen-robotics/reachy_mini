@@ -40,8 +40,8 @@ contract - your app is agnostic of everything else.
 
 - Go through the host shell: `mountHost()` in `dispatch.ts`,
   `connectToHost()` in `embed.ts`. Free OAuth + picker + top bar + leave.
-- Pin the **exact** SDK build everywhere it appears (npm dep AND any CDN
-  URL): `@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c`.
+- Pin the **exact** SDK version everywhere it appears (npm dep AND any CDN
+  URL): `@pollen-robotics/reachy-mini-sdk@1.8.0`.
 - Register `onLeave(() => safelyReturnToPose(handle.reachy))` so the robot
   returns to a safe rest pose when the user leaves.
 - Validate `handle.config` at the boundary before using it.
@@ -113,7 +113,7 @@ Svelte, Vue, or vanilla. The host doesn't care.
   "private": true,
   "type": "module",
   "scripts": { "dev": "vite", "build": "tsc -b && vite build", "preview": "vite preview" },
-  "dependencies": { "@pollen-robotics/reachy-mini-sdk": "1.8.0-rc1-main.fd4354c" },
+  "dependencies": { "@pollen-robotics/reachy-mini-sdk": "1.8.0" },
   "devDependencies": { "typescript": "^5.5.4", "vite": "^5.4.10" }
 }
 ```

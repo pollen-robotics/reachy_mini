@@ -33,7 +33,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
-  Chip,
   CircularProgress,
   ListItemButton,
   Stack,
@@ -45,12 +44,11 @@ import {
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import LockIcon from '@mui/icons-material/Lock';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import UsbIcon from '@mui/icons-material/Usb';
-import WifiIcon from '@mui/icons-material/Wifi';
 
 import { reachyBusteSvg, reachyStandardSvg } from '../assets';
 import type { RobotInfo } from '../lib/sdk-types';
 import { FONT_WEIGHT, LAYOUT, TYPO } from '../lib/tokens';
+import { VariantTag } from '../ui/design/MetaPill';
 
 export interface PickerViewProps {
   robots: RobotInfo[];
@@ -334,7 +332,7 @@ function RemoteRobotCard({
             </Typography>
             {transport ? (
               <Box sx={{ flexShrink: 0 }}>
-                <TransportChip transport={transport} />
+                <VariantTag transport={transport} />
               </Box>
             ) : null}
           </Stack>
@@ -446,61 +444,6 @@ function CardAvatar(): JSX.Element {
         }}
       />
     </Box>
-  );
-}
-
-/* ─────────────────── Transport chip ─────────────────── */
-
-/**
- * Compact transport tag for a robot listing. Ported 1-to-1 from
- * the mobile shell's `TransportChip`. Two well-known values get
- * an icon + typed label (`usb`, `wifi`); anything else falls
- * through to a plain capitalised label so a future daemon
- * advertising `ethernet` / `sim` / `mockup` still renders without
- * a component update.
- */
-function TransportChip({ transport }: { transport: string }): JSX.Element {
-  if (transport === 'usb') {
-    return (
-      <Chip
-        size="small"
-        icon={<UsbIcon sx={{ fontSize: 14 }} />}
-        label="USB"
-        variant="outlined"
-        sx={{
-          height: 20,
-          fontSize: TYPO.tiny,
-          '.MuiChip-icon': { ml: 0.5 },
-        }}
-      />
-    );
-  }
-  if (transport === 'wifi') {
-    return (
-      <Chip
-        size="small"
-        icon={<WifiIcon sx={{ fontSize: 14 }} />}
-        label="Wi-Fi"
-        variant="outlined"
-        sx={{
-          height: 20,
-          fontSize: TYPO.tiny,
-          '.MuiChip-icon': { ml: 0.5 },
-        }}
-      />
-    );
-  }
-  return (
-    <Chip
-      size="small"
-      label={transport}
-      variant="outlined"
-      sx={{
-        height: 20,
-        fontSize: TYPO.tiny,
-        textTransform: 'capitalize',
-      }}
-    />
   );
 }
 

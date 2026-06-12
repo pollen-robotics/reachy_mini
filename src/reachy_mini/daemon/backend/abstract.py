@@ -30,6 +30,7 @@ from reachy_mini.io.protocol import (
     ApplyAudioConfigCmd,
     CancelAudioCmd,
     CancelMoveCmd,
+    ClearIncomingAudioCmd,
     GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
@@ -901,6 +902,15 @@ class Backend:
         if self._media_server is not None:
             self._media_server.stop_sound()
 
+    def clear_incoming_audio(self) -> None:
+        """Flush incoming WebRTC audio queued for the speaker (barge-in).
+
+        Delegates to the media server.  If the server is not available
+        (no_media mode), this is a no-op.
+        """
+        if self._media_server is not None:
+            self._media_server.clear_incoming_audio()
+
     # Basic move definitions
     INIT_HEAD_POSE = np.eye(4)
 
@@ -1148,6 +1158,10 @@ class Backend:
         elif isinstance(cmd, PlaySoundCmd):
             self.play_sound(cmd.file)
             send_response({"status": "ok", "command": "play_sound"})
+
+        elif isinstance(cmd, ClearIncomingAudioCmd):
+            self.clear_incoming_audio()
+            send_response({"status": "ok", "command": "clear_incoming_audio"})
 
         elif isinstance(cmd, SetSpeechOffsetsCmd):
             offsets = cmd.offsets

@@ -917,6 +917,23 @@
         }
       }
     },
+    "/api/hf-auth/oauth/begin": {
+      "get": {
+        "summary": "Begin Oauth",
+        "description": "One-shot OAuth entry point for the mobile setup flow.\n\nCreates a session and 302-redirects the browser straight to Hugging Face's\nauthorize page, so the phone only has to open this single URL. The existing\n/oauth/callback finishes the job (exchange \u2192 store token \u2192 start relay).",
+        "operationId": "begin_oauth_api_hf_auth_oauth_begin_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/hf-auth/oauth/status/{session_id}": {
       "get": {
         "summary": "Get Oauth Status",
@@ -1307,6 +1324,29 @@
                   },
                   "type": "object",
                   "title": "Response Stop Sound Api Media Stop Sound Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/clear_incoming_audio": {
+      "post": {
+        "summary": "Clear Incoming Audio",
+        "description": "Drop audio received from WebRTC clients that is queued for the speaker.\n\nUsed for barge-in so the robot stops speaking already-buffered audio.",
+        "operationId": "clear_incoming_audio_api_media_clear_incoming_audio_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Clear Incoming Audio Api Media Clear Incoming Audio Post"
                 }
               }
             }

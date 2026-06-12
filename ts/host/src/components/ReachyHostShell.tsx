@@ -46,6 +46,7 @@ import { EmbedFrame } from './EmbedFrame';
 import { ErrorView } from './ErrorView';
 import { LeavingView } from './LeavingView';
 import { PickerView } from './PickerView';
+import { PostOAuthSplash } from './PostOAuthSplash';
 import { SignInView } from './SignInView';
 import { TopBar, type HostPhase } from './TopBar';
 import { WelcomeBackOverlay } from './WelcomeBackOverlay';
@@ -134,7 +135,12 @@ const MOCK_ROBOTS: RobotInfo[] = [
 export function ReachyHostShell(
   props: ReachyHostShellProps,
 ): JSX.Element {
-  const previewPhase = readPreviewPhase();
+  // Preview harness is a DEV-only affordance. Gating on
+  // `import.meta.env.DEV` lets the bundler tree-shake the whole
+  // preview branch (ReachyHostShellPreview + MOCK_ROBOTS) out of the
+  // production build, so a deployed Space can't be flipped into the
+  // mock view via `?host-preview=...`.
+  const previewPhase = import.meta.env.DEV ? readPreviewPhase() : null;
   if (previewPhase) {
     return <ReachyHostShellPreview phase={previewPhase} {...props} />;
   }
@@ -157,10 +163,21 @@ function ReachyHostShellNormal({
 
   const [hostPhase, setHostPhase] = useState<HostPhase>('signing-in');
   const [selectedRobotId, setSelectedRobotId] = useState<string | null>(null);
+  /** Identity (name + transport) of the picked robot, captured at
+   *  selection time. `useRobots` is disabled the moment we leave
+   *  `picking` (and clears its list to protect the 1:1 token→peer
+   *  handoff invariant), so we CANNOT look the robot up in `robots`
+   *  during the session - it's empty. We snapshot what the topbar
+   *  needs here instead. */
+  const [selectedRobot, setSelectedRobot] = useState<{
+    name: string | null;
+    transport: string | null;
+  } | null>(null);
   const [embedAppState, setEmbedAppState] = useState<EmbedAppState>({
     phase: 'boot',
     connectingStep: null,
     message: null,
+    rttMs: null,
   });
   const [errorPayload, setErrorPayload] = useState<{
     message: string;
@@ -362,6 +379,13 @@ function ReachyHostShellNormal({
       if (!sdk) return;
       if (hostPhase !== 'picking') return;
       setSelectedRobotId(robotId);
+      // Snapshot identity NOW, while `robots` is still populated -
+      // it gets cleared as soon as we flip to `embedded` below.
+      const picked = robots.find((r) => r.id === robotId);
+      setSelectedRobot({
+        name: picked?.meta?.name ?? null,
+        transport: picked?.transport ?? null,
+      });
       initSentForRef.current = null;
       embedReadyPendingRef.current = false;
       // The host never opened an SSE (picker uses REST), so the
@@ -373,10 +397,11 @@ function ReachyHostShellNormal({
         phase: 'connecting',
         connectingStep: 'link',
         message: null,
+        rttMs: null,
       });
       setHostPhase('embedded');
     },
-    [hostPhase, sdk],
+    [hostPhase, robots, sdk],
   );
 
   /* ─────────────────── End session ─────────────────── */
@@ -398,10 +423,12 @@ function ReachyHostShellNormal({
       // only on full sign-out (`signOut`) and on `pagehide` (tab
       // close).
       setSelectedRobotId(null);
+      setSelectedRobot(null);
       setEmbedAppState({
         phase: 'boot',
         connectingStep: null,
         message: null,
+        rttMs: null,
       });
       initSentForRef.current = null;
       embedReadyPendingRef.current = false;
@@ -495,12 +522,20 @@ function ReachyHostShellNormal({
           hostPhase={hostPhase}
           userName={displayUserName}
           avatarUrl={hfProfile.avatarUrl}
+          // Identity captured at selection time - `robots` is empty
+          // during the session (useRobots disabled on handoff), so we
+          // read the snapshot, falling back to the peer id only if the
+          // robot never advertised a name.
           selectedRobotName={
             selectedRobotId
-              ? (robots.find((r) => r.id === selectedRobotId)?.meta?.name ??
-                selectedRobotId)
+              ? (selectedRobot?.name ?? selectedRobotId)
               : null
           }
+          selectedRobotTransport={selectedRobot?.transport ?? null}
+          // True live latency reported by the embed (the host handed
+          // its WebRTC slot to the iframe). `null` until the embed
+          // reaches `live` and starts sampling.
+          linkRttMs={embedAppState.rttMs}
           onSignOut={signOut}
           onEndSession={() => void endSession('user-action')}
         />
@@ -519,7 +554,7 @@ function ReachyHostShellNormal({
             />
           )}
 
-          {hostPhase === 'signing-in' && (
+          {hostPhase === 'signing-in' && !isPostOauthReturn && (
             <SignInView
               appName={appName}
               isLocalDevMissingConfig={isLocalDevMissingConfig}
@@ -559,6 +594,15 @@ function ReachyHostShellNormal({
             )}
         </Box>
       </Stack>
+
+      {/* OAuth return leg: cover the screen the moment we know we
+       *  came back from a redirect, so the "Continue with Hugging
+       *  Face" button never flashes while `authenticate()` resolves
+       *  the cached token. Hands off to WelcomeBackOverlay (zIndex
+       *  1300) once the username lands. */}
+      {hostPhase === 'signing-in' && isPostOauthReturn && !welcomeBackShown && (
+        <PostOAuthSplash />
+      )}
 
       {welcomeBackShown && (
         <WelcomeBackOverlay
@@ -643,6 +687,8 @@ function ReachyHostShellPreview({
           selectedRobotName={
             phase === 'connecting' ? 'Tabouret' : null
           }
+          selectedRobotTransport={phase === 'connecting' ? 'wifi' : null}
+          linkRttMs={phase === 'connecting' ? 38 : null}
           onSignOut={() => window.alert('Preview: sign-out')}
           onEndSession={() => {
             window.alert('Preview: end-session (no-op)');

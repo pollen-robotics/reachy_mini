@@ -6,6 +6,11 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/aarch64-linux-gnu/
 export LIBCAMERA_IPA_MODULE_PATH=/usr/local/lib/aarch64-linux-gnu/libcamera/ipa
 export LIBCAMERA_IPA_CONFIG_PATH=/usr/local/share/libcamera/ipa
 
+# Cap glibc malloc arenas. On a quad core Pi 4 the default (8 x ncpu) lets the
+# multithreaded daemon spread allocations across many 64MB arenas, which grows
+# RSS over time on the 4GB Wireless unit. 2 keeps it bounded. See issue #1165.
+export MALLOC_ARENA_MAX=2
+
 # Ensure WiFi is not soft-blocked (can happen after a crash or kernel module reload)
 sudo rfkill unblock wifi
 
