@@ -8,7 +8,7 @@ Client->Server command types:
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
     get_state, get_version, start_recording, stop_recording, append_record,
-    subscribe_logs, unsubscribe_logs, restart_daemon,
+    subscribe_logs, unsubscribe_logs, restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
     play_uploaded_move, cancel_move,
@@ -379,6 +379,35 @@ class RestartDaemonCmd(BaseModel):
 
 
 # ------------------------------------------------------------------
+# Remote daemon update over the DataChannel.
+#
+# Remote counterpart of ``POST /update/start`` (``routers/update.py``):
+# upgrades the ``reachy_mini`` package in the daemon venv from PyPI.
+# Exposed over the typed transport so Central-routed peers can trigger
+# an update without an LAN HTTP path.
+#
+# Like ``restart_daemon``, this is fire-and-ack: the update ends with a
+# ``systemctl restart`` that tears the transport down, so the daemon
+# sends a single ack (``{"status": "ok", "command": "start_update"}``)
+# immediately and the consumer is expected to reconnect once the daemon
+# is back up. No completion / log message is streamed over this channel;
+# consumers that need progress can pair this with ``subscribe_logs``.
+# ------------------------------------------------------------------
+
+
+class StartUpdateCmd(BaseModel):
+    """Start a PyPI update of the daemon, then restart it.
+
+    ``pre_release`` mirrors the REST endpoint: when true the daemon
+    installs the latest pre-release. See :class:`RestartDaemonCmd` for
+    the fire-and-ack semantics (the transport dies with the restart).
+    """
+
+    type: Literal["start_update"] = "start_update"
+    pre_release: bool = False
+
+
+# ------------------------------------------------------------------
 # Inline-move upload + daemon-side playback.
 #
 # Streaming control over the data channel (one set_target per tick)
@@ -685,6 +714,7 @@ AnyCommand = Annotated[
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
     | RestartDaemonCmd
+    | StartUpdateCmd
     | UploadMoveStartCmd
     | UploadMoveChunkCmd
     | UploadMoveFinishCmd

@@ -1132,6 +1132,17 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         return this._sendCommand({ type: 'clear_incoming_audio' });
     }
 
+    /**
+     * Trigger a PyPI update of the daemon over the data channel. Remote
+     * counterpart of `POST /update/start`. Fire-and-forget: the daemon
+     * acks then restarts itself once the install finishes, which tears
+     * this session down - the caller is expected to reconnect afterwards.
+     * No progress is streamed here; pair with `subscribeLogs()` if needed.
+     */
+    startDaemonUpdate({ preRelease = false }: { preRelease?: boolean } = {}): boolean {
+        return this._sendCommand({ type: 'start_update', pre_release: preRelease });
+    }
+
     setMotorMode(mode: 'enabled' | 'disabled' | 'gravity_compensation'): boolean {
         return this._sendCommand({ type: 'set_motor_mode', mode });
     }

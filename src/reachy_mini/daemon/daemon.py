@@ -334,6 +334,7 @@ class Daemon:
                 if self.backend is not None:
                     self.backend.setup_media_server(self._media_server)
                     self.backend.set_restart_daemon_callback(self._spawn_webrtc_restart)
+                    self.backend.set_start_update_callback(self._spawn_webrtc_update)
                 self._media_server.start()
 
                 # Start central signaling relay for remote WebRTC access
@@ -558,6 +559,32 @@ class Daemon:
                 self.logger.error(f"WebRTC restart_daemon failed: {e}")
 
         Thread(target=_run, daemon=True, name="webrtc-restart-daemon").start()
+
+    def _spawn_webrtc_update(self, pre_release: bool = False) -> None:
+        """Run a PyPI update of the daemon on a fresh thread.
+
+        Called from the backend's WebRTC ``start_update`` handler. Mirrors
+        ``_spawn_webrtc_restart`` and the REST ``/update/start`` endpoint:
+        ``update_reachy_mini`` upgrades the package and ends with a
+        ``systemctl restart``. We run it on a daemon thread with its own
+        asyncio loop so the caller can flush its DataChannel ack before the
+        WebRTC stack is torn down by the restart.
+        """
+        if self._status.state == DaemonState.STOPPED:
+            self.logger.warning("Ignoring WebRTC start_update: daemon already stopped.")
+            return
+
+        # Local import: keeps the wireless-update dependency chain out of
+        # the daemon module's import-time graph (matches routers/update.py).
+        from reachy_mini.utils.wireless_version.update import update_reachy_mini
+
+        def _run() -> None:
+            try:
+                asyncio.run(update_reachy_mini(self.logger, pre_release=pre_release))
+            except Exception as e:
+                self.logger.error(f"WebRTC start_update failed: {e}")
+
+        Thread(target=_run, daemon=True, name="webrtc-start-update").start()
 
     def status(self) -> "DaemonStatus":
         """Get the current status of the Reachy Mini daemon."""
