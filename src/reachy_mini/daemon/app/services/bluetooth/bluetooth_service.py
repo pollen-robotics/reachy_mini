@@ -897,6 +897,37 @@ class BluetoothCommandService:
                 self._register_pin_failure()
                 return "ERROR: Incorrect PIN"
 
+        # Daemon software update over BLE. Proxies to the daemon's existing
+        # /update/* API on localhost (no logic duplicated). Updating the
+        # daemon is privileged, so all three require a live TTL session (the
+        # same auth gate the WiFi commands use). They run OFF the mainloop via
+        # _run_async and deliver the real result over the RESPONSE
+        # notification; WriteValue returns the "OK: working" ack immediately.
+        # NB: /update/start-from-ref (arbitrary git ref) is intentionally NOT
+        # exposed over BLE — it's a much larger attack surface than updating
+        # to the official published release.
+        # CAVEAT: a successful update ends with `systemctl restart
+        # reachy-mini-daemon`, which drops the daemon's HTTP server AND wipes
+        # the in-memory job registry. So UPDATE_INFO polling cannot observe a
+        # terminal DONE — it tails off into "Daemon unreachable" / "Unknown
+        # job". Clients infer success by reconnecting and re-running
+        # UPDATE_CHECK (current_version == latest), not by polling to the end.
+        elif upper == "UPDATE_CHECK":
+            if not self._is_authed():
+                return "ERROR: Not connected. Please authenticate first."
+            self._run_async(_update_check)
+            return "OK: working"
+        elif upper == "UPDATE_START":
+            if not self._is_authed():
+                return "ERROR: Not connected. Please authenticate first."
+            self._run_async(_update_start)
+            return "OK: working"
+        elif upper.startswith("UPDATE_INFO "):
+            if not self._is_authed():
+                return "ERROR: Not connected. Please authenticate first."
+            job_id = command_str[len("UPDATE_INFO ") :].strip()
+            self._run_async(lambda: _update_info(job_id))
+            return "OK: working"
         # WiFi provisioning over BLE. All of these proxy to the daemon and may
         # block (nmcli rescan ~10s), so they run OFF the mainloop via
         # _run_async and deliver their result over the RESPONSE notification;
@@ -1243,6 +1274,43 @@ def _daemon_request(
             return raw.decode("utf-8", errors="replace")
 
 
+# --- Daemon software update proxy (reuses _daemon_request above) -------------
+# Relays to the daemon's /update/* routes. /update/available hits PyPI, so
+# these use a longer timeout than the WiFi calls. /update/start-from-ref
+# (arbitrary git ref) is intentionally NOT proxied — far larger attack surface
+# than the official published release.
+_UPDATE_HTTP_TIMEOUT_S = 30.0
+# Like _wifi_scan, an UPDATE_INFO reply must fit a single RESPONSE
+# notification, so its whole serialized payload is bounded by bytes.
+_UPDATE_MTU_BUDGET = 180
+
+
+def _update_check() -> str:
+    """Report whether a daemon update is available (compact JSON for BLE)."""
+    try:
+        data = _daemon_request(
+            "GET",
+            "/update/available",
+            {"pre_release": "false"},
+            timeout=_UPDATE_HTTP_TIMEOUT_S,
+        )
+        rm = (data or {}).get("update", {}).get("reachy_mini", {})
+        compact = {
+            "available": rm.get("is_available"),
+            "current": rm.get("current_version"),
+            "latest": rm.get("available_version"),
+        }
+        return json.dumps(compact, separators=(",", ":"), ensure_ascii=False)
+    except urllib.error.HTTPError as e:
+        if e.code == 400:
+            return "ERROR: Update in progress"
+        return "ERROR: Check failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
 def _wifi_status(authed: bool) -> str:
     """Compact WiFi state for a BLE read/notify.
 
@@ -1288,6 +1356,32 @@ def _wifi_keyex() -> str:
         return f"ERROR: {e}"
 
 
+def _update_start() -> str:
+    """Trigger the daemon update (latest published release). Returns the job id."""
+    try:
+        data = _daemon_request(
+            "POST",
+            "/update/start",
+            {"pre_release": "false"},
+            timeout=_UPDATE_HTTP_TIMEOUT_S,
+        )
+        job_id = (data or {}).get("job_id") if isinstance(data, dict) else None
+        if not job_id:
+            return "ERROR: Start failed"
+        # UPDATE_INFO <job_id> follows early progress, but the daemon restarts
+        # on success and the job is then gone — see the CAVEAT in _handle_command.
+        return f"OK: Update started {job_id}"
+    except urllib.error.HTTPError as e:
+        # The daemon returns 400 for "No update available" / "already in progress".
+        if e.code == 400:
+            return "ERROR: No update available or already in progress"
+        return "ERROR: Start failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
 def _wifi_scan() -> str:
     """Scan for SSIDs. JSON array bounded by serialized byte length, or ERROR."""
     try:
@@ -1312,6 +1406,42 @@ def _wifi_scan() -> str:
         if e.code == 409:
             return "ERROR: Busy"
         return "ERROR: Scan failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _update_info(job_id: str) -> str:
+    """Report the status of an update job (compact; full logs stay off BLE)."""
+    job_id = job_id.strip()
+    if not job_id:
+        return "ERROR: Missing job_id"
+    try:
+        data = _daemon_request(
+            "GET", "/update/info", {"job_id": job_id}, timeout=_UPDATE_HTTP_TIMEOUT_S
+        )
+        if not isinstance(data, dict):
+            return "ERROR: Unknown job"
+        logs = data.get("logs") or []
+        # Forward only the last log line (the full log can be large; use the
+        # daemon's /update/ws/logs websocket for the live stream). A single
+        # RESPONSE notification must fit the negotiated ATT MTU, so bound the
+        # WHOLE serialized payload by bytes and trim `last` — the one unbounded
+        # field — until it fits. A fixed char cap is not enough: the JSON
+        # envelope ({"status",...,"lines",...}) pushes the total over the MTU.
+        compact = {"status": data.get("status"), "lines": len(logs), "last": ""}
+        last = logs[-1] if logs else ""
+        while True:
+            compact["last"] = last
+            encoded = json.dumps(compact, separators=(",", ":"), ensure_ascii=False)
+            if len(encoded.encode("utf-8")) <= _UPDATE_MTU_BUDGET or not last:
+                return encoded
+            last = last[:-1]
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return "ERROR: Unknown job"
+        return "ERROR: Info failed"
     except urllib.error.URLError:
         return "ERROR: Daemon unreachable"
     except Exception as e:
