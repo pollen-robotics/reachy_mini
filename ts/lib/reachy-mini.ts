@@ -63,6 +63,17 @@ interface LogSubscriber {
     onError?: (error: string) => void;
 }
 
+/** One progress event from an in-flight `startDaemonUpdate()`. */
+export interface UpdateProgressEvent {
+    status: 'in_progress' | 'done' | 'failed';
+    /** A log line of the underlying update job (when `in_progress`). */
+    line?: string;
+    /** Set when `status === 'failed'`. */
+    error?: string;
+}
+
+type UpdateProgressCallback = (event: UpdateProgressEvent) => void;
+
 interface SignalingMessage {
     type?: string;
     sessionId?: string;
@@ -177,6 +188,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Log subscribers ─────────────────────────────────────────────────
     private readonly _logSubscribers: Set<LogSubscriber> = new Set();
+    private readonly _updateProgressSubscribers: Set<UpdateProgressCallback> = new Set();
 
     // ─── Broadcast waiters (playMove / playUploadedAudio) ────────────────
     private _broadcastWaiters: BroadcastWaiter[] = [];
@@ -717,6 +729,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         this._logSubscribers.clear();
+        this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Session stopped'));
         // Tear down resilience plumbing BEFORE closing `_pc` so a
         // queued grace callback can't dereference a dead handle.
@@ -763,6 +776,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         this._logSubscribers.clear();
+        this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Disconnected'));
         // Mirrors the resilience teardown in `stopSession()`.
         this._clearIceGrace();
@@ -1130,6 +1144,27 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     clearIncomingAudio(): boolean {
         return this._sendCommand({ type: 'clear_incoming_audio' });
+    }
+
+    /**
+     * Trigger a PyPI update of the daemon over the data channel. Remote
+     * counterpart of `POST /update/start`. The daemon acks then restarts
+     * itself once the install finishes, which tears this session down -
+     * the caller is expected to reconnect afterwards.
+     *
+     * Pass `onProgress` to receive `update_progress` events (one per log
+     * line of the update job). A *successful* update restarts the daemon
+     * before a `done` event can arrive, so treat the session teardown +
+     * a successful reconnect as the success signal; `onProgress` will fire
+     * with `status: 'failed'` if the install errors before the restart.
+     *
+     * Returns `false` if the data channel isn't open.
+     */
+    startDaemonUpdate(
+        { preRelease = false, onProgress }: { preRelease?: boolean; onProgress?: UpdateProgressCallback } = {},
+    ): boolean {
+        if (onProgress) this._updateProgressSubscribers.add(onProgress);
+        return this._sendCommand({ type: 'start_update', pre_release: preRelease });
     }
 
     setMotorMode(mode: 'enabled' | 'disabled' | 'gravity_compensation'): boolean {
@@ -1914,6 +1949,18 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     try { sub.onError(data.error as string); }
                     catch (e) { console.error('subscribeLogs onError threw:', e); }
                 }
+            }
+            return;
+        }
+        if (data.type === 'update_progress') {
+            const event: UpdateProgressEvent = {
+                status: data.status as UpdateProgressEvent['status'],
+                line: typeof data.line === 'string' ? data.line : undefined,
+                error: typeof data.error === 'string' ? data.error : undefined,
+            };
+            for (const cb of this._updateProgressSubscribers) {
+                try { cb(event); }
+                catch (e) { console.error('startDaemonUpdate onProgress threw:', e); }
             }
             return;
         }

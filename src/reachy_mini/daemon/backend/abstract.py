@@ -65,6 +65,7 @@ from reachy_mini.io.protocol import (
     SetVolumeCmd,
     SetWobblingCmd,
     StartRecordingCmd,
+    StartUpdateCmd,
     StopRecordingCmd,
     SubscribeLogsCmd,
     UnsubscribeLogsCmd,
@@ -328,6 +329,13 @@ class Backend:
         # Returns immediately - the actual restart runs on a fresh
         # thread so the data channel can flush its ack first.
         self._restart_daemon_callback: Optional[Callable[[], None]] = None
+
+        # Synchronous callback that triggers a PyPI update of the daemon
+        # followed by a restart. Wired in by `Daemon`, same fire-and-ack
+        # contract as `_restart_daemon_callback`: the update ends with a
+        # `systemctl restart` that tears the transport down, so the
+        # callback must return promptly (it spawns its own thread).
+        self._start_update_callback: Optional[Callable[[bool], None]] = None
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -1385,6 +1393,24 @@ class Backend:
             except Exception as e:
                 self.logger.error(f"restart_daemon callback failed: {e}")
 
+        elif isinstance(cmd, StartUpdateCmd):
+            # Same fire-and-ack contract as `restart_daemon`: the update
+            # ends with a `systemctl restart` that tears this transport
+            # down, so ack first and let the consumer reconnect.
+            if self._start_update_callback is None:
+                send_response(
+                    {
+                        "error": "start_update not supported by this backend host",
+                        "command": "start_update",
+                    }
+                )
+                return
+            send_response({"status": "ok", "command": "start_update"})
+            try:
+                self._start_update_callback(cmd.pre_release)
+            except Exception as e:
+                self.logger.error(f"start_update callback failed: {e}")
+
         elif isinstance(cmd, UploadMoveStartCmd):
             self._handle_upload_start(cmd)
         elif isinstance(cmd, UploadMoveChunkCmd):
@@ -2060,6 +2086,17 @@ class Backend:
         flush its ack on the about-to-be-torn-down DataChannel.
         """
         self._restart_daemon_callback = callback
+
+    def set_start_update_callback(self, callback: Callable[[bool], None]) -> None:
+        """Wire the trigger used by the ``start_update`` DataChannel cmd.
+
+        ``Daemon`` injects a callback that runs ``update_reachy_mini`` on
+        a fresh background thread (mirroring ``set_restart_daemon_callback``).
+        Takes the ``pre_release`` flag and MUST return promptly so the ack
+        is flushed before the update's ``systemctl restart`` tears the
+        DataChannel down.
+        """
+        self._start_update_callback = callback
 
     def setup_media_server(self, media_server: Any) -> None:
         """Connect the backend to the media server.

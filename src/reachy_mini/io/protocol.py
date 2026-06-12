@@ -8,7 +8,7 @@ Client->Server command types:
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
     get_state, get_version, start_recording, stop_recording, append_record,
-    subscribe_logs, unsubscribe_logs, restart_daemon,
+    subscribe_logs, unsubscribe_logs, restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
     play_uploaded_move, cancel_move,
@@ -17,7 +17,8 @@ Client->Server command types:
 
 Server->Client message types:
     joint_positions, head_pose, imu_data, recorded_data,
-    daemon_status, task_progress
+    daemon_status, task_progress, log_line, log_stream_error,
+    update_progress
 """
 
 from datetime import datetime
@@ -379,6 +380,35 @@ class RestartDaemonCmd(BaseModel):
 
 
 # ------------------------------------------------------------------
+# Remote daemon update over the DataChannel.
+#
+# Remote counterpart of ``POST /update/start`` (``routers/update.py``):
+# upgrades the ``reachy_mini`` package in the daemon venv from PyPI.
+# Exposed over the typed transport so Central-routed peers can trigger
+# an update without an LAN HTTP path.
+#
+# Like ``restart_daemon``, this is fire-and-ack: the update ends with a
+# ``systemctl restart`` that tears the transport down, so the daemon
+# sends a single ack (``{"status": "ok", "command": "start_update"}``)
+# immediately and the consumer is expected to reconnect once the daemon
+# is back up. No completion / log message is streamed over this channel;
+# consumers that need progress can pair this with ``subscribe_logs``.
+# ------------------------------------------------------------------
+
+
+class StartUpdateCmd(BaseModel):
+    """Start a PyPI update of the daemon, then restart it.
+
+    ``pre_release`` mirrors the REST endpoint: when true the daemon
+    installs the latest pre-release. See :class:`RestartDaemonCmd` for
+    the fire-and-ack semantics (the transport dies with the restart).
+    """
+
+    type: Literal["start_update"] = "start_update"
+    pre_release: bool = False
+
+
+# ------------------------------------------------------------------
 # Inline-move upload + daemon-side playback.
 #
 # Streaming control over the data channel (one set_target per tick)
@@ -685,6 +715,7 @@ AnyCommand = Annotated[
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
     | RestartDaemonCmd
+    | StartUpdateCmd
     | UploadMoveStartCmd
     | UploadMoveChunkCmd
     | UploadMoveFinishCmd
@@ -771,6 +802,30 @@ class LogStreamErrorMsg(BaseModel):
 
 
 # ------------------------------------------------------------------
+# Update progress broadcast over the DataChannel.
+#
+# Unsolicited fan-out emitted while a `start_update` job runs, mirroring
+# the REST `WS /update/ws/logs` stream. One message per log line of the
+# underlying `update_reachy_mini` job (`status="in_progress"`), plus a
+# terminal `status="failed"` if the install raises before the restart.
+#
+# Note: a *successful* update ends with a `systemctl restart` that tears
+# the transport down, so `status="done"` is best-effort and usually
+# never arrives - consumers infer success from the channel teardown +
+# reconnect, exactly like the desktop app does with the REST WS close.
+# ------------------------------------------------------------------
+
+
+class UpdateProgressMsg(BaseModel):
+    """A progress event for an in-flight ``start_update`` job."""
+
+    type: Literal["update_progress"] = "update_progress"
+    status: Literal["in_progress", "done", "failed"]
+    line: str | None = None
+    error: str | None = None
+
+
+# ------------------------------------------------------------------
 # Task protocol
 # ------------------------------------------------------------------
 
@@ -825,7 +880,8 @@ AnyServerMsg = Annotated[
     | DaemonStatus
     | TaskProgress
     | LogLineMsg
-    | LogStreamErrorMsg,
+    | LogStreamErrorMsg
+    | UpdateProgressMsg,
     Field(discriminator="type"),
 ]
 server_msg_adapter: TypeAdapter[AnyServerMsg] = TypeAdapter(AnyServerMsg)
