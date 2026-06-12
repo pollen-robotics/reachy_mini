@@ -10,13 +10,13 @@ Direction of Arrival (``get_DoA()``), and ``cleanup()`` logic so that
 Subclasses must implement:
 - ``start_recording()``, ``stop_recording()``
 - ``start_playing()``, ``stop_playing()``
-- ``push_audio_sample()``
 - ``clear_player()``
 - ``play_sound()``
 
 """
 
 import logging
+import warnings
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -34,6 +34,13 @@ from reachy_mini.media.gstreamer_utils import get_sample, handle_default_bus_mes
 
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
+
+# Software AEC (webrtcdsp + webrtcechoprobe) constants shared by the audio
+# backends. The elements only accept S16LE at a fixed set of rates
+# (8000/16000/32000/48000) and must share a probe name to be paired.
+AEC_RATE = 48_000
+AEC_CHANNELS = 2
+AEC_PROBE_NAME = "reachymini_aec_probe"
 
 
 class AudioBase(ABC):
@@ -62,26 +69,38 @@ class AudioBase(ABC):
         # "no previous buffer, anchor to running-time on next push".
         self._appsrc_pts: int = -1
 
-    def _compute_pts(
-        self,
-        num_samples: int,
-        running_time_ns: int,
-        next_pts_ns: int,
-    ) -> tuple[int, int, int]:
-        """Return ``(pts_ns, duration_ns, next_pts_ns)`` for an appsrc buffer.
+    def _push_appsrc_buffer(
+        self, data: npt.NDArray[np.float32]
+    ) -> Optional[Gst.FlowReturn]:
+        """Stamp and push one F32LE chunk into ``self._appsrc``.
 
-        Anchors PTS to ``running_time_ns`` when ``next_pts_ns`` is
-        negative (sentinel for "no previous") or the gap is larger
-        than ``GAP_RESET_NS``; otherwise continues the previous
-        stream's PTS to keep audio contiguous across consecutive
-        push calls.
+        Gap-aware: the first buffer after a start/flush (``_appsrc_pts < 0``)
+        or after a gap larger than ``GAP_RESET_NS`` carries the ``DISCONT``
+        flag and a PTS anchored to the current running-time, so an
+        ``audiomixer`` downstream can align it on the current timeline.
+        Follow-up buffers leave PTS/DTS as ``CLOCK_TIME_NONE`` so the
+        mixer places them contiguously by byte offset.
+
+        Returns the ``Gst.FlowReturn`` from ``push_buffer``, or ``None``
+        if ``self._appsrc`` is not initialized.
         """
-        duration_ns = (num_samples * 1_000_000_000) // self.SAMPLE_RATE
-        if next_pts_ns < 0 or running_time_ns > next_pts_ns + self.GAP_RESET_NS:
-            pts_ns = running_time_ns
+        appsrc = getattr(self, "_appsrc", None)
+        if appsrc is None:
+            return None
+        running_time = appsrc.get_current_running_time()
+        duration_ns = (int(data.shape[0]) * Gst.SECOND) // self.SAMPLE_RATE
+        new_cue = (
+            self._appsrc_pts < 0 or running_time > self._appsrc_pts + self.GAP_RESET_NS
+        )
+        buf = Gst.Buffer.new_wrapped(data.tobytes())
+        if new_cue:
+            buf.set_flags(Gst.BufferFlags.DISCONT)
+            buf.pts = running_time
+            buf.dts = running_time
+            self._appsrc_pts = running_time + duration_ns
         else:
-            pts_ns = next_pts_ns
-        return pts_ns, duration_ns, pts_ns + duration_ns
+            self._appsrc_pts += duration_ns
+        return appsrc.push_buffer(buf)
 
     def _on_bus_message(
         self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
@@ -214,10 +233,29 @@ class AudioBase(ABC):
         """Stop the playback pipeline."""
         ...
 
-    @abstractmethod
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push audio data to the output."""
-        ...
+        """Push audio data to the output appsrc.
+
+        Args:
+            data: Audio samples as a float32 array.
+
+        """
+        ret = self._push_appsrc_buffer(data)
+        if ret is None:
+            self.logger.warning(
+                "AppSrc is not initialized. Call start_playing() first."
+            )
+        elif ret != Gst.FlowReturn.OK:
+            self.logger.warning(f"push_buffer dropped: {ret}")
+
+    def clear_output_buffer(self) -> None:
+        """Use :meth:`clear_player` instead. Deprecated; does nothing."""
+        warnings.warn(
+            "clear_output_buffer() is deprecated; use clear_player().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.logger.warning("clear_output_buffer() is deprecated; use clear_player().")
 
     @abstractmethod
     def clear_player(self) -> None:
