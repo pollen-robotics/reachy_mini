@@ -904,6 +904,43 @@ If a part is broken/malfunctioning, Pollen's after-sales team will determine if 
 </details>
 
 
+<details>
+<summary><strong>Wireless robot runs out of memory / daemon RSS keeps growing (Raspberry Pi 4, 4GB)</strong></summary>
+
+On a 4GB CM4 Wireless unit the daemon can climb to around 1.8GB RSS within a few hours, push the Pi into swap, and trigger a watchdog restart loop. Two settings keep it under control.
+
+First, if you are not using the Hugging Face App Store remote view, stop the signaling relay. When the HF signaling endpoint is unreachable (stale token, rate limit, region policy), `central_signaling_relay` retries about once a second, which was seen at over 17,000 reconnects per boot. The relay reads the token through `huggingface_hub.get_token()`, so it picks up the cached file or the `HF_TOKEN` environment variable. Moving the cached file aside disables the relay as long as no `HF_TOKEN` is exported for the daemon (check the service environment if the relay keeps reconnecting). This is reversible: keep the `.bak` and move it back to re-enable the remote view.
+
+```bash
+mv ~/.cache/huggingface/token ~/.cache/huggingface/token.bak
+sudo systemctl restart reachy-mini-daemon
+```
+
+Second, cap glibc memory arenas. A quad core Pi 4 defaults to many arenas, and a multithreaded daemon fills them over time. Add a systemd drop-in for the daemon service:
+
+```bash
+sudo systemctl edit reachy-mini-daemon
+```
+
+```ini
+[Service]
+Environment=MALLOC_ARENA_MAX=2
+```
+
+Then apply it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart reachy-mini-daemon
+```
+
+On one unit after both changes, daemon RSS went from 1791MB to 178MB, available memory from 762MB to 2612MB, and reconnects per boot from over 17,000 to zero. The watchdog loop went from roughly 15 minutes to several hours.
+
+Both are mitigations, not a root fix. See [issue #1165](https://github.com/pollen-robotics/reachy_mini/issues/1165).
+
+</details>
+
+
 ## 💬 Still stuck?
 
 If you couldn't find the answer to your issue in this guide, please reach out to us directly!
