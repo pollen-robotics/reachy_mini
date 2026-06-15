@@ -677,13 +677,13 @@ jobs:
           source .venv/bin/activate
           : > install.log
           python3.12 -m pip install --upgrade pip 2>&1 | tee -a install.log
-          uv pip install --force-reinstall --no-cache git+https://github.com/pollen-robotics/reachy_mini.git@${{ env.REACHY_REF }} 2>&1 | tee -a install.log
+          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@${{ env.REACHY_REF }} 2>&1 | tee -a install.log
 
       - name: Start Reachy Mini Lite daemon
         run: |
           echo "Starting Reachy Mini Lite daemon..."
           source .venv/bin/activate
-          uv run reachy-mini-daemon --robot-name reachy_mini_lite --serialport auto --localhost-only > daemon.log 2>&1 &
+          reachy-mini-daemon --robot-name reachy_mini_lite --serialport auto --localhost-only > daemon.log 2>&1 &
           echo $! > lite_daemon.pid
           echo "Daemon PID: $(cat lite_daemon.pid)"
 
