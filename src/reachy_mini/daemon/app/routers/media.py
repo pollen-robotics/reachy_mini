@@ -8,6 +8,7 @@ so that WebRTC clients can upload, play, list and delete sound files on
 the daemon.
 """
 
+import asyncio
 import os
 import tempfile
 from pathlib import Path
@@ -203,7 +204,8 @@ async def upload_sound(
             while chunk := await file.read(1 << 20):
                 f.write(chunk)
 
-        if not is_valid_audio_file(tmp_path):
+        # Offload the blocking GStreamer probe (up to 5 s) off the event loop.
+        if not await asyncio.to_thread(is_valid_audio_file, tmp_path):
             raise HTTPException(
                 status_code=400, detail="Unsupported or invalid audio file"
             )
