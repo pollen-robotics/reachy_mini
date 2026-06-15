@@ -378,7 +378,7 @@ Audio recording, playback, and direction-of-arrival detection work the same way 
 Refer to the official examples for working code:
 
 - **[Sound Recording](../examples/sound_record)**: Record from the mic array and save to WAV.
-- **[Sound Playback](../examples/sound_play)**: Play a WAV file or push real-time audio (e.g., from a TTS engine).
+- **[Sound Playback](../examples/sound_play)**: Play a sound file or push real-time audio (e.g., from a TTS engine).
 - **[Sound Direction of Arrival](../examples/sound_doa)**: Detect who is speaking and make the robot look at them.
 
 For details on how audio streams differ between Wireless and Lite, see [Media Architecture](media-architecture.md).

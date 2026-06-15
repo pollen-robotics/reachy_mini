@@ -8,12 +8,15 @@ so that WebRTC clients can upload, play, list and delete sound files on
 the daemon.
 """
 
+import asyncio
 import os
+import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from ....media.gstreamer_utils import is_valid_audio_file
 from ...daemon import Daemon
 from ..dependencies import get_daemon
 
@@ -22,6 +25,17 @@ router = APIRouter(
 )
 
 SOUNDS_TMP_DIR = "/tmp/reachy_mini_sounds"
+
+# Sound uploads are restricted to known audio container extensions (allow-list)
+# and validated by content (see ``is_valid_audio_file``) to prevent arbitrary
+# file upload (CWE-434, GHSA-m2pc-3q4q-w6jr).
+ALLOWED_SOUND_EXTENSIONS = frozenset(
+    {".wav", ".mp3", ".ogg", ".oga", ".opus", ".flac", ".m4a", ".aac"}
+)
+
+# Cap upload size before the file is probed so a large body can neither exhaust
+# memory nor tie up the GStreamer discoverer.
+MAX_SOUND_UPLOAD_BYTES = 25 * 1024 * 1024
 
 
 @router.post("/release")
@@ -153,6 +167,10 @@ async def upload_sound(
     The file is saved to ``/tmp/reachy_mini_sounds/<original_filename>``.
     If a file with the same name already exists it is overwritten.
 
+    The upload is restricted to known audio extensions, capped at
+    ``MAX_SOUND_UPLOAD_BYTES``, and validated by content before being stored,
+    so non-audio payloads cannot be written to disk.
+
     Returns:
         JSON with the absolute *path* of the saved file on the daemon.
 
@@ -165,12 +183,38 @@ async def upload_sound(
     if not filename or filename in (".", ".."):
         raise HTTPException(status_code=400, detail="Invalid filename")
 
+    # Allow-list the extension before touching the disk.
+    if Path(filename).suffix.lower() not in ALLOWED_SOUND_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Unsupported file extension; allowed: "
+                f"{', '.join(sorted(ALLOWED_SOUND_EXTENSIONS))}"
+            ),
+        )
+
     os.makedirs(SOUNDS_TMP_DIR, exist_ok=True)
     dest = os.path.join(SOUNDS_TMP_DIR, filename)
 
-    content = await file.read()
-    with open(dest, "wb") as f:
-        f.write(content)
+    # Probe a temp copy, then atomically move it into place so no partial or
+    # invalid file ever lands at the public destination name.
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=SOUNDS_TMP_DIR, suffix=".upload")
+    try:
+        with os.fdopen(tmp_fd, "wb") as f:
+            while chunk := await file.read(1 << 20):
+                f.write(chunk)
+
+        # Offload the blocking GStreamer probe (up to 5 s) off the event loop.
+        if not await asyncio.to_thread(is_valid_audio_file, tmp_path):
+            raise HTTPException(
+                status_code=400, detail="Unsupported or invalid audio file"
+            )
+
+        os.replace(tmp_path, dest)
+    except BaseException:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
 
     return {"status": "ok", "path": dest}
 

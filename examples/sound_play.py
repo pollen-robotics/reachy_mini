@@ -1,8 +1,8 @@
 """Reachy Mini sound playback example.
 
 Two modes:
-  --wav <path>  Play a wav file using the media play_sound API.
-  --live        Push a continuous sine tone using push_audio_sample.
+  --file <path>  Play a sound file (WAV, OGG, MP3, FLAC, ...) via play_sound.
+  --live         Push a continuous sine tone using push_audio_sample.
 """
 
 # START doc_example
@@ -10,22 +10,20 @@ Two modes:
 import argparse
 import os
 import time
-import wave
 
 import numpy as np
 
 from reachy_mini import ReachyMini
+from reachy_mini.media.gstreamer_utils import audio_duration_seconds
 
 
-def play_wav(mini: "ReachyMini", wav_path: str) -> None:
-    """Play a wav file using the media play_sound API."""
-    wav_path = os.path.abspath(wav_path)
-    print(f"Playing {wav_path}...")
-    mini.media.play_sound(wav_path)
+def play_file(mini: "ReachyMini", file_path: str) -> None:
+    """Play a sound file using the media play_sound API."""
+    file_path = os.path.abspath(file_path)
+    print(f"Playing {file_path}...")
+    mini.media.play_sound(file_path)
 
-    with wave.open(wav_path, "rb") as wf:
-        wav_duration = wf.getnframes() / mini.media.get_output_audio_samplerate()
-    time.sleep(wav_duration)
+    time.sleep(audio_duration_seconds(file_path))
     print("Playback finished.")
 
 
@@ -52,14 +50,14 @@ def play_live_tone(mini: "ReachyMini", tone_hz: float) -> None:
 
 
 def main(
-    backend: str, wav_path: str | None, tone_hz: float, wobbling: bool = False
+    backend: str, file_path: str | None, tone_hz: float, wobbling: bool = False
 ) -> None:
     """Run the sound playback example."""
     with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
         if wobbling:
             mini.enable_wobbling()
-        if wav_path:
-            play_wav(mini, wav_path)
+        if file_path:
+            play_file(mini, file_path)
         else:
             play_live_tone(mini, tone_hz)
 
@@ -78,9 +76,9 @@ if __name__ == "__main__":
 
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
-        "--wav",
+        "--file",
         type=str,
-        help="Path to a wav file to play.",
+        help="Path to a sound file to play (WAV, OGG, MP3, FLAC, ...).",
     )
     mode.add_argument(
         "--live",
@@ -103,7 +101,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(
         backend=args.backend,
-        wav_path=args.wav,
+        file_path=args.file,
         tone_hz=args.tone_hz,
         wobbling=args.wobbling,
     )

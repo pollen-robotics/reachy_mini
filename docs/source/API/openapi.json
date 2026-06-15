@@ -1403,7 +1403,7 @@
     "/api/media/sounds/upload": {
       "post": {
         "summary": "Upload Sound",
-        "description": "Upload a sound file to the daemon's temporary sound directory.\n\nThe file is saved to ``/tmp/reachy_mini_sounds/<original_filename>``.\nIf a file with the same name already exists it is overwritten.\n\nReturns:\n    JSON with the absolute *path* of the saved file on the daemon.",
+        "description": "Upload a sound file to the daemon's temporary sound directory.\n\nThe file is saved to ``/tmp/reachy_mini_sounds/<original_filename>``.\nIf a file with the same name already exists it is overwritten.\n\nThe upload is restricted to known audio extensions, capped at\n``MAX_SOUND_UPLOAD_BYTES``, and validated by content before being stored,\nso non-audio payloads cannot be written to disk.\n\nReturns:\n    JSON with the absolute *path* of the saved file on the daemon.",
         "operationId": "upload_sound_api_media_sounds_upload_post",
         "requestBody": {
           "content": {

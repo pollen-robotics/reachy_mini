@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.daemon.app.middleware import MaxBodySizeMiddleware
 from reachy_mini.daemon.app.routers import (
     apps,
     audio_config,
@@ -265,6 +266,16 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             """Health check endpoint to reset the health check timer."""
             health_check_event.set()
             return {"status": "ok"}
+
+    # Cap the size of sound uploads before the body is read, so a large file
+    # cannot be streamed to disk (see GHSA-m2pc-3q4q-w6jr). Added before CORS
+    # so CORS remains the outermost middleware and even a 413 carries its
+    # headers.
+    app.add_middleware(
+        MaxBodySizeMiddleware,
+        max_body_size=media.MAX_SOUND_UPLOAD_BYTES,
+        paths={"/api/media/sounds/upload"},
+    )
 
     # Restrict cross-origin access to local browser tooling; everything else is
     # same-origin, native, or WebRTC.
