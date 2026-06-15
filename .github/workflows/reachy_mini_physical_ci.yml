@@ -23,9 +23,12 @@ jobs:
         id: resolve
         run: |
           echo "Input ref: $REACHY_REF"
-          RESPONSE=$(curl -s -w "\n__HTTP_CODE=%{http_code}\n" \
-            "https://api.github.com/repos/pollen-robotics/reachy_mini/commits/$REACHY_REF")
-          SHA=$(echo "$RESPONSE" | grep -o '"sha":"[^"]*"' | head -1 | cut -d'"' -f4)
+          RESPONSE=$(curl -s "https://api.github.com/repos/pollen-robotics/reachy_mini/commits/$REACHY_REF")
+          SHA=$(echo "$RESPONSE" | python3 -c "import sys, json
+          try:
+              print(json.loads(sys.stdin.read()).get('sha', ''))
+          except Exception:
+              pass")
           if [ -z "$SHA" ]; then
             echo "[ERROR] Could not resolve '$REACHY_REF' on GitHub"
             echo "Full API response:"
@@ -117,8 +120,8 @@ jobs:
           curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon"
 
   linux_lite:
-    needs: linux_wireless
-    if: always()
+    needs: [linux_wireless, validate_ref]
+    if: ${{ always() && needs.validate_ref.result == 'success' }}
     runs-on: ci-runner-linux
     timeout-minutes: 10
     steps:
@@ -195,8 +198,8 @@ jobs:
         run: rm -rf .venv
 
   linux_sim:
-    needs: linux_lite
-    if: always()
+    needs: [linux_lite, validate_ref]
+    if: ${{ always() && needs.validate_ref.result == 'success' }}
     runs-on: ci-runner-linux
     timeout-minutes: 10
     steps:
@@ -449,8 +452,8 @@ jobs:
           $global:LASTEXITCODE = 0
 
   windows_sim:
-    needs: windows_wireless
-    if: always()
+    needs: [windows_wireless, validate_ref]
+    if: ${{ always() && needs.validate_ref.result == 'success' }}
     runs-on: ci-runner-windows
     timeout-minutes: 10
     steps:
@@ -659,8 +662,8 @@ jobs:
       #   run: rm -rf .venv
 
   mac_lite:
-    needs: mac_sim
-    if: always()
+    needs: [mac_sim, validate_ref]
+    if: ${{ always() && needs.validate_ref.result == 'success' }}
     runs-on: ci-runner-mac
     timeout-minutes: 10
     steps:
