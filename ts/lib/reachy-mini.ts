@@ -1952,6 +1952,20 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             }
             return;
         }
+        if (data.command === 'start_update') {
+            // Refusal ack (non-wireless robot, no update available, or one
+            // already running): the daemon never spawned the job, so surface
+            // it to `onProgress` as a terminal `failed` event - there will be
+            // no transport teardown to infer success from.
+            if (typeof data.error === 'string') {
+                const event: UpdateProgressEvent = { status: 'failed', error: data.error };
+                for (const cb of this._updateProgressSubscribers) {
+                    try { cb(event); }
+                    catch (e) { console.error('startDaemonUpdate onProgress threw:', e); }
+                }
+            }
+            return;
+        }
         if (data.type === 'update_progress') {
             const event: UpdateProgressEvent = {
                 status: data.status as UpdateProgressEvent['status'],

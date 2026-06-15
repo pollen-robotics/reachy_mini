@@ -387,12 +387,15 @@ class RestartDaemonCmd(BaseModel):
 # Exposed over the typed transport so Central-routed peers can trigger
 # an update without an LAN HTTP path.
 #
-# Like ``restart_daemon``, this is fire-and-ack: the update ends with a
-# ``systemctl restart`` that tears the transport down, so the daemon
-# sends a single ack (``{"status": "ok", "command": "start_update"}``)
-# immediately and the consumer is expected to reconnect once the daemon
-# is back up. No completion / log message is streamed over this channel;
-# consumers that need progress can pair this with ``subscribe_logs``.
+# Like ``restart_daemon``, this is fire-and-ack: the daemon validates the
+# request (wireless robot, an update is actually available, no update
+# already running) and either rejects it with an ``error`` ack or accepts
+# it with ``{"status": "ok", "command": "start_update"}``. Once accepted,
+# the job's log lines are fanned out to every client as ``update_progress``
+# broadcasts (see :class:`UpdateProgressMsg`). A successful update ends
+# with a ``systemctl restart`` that tears the transport down before a
+# ``done`` event is delivered, so consumers infer success from the
+# teardown + reconnect.
 # ------------------------------------------------------------------
 
 

@@ -561,7 +561,7 @@ class Daemon:
 
         Thread(target=_run, daemon=True, name="webrtc-restart-daemon").start()
 
-    def _spawn_webrtc_update(self, pre_release: bool = False) -> None:
+    def _spawn_webrtc_update(self, pre_release: bool = False) -> Optional[str]:
         """Run a PyPI update of the daemon on a fresh thread.
 
         Called from the backend's WebRTC ``start_update`` handler. Mirrors
@@ -571,6 +571,20 @@ class Daemon:
         asyncio loop so the caller can flush its DataChannel ack before the
         WebRTC stack is torn down by the restart.
 
+        Returns a refusal reason string when the update is declined so the
+        caller can ack an error instead of ``ok`` (and never spawns the
+        thread in that case); returns ``None`` once the job is accepted.
+        The same guards as the REST endpoint are enforced:
+
+        * wireless-only -- the self-update path lives in
+          ``utils.wireless_version`` and has no meaning on a Lite, which is
+          updated through its host machine;
+        * an update must actually be available, otherwise we would force a
+          needless reinstall + restart of the running version;
+        * the shared ``busy_lock`` from ``routers/update.py`` is acquired so
+          a WebRTC update and a concurrent REST update can never run at the
+          same time and corrupt the venv.
+
         Progress is fanned out to every connected client as
         ``update_progress`` broadcasts (one per log line), mirroring the
         REST ``WS /update/ws/logs`` stream. A successful update restarts
@@ -579,11 +593,38 @@ class Daemon:
         """
         if self._status.state == DaemonState.STOPPED:
             self.logger.warning("Ignoring WebRTC start_update: daemon already stopped.")
-            return
+            return "Daemon is stopped"
+
+        # The PyPI self-update only exists on the wireless robot; a Lite is
+        # updated via its host machine, so reject it here rather than failing
+        # deep inside `update_reachy_mini`.
+        if not self.wireless_version:
+            return "start_update is only supported on Reachy Mini Wireless"
 
         # Local import: keeps the wireless-update dependency chain out of
         # the daemon module's import-time graph (matches routers/update.py).
+        from reachy_mini.daemon.app.routers.update import busy_lock
         from reachy_mini.utils.wireless_version.update import update_reachy_mini
+        from reachy_mini.utils.wireless_version.update_available import (
+            is_update_available,
+        )
+
+        # Share the REST router's lock so a WebRTC-triggered update and an
+        # HTTP-triggered one are mutually exclusive (a concurrent pip install
+        # into the same venv would corrupt it). Acquire non-blocking up front
+        # so we can reject immediately; on the accepted path the worker thread
+        # owns the lock and releases it, on every rejection we release here.
+        if not busy_lock.acquire(blocking=False):
+            return "Update already in progress"
+
+        try:
+            if not is_update_available("reachy_mini", pre_release):
+                busy_lock.release()
+                return "No update available"
+        except Exception as e:
+            busy_lock.release()
+            self.logger.error(f"WebRTC start_update availability check failed: {e}")
+            return f"Update availability check failed: {e}"
 
         backend = self.backend
 
@@ -618,8 +659,15 @@ class Daemon:
             except Exception as e:
                 self.logger.error(f"WebRTC start_update failed: {e}")
                 _broadcast("failed", error=str(e))
+            finally:
+                # On success `update_reachy_mini` triggers a `systemctl
+                # restart` that kills this process before we get here; the
+                # release only matters when the update failed without
+                # restarting, freeing the lock for a retry.
+                busy_lock.release()
 
         Thread(target=_run, daemon=True, name="webrtc-start-update").start()
+        return None
 
     def status(self) -> "DaemonStatus":
         """Get the current status of the Reachy Mini daemon."""
