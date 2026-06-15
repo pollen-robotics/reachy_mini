@@ -44,6 +44,13 @@ jobs:
           echo "[ERROR] Robot did not reach $UPDATE_REF after 5min"
           exit 1
 
+      - name: Put robot to sleep
+        if: always()
+        run: |
+          echo "Stopping daemon backend so each wireless job has to wake it up..."
+          curl -s --max-time 30 -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true" || echo "stop failed (already stopped?)"
+          echo ""
+
   linux_wireless:
     needs: wireless_update
     runs-on: ci-runner-linux
@@ -76,50 +83,6 @@ jobs:
         run: |
           echo "Stopping Wireless daemon..."
           curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon"
-
-      - name: Fetch daemon logs via WebSocket
-        if: always()
-        run: |
-          sleep 5
-          python3 -m venv /tmp/ws-venv
-          /tmp/ws-venv/bin/pip install --quiet websockets
-          /tmp/ws-venv/bin/python - > daemon.log <<'PYEOF'
-          import asyncio, websockets
-          async def main():
-              uri = "ws://reachy-mini-ci.local:8000/logs/ws/daemon"
-              print(f"[CI] Connecting to {uri}", flush=True)
-              try:
-                  async with websockets.connect(uri, open_timeout=30, ping_interval=None) as ws:
-                      print("[CI] WS connected, reading messages...", flush=True)
-                      while True:
-                          try:
-                              msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
-                              if msg.strip():
-                                  print(msg, flush=True)
-                          except asyncio.TimeoutError:
-                              break
-                          except websockets.exceptions.ConnectionClosed:
-                              break
-              except Exception as e:
-                  print(f"[CI] Failed to fetch logs: {type(e).__name__}: {e}", flush=True)
-          asyncio.run(main())
-          PYEOF
-          echo "Fetched $(wc -l < daemon.log) lines"
-          rm -rf /tmp/ws-venv
-
-      - name: Write step summary
-        if: always()
-        run: |
-          {
-            echo ""
-            echo "<details><summary>Daemon log</summary>"
-            echo ""
-            echo '```'
-            cat daemon.log 2>/dev/null || echo "(no daemon log)"
-            echo '```'
-            echo ""
-            echo "</details>"
-          } >> "$GITHUB_STEP_SUMMARY"
 
   linux_lite:
     needs: linux_wireless
@@ -452,58 +415,6 @@ jobs:
           }
           $global:LASTEXITCODE = 0
 
-      - name: Fetch daemon logs via WebSocket
-        if: always()
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Continue'
-          Start-Sleep -Seconds 5
-          python -m venv $env:TEMP\ws-venv
-          & "$env:TEMP\ws-venv\Scripts\python.exe" -m pip install --quiet websockets
-          $script = @'
-          import asyncio, websockets
-          async def main():
-              uri = "ws://reachy-mini-ci.local:8000/logs/ws/daemon"
-              print(f"[CI] Connecting to {uri}", flush=True)
-              try:
-                  async with websockets.connect(uri, open_timeout=30, ping_interval=None) as ws:
-                      print("[CI] WS connected, reading messages...", flush=True)
-                      while True:
-                          try:
-                              msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
-                              if msg.strip():
-                                  print(msg, flush=True)
-                          except asyncio.TimeoutError:
-                              break
-                          except websockets.exceptions.ConnectionClosed:
-                              break
-              except Exception as e:
-                  print(f"[CI] Failed to fetch logs: {type(e).__name__}: {e}", flush=True)
-          asyncio.run(main())
-          '@
-          $scriptPath = "$env:TEMP\fetch_logs.py"
-          $script | Out-File -FilePath $scriptPath -Encoding utf8
-          & "$env:TEMP\ws-venv\Scripts\python.exe" $scriptPath | Out-File -FilePath daemon.log -Encoding utf8
-          if (Test-Path daemon.log) {
-            Write-Host "Fetched $((Get-Content daemon.log).Count) lines"
-          }
-          Remove-Item -Recurse -Force $env:TEMP\ws-venv -ErrorAction SilentlyContinue
-          Remove-Item -Force $scriptPath -ErrorAction SilentlyContinue
-
-      - name: Write step summary
-        if: always()
-        shell: powershell
-        run: |
-          $p = $env:GITHUB_STEP_SUMMARY
-          "" | Add-Content -Path $p -Encoding utf8
-          "<details><summary>Daemon log</summary>" | Add-Content -Path $p -Encoding utf8
-          "" | Add-Content -Path $p -Encoding utf8
-          '```' | Add-Content -Path $p -Encoding utf8
-          if (Test-Path daemon.log) { Get-Content daemon.log | Add-Content -Path $p -Encoding utf8 } else { "(no daemon log)" | Add-Content -Path $p -Encoding utf8 }
-          '```' | Add-Content -Path $p -Encoding utf8
-          "" | Add-Content -Path $p -Encoding utf8
-          "</details>" | Add-Content -Path $p -Encoding utf8
-
   windows_sim:
     needs: windows_wireless
     if: always()
@@ -825,46 +736,3 @@ jobs:
           echo "Stopping Wireless daemon..."
           curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon"
 
-      - name: Fetch daemon logs via WebSocket
-        if: always()
-        run: |
-          sleep 5
-          python3.12 -m venv /tmp/ws-venv
-          /tmp/ws-venv/bin/pip install --quiet websockets
-          /tmp/ws-venv/bin/python - > daemon.log <<'PYEOF'
-          import asyncio, websockets
-          async def main():
-              uri = "ws://reachy-mini-ci.local:8000/logs/ws/daemon"
-              print(f"[CI] Connecting to {uri}", flush=True)
-              try:
-                  async with websockets.connect(uri, open_timeout=30, ping_interval=None) as ws:
-                      print("[CI] WS connected, reading messages...", flush=True)
-                      while True:
-                          try:
-                              msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
-                              if msg.strip():
-                                  print(msg, flush=True)
-                          except asyncio.TimeoutError:
-                              break
-                          except websockets.exceptions.ConnectionClosed:
-                              break
-              except Exception as e:
-                  print(f"[CI] Failed to fetch logs: {type(e).__name__}: {e}", flush=True)
-          asyncio.run(main())
-          PYEOF
-          echo "Fetched $(wc -l < daemon.log) lines"
-          rm -rf /tmp/ws-venv
-
-      - name: Write step summary
-        if: always()
-        run: |
-          {
-            echo ""
-            echo "<details><summary>Daemon log</summary>"
-            echo ""
-            echo '```'
-            cat daemon.log 2>/dev/null || echo "(no daemon log)"
-            echo '```'
-            echo ""
-            echo "</details>"
-          } >> "$GITHUB_STEP_SUMMARY"
