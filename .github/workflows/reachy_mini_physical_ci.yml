@@ -2,15 +2,33 @@ name: Reachy Mini Physical CI
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to install on robot/runners (branch / tag / SHA). Leave empty to use this branch HEAD.'
+        required: false
+        default: ''
+        type: string
+
+env:
+  REACHY_REF: ${{ inputs.ref || github.sha }}
 
 jobs:
   wireless_update:
     runs-on: ci-runner-linux
     timeout-minutes: 10
-    env:
-      UPDATE_REF: 10de4b99a96d706ac421809fd9402f2eeb02d467
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Resolve REACHY_REF to a SHA
+        run: |
+          echo "Input ref: $REACHY_REF"
+          SHA=$(curl -s "https://api.github.com/repos/pollen-robotics/reachy_mini/commits/$REACHY_REF" | grep -o '"sha":"[^"]*"' | head -1 | cut -d'"' -f4)
+          if [ -z "$SHA" ]; then
+            echo "[ERROR] Could not resolve '$REACHY_REF' on GitHub"
+            exit 1
+          fi
+          echo "Resolved to: $SHA"
+          echo "REACHY_SHA=$SHA" >> "$GITHUB_ENV"
 
       - name: Show robot install before
         run: |
@@ -24,24 +42,24 @@ jobs:
               pollen@reachy-mini-ci.local "
             set -e
             sudo systemctl stop reachy-mini-daemon
-            /venvs/mini_daemon/bin/pip install --force-reinstall --upgrade \"reachy-mini[wireless-version] @ git+https://github.com/pollen-robotics/reachy_mini.git@$UPDATE_REF\"
+            /venvs/mini_daemon/bin/pip install --force-reinstall --upgrade \"reachy-mini[wireless-version] @ git+https://github.com/pollen-robotics/reachy_mini.git@$REACHY_REF\"
             sudo systemctl start reachy-mini-daemon
           "
 
       - name: Wait until robot is on target ref
         run: |
-          SHORT_REF=$(echo "$UPDATE_REF" | cut -c1-8)
+          SHORT_REF=$(echo "$REACHY_SHA" | cut -c1-8)
           echo "Polling install-source until commit == $SHORT_REF (max 5min)..."
           for i in {1..60}; do
             COMMIT=$(curl -s --max-time 30 "http://reachy-mini-ci.local:8000/update/install-source" 2>/dev/null | grep -o '"commit":"[^"]*"' | cut -d'"' -f4)
             echo "Attempt $i: commit=$COMMIT"
             if [ "$COMMIT" = "$SHORT_REF" ]; then
-              echo "[OK] Robot is on $UPDATE_REF"
+              echo "[OK] Robot is on $REACHY_SHA"
               exit 0
             fi
             sleep 5
           done
-          echo "[ERROR] Robot did not reach $UPDATE_REF after 5min"
+          echo "[ERROR] Robot did not reach $REACHY_SHA after 5min"
           exit 1
 
       - name: Put robot to sleep
@@ -100,7 +118,7 @@ jobs:
           source .venv/bin/activate
           : > install.log
           python3 -m pip install --upgrade pip 2>&1 | tee -a install.log
-          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467 2>&1 | tee -a install.log
+          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@${{ env.REACHY_REF }} 2>&1 | tee -a install.log
 
       - name: Start Reachy Mini Lite daemon
         run: |
@@ -178,7 +196,7 @@ jobs:
           source .venv/bin/activate
           : > install.log
           python3 -m pip install --upgrade pip 2>&1 | tee -a install.log
-          pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | tee -a install.log
+          pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@${{ env.REACHY_REF }}" 2>&1 | tee -a install.log
 
       - name: Start Reachy Mini Simulation daemon
         run: |
@@ -271,7 +289,7 @@ jobs:
             Add-Content -Path install.log -Value "$_" -Encoding utf8
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pip install --force-reinstall "git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | ForEach-Object {
+          python -m pip install --force-reinstall "git+https://github.com/pollen-robotics/reachy_mini.git@${{ env.REACHY_REF }}" 2>&1 | ForEach-Object {
             Write-Host $_
             Add-Content -Path install.log -Value "$_" -Encoding utf8
           }
@@ -448,7 +466,7 @@ jobs:
             Add-Content -Path install.log -Value "$_" -Encoding utf8
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | ForEach-Object {
+          python -m pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@${{ env.REACHY_REF }}" 2>&1 | ForEach-Object {
             Write-Host $_
             Add-Content -Path install.log -Value "$_" -Encoding utf8
           }
@@ -562,7 +580,7 @@ jobs:
           which python
           : > install.log
           python3.12 -m pip install --upgrade pip 2>&1 | tee -a install.log
-          pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467" 2>&1 | tee -a install.log
+          pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@${{ env.REACHY_REF }}" 2>&1 | tee -a install.log
 
       - name: Start Reachy Mini Simulation daemon
         run: |
@@ -640,7 +658,7 @@ jobs:
           source .venv/bin/activate
           : > install.log
           python3.12 -m pip install --upgrade pip 2>&1 | tee -a install.log
-          uv pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@10de4b99a96d706ac421809fd9402f2eeb02d467 2>&1 | tee -a install.log
+          uv pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@${{ env.REACHY_REF }} 2>&1 | tee -a install.log
 
       - name: Start Reachy Mini Lite daemon
         run: |
