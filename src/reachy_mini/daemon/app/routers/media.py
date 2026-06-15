@@ -195,23 +195,12 @@ async def upload_sound(
     os.makedirs(SOUNDS_TMP_DIR, exist_ok=True)
     dest = os.path.join(SOUNDS_TMP_DIR, filename)
 
-    # Stream to a temp file in the same directory, enforcing the size cap, then
-    # validate the content before atomically moving it into place. This avoids
-    # buffering the whole body in memory and never leaves a partial or invalid
-    # file at the public destination name.
+    # Probe a temp copy, then atomically move it into place so no partial or
+    # invalid file ever lands at the public destination name.
     tmp_fd, tmp_path = tempfile.mkstemp(dir=SOUNDS_TMP_DIR, suffix=".upload")
     try:
-        size = 0
         with os.fdopen(tmp_fd, "wb") as f:
             while chunk := await file.read(1 << 20):
-                size += len(chunk)
-                if size > MAX_SOUND_UPLOAD_BYTES:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=(
-                            f"File too large; maximum is {MAX_SOUND_UPLOAD_BYTES} bytes"
-                        ),
-                    )
                 f.write(chunk)
 
         if not is_valid_audio_file(tmp_path):

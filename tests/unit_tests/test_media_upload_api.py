@@ -14,6 +14,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from reachy_mini.daemon.app.middleware import MaxBodySizeMiddleware
 from reachy_mini.daemon.app.routers import media
 
 
@@ -88,11 +89,17 @@ def test_dotdot_filename_is_rejected(client: TestClient, sounds_dir: Path) -> No
     assert _files_in(sounds_dir) == []
 
 
-def test_oversized_upload_is_rejected(
-    client: TestClient, sounds_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A body over the size cap returns 413 and leaves nothing behind."""
-    monkeypatch.setattr(media, "MAX_SOUND_UPLOAD_BYTES", 16)
+def test_oversized_upload_is_rejected_by_middleware(sounds_dir: Path) -> None:
+    """The middleware rejects an oversized Content-Length before the body is read."""
+    app = FastAPI()
+    app.add_middleware(
+        MaxBodySizeMiddleware,
+        max_body_size=16,
+        paths={"/media/sounds/upload"},
+    )
+    app.include_router(media.router)
+    client = TestClient(app)
+
     resp = client.post(
         "/media/sounds/upload",
         files={"file": ("big.wav", b"\x00" * 1024, "audio/wav")},
