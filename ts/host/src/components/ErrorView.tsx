@@ -57,7 +57,9 @@ export function ErrorView({
         </Box>
         <Stack spacing={1} sx={{ alignItems: 'center' }}>
           <Typography variant="h5">{title}</Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: 'text.secondary'
+          }}>
             {message}
           </Typography>
         </Stack>
