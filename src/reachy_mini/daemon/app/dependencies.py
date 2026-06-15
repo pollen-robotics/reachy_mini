@@ -3,6 +3,7 @@
 from fastapi import HTTPException, Request, WebSocket
 
 from ...apps.manager import AppManager
+from ...nfc import NfcReader
 from ..backend.abstract import Backend
 from ..daemon import Daemon
 
@@ -28,6 +29,11 @@ def get_app_manager(request: Request) -> "AppManager":
     """Get the app manager as request dependency."""
     assert isinstance(request.app.state.app_manager, AppManager)
     return request.app.state.app_manager
+
+
+def get_nfc_reader(request: Request) -> NfcReader | None:
+    """Get the NFC reader as request dependency (None if disabled)."""
+    return getattr(request.app.state, "nfc_reader", None)
 
 
 def ws_get_backend(websocket: WebSocket) -> Backend:
