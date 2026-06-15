@@ -141,7 +141,7 @@ jobs:
         run: |
           echo "Starting Reachy Mini Lite daemon..."
           source .venv/bin/activate
-          reachy-mini-daemon --robot-name reachy_mini_lite --serialport auto --localhost-only > daemon.log 2>&1 &
+          reachy-mini-daemon --robot-name reachy_mini_lite --serialport auto > daemon.log 2>&1 &
           echo $! > lite_daemon.pid
           echo "Daemon PID: $(cat lite_daemon.pid)"
 
@@ -219,7 +219,7 @@ jobs:
         run: |
           echo "Starting Reachy Mini Simulation daemon..."
           source .venv/bin/activate
-          reachy-mini-daemon --robot-name reachy_mini_sim --sim --headless --localhost-only > daemon.log 2>&1 &
+          reachy-mini-daemon --robot-name reachy_mini_sim --sim --headless > daemon.log 2>&1 &
           echo $! > sim_daemon.pid
           echo "Daemon PID: $(cat sim_daemon.pid)"
 
@@ -318,7 +318,7 @@ jobs:
         run: |
           Write-Host "Starting Reachy Mini Lite daemon with detached process..."
           .venv\Scripts\Activate.ps1
-          cmd /c "start /B .venv\Scripts\reachy-mini-daemon.exe --robot-name reachy_mini_lite --serialport auto --localhost-only > daemon.log 2>&1"
+          cmd /c "start /B .venv\Scripts\reachy-mini-daemon.exe --robot-name reachy_mini_lite --serialport auto > daemon.log 2>&1"
           Start-Sleep -Seconds 5
           Write-Host "Finding daemon PID..."
           $process = Get-Process | Where-Object {$_.ProcessName -eq "reachy-mini-daemon"} | Select-Object -First 1
@@ -495,7 +495,7 @@ jobs:
         run: |
           Write-Host "Starting Reachy Mini Simulation daemon with detached process..."
           .venv\Scripts\Activate.ps1
-          cmd /c "start /B .venv\Scripts\reachy-mini-daemon.exe --robot-name reachy_mini_sim --sim --headless --localhost-only > daemon.log 2>&1"
+          cmd /c "start /B .venv\Scripts\reachy-mini-daemon.exe --robot-name reachy_mini_sim --sim --headless > daemon.log 2>&1"
           Start-Sleep -Seconds 5
           Write-Host "Finding daemon PID..."
           $process = Get-Process | Where-Object {$_.ProcessName -eq "reachy-mini-daemon"} | Select-Object -First 1
@@ -605,7 +605,7 @@ jobs:
         run: |
           echo "Starting Reachy Mini Simulation daemon..."
           source .venv/bin/activate
-          reachy-mini-daemon --robot-name reachy_mini_sim --sim --headless --localhost-only > daemon.log 2>&1 &
+          reachy-mini-daemon --robot-name reachy_mini_sim --sim --headless > daemon.log 2>&1 &
           echo $! > sim_daemon.pid
           echo "Daemon PID: $(cat sim_daemon.pid)"
 
@@ -683,7 +683,7 @@ jobs:
         run: |
           echo "Starting Reachy Mini Lite daemon..."
           source .venv/bin/activate
-          reachy-mini-daemon --robot-name reachy_mini_lite --serialport auto --localhost-only > daemon.log 2>&1 &
+          reachy-mini-daemon --robot-name reachy_mini_lite --serialport auto > daemon.log 2>&1 &
           echo $! > lite_daemon.pid
           echo "Daemon PID: $(cat lite_daemon.pid)"
 
