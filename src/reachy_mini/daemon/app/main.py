@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.daemon import log_stream
 from reachy_mini.daemon.app.routers import (
     apps,
     audio_config,
@@ -317,6 +318,13 @@ def run_app(args: Args) -> None:
     handler.setFormatter(logging.Formatter("%(name)s - %(levelname)s - %(message)s"))
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
+
+    # Mirror logs into an in-process ring buffer so log streaming still
+    # works on hosts without systemd/journalctl (developer machines, the
+    # desktop / mockup daemon). The real journalctl is still preferred
+    # when present; this only backs the fallback path. See
+    # reachy_mini.daemon.log_stream.
+    log_stream.install()
 
     # Explicitly configure the apps.manager logger to ensure propagation
     apps_logger = logging.getLogger("reachy_mini.apps.manager")
