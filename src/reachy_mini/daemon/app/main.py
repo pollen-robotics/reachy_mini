@@ -35,6 +35,7 @@ from reachy_mini.daemon.app.routers import (
     media,
     motors,
     move,
+    nfc,
     sdk_ws,
     state,
     volume,
@@ -46,6 +47,7 @@ from reachy_mini.media.audio_utils import (
     write_asoundrc_to_home,
 )
 from reachy_mini.motion.recorded_move import preload_default_datasets
+from reachy_mini.nfc import NfcReader
 from reachy_mini.utils.discovery import MdnsServiceRegistration
 from reachy_mini.utils.wireless_version.startup_check import (
     check_and_fix_restore_venv,
@@ -70,6 +72,9 @@ class Args:
 
     serialport: str = "auto"
     hardware_config_filepath: str | None = None
+
+    nfc_enabled: bool = True
+    nfc_port: str = "auto"
 
     sim: bool = False
     mockup_sim: bool = False
@@ -173,6 +178,14 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             # Register mDNS service only after the daemon is ready
             mdns.register()
 
+            # Start the optional NFC reader. It is fully decoupled from the
+            # robot backend and must never block or break daemon startup.
+            if app.state.nfc_reader is not None:
+                try:
+                    app.state.nfc_reader.start()
+                except Exception as e:
+                    logger.warning(f"Failed to start NFC reader: {e}")
+
             yield
         finally:
             # Cancel dataset updater task if running
@@ -185,6 +198,13 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
             # Unregister mDNS service
             mdns.unregister()
+
+            # Stop the NFC reader if it was started
+            if getattr(app.state, "nfc_reader", None) is not None:
+                try:
+                    app.state.nfc_reader.stop()
+                except Exception as e:
+                    logger.exception(f"Error stopping NFC reader: {e}")
 
             # Ensure cleanup happens even if there's an exception
             try:
@@ -226,6 +246,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         desktop_app_daemon=args.desktop_app_daemon,
         daemon=app.state.daemon,
     )
+    app.state.nfc_reader = (
+        NfcReader(port=args.nfc_port) if args.nfc_enabled else None
+    )
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
@@ -237,6 +260,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(media.router)
     router.include_router(motors.router)
     router.include_router(move.router)
+    router.include_router(nfc.router)
     router.include_router(state.router)
     router.include_router(volume.router)
 
@@ -471,6 +495,19 @@ def main() -> None:
         type=str,
         default=default_hw_config_path,
         help=f"Path to the hardware configuration YAML file (default: {default_hw_config_path}).",
+    )
+    # Optional NFC reader accessory (Arduino + PN532 over USB serial)
+    parser.add_argument(
+        "--no-nfc",
+        action="store_false",
+        dest="nfc_enabled",
+        help="Disable the optional NFC reader accessory (default: enabled).",
+    )
+    parser.add_argument(
+        "--nfc-port",
+        type=str,
+        default=default_args.nfc_port,
+        help="Serial port for the NFC reader (default: auto-detect by USB id).",
     )
     # Simulation mode
     parser.add_argument(
