@@ -677,7 +677,7 @@ jobs:
           source .venv/bin/activate
           : > install.log
           python3.12 -m pip install --upgrade pip 2>&1 | tee -a install.log
-          uv pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@${{ env.REACHY_REF }} 2>&1 | tee -a install.log
+          uv pip install --force-reinstall --no-cache git+https://github.com/pollen-robotics/reachy_mini.git@${{ env.REACHY_REF }} 2>&1 | tee -a install.log
 
       - name: Start Reachy Mini Lite daemon
         run: |
