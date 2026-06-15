@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Git ref to install on robot/runners (branch / tag / SHA). Leave empty to use this branch HEAD.'
+        description: 'Git ref to install. Examples: main, develop, v1.8.1, chore/my-branch, 10de4b99a96d706ac421809fd9402f2eeb02d467. Empty = HEAD of the branch selected above.'
         required: false
         default: ''
         type: string
@@ -13,22 +13,36 @@ env:
   REACHY_REF: ${{ inputs.ref || github.sha }}
 
 jobs:
-  wireless_update:
+  validate_ref:
     runs-on: ci-runner-linux
-    timeout-minutes: 10
+    timeout-minutes: 2
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
       - name: Resolve REACHY_REF to a SHA
+        id: resolve
         run: |
           echo "Input ref: $REACHY_REF"
-          SHA=$(curl -s "https://api.github.com/repos/pollen-robotics/reachy_mini/commits/$REACHY_REF" | grep -o '"sha":"[^"]*"' | head -1 | cut -d'"' -f4)
+          RESPONSE=$(curl -s -w "\n__HTTP_CODE=%{http_code}\n" \
+            "https://api.github.com/repos/pollen-robotics/reachy_mini/commits/$REACHY_REF")
+          SHA=$(echo "$RESPONSE" | grep -o '"sha":"[^"]*"' | head -1 | cut -d'"' -f4)
           if [ -z "$SHA" ]; then
             echo "[ERROR] Could not resolve '$REACHY_REF' on GitHub"
+            echo "Full API response:"
+            echo "$RESPONSE"
             exit 1
           fi
-          echo "Resolved to: $SHA"
-          echo "REACHY_SHA=$SHA" >> "$GITHUB_ENV"
+          echo "Resolved $REACHY_REF -> $SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+  wireless_update:
+    needs: validate_ref
+    runs-on: ci-runner-linux
+    timeout-minutes: 10
+    env:
+      REACHY_SHA: ${{ needs.validate_ref.outputs.sha }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Show robot install before
         run: |
@@ -259,6 +273,7 @@ jobs:
         run: rm -rf .venv
 
   windows_lite:
+    needs: validate_ref
     runs-on: ci-runner-windows
     timeout-minutes: 10
     steps:
@@ -564,6 +579,7 @@ jobs:
           Write-Host "Cleanup complete"
 
   mac_sim:
+    needs: validate_ref
     runs-on: ci-runner-mac
     timeout-minutes: 10
     steps:
