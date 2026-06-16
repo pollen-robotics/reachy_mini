@@ -782,6 +782,15 @@ Performance relies heavily on lighting conditions. Ensure the face is well-lit. 
 </details>
 
 <details>
+<summary><strong>The camera can't focus.</strong></summary>
+
+When running the [look_at example](https://huggingface.co/docs/reachy_mini/examples/look_at), it's easy to see whether the camera is focusing by putting your hand in front of it. If it isn't, the camera may be physically blocked. It is held to the black part by 4 screws — loosen them very slightly, about 1/8 of a turn.
+
+![camera_focus](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/troubleshooting_screw_focus_camera.png)
+
+</details>
+
+<details>
 <summary><strong>How do I check that the sound system is working?</strong></summary>
 
 ### Reachy Mini Lite Version
