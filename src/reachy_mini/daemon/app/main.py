@@ -58,6 +58,11 @@ from reachy_mini.utils.wireless_version.startup_check import (
 
 logger = logging.getLogger(__name__)
 
+# Origins allowed to call the unauthenticated API cross-origin: localhost tooling
+# plus the native app webview schemes (Tauri/Capacitor), which a browser cannot
+# forge, so the drive-by protection of GHSA-p4cp-8gwf-3fgv holds.
+CORS_ORIGIN_REGEX = r"(https?://(localhost|127\.0\.0\.1)(:\d+)?|tauri://localhost|https?://tauri\.localhost|capacitor://localhost)"
+
 
 @dataclass
 class Args:
@@ -277,11 +282,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         paths={"/api/media/sounds/upload"},
     )
 
-    # Restrict cross-origin access to local browser tooling; everything else is
-    # same-origin, native, or WebRTC.
+    # Restrict cross-origin access to local browser tooling and the native app
+    # webviews (see CORS_ORIGIN_REGEX); everything else is same-origin or WebRTC.
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+        allow_origin_regex=CORS_ORIGIN_REGEX,
         allow_methods=["*"],
         allow_headers=["*"],
     )
