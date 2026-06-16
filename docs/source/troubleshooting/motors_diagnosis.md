@@ -60,9 +60,6 @@ Please let some slack to the usb cable to allow the head to move freely, even to
 
 
 **A motor feels broken:**
-We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty batch of Dynamixel motors. 
-
-In most reported cases, the issue affects motor number 4 or one with QC label n°2544.
 
 If one of your motors, **blinks red and feels unusually hard to move when turned off** [(example video here)](https://drive.google.com/file/d/1UHTqUcb21aFThqlr2Qcx23VWqvj_y-ly/view?usp=sharing), and you are 100% sure the motor was in the correct slot.
 
