@@ -645,6 +645,12 @@ Your GUI will open at the usual address (for example, `http://reachy-mini.local:
 
 </details>
 
+<details>
+<summary><strong>The Web App can't connect to my Reachy</strong></summary>
+
+Make sure that your Reachy is logged in to your HF account using the desktop app. Make sure there is no other web app connected to it. You may want to restart your browser or clear your cache.
+
+</details>
 
 
 ## 🕹️ Moving the Robot
