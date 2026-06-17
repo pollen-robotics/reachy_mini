@@ -281,6 +281,23 @@ class GetMicrophoneVolumeCmd(BaseModel):
 
     type: Literal["get_microphone_volume"] = "get_microphone_volume"
 
+
+# First wake-up setup wizard. A persistent, robot-wide boolean (not
+# per-session): once the owner has run the post-connection hardware
+# diagnostic wizard the daemon remembers it so it only ever shows once.
+class GetFirstWakeUpCmd(BaseModel):
+    """Query whether the first wake-up setup wizard has been completed."""
+
+    type: Literal["get_first_wake_up"] = "get_first_wake_up"
+
+
+class SetFirstWakeUpCmd(BaseModel):
+    """Mark the first wake-up setup wizard completed (or reset it)."""
+
+    type: Literal["set_first_wake_up"] = "set_first_wake_up"
+    is_completed: bool = True
+
+
 class SetSpeechOffsetsCmd(BaseModel):
     """Set head-wobbler speech offsets (composed with target pose before IK)."""
 
@@ -715,6 +732,8 @@ AnyCommand = Annotated[
     | GetVolumeCmd
     | SetMicrophoneVolumeCmd
     | GetMicrophoneVolumeCmd
+    | GetFirstWakeUpCmd
+    | SetFirstWakeUpCmd
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
     | RestartDaemonCmd
