@@ -840,19 +840,6 @@ We are using a higher voltage on Reachy Mini, it's on purpose :)
 
 </details>
 
-
-
-<details>
-<summary><strong>Error: "OSError: PortAudio library not found"</strong></summary>
-
-This error occurs when using `sounddevice` directly (e.g. after calling `release_media()`). Install the system dependency:
-
-```bash
-sudo apt-get install libportaudio2
-```
-
-</details>
-
 <details>
 <summary><strong>Warning: "Circular buffer overrun" (Simulation/Mujoco)</strong></summary>
 
