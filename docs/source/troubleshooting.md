@@ -645,6 +645,12 @@ Your GUI will open at the usual address (for example, `http://reachy-mini.local:
 
 </details>
 
+<details>
+<summary><strong>The Web App can't connect to my Reachy</strong></summary>
+
+Make sure that your Reachy is logged in to your HF account using the desktop app. Make sure there is no other web app connected to it. You may want to restart your browser or clear your cache.
+
+</details>
 
 
 ## 🕹️ Moving the Robot
@@ -782,6 +788,15 @@ Performance relies heavily on lighting conditions. Ensure the face is well-lit. 
 </details>
 
 <details>
+<summary><strong>The camera can't focus.</strong></summary>
+
+When running the [look_at example](https://huggingface.co/docs/reachy_mini/examples/look_at), it's easy to see whether the camera is focusing by putting your hand in front of it. If it isn't, the camera may be physically blocked. It is held to the black part by 4 screws — loosen them very slightly, about 1/8 of a turn.
+
+![camera_focus](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/troubleshooting_screw_focus_camera.png)
+
+</details>
+
+<details>
 <summary><strong>How do I check that the sound system is working?</strong></summary>
 
 ### Reachy Mini Lite Version
@@ -822,19 +837,6 @@ You can play back a sound while recording simultaneously to test the echo cancel
 <details>
 <summary><strong>Motor '<name>' hardware errors: ['Input Voltage Error']</strong></summary>
 We are using a higher voltage on Reachy Mini, it's on purpose :)
-
-</details>
-
-
-
-<details>
-<summary><strong>Error: "OSError: PortAudio library not found"</strong></summary>
-
-This error occurs when using `sounddevice` directly (e.g. after calling `release_media()`). Install the system dependency:
-
-```bash
-sudo apt-get install libportaudio2
-```
 
 </details>
 
