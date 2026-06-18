@@ -311,6 +311,7 @@ class SetWobblingCmd(BaseModel):
     type: Literal["set_wobbling"] = "set_wobbling"
     enabled: bool
 
+
 # ------------------------------------------------------------------
 # Daemon log streaming over the DataChannel.
 #
