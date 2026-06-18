@@ -8,6 +8,7 @@ Client->Server command types:
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
     get_state, get_version, start_recording, stop_recording, append_record,
+    get_robot_name, set_robot_name,
     subscribe_logs, unsubscribe_logs, restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
@@ -292,6 +293,23 @@ class GetMicrophoneVolumeCmd(BaseModel):
     """Query the current input (microphone) volume."""
 
     type: Literal["get_microphone_volume"] = "get_microphone_volume"
+
+
+# Robot display name. A persistent, robot-wide string (not per-session):
+# advertised to the central relay / mDNS and shown in the apps' robot list.
+# Defaults to the daemon's --robot-name; a client rename is stored on the
+# robot and wins over the default at the next daemon start.
+class GetRobotNameCmd(BaseModel):
+    """Query the persisted robot display name (null if unset)."""
+
+    type: Literal["get_robot_name"] = "get_robot_name"
+
+
+class SetRobotNameCmd(BaseModel):
+    """Set and persist the robot display name."""
+
+    type: Literal["set_robot_name"] = "set_robot_name"
+    name: str = Field(..., min_length=1, max_length=64)
 
 
 class SetSpeechOffsetsCmd(BaseModel):
@@ -753,6 +771,8 @@ AnyCommand = Annotated[
     | GetVolumeCmd
     | SetMicrophoneVolumeCmd
     | GetMicrophoneVolumeCmd
+    | GetRobotNameCmd
+    | SetRobotNameCmd
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
     | RestartDaemonCmd

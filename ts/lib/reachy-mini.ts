@@ -183,6 +183,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _volumeResolve: ((v: number | null) => void) | null = null;
     private _micVolumeResolve: ((v: number | null) => void) | null = null;
     private _trackedFaceResolve: ((v: FaceTarget | null) => void) | null = null;
+    private _robotNameResolve: ((v: string | null) => void) | null = null;
     // applyAudioConfig() / readAudioParameter() share the same single-slot
     // pattern as the volume helpers. Separate slots so the two can be
     // in-flight concurrently without collision.
@@ -743,6 +744,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
+        if (this._robotNameResolve) { this._robotNameResolve(null); this._robotNameResolve = null; }
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Session stopped'));
@@ -792,6 +794,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
+        if (this._robotNameResolve) { this._robotNameResolve(null); this._robotNameResolve = null; }
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Disconnected'));
@@ -1338,6 +1341,32 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             () => this._micVolumeResolve,
             (next) => { this._micVolumeResolve = next; },
             { type: 'set_microphone_volume', volume: clampVolume(volume) },
+        );
+    }
+
+    /**
+     * Query the persisted robot display name. Resolves the stored name,
+     * `null` when none is set / the channel isn't open / the daemon predates
+     * the `get_robot_name` command.
+     */
+    getRobotName(): Promise<string | null> {
+        return this._slotRoundtrip(
+            () => this._robotNameResolve,
+            (next) => { this._robotNameResolve = next; },
+            { type: 'get_robot_name' },
+        );
+    }
+
+    /**
+     * Set and persist the robot display name on the robot. Resolves with the
+     * stored (trimmed) name, or `null` on error / channel-closed. Takes effect
+     * on the next daemon restart (the persisted name overrides --robot-name).
+     */
+    setRobotName(name: string): Promise<string | null> {
+        return this._slotRoundtrip(
+            () => this._robotNameResolve,
+            (next) => { this._robotNameResolve = next; },
+            { type: 'set_robot_name', name },
         );
     }
 
@@ -2029,6 +2058,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             if (this._micVolumeResolve) {
                 this._micVolumeResolve(data.status === 'error' ? null : (data.volume as number));
                 this._micVolumeResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'get_robot_name' || data.command === 'set_robot_name') {
+            if (this._robotNameResolve) {
+                this._robotNameResolve(
+                    data.status === 'error' ? null : ((data.name as string | null) ?? null),
+                );
+                this._robotNameResolve = null;
             }
             return;
         }
