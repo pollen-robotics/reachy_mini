@@ -882,6 +882,14 @@ class BluetoothCommandService:
             except Exception as e:
                 logger.error(f"Error executing command: {e}")
             return "OK: System running"
+        elif upper == "IDENTIFY":
+            # Play a short sound on the robot so the user can tell which
+            # physical Reachy maps to this entry in the BLE scan list. Public
+            # (no PIN): identification happens BEFORE authenticating, the action
+            # is benign and the BLE range already bounds who can trigger it.
+            # Runs OFF the mainloop because it proxies to the daemon over HTTP.
+            self._run_async(_identify)
+            return "OK: working"
         elif command_str.upper() == "JOURNAL_START":
             return self._start_journal()
         elif command_str.upper() == "JOURNAL_READ":
@@ -1285,6 +1293,33 @@ def _daemon_request(
             return json.loads(raw.decode("utf-8"))
         except json.JSONDecodeError:
             return raw.decode("utf-8", errors="replace")
+
+
+# --- Robot identification proxy (reuses _daemon_request above) ---------------
+# Plays a short sound on the robot speaker so the user can pick their Reachy out
+# of the BLE scan list before connecting. Proxies to the daemon's
+# /api/media/play_sound route — note the /api prefix: the media router is
+# mounted under the prefixed APIRouter, unlike the /wifi and /update routes.
+_IDENTIFY_SOUND_FILE = "wake_up.wav"
+
+
+def _identify() -> str:
+    """Play the identification sound on the robot speaker."""
+    try:
+        _daemon_request(
+            "POST",
+            "/api/media/play_sound",
+            data={"file": _IDENTIFY_SOUND_FILE},
+        )
+        return "OK: Playing identification sound"
+    except urllib.error.HTTPError as e:
+        if e.code == 503:
+            return "ERROR: Audio not ready"
+        return "ERROR: Identify failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
 
 
 # --- Daemon software update proxy (reuses _daemon_request above) -------------
