@@ -66,6 +66,7 @@ def get_hardware_id() -> str | None:
         return None
     return hashlib.sha256(raw.encode("ascii")).hexdigest()[:16]
 
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -351,7 +352,7 @@ class ResponseCharacteristic(Characteristic):
         self.notifying = False
         logger.info("Response notifications disabled")
         # Stop journal streaming if running (client disconnected without JOURNAL_STOP)
-        if hasattr(self.service, '_bt_service') and self.service._bt_service:
+        if hasattr(self.service, "_bt_service") and self.service._bt_service:
             self.service._bt_service._stop_journal()
 
     def send_notification(self, text: str):
@@ -717,7 +718,17 @@ class BluetoothCommandService:
         try:
             self._journal_buffer = ""
             self._journal_proc = subprocess.Popen(
-                ["stdbuf", "-oL", "journalctl", "-f", "-n", "20", "--no-pager", "-u", "reachy-mini-daemon"],
+                [
+                    "stdbuf",
+                    "-oL",
+                    "journalctl",
+                    "-f",
+                    "-n",
+                    "20",
+                    "--no-pager",
+                    "-u",
+                    "reachy-mini-daemon",
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
             )
@@ -746,7 +757,9 @@ class BluetoothCommandService:
                 if data:
                     text = data.decode("utf-8", errors="replace")
                     self._journal_buffer += text
-                    logger.info(f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}")
+                    logger.info(
+                        f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}"
+                    )
                     # Cap buffer to ~32KB to avoid unbounded growth
                     if len(self._journal_buffer) > 32768:
                         self._journal_buffer = self._journal_buffer[-32768:]
@@ -882,9 +895,7 @@ class BluetoothCommandService:
                 # Locked out: reject WITHOUT comparing the PIN, so a correct
                 # guess landed mid-spree doesn't win and the lockout window is
                 # the real bottleneck. int()+1 rounds up so we never show "0s".
-                return (
-                    f"ERROR: Too many attempts. Try again in {int(remaining) + 1}s."
-                )
+                return f"ERROR: Too many attempts. Try again in {int(remaining) + 1}s."
             pin = command_str[4:].strip()
             if pin == self.pin_code:
                 self._reset_pin_throttle()
@@ -1109,7 +1120,9 @@ class BluetoothCommandService:
             self._ad_manager.RegisterAdvertisement(
                 self.adv.get_path(),
                 {},
-                reply_handler=lambda: logger.info("Advertisement re-asserted after disconnect"),
+                reply_handler=lambda: logger.info(
+                    "Advertisement re-asserted after disconnect"
+                ),
                 error_handler=lambda e: logger.warning(
                     f"Re-assert advertisement failed (non-fatal): {e}"
                 ),
