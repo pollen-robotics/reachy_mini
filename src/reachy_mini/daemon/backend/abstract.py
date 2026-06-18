@@ -35,6 +35,7 @@ from reachy_mini.io.protocol import (
     GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
+    GetRobotNameCmd,
     GetStateCmd,
     GetVersionCmd,
     GetVolumeCmd,
@@ -61,6 +62,7 @@ from reachy_mini.io.protocol import (
     SetHeadJointsCmd,
     SetMicrophoneVolumeCmd,
     SetMotorModeCmd,
+    SetRobotNameCmd,
     SetSpeechOffsetsCmd,
     SetTargetCmd,
     SetTorqueCmd,
@@ -1292,6 +1294,30 @@ class Backend:
                     {
                         "command": "get_first_wake_up",
                         "is_completed": get_first_wake_up_completed(),
+                    }
+                )
+
+        elif isinstance(cmd, (GetRobotNameCmd, SetRobotNameCmd)):
+            # Robot display name is a persistent, robot-wide string stored on
+            # disk (same fail-safe helpers as the first-wake-up flag). A rename
+            # takes effect on the next daemon start, where the persisted value
+            # overrides the --robot-name default.
+            from reachy_mini.utils.robot_name import get_robot_name, set_robot_name
+
+            if isinstance(cmd, SetRobotNameCmd):
+                stored = set_robot_name(cmd.name)
+                send_response(
+                    {
+                        "command": "set_robot_name",
+                        "status": "ok" if stored is not None else "error",
+                        "name": stored if stored is not None else get_robot_name(),
+                    }
+                )
+            else:  # GetRobotNameCmd
+                send_response(
+                    {
+                        "command": "get_robot_name",
+                        "name": get_robot_name(),
                     }
                 )
 
