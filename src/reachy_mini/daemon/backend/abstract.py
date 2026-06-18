@@ -1633,7 +1633,9 @@ class Backend:
             import base64
             raw = base64.b64decode(payload, validate=False)
             os.makedirs(self._audio_temp_dir, exist_ok=True)
-            path = os.path.join(self._audio_temp_dir, f"{cmd.upload_id}.wav")
+            # encoding "<container>-base64" → file extension; wav for legacy clients.
+            ext = str(meta.get("encoding", "wav-base64")).split("-")[0] or "wav"
+            path = os.path.join(self._audio_temp_dir, f"{cmd.upload_id}.{ext}")
             with open(path, "wb") as f:
                 f.write(raw)
         except Exception as e:
