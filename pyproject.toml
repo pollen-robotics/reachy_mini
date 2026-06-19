@@ -105,6 +105,9 @@ exclude-newer = "7 days"
 
 [tool.uv.exclude-newer-package]
 "pollen_BMI088_imu_library"  = false
+# Opt out of the 7-day cutoff for huggingface-hub: device-code OAuth login with
+# transparent token refresh requires >=1.20.0, released within the window.
+"huggingface_hub" = false
 
 [tool.setuptools]
 package-dir = { "" = "src" }
