@@ -14,7 +14,7 @@ env:
 
 jobs:
   validate_ref:
-    runs-on: ci-runner-linux
+    runs-on: ci-runner-mac
     timeout-minutes: 2
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
@@ -38,8 +38,33 @@ jobs:
           echo "Resolved $REACHY_REF -> $SHA"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
-  wireless_update:
+  power_on:
     needs: validate_ref
+    runs-on: ci-runner-mac
+    timeout-minutes: 10
+    steps:
+      - name: Turn on connected plug
+        run: |
+          echo "Turning on connected plug..."
+          curl -s --max-time 10 "http://shellyplugsg3-48F6EEB5B21C.local/rpc/Switch.Set?id=0&on=true"
+          echo ""
+
+      - name: Wait for wireless robot HTTP to be reachable
+        run: |
+          echo "Waiting for robot HTTP (max 5min)..."
+          for i in {1..30}; do
+            if curl -s --max-time 5 http://reachy-mini-ci.local:8000/api/daemon/status > /dev/null 2>&1; then
+              echo "[OK] Robot HTTP reachable after $((i*10))s"
+              exit 0
+            fi
+            echo "Attempt $i: not reachable yet"
+            sleep 10
+          done
+          echo "[ERROR] Robot HTTP not reachable after 5min"
+          exit 1
+
+  wireless_update:
+    needs: power_on
     runs-on: ci-runner-linux
     timeout-minutes: 10
     env:
@@ -120,8 +145,8 @@ jobs:
           curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon"
 
   linux_lite:
-    needs: [linux_wireless, validate_ref]
-    if: ${{ always() && needs.validate_ref.result == 'success' }}
+    needs: [linux_wireless, power_on]
+    if: ${{ always() && needs.power_on.result == 'success' }}
     runs-on: ci-runner-linux
     timeout-minutes: 10
     steps:
@@ -198,8 +223,8 @@ jobs:
         run: rm -rf .venv
 
   linux_sim:
-    needs: [linux_lite, validate_ref]
-    if: ${{ always() && needs.validate_ref.result == 'success' }}
+    needs: [linux_lite, power_on]
+    if: ${{ always() && needs.power_on.result == 'success' }}
     runs-on: ci-runner-linux
     timeout-minutes: 10
     steps:
@@ -276,7 +301,7 @@ jobs:
         run: rm -rf .venv
 
   windows_lite:
-    needs: validate_ref
+    needs: power_on
     runs-on: ci-runner-windows
     timeout-minutes: 10
     steps:
@@ -452,8 +477,8 @@ jobs:
           $global:LASTEXITCODE = 0
 
   windows_sim:
-    needs: [windows_wireless, validate_ref]
-    if: ${{ always() && needs.validate_ref.result == 'success' }}
+    needs: [windows_wireless, power_on]
+    if: ${{ always() && needs.power_on.result == 'success' }}
     runs-on: ci-runner-windows
     timeout-minutes: 10
     steps:
@@ -582,7 +607,7 @@ jobs:
           Write-Host "Cleanup complete"
 
   mac_sim:
-    needs: validate_ref
+    needs: power_on
     runs-on: ci-runner-mac
     timeout-minutes: 10
     steps:
@@ -662,8 +687,8 @@ jobs:
       #   run: rm -rf .venv
 
   mac_lite:
-    needs: [mac_sim, validate_ref]
-    if: ${{ always() && needs.validate_ref.result == 'success' }}
+    needs: [mac_sim, power_on]
+    if: ${{ always() && needs.power_on.result == 'success' }}
     runs-on: ci-runner-mac
     timeout-minutes: 10
     steps:
@@ -772,4 +797,16 @@ jobs:
         run: |
           echo "Stopping Wireless daemon..."
           curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon"
+
+  power_off:
+    needs: [linux_sim, windows_sim, mac_wireless]
+    if: always()
+    runs-on: ci-runner-mac
+    timeout-minutes: 2
+    steps:
+      - name: Turn off connected plug
+        run: |
+          echo "Turning off connected plug..."
+          curl -s --max-time 10 "http://shellyplugsg3-48F6EEB5B21C.local/rpc/Switch.Set?id=0&on=false"
+          echo ""
 
