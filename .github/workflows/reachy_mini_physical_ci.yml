@@ -90,12 +90,16 @@ jobs:
 
       - name: Wait until robot is on target ref
         run: |
+          if [ -z "$REACHY_SHA" ]; then
+            echo "[ERROR] REACHY_SHA is empty; refusing to poll"
+            exit 1
+          fi
           SHORT_REF=$(echo "$REACHY_SHA" | cut -c1-8)
           echo "Polling install-source until commit == $SHORT_REF (max 5min)..."
           for i in {1..60}; do
             COMMIT=$(curl -s --max-time 30 "http://reachy-mini-ci.local:8000/update/install-source" 2>/dev/null | grep -o '"commit":"[^"]*"' | cut -d'"' -f4)
             echo "Attempt $i: commit=$COMMIT"
-            if [ "$COMMIT" = "$SHORT_REF" ]; then
+            if [ -n "$COMMIT" ] && [ "$COMMIT" = "$SHORT_REF" ]; then
               echo "[OK] Robot is on $REACHY_SHA"
               exit 0
             fi
