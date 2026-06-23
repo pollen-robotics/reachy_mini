@@ -1,0 +1,1 @@
+WARNING  reachy_mini.media.device_detection:device_detection.py:395 No Reachy Mini Audio Source card found.

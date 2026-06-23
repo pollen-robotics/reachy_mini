@@ -1,0 +1,2 @@
+WARNING  _ble_bluetooth_service_under_test:bluetooth_service.py:817 Wrong PIN (4 consecutive). PIN locked for 5s.
+WARNING  _ble_bluetooth_service_under_test:bluetooth_service.py:817 Wrong PIN (5 consecutive). PIN locked for 10s.
