@@ -3,7 +3,6 @@ name: Allure Report
 on:
   push:
     branches: [main]
-  pull_request:
   workflow_dispatch:
 
 # Needed for the gh-pages publish step.
