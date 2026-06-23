@@ -90,6 +90,9 @@ jobs:
           if [ -d htmlcov ]; then
             mkdir -p allure-report/coverage
             cp -r htmlcov/. allure-report/coverage/
+            # coverage.py writes a `.gitignore` ('*') in htmlcov; left in place it
+            # makes the gh-pages `git add` skip the whole coverage/ dir.
+            rm -f allure-report/coverage/.gitignore
           fi
 
       - name: Bundle history into report
