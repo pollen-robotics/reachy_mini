@@ -1,1 +1,1 @@
-{"id":"86e74690eb1e37ca10d0f169202890f0","fullName":"tests.unit_tests.test_device_detection.TestFindAudioDevice#test_empty_device_list","name":"test_empty_device_list","status":"passed","testResultsByEnv":{"default":"e51b1bc02a52d40f95845c6f7f39e88a"}}
+{"id":"86e74690eb1e37ca10d0f169202890f0","fullName":"tests.unit_tests.test_device_detection.TestFindAudioDevice#test_empty_device_list","name":"test_empty_device_list","status":"passed","testResultsByEnv":{"default":"da90871c8a8eda43d35b70196598978f"}}

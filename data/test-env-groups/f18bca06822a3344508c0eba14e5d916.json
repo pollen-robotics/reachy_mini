@@ -1,1 +1,1 @@
-{"id":"f18bca06822a3344508c0eba14e5d916","fullName":"tests.unit_tests.test_device_detection.TestFindVideoDevice#test_linux_pipewire_reachy_camera","name":"test_linux_pipewire_reachy_camera","status":"passed","testResultsByEnv":{"default":"2e52963fa4283456e0a1e4d271b3fbb1"}}
+{"id":"f18bca06822a3344508c0eba14e5d916","fullName":"tests.unit_tests.test_device_detection.TestFindVideoDevice#test_linux_pipewire_reachy_camera","name":"test_linux_pipewire_reachy_camera","status":"passed","testResultsByEnv":{"default":"fee0bc5fff54039a96daa4b39cef40ca"}}
