@@ -21,7 +21,7 @@ dependencies = [
     "python-multipart>=0.0.27",
     "starlette<1.0.0", # TODO: update TemplateResponse(request, name, context) before allowing Starlette 1.x
     "pyserial",
-    "huggingface-hub>=1.17.0,<2.0.0",
+    "huggingface-hub>=1.20.0,<2.0.0", # >=1.20.0: device-code OAuth login with transparent token refresh (get_token())
     "reachy-mini-rust-kinematics>=1.0.3",
     "asgiref",
     "aiohttp>=3.14.0",
@@ -105,6 +105,9 @@ exclude-newer = "7 days"
 
 [tool.uv.exclude-newer-package]
 "pollen_BMI088_imu_library"  = false
+# Opt out of the 7-day cutoff for huggingface-hub: device-code OAuth login with
+# transparent token refresh requires >=1.20.0, released within the window.
+"huggingface_hub" = false
 
 [tool.setuptools]
 package-dir = { "" = "src" }

@@ -122,9 +122,7 @@ def _cleanup_expired_sessions() -> None:
         del _oauth_sessions[sid]
 
 
-def get_oauth_redirect_uri(
-    wireless_version: bool, use_localhost: bool = False
-) -> str:
+def get_oauth_redirect_uri(wireless_version: bool, use_localhost: bool = False) -> str:
     """Get the appropriate OAuth redirect URI based on robot type.
 
     Args:
@@ -247,7 +245,9 @@ async def exchange_code_for_token(
         session.error_message = "OAuth not configured"
         return {"status": "error", "message": "OAuth not configured"}
 
-    redirect_uri = get_oauth_redirect_uri(session.wireless_version, session.use_localhost)
+    redirect_uri = get_oauth_redirect_uri(
+        session.wireless_version, session.use_localhost
+    )
 
     # Exchange code for token using PKCE
     token_url = "https://huggingface.co/oauth/token"
@@ -365,6 +365,199 @@ def cancel_oauth_session(session_id: str) -> bool:
 def is_oauth_configured() -> bool:
     """Check if OAuth is configured."""
     return bool(OAUTH_CLIENT_ID)
+
+
+# =============================================================================
+# Device Code OAuth (RFC 8628) — refresh-capable, redirect-free login
+# =============================================================================
+# Unlike the authorization-code flow above, the device-code flow:
+#   - needs NO redirect URI, so it does not depend on the robot being reachable
+#     at a fixed hostname (reachy-mini.local) — the phone only displays a short
+#     code + URL and the robot polls Hugging Face for the result.
+#   - yields a refresh token. huggingface_hub persists it next to the access
+#     token (HF_STORED_TOKENS_PATH) and `get_token()` transparently renews the
+#     access token when it is close to expiry, so a long-running robot never
+#     needs the user to re-authenticate by hand.
+#
+# It uses Hugging Face's first-party device-code OAuth client (shipped in
+# huggingface_hub via DEVICE_CODE_OAUTH_CLIENT_ID), not the Pollen OAuth app,
+# so it works even when HF_OAUTH_CLIENT_ID is not configured.
+
+# In-memory storage for device-code login sessions, polled by the frontend.
+_device_code_sessions: dict[str, "DeviceCodeSession"] = {}
+
+
+@dataclass
+class DeviceCodeSession:
+    """A pending device-code OAuth login, polled in the background."""
+
+    session_id: str
+    user_code: str
+    verification_uri: str
+    verification_uri_complete: str
+    status: str = "pending"  # pending, authorized, error, expired
+    username: Optional[str] = None
+    error_message: Optional[str] = None
+    relay_started: bool = False  # set once the central relay has been brought up
+    created_at: float = field(default_factory=time.time)
+    expires_at: float = field(default_factory=lambda: time.time() + 900)
+    # Keep a strong reference to the polling task so it is not garbage-collected.
+    task: Optional["asyncio.Task[None]"] = None
+
+
+def _cleanup_expired_device_sessions() -> None:
+    """Remove finished or expired device-code sessions."""
+    now = time.time()
+    stale = [
+        sid
+        for sid, s in _device_code_sessions.items()
+        if s.expires_at < now and s.status in ("pending", "expired", "error")
+    ]
+    for sid in stale:
+        _device_code_sessions.pop(sid, None)
+
+
+def _persist_device_oauth_token(response: dict[str, Any]) -> tuple[str, str]:
+    """Persist a device-code token response so `get_token()` can auto-refresh it.
+
+    huggingface_hub stores the access token, its `refresh_token` and `expires_at`
+    in HF_STORED_TOKENS_PATH and marks it as the active token. `get_token()` then
+    transparently exchanges the refresh token for a new access token shortly
+    before expiry — no user interaction required.
+
+    Returns:
+        Tuple of (token_name, username).
+
+    """
+    # Private but stable within the pinned huggingface_hub range (>=1.20,<2).
+    from huggingface_hub._login import _save_oauth_token
+
+    return _save_oauth_token(response)
+
+
+async def start_device_code_login() -> dict[str, Any]:
+    """Begin a device-code OAuth login and poll for completion in the background.
+
+    Returns immediately with the user code and verification URL to display, plus a
+    `session_id` the frontend polls via `get_device_code_session_status`.
+    """
+    _cleanup_expired_device_sessions()
+
+    try:
+        from huggingface_hub.utils._oauth_device import request_device_code
+
+        device_info = await asyncio.to_thread(request_device_code)
+    except Exception as e:  # noqa: BLE001 — surface any failure to the caller
+        logger.error("[HF Auth] Failed to request device code: %s", e)
+        return {
+            "status": "error",
+            "message": f"Could not start login: {type(e).__name__}: {e}",
+        }
+
+    session_id = secrets.token_urlsafe(16)
+    session = DeviceCodeSession(
+        session_id=session_id,
+        user_code=device_info["user_code"],
+        verification_uri=device_info["verification_uri"],
+        verification_uri_complete=device_info["verification_uri_complete"],
+        expires_at=time.time() + int(device_info.get("expires_in", 900)),
+    )
+    _device_code_sessions[session_id] = session
+    session.task = asyncio.create_task(_run_device_code_poll(session, device_info))
+
+    return {
+        "status": "pending",
+        "session_id": session_id,
+        "user_code": session.user_code,
+        "verification_uri": session.verification_uri,
+        "verification_uri_complete": session.verification_uri_complete,
+        "interval": int(device_info.get("interval", 5)),
+        "expires_in": int(device_info.get("expires_in", 900)),
+    }
+
+
+async def _run_device_code_poll(
+    session: DeviceCodeSession, device_info: dict[str, Any]
+) -> None:
+    """Poll Hugging Face until the user authorizes the device, then persist the token."""
+    from huggingface_hub.errors import DeviceCodeError
+    from huggingface_hub.utils._oauth_device import poll_device_token
+
+    try:
+        # poll_device_token blocks (time.sleep between polls) — keep it off the loop.
+        response = await asyncio.to_thread(poll_device_token, device_info)
+    except DeviceCodeError as e:
+        logger.info("[HF Auth] Device-code login failed: %s", e)
+        session.status = "expired" if "expired" in str(e).lower() else "error"
+        session.error_message = str(e)
+        return
+    except Exception as e:  # noqa: BLE001
+        logger.error("[HF Auth] Device-code polling error: %s", e)
+        session.status = "error"
+        session.error_message = f"{type(e).__name__}: {e}"
+        return
+
+    try:
+        _, username = await asyncio.to_thread(_persist_device_oauth_token, response)
+    except Exception as e:  # noqa: BLE001
+        logger.error("[HF Auth] Failed to persist device-code token: %s", e)
+        session.status = "error"
+        session.error_message = f"Failed to save token: {type(e).__name__}: {e}"
+        return
+
+    session.username = username or ""
+    session.status = "authorized"
+
+    # Notify a *running* central relay so it reconnects with the new token. A
+    # token-less boot has no relay instance yet; the status route starts one.
+    try:
+        from reachy_mini.media.central_signaling_relay import notify_token_change
+
+        await notify_token_change(response.get("access_token"))
+        logger.info("[HF Auth] Notified central relay of device-code login")
+    except ImportError:
+        pass  # Central relay not available (e.g. Lite version)
+    except Exception as e:  # noqa: BLE001
+        logger.debug("[HF Auth] Could not notify relay: %s", e)
+
+
+def get_device_code_session_status(session_id: str) -> dict[str, Any]:
+    """Check the status of a device-code login session (polled by the frontend)."""
+    _cleanup_expired_device_sessions()
+    session = _device_code_sessions.get(session_id)
+    if not session:
+        return {"status": "expired", "message": "Session expired or not found"}
+
+    result: dict[str, Any] = {"status": session.status}
+    if session.status == "authorized":
+        result["username"] = session.username
+    elif session.status in ("error", "expired"):
+        result["message"] = session.error_message
+    return result
+
+
+def consume_device_session_relay_pending(session_id: str) -> bool:
+    """Return True exactly once after a session becomes authorized.
+
+    Lets the HTTP layer (which holds the daemon handle) start the central relay a
+    single time on a token-less boot, without the background poll task needing a
+    reference to the daemon.
+    """
+    session = _device_code_sessions.get(session_id)
+    if session is None or session.status != "authorized" or session.relay_started:
+        return False
+    session.relay_started = True
+    return True
+
+
+def cancel_device_code_session(session_id: str) -> bool:
+    """Cancel a pending device-code session and stop its polling task."""
+    session = _device_code_sessions.pop(session_id, None)
+    if session is None:
+        return False
+    if session.task is not None and not session.task.done():
+        session.task.cancel()
+    return True
 
 
 def _notify_relay_of_token_change(new_token: Optional[str] = None) -> None:
