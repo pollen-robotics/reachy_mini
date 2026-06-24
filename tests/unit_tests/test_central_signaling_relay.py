@@ -22,6 +22,9 @@ from reachy_mini.media.central_signaling_relay import (
     HEARTBEAT_DEFAULT_INTERVAL,
     HEARTBEAT_MAX_INTERVAL,
     HEARTBEAT_MIN_INTERVAL,
+    MAX_RECONNECT_INTERVAL,
+    RECONNECT_BACKOFF_JITTER,
+    RECONNECT_INTERVAL,
     CentralSignalingRelay,
     RelayState,
     _clamp_heartbeat_interval,
@@ -522,3 +525,27 @@ def test_run_loop_backs_off_when_connect_returns_in_error_state(
     assert call_count == 3
     assert relay._connection_attempts == 2
     assert elapsed >= 0.1
+
+
+def test_reconnect_delay_grows_and_is_capped() -> None:
+    """``_reconnect_delay`` backs off exponentially and stays under the cap."""
+    relay = _make_relay()
+
+    relay._connection_attempts = 1
+    d1 = relay._reconnect_delay()
+    relay._connection_attempts = 2
+    d2 = relay._reconnect_delay()
+    relay._connection_attempts = 3
+    d3 = relay._reconnect_delay()
+
+    # Strictly increasing: the base doubles each step, and the additive
+    # jitter (<=10%) cannot make a later attempt shorter than an earlier one.
+    assert RECONNECT_INTERVAL <= d1 < d2 < d3
+
+    # Capped on long outages, even with the maximum jitter applied.
+    relay._connection_attempts = 1000
+    assert (
+        relay._reconnect_delay()
+        <= MAX_RECONNECT_INTERVAL * (1 + RECONNECT_BACKOFF_JITTER) + 1e-9
+    )
+
