@@ -1,1 +1,1 @@
-{"id":"edf4869a9d1378bd09525529e4cf3f3e","fullName":"tests.unit_tests.test_device_detection.TestFindVideoDevice#test_macos_reachy_camera","name":"test_macos_reachy_camera","status":"passed","testResultsByEnv":{"default":"26980d6da7e27a3a00c553b6094ab1e6"}}
+{"id":"edf4869a9d1378bd09525529e4cf3f3e","fullName":"tests.unit_tests.test_device_detection.TestFindVideoDevice#test_macos_reachy_camera","name":"test_macos_reachy_camera","status":"passed","testResultsByEnv":{"default":"3cbec74bc4fccd07c6e3a1a64f06165e"}}

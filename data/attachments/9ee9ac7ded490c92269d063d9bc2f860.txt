@@ -1,0 +1,1 @@
+WARNING  reachy_mini.media.central_signaling_relay:central_signaling_relay.py:486 [Central Relay] notify_peer_session_failed: no central session mapped for peer_id=ghost (reason=any, diagnostic={}); session may have already been torn down

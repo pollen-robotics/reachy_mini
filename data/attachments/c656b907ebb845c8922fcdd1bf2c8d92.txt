@@ -1,1 +1,0 @@
-ERROR    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:493 [Central Relay] daemon-side WebRTC failure: peer_id=local-1 -> central_session=central-1 reason=ice_negotiation_timeout diagnostic={'ice_state': 'checking', 'elapsed_s': 12.0}

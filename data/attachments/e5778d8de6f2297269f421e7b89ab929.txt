@@ -1,0 +1,1 @@
+WARNING  reachy_mini.media.central_signaling_relay:central_signaling_relay.py:224 [Central Relay] State transition: stopped -> error | Authentication failed - token may be invalid

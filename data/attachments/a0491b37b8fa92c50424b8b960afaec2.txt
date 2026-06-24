@@ -1,0 +1,1 @@
+ERROR    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:496 [Central Relay] daemon-side WebRTC failure: peer_id=local-p -> central_session=central-p reason=any-reason diagnostic={}

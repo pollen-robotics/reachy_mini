@@ -1,0 +1,1 @@
+DEBUG    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:450 [Central Relay] notify_peer_session_failed: relay loop not running, dropping notification (peer_id=local-1, reason=any)
