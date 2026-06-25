@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_1b9aa9667b7e80fd_head_wobbler_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.14.1">coverage.py v7.14.1</a>,
-            created at 2026-06-24 10:13 +0000
+            created at 2026-06-25 09:11 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -139,18 +139,21 @@
     <p class="mis show_mis"><span class="n"><a id="t57" href="#t57">57</a></span><span class="t">        <span class="nam">interp_time</span> <span class="op">=</span> <span class="nam">time_trajectory</span><span class="op">(</span><span class="nam">t</span> <span class="op">/</span> <span class="nam">self</span><span class="op">.</span><span class="nam">duration</span><span class="op">,</span> <span class="nam">method</span><span class="op">=</span><span class="nam">self</span><span class="op">.</span><span class="nam">method</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t58" href="#t58">58</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t59" href="#t59">59</a></span><span class="t">        <span class="nam">interp_head_pose</span> <span class="op">=</span> <span class="nam">linear_pose_interpolation</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t60" href="#t60">60</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">start_head_pose</span><span class="op">,</span> <span class="nam">self</span><span class="op">.</span><span class="nam">target_head_pose</span><span class="op">,</span> <span class="nam">interp_time</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t61" href="#t61">61</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t62" href="#t62">62</a></span><span class="t">        <span class="nam">interp_antennas_joint</span> <span class="op">=</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t63" href="#t63">63</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">start_antennas</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t64" href="#t64">64</a></span><span class="t">            <span class="op">+</span> <span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">target_antennas</span> <span class="op">-</span> <span class="nam">self</span><span class="op">.</span><span class="nam">start_antennas</span><span class="op">)</span> <span class="op">*</span> <span class="nam">interp_time</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t65" href="#t65">65</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t66" href="#t66">66</a></span><span class="t">        <span class="nam">interp_body_yaw_joint</span> <span class="op">=</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t67" href="#t67">67</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">start_body_yaw</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t68" href="#t68">68</a></span><span class="t">            <span class="op">+</span> <span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">target_body_yaw</span> <span class="op">-</span> <span class="nam">self</span><span class="op">.</span><span class="nam">start_body_yaw</span><span class="op">)</span> <span class="op">*</span> <span class="nam">interp_time</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t69" href="#t69">69</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t70" href="#t70">70</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t71" href="#t71">71</a></span><span class="t">        <span class="key">return</span> <span class="nam">interp_head_pose</span><span class="op">,</span> <span class="nam">interp_antennas_joint</span><span class="op">,</span> <span class="nam">interp_body_yaw_joint</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t60" href="#t60">60</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">start_head_pose</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t61" href="#t61">61</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">target_head_pose</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t62" href="#t62">62</a></span><span class="t">            <span class="nam">interp_time</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t63" href="#t63">63</a></span><span class="t">            <span class="nam">yaw_as_scalar</span><span class="op">=</span><span class="key">True</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t64" href="#t64">64</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t65" href="#t65">65</a></span><span class="t">        <span class="nam">interp_antennas_joint</span> <span class="op">=</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t66" href="#t66">66</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">start_antennas</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t67" href="#t67">67</a></span><span class="t">            <span class="op">+</span> <span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">target_antennas</span> <span class="op">-</span> <span class="nam">self</span><span class="op">.</span><span class="nam">start_antennas</span><span class="op">)</span> <span class="op">*</span> <span class="nam">interp_time</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t68" href="#t68">68</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t69" href="#t69">69</a></span><span class="t">        <span class="nam">interp_body_yaw_joint</span> <span class="op">=</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t70" href="#t70">70</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">start_body_yaw</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t71" href="#t71">71</a></span><span class="t">            <span class="op">+</span> <span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">target_body_yaw</span> <span class="op">-</span> <span class="nam">self</span><span class="op">.</span><span class="nam">start_body_yaw</span><span class="op">)</span> <span class="op">*</span> <span class="nam">interp_time</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t72" href="#t72">72</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t73" href="#t73">73</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t74" href="#t74">74</a></span><span class="t">        <span class="key">return</span> <span class="nam">interp_head_pose</span><span class="op">,</span> <span class="nam">interp_antennas_joint</span><span class="op">,</span> <span class="nam">interp_body_yaw_joint</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -160,7 +163,7 @@
             <a class="nav" href="z_1b9aa9667b7e80fd_head_wobbler_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.14.1">coverage.py v7.14.1</a>,
-            created at 2026-06-24 10:13 +0000
+            created at 2026-06-25 09:11 +0000
         </p>
     </div>
 </footer>
