@@ -1,0 +1,110 @@
+name: Allure Report
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Needed for the gh-pages publish step.
+permissions:
+  contents: write
+
+jobs:
+  allure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          lfs: true
+
+      - name: Install system dependencies
+        uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
+        with:
+          packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0
+          version: 1.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+        with:
+          python-version: 3.12
+          enable-cache: true
+
+      - name: Install the project
+        run: uv sync --frozen --all-extras --group dev
+
+      - name: Run tests (Allure results)
+        continue-on-error: true
+        run: uv run --with allure-pytest --with pytest-cov pytest -m 'not audio and not video and not wireless' --tb=short --alluredir=allure-results --cov=reachy_mini --cov-report=json:coverage.json --cov-report=html
+        env:
+          MUJOCO_GL: disable
+
+      - uses: actions/setup-node@v4
+        if: always()
+        with:
+          node-version: 22
+
+      - name: Install Allure Report 3
+        if: always()
+        run: npm install --no-save allure @allurereport/plugin-awesome
+
+      - name: Get previous Allure history
+        if: always()
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages-prev
+
+      - name: Restore Allure history
+        if: always()
+        run: |
+          if [ -f gh-pages-prev/history/history.jsonl ]; then
+            mkdir -p history
+            cp gh-pages-prev/history/history.jsonl history/history.jsonl
+          fi
+
+      # Allure Report 3 (the `allure` npm package + awesome plugin). Pure Node,
+      # no Java needed. Produces the modern "awesome" UI and a root summary.json.
+      - name: Generate Allure report
+        if: always()
+        run: npx allure generate allure-results
+
+      # Fold pytest-cov's total into the published summary.json so the status
+      # page can show a coverage % alongside the test donut (one URL to fetch).
+      - name: Add coverage to summary.json
+        if: always()
+        run: |
+          if [ -f coverage.json ] && [ -f allure-report/summary.json ]; then
+            cov=$(jq '.totals.percent_covered | round' coverage.json)
+            jq --argjson cov "$cov" '. + {coverage: $cov}' allure-report/summary.json > summary.tmp
+            mv summary.tmp allure-report/summary.json
+          fi
+
+      # Drop pytest-cov's HTML report into the published dir (browsable at
+      # <pages>/coverage/). After `allure generate` so it can't be clobbered.
+      - name: Bundle coverage HTML into report
+        if: always()
+        run: |
+          if [ -d htmlcov ]; then
+            mkdir -p allure-report/coverage
+            cp -r htmlcov/. allure-report/coverage/
+            # coverage.py writes a `.gitignore` ('*') in htmlcov; left in place it
+            # makes the gh-pages `git add` skip the whole coverage/ dir.
+            rm -f allure-report/coverage/.gitignore
+          fi
+
+      - name: Bundle history into report
+        if: always()
+        run: |
+          mkdir -p allure-report/history
+          if [ -f history/history.jsonl ]; then
+            cp history/history.jsonl allure-report/history/history.jsonl
+          fi
+
+      - name: Publish to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report

@@ -13,8 +13,9 @@ except ImportError as e:
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
+gi.require_version("GstPbutils", "1.0")
 
-from gi.repository import Gst, GstApp  # noqa: E402
+from gi.repository import Gst, GstApp, GstPbutils  # noqa: E402
 
 
 def handle_default_bus_message(
@@ -73,3 +74,54 @@ def get_sample(appsink: GstApp.AppSink, logger: logging.Logger) -> Optional[byte
             logger.warning("Buffer is None")
         data = buf.extract_dup(0, buf.get_size())
     return data
+
+
+def is_valid_audio_file(path: str) -> bool:
+    """Return whether the file at *path* is a decodable audio file.
+
+    Uses GStreamer's ``pbutils`` discoverer — the same machinery used to play
+    sounds — so anything that passes here is guaranteed to be playable. The
+    probe inspects the media's structure rather than trusting the extension,
+    which rejects mislabelled or non-audio payloads.
+
+    Fails closed: returns ``False`` if the probe errors out for any reason.
+
+    Args:
+        path: Filesystem path to the file to validate.
+
+    Returns:
+        ``True`` if the file is a decodable media file with at least one audio
+        stream, ``False`` otherwise.
+
+    """
+    Gst.init([])  # idempotent
+    try:
+        discoverer = GstPbutils.Discoverer.new(5 * Gst.SECOND)
+        info = discoverer.discover_uri(Gst.filename_to_uri(path))
+    except Exception as e:
+        logging.warning(f"Could not validate audio file {path}: {e}")
+        return False
+
+    return (
+        info.get_result() == GstPbutils.DiscovererResult.OK
+        and len(info.get_audio_streams()) > 0
+    )
+
+
+def audio_duration_seconds(path: str) -> float:
+    """Return the media duration in seconds via GStreamer's discoverer.
+
+    Works for any container the daemon can play (WAV, OGG, MP3, FLAC, ...).
+
+    Args:
+        path: Filesystem path to the media file.
+
+    Returns:
+        The duration in seconds.
+
+    """
+    Gst.init([])  # idempotent
+    info = GstPbutils.Discoverer.new(5 * Gst.SECOND).discover_uri(
+        Gst.filename_to_uri(path)
+    )
+    return float(info.get_duration()) / 1_000_000_000

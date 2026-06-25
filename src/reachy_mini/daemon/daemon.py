@@ -6,6 +6,7 @@ It also provides a command-line interface for easy interaction.
 """
 
 import asyncio
+import json
 import logging
 import time
 from importlib.metadata import PackageNotFoundError, version
@@ -224,7 +225,6 @@ class Daemon:
         mockup_sim: bool = False,
         serialport: str = "auto",
         scene: str = "empty",
-        localhost_only: bool = True,
         wake_up_on_start: bool = True,
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
@@ -239,7 +239,6 @@ class Daemon:
             mockup_sim (bool): If True, run in lightweight simulation mode (no MuJoCo). Defaults to False.
             serialport (str): Serial port for real motors. Defaults to "auto", which will try to find the port automatically.
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
-            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             check_collision (bool): If True, enable collision checking. Defaults to False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
@@ -256,7 +255,7 @@ class Daemon:
             return self._status.state
 
         self.logger.info(
-            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
+            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
         )
 
         # mockup-sim behaves exactly like a real robot for apps (they open webcam directly)
@@ -264,7 +263,9 @@ class Daemon:
         self._status.simulation_enabled = sim
         self._status.mockup_sim_enabled = mockup_sim
 
-        if not localhost_only:
+        # The wireless version binds all interfaces and advertises its LAN
+        # address; loopback-only configurations have no meaningful wlan_ip.
+        if self.wireless_version:
             self._status.wlan_ip = get_ip_address()
 
         # When no_media is set, override use_audio to False
@@ -277,7 +278,6 @@ class Daemon:
             "headless": headless,
             "use_audio": effective_use_audio,
             "scene": scene,
-            "localhost_only": localhost_only,
         }
 
         self.logger.info("Starting Reachy Mini daemon...")
@@ -334,6 +334,7 @@ class Daemon:
                 if self.backend is not None:
                     self.backend.setup_media_server(self._media_server)
                     self.backend.set_restart_daemon_callback(self._spawn_webrtc_restart)
+                    self.backend.set_start_update_callback(self._spawn_webrtc_update)
                 self._media_server.start()
 
                 # Start central signaling relay for remote WebRTC access
@@ -469,7 +470,6 @@ class Daemon:
         scene: Optional[str] = None,
         headless: Optional[bool] = None,
         use_audio: Optional[bool] = None,
-        localhost_only: Optional[bool] = None,
         wake_up_on_start: Optional[bool] = None,
         goto_sleep_on_stop: Optional[bool] = None,
     ) -> "DaemonState":
@@ -482,7 +482,6 @@ class Daemon:
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to None (uses the previous value).
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to None (uses the previous value).
             use_audio (bool): If True, enable audio. Defaults to None (uses the previous value).
-            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to None (uses the previous value).
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to None (don't wake up).
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to None (don't go to sleep).
 
@@ -517,9 +516,6 @@ class Daemon:
                 "use_audio": use_audio
                 if use_audio is not None
                 else self._start_params["use_audio"],
-                "localhost_only": localhost_only
-                if localhost_only is not None
-                else self._start_params["localhost_only"],
                 "wake_up_on_start": wake_up_on_start
                 if wake_up_on_start is not None
                 else False,
@@ -558,6 +554,114 @@ class Daemon:
                 self.logger.error(f"WebRTC restart_daemon failed: {e}")
 
         Thread(target=_run, daemon=True, name="webrtc-restart-daemon").start()
+
+    def _spawn_webrtc_update(self, pre_release: bool = False) -> Optional[str]:
+        """Run a PyPI update of the daemon on a fresh thread.
+
+        Called from the backend's WebRTC ``start_update`` handler. Mirrors
+        ``_spawn_webrtc_restart`` and the REST ``/update/start`` endpoint:
+        ``update_reachy_mini`` upgrades the package and ends with a
+        ``systemctl restart``. We run it on a daemon thread with its own
+        asyncio loop so the caller can flush its DataChannel ack before the
+        WebRTC stack is torn down by the restart.
+
+        Returns a refusal reason string when the update is declined so the
+        caller can ack an error instead of ``ok`` (and never spawns the
+        thread in that case); returns ``None`` once the job is accepted.
+        The same guards as the REST endpoint are enforced:
+
+        * wireless-only -- the self-update path lives in
+          ``utils.wireless_version`` and has no meaning on a Lite, which is
+          updated through its host machine;
+        * an update must actually be available, otherwise we would force a
+          needless reinstall + restart of the running version;
+        * the shared ``busy_lock`` from ``routers/update.py`` is acquired so
+          a WebRTC update and a concurrent REST update can never run at the
+          same time and corrupt the venv.
+
+        Progress is fanned out to every connected client as
+        ``update_progress`` broadcasts (one per log line), mirroring the
+        REST ``WS /update/ws/logs`` stream. A successful update restarts
+        the daemon before a ``done`` event can be sent, so consumers infer
+        success from the transport teardown + reconnect.
+        """
+        if self._status.state == DaemonState.STOPPED:
+            self.logger.warning("Ignoring WebRTC start_update: daemon already stopped.")
+            return "Daemon is stopped"
+
+        # The PyPI self-update only exists on the wireless robot; a Lite is
+        # updated via its host machine, so reject it here rather than failing
+        # deep inside `update_reachy_mini`.
+        if not self.wireless_version:
+            return "start_update is only supported on Reachy Mini Wireless"
+
+        # Local import: keeps the wireless-update dependency chain out of
+        # the daemon module's import-time graph (matches routers/update.py).
+        from reachy_mini.daemon.app.routers.update import busy_lock
+        from reachy_mini.utils.wireless_version.update import update_reachy_mini
+        from reachy_mini.utils.wireless_version.update_available import (
+            is_update_available,
+        )
+
+        # Share the REST router's lock so a WebRTC-triggered update and an
+        # HTTP-triggered one are mutually exclusive (a concurrent pip install
+        # into the same venv would corrupt it). Acquire non-blocking up front
+        # so we can reject immediately; on the accepted path the worker thread
+        # owns the lock and releases it, on every rejection we release here.
+        if not busy_lock.acquire(blocking=False):
+            return "Update already in progress"
+
+        try:
+            if not is_update_available("reachy_mini", pre_release):
+                busy_lock.release()
+                return "No update available"
+        except Exception as e:
+            busy_lock.release()
+            self.logger.error(f"WebRTC start_update availability check failed: {e}")
+            return f"Update availability check failed: {e}"
+
+        backend = self.backend
+
+        def _broadcast(status: str, *, line: str | None = None, error: str | None = None) -> None:
+            if backend is None:
+                return
+            payload: dict[str, Any] = {"type": "update_progress", "status": status}
+            if line is not None:
+                payload["line"] = line
+            if error is not None:
+                payload["error"] = error
+            try:
+                backend.broadcast_to_all_clients(json.dumps(payload))
+            except Exception as e:
+                self.logger.warning(f"update_progress broadcast failed: {e}")
+
+        class _ProgressHandler(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                _broadcast("in_progress", line=self.format(record))
+
+        # Dedicated logger: streams update output to clients while still
+        # propagating to the daemon's journalctl logs (propagate=True).
+        update_logger = logging.getLogger("reachy_mini.webrtc_update")
+        update_logger.setLevel(logging.INFO)
+        update_logger.handlers.clear()
+        update_logger.addHandler(_ProgressHandler())
+
+        def _run() -> None:
+            try:
+                asyncio.run(update_reachy_mini(update_logger, pre_release=pre_release))
+                _broadcast("done")
+            except Exception as e:
+                self.logger.error(f"WebRTC start_update failed: {e}")
+                _broadcast("failed", error=str(e))
+            finally:
+                # On success `update_reachy_mini` triggers a `systemctl
+                # restart` that kills this process before we get here; the
+                # release only matters when the update failed without
+                # restarting, freeing the lock for a retry.
+                busy_lock.release()
+
+        Thread(target=_run, daemon=True, name="webrtc-start-update").start()
+        return None
 
     def status(self) -> "DaemonStatus":
         """Get the current status of the Reachy Mini daemon."""

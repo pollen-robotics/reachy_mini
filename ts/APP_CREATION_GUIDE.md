@@ -1,18 +1,19 @@
 # App Creation Guide
 
-> ### Use `@pollen-robotics/reachy-mini-sdk@1.8.0-rc1` today
+> ### Use `@pollen-robotics/reachy-mini-sdk@1.8.0` today
 >
-> Every reference app currently pins the same SDK release line:
-> **`1.8.0-rc1`** (precisely `1.8.0-rc1-main.fd4354c`). The host shell,
-> the embed adapter, the SDK runtime, and the daemon on the robot
-> are validated end-to-end against that build. Mixing versions
-> across these boundaries causes silent protocol drift - see
+> Every reference app pins the same SDK release: **`1.8.0`** (the
+> stable npm release; npm versions are immutable, so this is fully
+> reproducible — no commit suffix needed). The host shell, the embed
+> adapter, the SDK runtime, and the daemon on the robot are validated
+> end-to-end against that release. Mixing versions across these
+> boundaries causes silent protocol drift - see
 > [§10 SDK version pinning](#10-sdk-version-pinning).
 >
 > Add this to your `package.json`:
 >
 > ```json
-> { "dependencies": { "@pollen-robotics/reachy-mini-sdk": "1.8.0-rc1-main.fd4354c" } }
+> { "dependencies": { "@pollen-robotics/reachy-mini-sdk": "1.8.0" } }
 > ```
 
 **This is the single source of truth for building a Reachy Mini JS
@@ -648,17 +649,18 @@ The current pinned version across all three reference apps:
 ```json
 {
   "dependencies": {
-    "@pollen-robotics/reachy-mini-sdk": "1.8.0-rc1-main.fd4354c"
+    "@pollen-robotics/reachy-mini-sdk": "1.8.0"
   }
 }
 ```
 
-This is the `1.8.0-rc1` release line, with the `-main.fd4354c` suffix
-identifying the commit-tagged prerelease build that's been validated
-end-to-end against the host shell + daemon. **Use the same string in
-your `package.json`** unless you're explicitly tracking a newer RC.
+This is the stable `1.8.0` npm release, validated end-to-end against
+the host shell + daemon. npm versions are immutable, so pinning the
+exact version is fully reproducible — no commit suffix needed. **Use
+the same string in your `package.json`** unless you're explicitly
+tracking a newer release.
 
-> When a newer RC is published, the source of truth is whichever
+> When a newer release is published, the source of truth is whichever
 > string is currently shared by [`reachy_mini_minimal_conversation`'s
 > `package.json`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation/blob/main/package.json),
 > [`reachy_mini_emotions`'s `package.json`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions/blob/main/package.json),
@@ -908,9 +910,9 @@ the edge:
 
 ```html
 <script type="module">
-  import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c/+esm";
-  import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c/host/dist/entry/auto.js";
-  import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c/host/dist/entry/embed.js";
+  import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/+esm";
+  import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/host/dist/entry/auto.js";
+  import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/host/dist/entry/embed.js";
 
   window.ReachyMini = ReachyMini;
   window.dispatchEvent(new Event("reachymini:ready"));
@@ -974,9 +976,9 @@ shell without touching your motion code. The four-step recipe:
    import { ReachyMini } from "https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@v1.7.2/js/reachy-mini.js";
 
    // AFTER (modern host shell, same SDK runtime API)
-   import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c/+esm";
-   import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c/host/dist/entry/auto.js";
-   import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0-rc1-main.fd4354c/host/dist/entry/embed.js";
+   import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/+esm";
+   import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/host/dist/entry/auto.js";
+   import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/host/dist/entry/embed.js";
    ```
 
 2. **Branch on `?embedded=1`.** Wrap your existing app boot in:
@@ -1448,8 +1450,8 @@ rolled out by the SDK team, not by every app team.
 - App bundles (`index-<hash>.js`): hashed by Vite, cache-busted
   on deploy.
 - `@pollen-robotics/reachy-mini-sdk` in `package.json`: pinned to
-  an **exact prerelease build** (today: `1.8.0-rc1-main.fd4354c`),
-  not a range. See [§10 SDK version pinning](#10-sdk-version-pinning).
+  an **exact version** (today: `1.8.0`), not a range. See
+  [§10 SDK version pinning](#10-sdk-version-pinning).
 - `@pollen-robotics/reachy-mini-sdk/host` subpath imports: same
   pin, same package.
 

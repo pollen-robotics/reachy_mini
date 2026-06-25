@@ -24,6 +24,7 @@ import {
     bytesToBase64,
     gzipBase64,
     clampVolume,
+    audioUploadEncoding,
 } from './upload-helpers.js';
 import type {
     ApplyAudioConfigOptions,
@@ -63,6 +64,17 @@ interface LogSubscriber {
     onError?: (error: string) => void;
 }
 
+/** One progress event from an in-flight `startDaemonUpdate()`. */
+export interface UpdateProgressEvent {
+    status: 'in_progress' | 'done' | 'failed';
+    /** A log line of the underlying update job (when `in_progress`). */
+    line?: string;
+    /** Set when `status === 'failed'`. */
+    error?: string;
+}
+
+type UpdateProgressCallback = (event: UpdateProgressEvent) => void;
+
 interface SignalingMessage {
     type?: string;
     sessionId?: string;
@@ -85,6 +97,43 @@ interface OAuthRedirectResult {
     accessTokenExpiresAt: Date | string;
     userInfo: { preferred_username?: string; name?: string };
 }
+
+// ─── Internal constants ──────────────────────────────────────────────────────
+
+/**
+ * How long we tolerate `iceConnectionState === 'disconnected'` before
+ * surfacing it as an error. The spec defines this state as transient
+ * (browsers keep STUN keep-alives running and usually heal in 1-2 s
+ * on WiFi blips, AP roams, brief 4G dropouts). Consumers watching
+ * `iceStateChange` directly should outlive this window before
+ * showing any fatal UI.
+ */
+const ICE_DISCONNECT_GRACE_MS = 3000;
+
+/**
+ * Grace before treating `iceConnectionState === 'failed'` as terminal.
+ * The spec says `failed` IS terminal, but we've observed real
+ * `failed → connected` flips on rapid AP roams and iOS BT route
+ * changes — 1 s of debounce absorbs those without noticeably
+ * delaying a real failure.
+ */
+const ICE_FAILED_GRACE_MS = 1000;
+
+/**
+ * Ceiling on how long we'll keep `_armIceGraceOnVisibility` waiting
+ * for the tab to come back. The daemon's `webrtcsink` runs a STUN
+ * consent-freshness check (RFC 7675, ~30 s default) and unilaterally
+ * tears its side of the session down past that window, releasing the
+ * producer slot on central. If the user backgrounded the tab for
+ * longer than this, running another 3 s foreground grace is a lie —
+ * the underlying transport is gone, nothing can recover. Give up
+ * straight away so the host shows the real "session expired" UX
+ * instead of a fake "Reconnecting…" badge that's never going to
+ * heal. 60 s gives a 2× margin over the daemon-side timeout — long
+ * enough to absorb a "phone in pocket for 45 s" case, short enough
+ * to be honest with the user.
+ */
+const MAX_VISIBILITY_DEFER_MS = 60_000;
 
 export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
@@ -140,6 +189,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Log subscribers ─────────────────────────────────────────────────
     private readonly _logSubscribers: Set<LogSubscriber> = new Set();
+    private readonly _updateProgressSubscribers: Set<UpdateProgressCallback> = new Set();
 
     // ─── Broadcast waiters (playMove / playUploadedAudio) ────────────────
     private _broadcastWaiters: BroadcastWaiter[] = [];
@@ -153,6 +203,20 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _sessionReject: ((err: Error) => void) | null = null;
     private _iceConnected = false;
     private _dcOpen = false;
+
+    // ─── Resilience: ICE-blip debounce + network awareness ──────────────
+    // Backs `_scheduleIceGrace` / `_armIceGraceOnVisibility` and the
+    // `networkOnline` / `networkOffline` / `networkChange` forwarders.
+    // All three handler slots are scoped to the lifetime of a live
+    // session (installed in `startSession`, cleared in
+    // `stopSession` / `disconnect` / `_handleEndSession` /
+    // `_failSessionRejected`).
+    private _iceGraceTimer: ReturnType<typeof setTimeout> | null = null;
+    private _iceGraceReason: 'disconnected' | 'failed' | null = null;
+    private _pendingVisibilityHandler: (() => void) | null = null;
+    private _onlineHandler: (() => void) | null = null;
+    private _offlineHandler: (() => void) | null = null;
+    private _connectionChangeHandler: (() => void) | null = null;
 
     // ─── Motion completion plumbing (wake_up / goto_sleep) ───────────────
     private readonly _pendingMotionCompletions: Record<'wake_up' | 'goto_sleep', PendingMotion[]> = {
@@ -534,6 +598,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] satisfies RTCIceServer[],
         });
 
+        // Scope `networkOnline` / `networkOffline` / `networkChange`
+        // event forwarding to the lifetime of this session.
+        this._installNetworkListeners();
+
         return new Promise<void>((resolve, reject) => {
             this._sessionResolve = resolve;
             this._sessionReject = reject;
@@ -570,19 +638,38 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._pc!.oniceconnectionstatechange = () => {
                 const s = this._pc?.iceConnectionState;
                 if (!s) return;
+                // Public, granular event: every transition is visible to
+                // consumers so they can render finer UX (e.g. a transient
+                // "Reconnecting…" badge during `disconnected`) without
+                // having to attach their own handler to `_pc`.
+                this._emit('iceStateChange', { state: s });
+
                 if (s === 'connected' || s === 'completed') {
+                    // Healed — cancel any pending grace from a previous blip.
+                    this._clearIceGrace();
                     this._iceConnected = true;
                     this._checkSessionReady();
-                } else if (s === 'failed') {
-                    const err = new Error('ICE connection failed');
-                    if (this._sessionReject) {
-                        this._sessionReject(err);
-                        this._sessionResolve = null;
-                        this._sessionReject = null;
+                    return;
+                }
+                if (s === 'disconnected') {
+                    // TRANSIENT per spec — debounce before escalating.
+                    // If the tab is hidden, JS timers are throttled and
+                    // would fire unpredictably late, so defer the grace
+                    // window to the next foreground frame.
+                    if (typeof document !== 'undefined' && document.hidden) {
+                        this._armIceGraceOnVisibility();
+                    } else {
+                        this._scheduleIceGrace(ICE_DISCONNECT_GRACE_MS, 'disconnected');
                     }
-                    this._emit('error', { source: 'webrtc', error: err });
-                } else if (s === 'disconnected') {
-                    this._emit('error', { source: 'webrtc', error: new Error('ICE disconnected') });
+                    return;
+                }
+                if (s === 'failed') {
+                    // Terminal per spec, but in practice we've seen
+                    // `failed → connected` on rapid AP roams / BT route
+                    // changes on iOS. Give the ICE agent a short window
+                    // to surprise us before rejecting the session.
+                    this._scheduleIceGrace(ICE_FAILED_GRACE_MS, 'failed');
+                    return;
                 }
             };
 
@@ -614,6 +701,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         err.reason = msg.reason ?? null;
         err.activeApp = msg.activeApp ?? null;
 
+        // Resilience teardown BEFORE closing `_pc` so a queued grace
+        // callback can't dereference a dead handle.
+        this._clearIceGrace();
+        this._uninstallNetworkListeners();
         if (this._pc) { this._pc.close(); this._pc = null; }
         if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
         this._iceConnected = false;
@@ -639,7 +730,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         this._logSubscribers.clear();
+        this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Session stopped'));
+        // Tear down resilience plumbing BEFORE closing `_pc` so a
+        // queued grace callback can't dereference a dead handle.
+        this._clearIceGrace();
+        this._uninstallNetworkListeners();
         if (this._sessionReject) {
             this._sessionReject(new Error('Session stopped'));
             this._sessionResolve = null;
@@ -681,7 +777,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         this._logSubscribers.clear();
+        this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Disconnected'));
+        // Mirrors the resilience teardown in `stopSession()`.
+        this._clearIceGrace();
+        this._uninstallNetworkListeners();
         if (this._sessionReject) {
             this._sessionReject(new Error('Disconnected'));
             this._sessionResolve = null;
@@ -707,6 +807,202 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._robots = [];
         this._state = 'disconnected';
         this._emit('disconnected', { reason: 'user' });
+    }
+
+    // ─── Resilience: ICE-blip debounce + network awareness ───────────────
+    //
+    // Both halves below are intentionally generic (they don't know about
+    // motion, audio, or the FSM): they just smooth out browser-level
+    // events so the consumer's own state machine doesn't get torn down
+    // by routine WiFi/4G/screen-off noise.
+
+    /**
+     * Cancel any pending ICE grace timer and visibility handler. Called
+     * on a healed `connected`/`completed` transition AND from the
+     * lifecycle teardown paths so a callback can't fire after `_pc`
+     * is closed.
+     */
+    private _clearIceGrace(): void {
+        if (this._iceGraceTimer !== null) {
+            clearTimeout(this._iceGraceTimer);
+            this._iceGraceTimer = null;
+        }
+        this._iceGraceReason = null;
+        if (this._pendingVisibilityHandler && typeof document !== 'undefined') {
+            document.removeEventListener('visibilitychange', this._pendingVisibilityHandler);
+        }
+        this._pendingVisibilityHandler = null;
+    }
+
+    /**
+     * Start a grace window. After `ms`, re-check the live ICE state:
+     *   - If we healed back to `connected`/`completed`, the timer was
+     *     already cancelled in `oniceconnectionstatechange`, so we
+     *     never get here.
+     *   - If we're still in the originally-observed bad state (or
+     *     worse), surface the error and reject any pending session
+     *     promise. The original code path is preserved verbatim so
+     *     downstream consumers see the same `error` payload shape.
+     */
+    private _scheduleIceGrace(ms: number, reason: 'disconnected' | 'failed'): void {
+        // Coalesce: if a grace is already pending and the reason hasn't
+        // changed, keep the original timer so a flurry of identical
+        // transitions doesn't reset the clock. If the reason changed
+        // (typically `disconnected` → `failed`, but also the reverse on
+        // some Android WebViews), replace the timer with the new
+        // (reason, ms) pair — the latest signal wins.
+        if (this._iceGraceTimer !== null) {
+            if (this._iceGraceReason === reason) return;
+            clearTimeout(this._iceGraceTimer);
+        }
+        this._iceGraceReason = reason;
+        this._iceGraceTimer = setTimeout(() => {
+            this._iceGraceTimer = null;
+            const r = this._iceGraceReason;
+            this._iceGraceReason = null;
+            const s = this._pc?.iceConnectionState;
+            if (s === 'connected' || s === 'completed') return; // healed
+            if (r === 'disconnected' && s === 'disconnected') {
+                this._emit('error', {
+                    source: 'webrtc',
+                    error: new Error(`ICE stuck in 'disconnected' for > ${ms}ms`),
+                });
+                return;
+            }
+            if (r === 'failed' || s === 'failed') {
+                const err = new Error('ICE connection failed');
+                if (this._sessionReject) {
+                    this._sessionReject(err);
+                    this._sessionResolve = null;
+                    this._sessionReject = null;
+                }
+                this._emit('error', { source: 'webrtc', error: err });
+            }
+        }, ms);
+    }
+
+    /**
+     * `disconnected` while the tab is hidden. JS timers are throttled
+     * in background tabs (Chrome clamps to ~1 Hz, Safari can pause
+     * altogether), so a foreground grace timer would either miss the
+     * window or fire long after the connection healed. Wait for the
+     * tab to come back, then re-evaluate.
+     */
+    private _armIceGraceOnVisibility(): void {
+        if (this._pendingVisibilityHandler) return;
+        const deferredAt = Date.now();
+        const handler = (): void => {
+            if (typeof document !== 'undefined' && document.hidden) return;
+            document.removeEventListener('visibilitychange', handler);
+            this._pendingVisibilityHandler = null;
+            if (!this._pc) return;
+            const s = this._pc.iceConnectionState;
+            if (s === 'connected' || s === 'completed') return; // healed in bg
+
+            // Ceiling: if the user backgrounded past the daemon's
+            // ICE-consent freshness window the session is gone from
+            // the daemon's side regardless of what `_pc` reports
+            // locally. Running another foreground grace would tell
+            // the user "Reconnecting…" for a recovery that can never
+            // happen. Escalate immediately so the host renders the
+            // real "session expired" UX. See MAX_VISIBILITY_DEFER_MS.
+            if (Date.now() - deferredAt > MAX_VISIBILITY_DEFER_MS) {
+                const err = new Error(
+                    'Session expired while tab was backgrounded',
+                );
+                if (this._sessionReject) {
+                    this._sessionReject(err);
+                    this._sessionResolve = null;
+                    this._sessionReject = null;
+                }
+                this._emit('error', { source: 'webrtc', error: err });
+                return;
+            }
+
+            if (s === 'failed') {
+                this._scheduleIceGrace(ICE_FAILED_GRACE_MS, 'failed');
+                return;
+            }
+            // Still disconnected when we came back — give it a normal
+            // foreground grace window now that timers fire reliably.
+            this._scheduleIceGrace(ICE_DISCONNECT_GRACE_MS, 'disconnected');
+        };
+        document.addEventListener('visibilitychange', handler);
+        this._pendingVisibilityHandler = handler;
+    }
+
+    /**
+     * Install browser-level network listeners and forward them as
+     * public `networkOnline` / `networkOffline` / `networkChange`
+     * events on this instance. Idempotent: called from
+     * `startSession()`, removed by `_uninstallNetworkListeners` on
+     * teardown. Reachable only when there's a live `window`
+     * (defensive guard for SSR / test environments).
+     *
+     * `online` / `offline` are semantically about CONNECTIVITY:
+     * "does the OS think we can reach the internet". They flip
+     * symmetrically.
+     *
+     * `connection.change` (NetworkInformation API, Chrome / Android
+     * WebView only) is semantically about the TRANSPORT: it fires
+     * on Wi-Fi → 4G swaps, AP roams, etc. without necessarily going
+     * through `offline`. We forward it as its own `networkChange`
+     * event rather than aliasing it onto `networkOnline`, so
+     * consumers don't have to guess whether they're seeing a real
+     * connectivity recovery or a silent transport swap.
+     */
+    private _installNetworkListeners(): void {
+        if (this._onlineHandler || typeof window === 'undefined') return;
+        const onOnline = (): void => this._emit('networkOnline', {});
+        const onOffline = (): void => this._emit('networkOffline', {});
+        window.addEventListener('online', onOnline);
+        window.addEventListener('offline', onOffline);
+        this._onlineHandler = onOnline;
+        this._offlineHandler = onOffline;
+
+        const conn = (navigator as Navigator & {
+            connection?: {
+                effectiveType?: string;
+                downlink?: number;
+                rtt?: number;
+                saveData?: boolean;
+                addEventListener?: (type: string, listener: () => void) => void;
+                removeEventListener?: (type: string, listener: () => void) => void;
+            };
+        }).connection;
+        if (conn && typeof conn.addEventListener === 'function') {
+            const onChange = (): void => this._emit('networkChange', {
+                effectiveType: conn.effectiveType,
+                downlink: conn.downlink,
+                rtt: conn.rtt,
+                saveData: conn.saveData,
+            });
+            conn.addEventListener('change', onChange);
+            this._connectionChangeHandler = onChange;
+        }
+    }
+
+    /** Counterpart to `_installNetworkListeners`. */
+    private _uninstallNetworkListeners(): void {
+        if (typeof window !== 'undefined') {
+            if (this._onlineHandler) {
+                window.removeEventListener('online', this._onlineHandler);
+            }
+            if (this._offlineHandler) {
+                window.removeEventListener('offline', this._offlineHandler);
+            }
+        }
+        const conn = (navigator as Navigator & {
+            connection?: {
+                removeEventListener?: (type: string, listener: () => void) => void;
+            };
+        }).connection;
+        if (conn && this._connectionChangeHandler && typeof conn.removeEventListener === 'function') {
+            conn.removeEventListener('change', this._connectionChangeHandler);
+        }
+        this._onlineHandler = null;
+        this._offlineHandler = null;
+        this._connectionChangeHandler = null;
     }
 
     // ─── Commands ────────────────────────────────────────────────────────
@@ -845,6 +1141,31 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     playSound(file: string): boolean {
         return this._sendCommand({ type: 'play_sound', file });
+    }
+
+    clearIncomingAudio(): boolean {
+        return this._sendCommand({ type: 'clear_incoming_audio' });
+    }
+
+    /**
+     * Trigger a PyPI update of the daemon over the data channel. Remote
+     * counterpart of `POST /update/start`. The daemon acks then restarts
+     * itself once the install finishes, which tears this session down -
+     * the caller is expected to reconnect afterwards.
+     *
+     * Pass `onProgress` to receive `update_progress` events (one per log
+     * line of the update job). A *successful* update restarts the daemon
+     * before a `done` event can arrive, so treat the session teardown +
+     * a successful reconnect as the success signal; `onProgress` will fire
+     * with `status: 'failed'` if the install errors before the restart.
+     *
+     * Returns `false` if the data channel isn't open.
+     */
+    startDaemonUpdate(
+        { preRelease = false, onProgress }: { preRelease?: boolean; onProgress?: UpdateProgressCallback } = {},
+    ): boolean {
+        if (onProgress) this._updateProgressSubscribers.add(onProgress);
+        return this._sendCommand({ type: 'start_update', pre_release: preRelease });
     }
 
     setMotorMode(mode: 'enabled' | 'disabled' | 'gravity_compensation'): boolean {
@@ -1188,7 +1509,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 type: 'upload_audio_start',
                 upload_id: uploadId,
                 total_chunks: audioTotal,
-                encoding: 'wav-base64',
+                encoding: audioUploadEncoding(audioBlob),
                 description,
             });
             for (let i = 0; i < audioTotal; i++) {
@@ -1287,7 +1608,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             type: 'upload_audio_start',
             upload_id: uploadId,
             total_chunks: total,
-            encoding: 'wav-base64',
+            encoding: audioUploadEncoding(audioBlob),
             description,
         });
         for (let i = 0; i < total; i++) {
@@ -1469,6 +1790,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             ) as SessionRejectError;
             err.reason = reason ?? null;
             this._emit('sessionRejected', { reason, activeApp: null });
+            // Resilience teardown alongside the PC close path.
+            this._clearIceGrace();
+            this._uninstallNetworkListeners();
             if (this._pc) { this._pc.close(); this._pc = null; }
             if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
             this._iceConnected = false;
@@ -1626,6 +1950,32 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     try { sub.onError(data.error as string); }
                     catch (e) { console.error('subscribeLogs onError threw:', e); }
                 }
+            }
+            return;
+        }
+        if (data.command === 'start_update') {
+            // Refusal ack (non-wireless robot, no update available, or one
+            // already running): the daemon never spawned the job, so surface
+            // it to `onProgress` as a terminal `failed` event - there will be
+            // no transport teardown to infer success from.
+            if (typeof data.error === 'string') {
+                const event: UpdateProgressEvent = { status: 'failed', error: data.error };
+                for (const cb of this._updateProgressSubscribers) {
+                    try { cb(event); }
+                    catch (e) { console.error('startDaemonUpdate onProgress threw:', e); }
+                }
+            }
+            return;
+        }
+        if (data.type === 'update_progress') {
+            const event: UpdateProgressEvent = {
+                status: data.status as UpdateProgressEvent['status'],
+                line: typeof data.line === 'string' ? data.line : undefined,
+                error: typeof data.error === 'string' ? data.error : undefined,
+            };
+            for (const cb of this._updateProgressSubscribers) {
+                try { cb(event); }
+                catch (e) { console.error('startDaemonUpdate onProgress threw:', e); }
             }
             return;
         }

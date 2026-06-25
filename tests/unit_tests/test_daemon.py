@@ -1,11 +1,12 @@
 import asyncio
+import re
 import threading
 
 import numpy as np
 import pytest
 import uvicorn
 
-from reachy_mini.daemon.app.main import Args, create_app
+from reachy_mini.daemon.app.main import CORS_ORIGIN_REGEX, Args, create_app
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.reachy_mini import ReachyMini
 
@@ -194,3 +195,27 @@ async def test_multi_robot_isolation() -> None:
         await daemon2.stop(goto_sleep_on_stop=False)
         await _stop_app_server(server1, thread1)
         await _stop_app_server(server2, thread2)
+
+
+def test_cors_origin_regex():
+    """Starlette fullmatches Origin against CORS_ORIGIN_REGEX (GHSA-p4cp-8gwf-3fgv)."""
+    pat = re.compile(CORS_ORIGIN_REGEX)
+    allowed = [
+        "http://localhost:3000",
+        "https://localhost",
+        "http://127.0.0.1:8000",
+        "tauri://localhost",
+        "https://tauri.localhost",
+        "capacitor://localhost",
+    ]
+    blocked = [
+        "http://evil.com",
+        "http://localhost.evil.com",
+        "https://reachy.tauri.localhost.evil.com",
+        "tauri://evil",
+        "capacitor://evil",
+    ]
+    for origin in allowed:
+        assert pat.fullmatch(origin), origin
+    for origin in blocked:
+        assert not pat.fullmatch(origin), origin

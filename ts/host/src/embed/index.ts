@@ -342,6 +342,11 @@ async function bootOnce(
   bridge.attachPageHide(sdk);
   pushAppState('live', null);
 
+  // 9. Start sampling our own WebRTC RTT and reporting it upstream so
+  //    a host shell that handed its session off to us (mobile app)
+  //    can show a true live latency instead of a frozen value.
+  startLiveLinkMonitor(sdk);
+
   return bridge.buildHandle<unknown>(sdk, live);
 }
 
@@ -652,6 +657,7 @@ function pushAppState(
   phase: AppPhase,
   connectingStep: AppConnectingStep | null,
   message: string | null = null,
+  rttMs: number | null = null,
 ): void {
   postToHost({
     source: PROTOCOL_SOURCE,
@@ -660,7 +666,99 @@ function pushAppState(
     phase,
     connectingStep,
     message,
+    rttMs,
   });
+}
+
+/* ─────────────────── Live link latency monitor ─────────────────── */
+
+/** Poll cadence for the live RTT sampler. Matches the host-side
+ *  `TransportMonitor` so the number updates at the same rhythm the
+ *  user is used to on the session screen. */
+const LINK_MONITOR_INTERVAL_MS = 1500;
+/** Rolling-min window: ~6 ticks ≈ 9 s of history, so a single Wi-Fi
+ *  jitter spike doesn't bounce the displayed latency. Mirrors the
+ *  host's `RTT_WINDOW_SIZE`. */
+const RTT_WINDOW_SIZE = 6;
+
+/**
+ * Sample the selected ICE candidate pair's `currentRoundTripTime`
+ * from a peer connection and return it in milliseconds, or `null`
+ * when no nominated pair exposes it yet (or the platform omits it,
+ * e.g. iOS WKWebView). Pure read of `getStats()` - same field the
+ * host's `TransportMonitor` reads.
+ */
+async function sampleRttMs(pc: RTCPeerConnection): Promise<number | null> {
+  try {
+    const stats = await pc.getStats();
+    let rtt: number | null = null;
+    stats.forEach((report) => {
+      const r = report as {
+        type: string;
+        selected?: boolean;
+        nominated?: boolean;
+        state?: string;
+        currentRoundTripTime?: number;
+      };
+      if (r.type !== 'candidate-pair') return;
+      const isSelected =
+        r.selected === true || (r.nominated === true && r.state === 'succeeded');
+      if (!isSelected) return;
+      if (typeof r.currentRoundTripTime === 'number') {
+        rtt = r.currentRoundTripTime * 1000;
+      }
+    });
+    return rtt;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Once the app is live, periodically sample the embed's OWN WebRTC
+ * RTT and re-emit `embed:app-state` (still `phase: 'live'`) carrying
+ * the rolling-min latency. This is what lets a host shell that has
+ * released its session to us (the mobile app) display a TRUE,
+ * up-to-date link latency: the host no longer holds a connection, so
+ * the iframe is the only place the candidate pair still exists.
+ *
+ * Self-stops on `sessionStopped` and `pagehide`. No-op (never emits)
+ * when the platform doesn't expose RTT, so the host keeps hiding the
+ * latency pill rather than showing a frozen value.
+ */
+function startLiveLinkMonitor(sdk: ReachyMiniInstance): void {
+  if (typeof window === 'undefined') return;
+  const pc = (sdk as unknown as { _pc?: RTCPeerConnection | null })._pc;
+  if (!pc) return;
+
+  const windowMs: number[] = [];
+  let stopped = false;
+
+  const tick = async (): Promise<void> => {
+    if (stopped) return;
+    const sample = await sampleRttMs(pc);
+    if (sample === null) return;
+    windowMs.push(sample);
+    if (windowMs.length > RTT_WINDOW_SIZE) windowMs.shift();
+    pushAppState('live', null, null, Math.min(...windowMs));
+  };
+
+  const interval = window.setInterval(() => void tick(), LINK_MONITOR_INTERVAL_MS);
+  // Kick a first sample shortly after going live (the pair is already
+  // nominated by the time `connectToHost()` resolves).
+  window.setTimeout(() => void tick(), 600);
+
+  const stop = (): void => {
+    if (stopped) return;
+    stopped = true;
+    window.clearInterval(interval);
+  };
+  try {
+    sdk.addEventListener('sessionStopped', stop);
+  } catch {
+    /* ignore - sampler will keep running until pagehide */
+  }
+  window.addEventListener('pagehide', stop, { once: true });
 }
 
 /**

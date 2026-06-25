@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "1.8.0rc1"
+version = "1.8.4"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
@@ -17,30 +17,28 @@ dependencies = [
     "jinja2",
     "uvicorn[standard]",
     "fastapi",
-    "python-multipart",
-    "starlette<1.0.0",                           #Fix: for starlette >= 1.0.0, we need to implement TemplateResponse(request, name, context)
+    "pydantic>=2.12.5,<3.0.0",
+    "python-multipart>=0.0.27",
+    "starlette<1.0.0", # TODO: update TemplateResponse(request, name, context) before allowing Starlette 1.x
     "pyserial",
-    "huggingface-hub==1.17.0",
+    "huggingface-hub>=1.17.0,<2.0.0",
     "reachy-mini-rust-kinematics>=1.0.3",
     "asgiref",
-    "aiohttp",
+    "aiohttp>=3.14.0",
     "log-throttling==0.0.3",
     "pyusb>=1.2.1",
     "libusb_package>=1.0.26.3",
-    "pip>=25",
+    "pip>=26.1",
     "rich",
     "questionary",
     "websockets>=12,<16",
     "toml",
     "rustypot>=1.4.2",
     "pyyaml>=6.0",
-    "requests>=2.28.0",
-    "zeroconf>=0.131,<1",
+    "requests>=2.33.0",
+    "zeroconf>=0.149.7,<1",
     "pycaw>=20240210; sys_platform == 'win32'",
     "pulsectl>=24.1.0; sys_platform == 'linux'",
-
-    "tornado>=6.5.5",   # fix security issue of this subdependency
-    "requests>=2.33.0", # fix security issue of this subdependency
 
     "gstreamer-bundle==1.28.3; sys_platform != 'linux'",
     # OS-specific: use PyGObject for Linux
@@ -57,11 +55,18 @@ examples = [
 ]
 mujoco = ["mujoco==3.3.0"]
 nn_kinematics = ["onnxruntime==1.22.1"]
-placo_kinematics = ["placo==0.9.14; sys_platform != 'win32'"]
+placo_kinematics = [
+    "placo==0.9.14; sys_platform != 'win32'",
+    "tornado>=6.5.5; sys_platform != 'win32'", # security floor for meshcat transitive dependency
+]
 rerun = ["rerun-sdk>=0.29.0,<=0.31.3"]
 wireless-version = [
     "semver>=3,<4",
     "nmcli>=1.5; sys_platform == 'linux'",
+    # Sealed BLE WiFi provisioning (wifi_config.py) does X25519 + HKDF +
+    # AES-GCM to keep the WiFi password off the air in cleartext. Was only
+    # present transitively before; declared here now that it's a direct import.
+    "cryptography>=42.0",
     "pollen_BMI088_imu_library; sys_platform == 'linux'",
     "gpiozero>=2.0.0; sys_platform == 'linux'",
     "lgpio>=0.2.2.0; sys_platform == 'linux'",
@@ -81,7 +86,7 @@ all = [
 
 [dependency-groups]
 dev = [
-    "pytest",
+    "pytest>=9.0.3",
     "pytest-asyncio",
     "ruff==0.12.0",
     "onshape-to-robot==1.7.6",
@@ -96,6 +101,12 @@ dev = [
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
 reachy-mini-app-assistant = "reachy_mini.apps.app:main"
 reachy-mini-reflash-motors = "reachy_mini.tools.reflash_motors:main"
+
+[tool.uv]
+exclude-newer = "7 days"
+
+[tool.uv.exclude-newer-package]
+"pollen_BMI088_imu_library"  = false
 
 [tool.setuptools]
 package-dir = { "" = "src" }

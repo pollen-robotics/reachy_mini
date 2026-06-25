@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Reachy Mini Host · dev harness</title>
+    <style>
+      html, body, #root { height: 100%; }
+      body { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Standalone dev harness for the host shell. This file exists
+      ONLY for `npm run dev` (vite dev server); it is never shipped
+      - the published package is the library build (`vite build`,
+      see vite.config.ts) which ignores this `index.html`.
+
+      `dev/main.ts` plays the role an app's `dispatch.ts` plays in
+      production: route the same origin between the host shell and a
+      minimal vanilla embed (the iframe). The host is self-contained
+      (bundles its own React + MUI), so no consuming app is needed.
+    -->
+    <div id="root"></div>
+    <script type="module" src="/dev/main.ts"></script>
+  </body>
+</html>

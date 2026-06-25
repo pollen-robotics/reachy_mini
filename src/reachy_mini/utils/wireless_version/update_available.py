@@ -47,7 +47,7 @@ def is_update_available(package_name: str, pre_release: bool) -> bool:
 def get_pypi_version(package_name: str, pre_release: bool) -> semver.Version:
     """Get the latest version of a package from PyPI."""
     url = f"https://pypi.org/pypi/{package_name}/json"
-    response = requests.get(url)
+    response = requests.get(url, timeout=5)
     response.raise_for_status()
     data = response.json()
 

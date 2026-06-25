@@ -39,6 +39,7 @@ from reachy_mini.daemon.utils import (
     SimulationMode,
     is_local_camera_available,
 )
+from reachy_mini.media.audio_base import AEC_CHANNELS, AEC_PROBE_NAME, AEC_RATE
 from reachy_mini.media.audio_control_utils import init_respeaker_usb
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.camera_constants import (
@@ -138,6 +139,25 @@ class GstMediaServer:
     # converts whatever the source produces down to this rate before delivery.
     WOBBLER_SAMPLE_RATE = 16_000
 
+    # Receive-side jitter buffer depth (ms) for the consumer `webrtcbin`,
+    # i.e. the phone->robot voice leg. Default webrtcbin latency (200ms)
+    # underruns on a jittery Wi-Fi link and the speaker stutters. We trade
+    # a little latency for a steady buffer, capped at 300ms because
+    # end-to-end latency is the metric we watch closest.
+    RX_JITTER_LATENCY_MS = 300
+
+    # Send-side Opus loss resilience for the robot mic -> phone leg (the
+    # audio that feeds the realtime backend / STT). webrtcsink builds the
+    # opusenc with defaults (inband-fec off, packet-loss-percentage 0), so
+    # a dropped mic packet on a jittery Wi-Fi link can only be concealed by
+    # the browser decoder, never reconstructed. We enable in-band FEC and
+    # tell the encoder to budget for this much loss so it ships redundancy.
+    TX_OPUS_FEC_LOSS_PERC = 20
+
+    # Name of the appsrc feeding the incoming-audio playback pipeline; used
+    # both when building the pipeline and when flushing it (clear_incoming_audio).
+    INCOMING_AUDIO_SRC_NAME = "audio_in"
+
     def __init__(
         self,
         log_level: str = "INFO",
@@ -217,6 +237,10 @@ class GstMediaServer:
         self._playbin: Optional[Gst.Element] = None
         self._head_wobbler: Optional[HeadWobbler] = None
         self._pipeline_playback: Optional[Gst.Pipeline] = None
+        # Software AEC: set in _configure_audio; the probe is created there and
+        # reused across per-peer playback pipelines (see _on_consumer_pad_added).
+        self._aec_enabled = False
+        self._webrtcechoprobe: Optional[Gst.Element] = None
 
         self._build_pipeline()
 
@@ -266,10 +290,45 @@ class GstMediaServer:
 
         webrtcsink.connect("consumer-added", self._consumer_added)
         webrtcsink.connect("consumer-removed", self._consumer_removed)
+        # Tune the auto-created Opus encoder for the mic->phone leg
+        # (in-band FEC). See `_encoder_setup` / `TX_OPUS_FEC_LOSS_PERC`.
+        webrtcsink.connect("encoder-setup", self._encoder_setup)
 
         pipeline.add(webrtcsink)
 
         return webrtcsink
+
+    def _encoder_setup(
+        self,
+        webrtcsink: Gst.Element,
+        consumer_id: str,
+        pad_name: str,
+        encoder: Gst.Element,
+    ) -> bool:
+        """Configure webrtcsink's auto-created encoder before it runs.
+
+        Fired by ``webrtcsink`` once per consumer encoder. We only touch
+        the Opus audio encoder (the robot mic uplink): enable in-band FEC
+        and budget for packet loss so the encoder ships redundancy that
+        the browser can use to reconstruct dropped mic packets instead of
+        merely concealing them. Returning ``False`` keeps webrtcsink's own
+        default configuration (notably its congestion-controlled bitrate),
+        which does not otherwise touch these two properties.
+        """
+        factory = encoder.get_factory()
+        factory_name = factory.get_name() if factory else ""
+        if factory_name == "opusenc":
+            if encoder.find_property("inband-fec") is not None:
+                encoder.set_property("inband-fec", True)
+            if encoder.find_property("packet-loss-percentage") is not None:
+                encoder.set_property(
+                    "packet-loss-percentage", self.TX_OPUS_FEC_LOSS_PERC
+                )
+            self._logger.info(
+                f"opusenc tuned for {consumer_id}: inband-fec=True, "
+                f"packet-loss-percentage={self.TX_OPUS_FEC_LOSS_PERC}"
+            )
+        return False
 
     def _consumer_added(
         self,
@@ -286,6 +345,13 @@ class GstMediaServer:
         GLib.timeout_add_seconds(5, self._dump_latency)
 
         self._setup_data_channel(peer_id, webrtcbin)
+
+        # Deepen this consumer's receive jitter buffer before media flows
+        # so transient Wi-Fi jitter on the phone->robot voice leg doesn't
+        # starve the speaker. Must be set on `webrtcbin` here, while it is
+        # still being negotiated, for the internal jitterbuffer to pick it
+        # up. See `RX_JITTER_LATENCY_MS`.
+        webrtcbin.set_property("latency", self.RX_JITTER_LATENCY_MS)
 
         # Make audio bidirectional before SDP offer is generated
         self._enable_audio_receive(webrtcbin)
@@ -387,13 +453,24 @@ class GstMediaServer:
         self._pipeline_playback.use_clock(sender_clock)
         self._pipeline_playback.set_start_time(Gst.CLOCK_TIME_NONE)
 
-        appsrc = Gst.ElementFactory.make("appsrc", "audio_in")
+        appsrc = Gst.ElementFactory.make("appsrc", self.INCOMING_AUDIO_SRC_NAME)
         appsrc.set_property("format", Gst.Format.TIME)
         appsrc.set_property("is-live", True)
         appsrc.set_property("caps", caps)
 
         rtpopusdepay = Gst.ElementFactory.make("rtpopusdepay")
         opusdec = Gst.ElementFactory.make("opusdec")
+        # Wi-Fi resilience on the phone->robot voice leg. The browser
+        # encoder emits Opus in-band FEC (a redundant copy of the
+        # previous frame piggybacked on the next packet) and ramps it
+        # with the loss it sees over RTCP; without these two properties
+        # the decoder silently ignores that redundancy and we glitch on
+        # every dropped packet. `use-inband-fec` reconstructs the lost
+        # frame from the next one (one packet of look-ahead, so the
+        # latency cost is ~one frame); `plc` conceals whatever FEC can't
+        # recover. This is the cheapest robustness win on this path.
+        opusdec.set_property("use-inband-fec", True)
+        opusdec.set_property("plc", True)
 
         audiosink = self._build_audiosink_element()
         if audiosink is None:
@@ -415,12 +492,26 @@ class GstMediaServer:
 
         appsink_wobbler = self._make_wobbler_appsink()
 
+        # Software AEC far-end reference: tap the speaker branch (what is
+        # physically played) with the shared echo probe. opusdec emits S16LE@48k,
+        # which the probe accepts, so no convert/resample is needed. The probe
+        # is reused across peers, so detach it from any previous pipeline first.
+        # Caveat: there is one probe (webrtcdsp binds a single far-end), so with
+        # several peers streaming at once AEC only references the most recently
+        # connected one. Fine for the usual single-conversation case.
+        webrtcechoprobe = self._webrtcechoprobe if self._aec_enabled else None
+        if webrtcechoprobe is not None:
+            old_parent = webrtcechoprobe.get_parent()
+            if old_parent is not None:
+                old_parent.remove(webrtcechoprobe)
+
         for elem in [
             appsrc,
             rtpopusdepay,
             opusdec,
             tee,
             queue_speaker,
+            *([webrtcechoprobe] if webrtcechoprobe is not None else []),
             ac_speaker,
             ar_speaker,
             audiosink,
@@ -434,7 +525,11 @@ class GstMediaServer:
         rtpopusdepay.link(opusdec)
         opusdec.link(tee)
         tee.link(queue_speaker)
-        queue_speaker.link(ac_speaker)
+        if webrtcechoprobe is not None:
+            queue_speaker.link(webrtcechoprobe)
+            webrtcechoprobe.link(ac_speaker)
+        else:
+            queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
         ar_speaker.link(audiosink)
         tee.link(queue_wobbler)
@@ -498,7 +593,39 @@ class GstMediaServer:
         playback_pipe = info.get("playback_pipeline")
         if playback_pipe is not None:
             playback_pipe.set_state(Gst.State.NULL)
+            # Rescue the shared echo probe so it survives for the next peer.
+            if (
+                self._webrtcechoprobe is not None
+                and self._webrtcechoprobe.get_parent() is playback_pipe
+            ):
+                playback_pipe.remove(self._webrtcechoprobe)
         self._logger.info(f"Cleaned up incoming audio for peer {peer_id}")
+
+    def clear_incoming_audio(self) -> None:
+        """Flush queued/rendering audio in the incoming-audio playback pipeline.
+
+        Used for barge-in: drops audio already received from a WebRTC client
+        and queued for the robot's speaker so the robot stops speaking promptly.
+
+        The playback pipeline shares the sender clock + base-time, so incoming
+        buffer PTS live in that shared running-time; we flush with
+        ``reset_time=False`` to keep the timeline intact (``reset_time=True``
+        would strand future-stamped buffers and stall playback). The pad probe
+        keeps pushing new RTP buffers into the appsrc, which resume in sync.
+        """
+        pipeline = self._pipeline_playback
+        if pipeline is None:
+            self._logger.info("No incoming-audio pipeline to clear.")
+            return
+        appsrc = pipeline.get_by_name(self.INCOMING_AUDIO_SRC_NAME)
+        if appsrc is None:
+            self._logger.warning("Incoming-audio appsrc not found; nothing to flush.")
+            return
+        appsrc.send_event(Gst.Event.new_flush_start())
+        appsrc.send_event(Gst.Event.new_flush_stop(reset_time=False))
+        if self._head_wobbler is not None:
+            self._head_wobbler.reset()
+        self._logger.info("Flushed incoming audio playback")
 
     @property
     def resolution(self) -> tuple[int, int]:
@@ -933,8 +1060,70 @@ class GstMediaServer:
         queue = Gst.ElementFactory.make("queue", "queue_audiosrc")
         pipeline.add(audiosrc)
         pipeline.add(queue)
-        audiosrc.link(queue)
+
+        # Software AEC on the autoaudiosrc fallback (no Reachy Mini card → no
+        # XMOS hardware AEC). webrtcdsp subtracts the far-end reference captured
+        # by the paired webrtcechoprobe from the mic signal. The probe must
+        # exist before webrtcdsp starts, so create it here; both elements are
+        # needed, so disable AEC if either is unavailable.
+        self._aec_enabled = False
+        webrtcdsp = None
+        if factory_name == "autoaudiosrc":
+            if self._webrtcechoprobe is None:
+                self._webrtcechoprobe = Gst.ElementFactory.make("webrtcechoprobe")
+                if self._webrtcechoprobe is not None:
+                    self._webrtcechoprobe.set_property("name", AEC_PROBE_NAME)
+            if self._webrtcechoprobe is not None:
+                webrtcdsp = Gst.ElementFactory.make("webrtcdsp")
+            if webrtcdsp is None:
+                self._logger.warning(
+                    "webrtcdsp/webrtcechoprobe unavailable; "
+                    "software echo cancellation disabled."
+                )
+
+        if webrtcdsp is not None:
+            self._aec_enabled = True
+            webrtcdsp.set_property("probe", AEC_PROBE_NAME)
+            # webrtcdsp requires S16LE at 8/16/32/48 kHz.
+            chain = self._make_aec_caps_chain()
+            for el in (*chain, webrtcdsp):
+                pipeline.add(el)
+            audiosrc.link(chain[0])
+            for upstream, downstream in zip(chain, chain[1:]):
+                upstream.link(downstream)
+            chain[-1].link(webrtcdsp)
+            webrtcdsp.link(queue)
+            self._logger.info("No hardware AEC; enabled software echo cancellation.")
+        else:
+            audiosrc.link(queue)
+
+        # Link into webrtcsink last, once the full upstream chain exists, so its
+        # request pad / stream discovery sees a fully-linked input.
         queue.link(webrtcsink)
+
+    def _make_aec_caps_chain(self) -> list[Gst.Element]:
+        """Build the convert/resample/caps chain feeding an AEC element.
+
+        ``webrtcdsp`` and ``webrtcechoprobe`` only accept S16LE at
+        8/16/32/48 kHz, so each is fronted by
+        ``audioconvert → audioresample → capsfilter(S16LE @ AEC_RATE)``.
+
+        Returns:
+            The three elements in link order; the caller adds them to its
+            pipeline and links the last one into the AEC element.
+
+        """
+        audioconvert = Gst.ElementFactory.make("audioconvert")
+        audioresample = Gst.ElementFactory.make("audioresample")
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        capsfilter.set_property(
+            "caps",
+            Gst.Caps.from_string(
+                f"audio/x-raw,format=S16LE,rate={AEC_RATE},"
+                f"channels={AEC_CHANNELS},layout=interleaved"
+            ),
+        )
+        return [audioconvert, audioresample, capsfilter]
 
     def _build_audio_source(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio source element.
@@ -1552,7 +1741,7 @@ class GstMediaServer:
     def _on_data_channel_message(
         self, channel: Gst.Element, message: str, peer_id: str
     ) -> None:
-        self._logger.info(f"Data channel message from peer {peer_id}: {message}")
+        self._logger.debug(f"Data channel message from peer {peer_id}: {message}")
         if self._on_data_message:
             self._on_data_message(peer_id, message)
 
