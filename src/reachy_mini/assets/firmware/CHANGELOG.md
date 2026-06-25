@@ -1,5 +1,8 @@
 # Changelog of Reachy Mini Audio Firmware
 
+## 2.1.4
+
+Adds +6dB gain on the audio input.
 
 ## 2.1.3
 
