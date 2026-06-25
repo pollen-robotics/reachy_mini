@@ -1,1 +1,1 @@
-{"id":"d6bfddbc3273dadd69b74aa36c28b7a9","fullName":"tests.unit_tests.test_device_detection.TestFindAudioDevice#test_windows_sink","name":"test_windows_sink","status":"passed","testResultsByEnv":{"default":"cc72443d98d765af4ea85b39a2420a78"}}
+{"id":"d6bfddbc3273dadd69b74aa36c28b7a9","fullName":"tests.unit_tests.test_device_detection.TestFindAudioDevice#test_windows_sink","name":"test_windows_sink","status":"passed","testResultsByEnv":{"default":"069958a95c5f61f1ffa02a5f072b4c72"}}

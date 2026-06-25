@@ -1,1 +1,1 @@
-{"id":"d7caa70c65ba937cab7e8115032b85bd","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_check_daemon_unreachable","name":"test_update_check_daemon_unreachable","status":"passed","testResultsByEnv":{"default":"63f3e487ecdd86ab7be2514ec6ab88f7"}}
+{"id":"d7caa70c65ba937cab7e8115032b85bd","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_check_daemon_unreachable","name":"test_update_check_daemon_unreachable","status":"passed","testResultsByEnv":{"default":"c639ecd1546c1c3b9a0d57403e686430"}}

@@ -1,1 +1,1 @@
-{"id":"0abb9f8be82e5efc33156c91ee30f3a9","fullName":"tests.unit_tests.test_no_token_in_urls#test_no_token_in_urls","name":"test_no_token_in_urls[src/reachy_mini/daemon/app/routers/hf_auth.py]","status":"passed","testResultsByEnv":{"default":"5ab3294fe7af4a2ddd357ec52f73ff81"}}
+{"id":"0abb9f8be82e5efc33156c91ee30f3a9","fullName":"tests.unit_tests.test_no_token_in_urls#test_no_token_in_urls","name":"test_no_token_in_urls[ts/lib/url-helpers.ts]","status":"passed","testResultsByEnv":{"default":"b5e4e70ae24a7af2953e68a98b57dc2b"}}
