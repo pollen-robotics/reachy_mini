@@ -149,7 +149,7 @@ async def ws_full_state(
     period = 1.0 / frequency
 
     try:
-        while True:
+        while backend.ready.is_set():
             full_state = await get_full_state(
                 with_head_pose=with_head_pose,
                 with_target_head_pose=with_target_head_pose,
