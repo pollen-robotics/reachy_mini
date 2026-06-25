@@ -2,45 +2,25 @@
   "stats": {
     "total": 250,
     "passed": 247,
-    "new": 3,
     "skipped": 3
   },
   "status": "passed",
-  "newTests": [
-    {
-      "id": "9605f2c43087f0b3d66874ab10c01885",
-      "name": "test_yaw_as_scalar_routes_through_front_not_back",
-      "status": "passed",
-      "duration": 47
-    },
-    {
-      "id": "7e64656874841948100563f17aa4ae38",
-      "name": "test_yaw_as_scalar_endpoints_exact",
-      "status": "passed",
-      "duration": 2
-    },
-    {
-      "id": "bb945aa3cbbaee1006984b41e05375ad",
-      "name": "test_yaw_as_scalar_matches_slerp_without_back_crossing",
-      "status": "passed",
-      "duration": 24
-    }
-  ],
+  "newTests": [],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
   "duration": 36168,
-  "createdAt": 1782378681039,
+  "createdAt": 1782382581021,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "63698150-14f3-4c0d-96be-d2cdb1673616",
+    "reportId": "5c0798ee-0d98-4f99-b5aa-ed1a8713426a",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/28159512769",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/28163089351",
   "href": "awesome/",
   "coverage": 32
 }
