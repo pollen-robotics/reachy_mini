@@ -26,12 +26,14 @@ import logging
 import os
 import platform
 import time
+import typing
 from dataclasses import dataclass, field
-from threading import Lock, Thread
+from threading import Event, Lock, Thread
 from typing import Any, Callable, Dict, Optional
 
 import gi
 import numpy as np
+import numpy.typing as npt
 
 from reachy_mini.daemon.utils import (
     CAMERA_PIPE_NAME,
@@ -48,6 +50,7 @@ from reachy_mini.media.camera_constants import (
     MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
+from reachy_mini.media.camera_utils import scale_intrinsics
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
 from reachy_mini.media.gstreamer_utils import handle_default_bus_message
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
@@ -81,6 +84,32 @@ ICE_NEGOTIATION_DEADLINE_S = 12
 # wire-level emission.
 SESSION_FAILED_REASON_ICE_TIMEOUT = "ice_negotiation_timeout"
 SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
+
+TRACKER_WIDTH = 640
+TRACKER_HEIGHT = 480
+TRACKER_FPS = 15
+
+HeadTrackingCallback = Callable[
+    [
+        npt.NDArray[np.float64] | None,
+        float | None,
+        int,
+        int,
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+        float,
+    ],
+    None,
+]
+
+
+class _HeadTracker(typing.Protocol):
+    def get_head_position(
+        self,
+        img: npt.NDArray[np.uint8],
+    ) -> tuple[npt.NDArray[np.float64], float] | tuple[None, None]: ...
+
+    def close(self) -> None: ...
 
 
 @dataclass
@@ -208,6 +237,10 @@ class GstMediaServer:
         if self._resolution is None:
             raise RuntimeError("Failed to get default camera resolution.")
 
+        self._tracking_K = self._scaled_intrinsics_for_size(
+            (TRACKER_WIDTH, TRACKER_HEIGHT)
+        )
+
         self._cam_path = cam_path
 
         self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
@@ -237,6 +270,14 @@ class GstMediaServer:
         self._playbin: Optional[Gst.Element] = None
         self._head_wobbler: Optional[HeadWobbler] = None
         self._pipeline_playback: Optional[Gst.Pipeline] = None
+        self._tracking_valve: Optional[Gst.Element] = None
+        self._tracking_appsink: Optional[Gst.Element] = None
+        self._tracking_thread: Optional[Thread] = None
+        self._tracking_stop = Event()
+        self._tracking_callback: Optional[HeadTrackingCallback] = None
+        self._tracking_lock = Lock()
+        self._head_tracker: _HeadTracker | None = None
+        self._last_tracking_error_log = 0.0
         # Software AEC: set in _configure_audio; the probe is created there and
         # reused across per-peer playback pipelines (see _on_consumer_pad_added).
         self._aec_enabled = False
@@ -244,8 +285,41 @@ class GstMediaServer:
 
         self._build_pipeline()
 
+    def _scaled_intrinsics_for_size(
+        self,
+        target_size: tuple[int, int],
+    ) -> npt.NDArray[np.float64]:
+        """Return intrinsics scaled to a downstream video branch size."""
+        source_size = self.resolution
+        crop_scale = self._resolution.value[3]
+        source_k = self.camera_specs.K
+
+        if (
+            crop_scale != 1.0
+            or source_k[0, 2] > source_size[0]
+            or source_k[1, 2] > source_size[1]
+        ):
+            source_k = scale_intrinsics(
+                source_k,
+                original_size=(3840, 2592),
+                target_size=source_size,
+                crop_scale=crop_scale,
+            )
+
+        if target_size == source_size:
+            return source_k.copy()
+
+        return scale_intrinsics(
+            source_k,
+            original_size=source_size,
+            target_size=target_size,
+            crop_scale=1.0,
+        )
+
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
+        self._tracking_valve = None
+        self._tracking_appsink = None
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
         self._bus_sender = self._pipeline_sender.get_bus()
         self._bus_sender.add_watch(
@@ -262,6 +336,7 @@ class GstMediaServer:
     def close(self) -> None:
         """Release GStreamer resources (MainLoop, bus watch)."""
         self._logger.debug("Cleaning up GstMediaServer")
+        self.disable_tracking()
         self._loop.quit()
         self._bus_sender.remove_watch()
 
@@ -646,6 +721,7 @@ class GstMediaServer:
 
             camera_source → [optional decode/convert] → tee
                 ├─ IPC branch  (unixfdsink on Linux/macOS, win32ipcvideosink on Windows)
+                ├─ Tracking branch (gated RGB appsink, off until enabled)
                 └─ WebRTC branch:
                      RPi (imx708): v4l2h264enc → capsfilter_h264 → webrtcsink
                      Others:       raw video → webrtcsink (encodes internally)
@@ -729,6 +805,9 @@ class GstMediaServer:
 
         # IPC branch: share camera with local applications
         self._build_ipc_branch(tee, pipeline, is_rpi=is_rpi)
+
+        # Head-tracking branch: gated by a valve and consumed from a thread
+        self._build_tracking_branch(tee, pipeline)
 
         # WebRTC branch
         queue_webrtc = Gst.ElementFactory.make("queue", "queue_webrtc")
@@ -981,6 +1060,64 @@ class GstMediaServer:
             videoconvert_ipc.link(capsfilter_ipc)
             capsfilter_ipc.link(ipc_sink)
 
+    def _build_tracking_branch(self, tee: Gst.Element, pipeline: Gst.Pipeline) -> None:
+        """Build the gated video branch consumed by daemon-side head tracking."""
+        queue = Gst.ElementFactory.make("queue", "queue_tracking")
+        valve = Gst.ElementFactory.make("valve", "tracking_valve")
+        videorate = Gst.ElementFactory.make("videorate", "tracking_videorate")
+        videoscale = Gst.ElementFactory.make("videoscale", "tracking_videoscale")
+        videoconvert = Gst.ElementFactory.make("videoconvert", "tracking_videoconvert")
+        capsfilter = Gst.ElementFactory.make("capsfilter", "tracking_capsfilter")
+        appsink = Gst.ElementFactory.make("appsink", "tracking_appsink")
+
+        elements = [
+            queue,
+            valve,
+            videorate,
+            videoscale,
+            videoconvert,
+            capsfilter,
+            appsink,
+        ]
+        if not all(elements):
+            return
+
+        assert queue is not None
+        assert valve is not None
+        assert capsfilter is not None
+        assert appsink is not None
+
+        queue.set_property("leaky", 2)
+        queue.set_property("max-size-buffers", 1)
+        queue.set_property("max-size-bytes", 0)
+        queue.set_property("max-size-time", 0)
+        valve.set_property("drop", True)
+
+        caps = Gst.Caps.from_string(
+            f"video/x-raw,format=RGB,width={TRACKER_WIDTH},"
+            f"height={TRACKER_HEIGHT},framerate={TRACKER_FPS}/1"
+        )
+        capsfilter.set_property("caps", caps)
+        appsink.set_property("drop", True)
+        appsink.set_property("max-buffers", 1)
+        appsink.set_property("sync", False)
+        appsink.set_property("emit-signals", False)
+
+        for elem in elements:
+            assert elem is not None
+            pipeline.add(elem)
+
+        tee.link(queue)
+        queue.link(valve)
+        valve.link(videorate)
+        videorate.link(videoscale)
+        videoscale.link(videoconvert)
+        videoconvert.link(capsfilter)
+        capsfilter.link(appsink)
+
+        self._tracking_valve = valve
+        self._tracking_appsink = appsink
+
     def _build_rpi_encoder_branch(
         self,
         queue_webrtc: Gst.Element,
@@ -1199,6 +1336,7 @@ class GstMediaServer:
         Rebuilding ensures a clean state after stop() released all hardware.
         """
         self._logger.debug("Starting WebRTC (rebuilding pipeline)")
+        self.disable_tracking()
         self._build_pipeline()
         self._pipeline_sender.set_state(Gst.State.PLAYING)
         GLib.timeout_add_seconds(5, self._dump_latency)
@@ -1206,6 +1344,7 @@ class GstMediaServer:
     def stop(self) -> None:
         """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
+        self.disable_tracking()
         self._pipeline_sender.set_state(Gst.State.NULL)
 
     def play_sound(self, sound_file: str) -> None:
@@ -1415,6 +1554,149 @@ class GstMediaServer:
             self._head_wobbler.stop()
             self._head_wobbler = None
             self._logger.info("Head wobbler disabled (daemon-side)")
+
+    def enable_tracking(self, callback: HeadTrackingCallback) -> bool:
+        """Enable daemon-side visual head tracking.
+
+        Args:
+            callback: Called from the tracker thread with face observations
+                in the tracker branch's RGB frame.
+
+        Returns:
+            True when the tracker thread started, False when tracking is
+            unavailable (no video branch or missing optional vision extra).
+
+        """
+        if self._tracking_appsink is None or self._tracking_valve is None:
+            self._logger.warning("Head tracking unavailable: video branch not ready.")
+            return False
+
+        try:
+            from reachy_mini.vision.head_tracker import HeadTracker
+        except ImportError as e:
+            self._logger.warning("Head tracking unavailable: %s", e)
+            return False
+
+        with self._tracking_lock:
+            if self._tracking_thread is not None and self._tracking_thread.is_alive():
+                self._tracking_callback = callback
+                self._tracking_valve.set_property("drop", False)
+                return True
+
+            try:
+                self._head_tracker = HeadTracker()
+            except Exception as e:
+                self._logger.warning("Head tracker initialization failed: %s", e)
+                return False
+
+            self._tracking_callback = callback
+            self._tracking_stop.clear()
+            self._tracking_valve.set_property("drop", False)
+            self._tracking_thread = Thread(
+                target=self._tracking_loop,
+                daemon=True,
+                name="reachymini-head-tracking",
+            )
+            self._tracking_thread.start()
+
+        self._logger.info("Head tracking enabled (daemon-side)")
+        return True
+
+    def disable_tracking(self) -> None:
+        """Disable daemon-side visual head tracking."""
+        try:
+            tracking_lock = self._tracking_lock
+        except AttributeError:
+            return
+
+        with tracking_lock:
+            thread = self._tracking_thread
+            self._tracking_stop.set()
+            self._tracking_callback = None
+            if self._tracking_valve is not None:
+                self._tracking_valve.set_property("drop", True)
+
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=1.0)
+
+        with self._tracking_lock:
+            self._tracking_thread = None
+            tracker = self._head_tracker
+            self._head_tracker = None
+
+        if tracker is not None:
+            tracker.close()
+
+        if thread is not None:
+            self._logger.info("Head tracking disabled (daemon-side)")
+
+    def _tracking_loop(self) -> None:
+        """Pull RGB frames from the tracking appsink and run face detection."""
+        appsink = self._tracking_appsink
+        if appsink is None:
+            return
+
+        while not self._tracking_stop.is_set():
+            sample = appsink.emit("try-pull-sample", 200_000_000)
+            if sample is None:
+                continue
+
+            frame = self._rgb_frame_from_sample(sample)
+            if frame is None:
+                continue
+
+            timestamp = time.monotonic()
+            with self._tracking_lock:
+                tracker = self._head_tracker
+                callback = self._tracking_callback
+
+            if tracker is None or callback is None:
+                continue
+
+            try:
+                eye_center, roll = tracker.get_head_position(frame)
+            except Exception as e:
+                now = time.monotonic()
+                if now - self._last_tracking_error_log > 2.0:
+                    self._logger.warning("Head tracker detection failed: %s", e)
+                    self._last_tracking_error_log = now
+                continue
+
+            height, width = frame.shape[:2]
+            callback(
+                eye_center,
+                roll,
+                width,
+                height,
+                self._tracking_K,
+                self.camera_specs.D,
+                timestamp,
+            )
+
+    def _rgb_frame_from_sample(
+        self, sample: Gst.Sample
+    ) -> npt.NDArray[np.uint8] | None:
+        """Convert a GStreamer RGB sample to a NumPy array."""
+        caps = sample.get_caps()
+        if caps is None or caps.get_size() == 0:
+            return None
+        structure = caps.get_structure(0)
+        width = int(structure.get_value("width"))
+        height = int(structure.get_value("height"))
+        buf = sample.get_buffer()
+        if buf is None:
+            return None
+        data = buf.extract_dup(0, buf.get_size())
+        try:
+            return np.frombuffer(data, dtype=np.uint8).reshape((height, width, 3))
+        except ValueError:
+            self._logger.warning(
+                "Unexpected head-tracking frame size: got %d bytes for %dx%d RGB",
+                len(data),
+                width,
+                height,
+            )
+            return None
 
     def set_message_handler(
         self,

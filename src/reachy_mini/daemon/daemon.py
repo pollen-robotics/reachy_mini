@@ -667,6 +667,7 @@ class Daemon:
         """Get the current status of the Reachy Mini daemon."""
         if self.backend is not None:
             self._status.backend_status = self.backend.get_status()
+            self._status.face_target = self.backend.get_tracked_face()
 
             assert self._status.backend_status is not None, (
                 "Backend status should not be None after backend initialization."

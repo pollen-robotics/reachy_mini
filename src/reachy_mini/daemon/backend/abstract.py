@@ -31,10 +31,12 @@ from reachy_mini.io.protocol import (
     CancelAudioCmd,
     CancelMoveCmd,
     ClearIncomingAudioCmd,
+    FaceTarget,
     GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
     GetStateCmd,
+    GetTrackedFaceCmd,
     GetVersionCmd,
     GetVolumeCmd,
     GotoSleepCmd,
@@ -57,6 +59,7 @@ from reachy_mini.io.protocol import (
     SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
+    SetHeadTrackingCmd,
     SetMicrophoneVolumeCmd,
     SetMotorModeCmd,
     SetSpeechOffsetsCmd,
@@ -92,7 +95,12 @@ from reachy_mini.utils.interpolation import (
     InterpolationTechnique,
     compose_world_offset,
     distance_between_poses,
+    linear_pose_interpolation,
     time_trajectory,
+)
+from reachy_mini.vision.look_at import (
+    default_head_to_camera_transform,
+    look_at_image_pose,
 )
 
 
@@ -298,6 +306,15 @@ class Backend:
         self._speech_offsets: tuple[float, float, float, float, float, float] = (
             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         )
+        self._tracking_enabled = False
+        self._tracking_requested_weight = 1.0
+        self._tracking_weight = 0.0
+        self._tracking_loss_started_at: float | None = None
+        self._tracking_loss_start_weight = 0.0
+        self._tracking_decay_s = 0.3
+        self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
+        self._face_target = FaceTarget()
+        self.T_head_cam = default_head_to_camera_transform()
 
         # WebRTC support
         self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
@@ -448,6 +465,10 @@ class Backend:
         if body_yaw is None:
             body_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
 
+        if self._tracking_aim is not None and self._tracking_weight > 0.0:
+            weight = min(max(self._tracking_weight, 0.0), 1.0)
+            pose = linear_pose_interpolation(pose, self._tracking_aim, weight)
+
         # Compose speech wobbler offsets (if any) before IK
         if any(o != 0.0 for o in self._speech_offsets):
             x_m, y_m, z_m, roll_r, pitch_r, yaw_r = self._speech_offsets
@@ -548,6 +569,109 @@ class Backend:
         """
         self._speech_offsets = offsets
         self.ik_required = True
+
+    def enable_head_tracking(self, weight: float = 1.0) -> bool:
+        """Enable daemon-side visual head tracking."""
+        self._tracking_requested_weight = min(max(float(weight), 0.0), 1.0)
+        self._tracking_enabled = True
+        if self._media_server is None:
+            self.logger.warning("Cannot enable head tracking: media server unavailable")
+            self._tracking_enabled = False
+            return False
+        enabled = self._media_server.enable_tracking(self.set_tracking_face)
+        if not enabled:
+            self._tracking_enabled = False
+            self.clear_tracking_aim()
+        return bool(enabled)
+
+    def disable_head_tracking(self) -> None:
+        """Disable daemon-side visual head tracking and clear its aim."""
+        self._tracking_enabled = False
+        if self._media_server is not None:
+            self._media_server.disable_tracking()
+        self.clear_tracking_aim()
+
+    def clear_tracking_aim(self) -> None:
+        """Clear the tracking aim and latest detected face."""
+        self._tracking_aim = None
+        self._tracking_weight = 0.0
+        self._tracking_loss_started_at = None
+        self._tracking_loss_start_weight = 0.0
+        self._face_target = FaceTarget()
+        self.ik_required = True
+
+    def set_tracking_face(
+        self,
+        eye_center: NDArray[np.float64] | None,
+        roll: float | None,
+        width: int,
+        height: int,
+        camera_matrix: NDArray[np.float64],
+        distortion: NDArray[np.float64],
+        timestamp: float,
+    ) -> None:
+        """Update tracking aim from a face observation in tracker-frame pixels."""
+        if not self._tracking_enabled:
+            return
+
+        if eye_center is None:
+            self._update_tracking_face_lost(timestamp)
+            return
+
+        x_norm = float(eye_center[0])
+        y_norm = float(eye_center[1])
+        u = (x_norm + 1.0) * 0.5 * max(width - 1, 1)
+        v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)
+
+        try:
+            aim = look_at_image_pose(
+                u=u,
+                v=v,
+                K=camera_matrix,
+                D=distortion,
+                T_world_head=self.get_current_head_pose(),
+                T_head_cam=self.T_head_cam,
+            )
+        except Exception as e:
+            self.logger.warning("Head-tracking aim update failed: %s", e)
+            return
+
+        self._tracking_aim = aim
+        self._tracking_weight = self._tracking_requested_weight
+        self._tracking_loss_started_at = None
+        self._tracking_loss_start_weight = 0.0
+        self._face_target = FaceTarget(
+            detected=True,
+            x=x_norm,
+            y=y_norm,
+            roll=roll,
+            ts=timestamp,
+        )
+        self.ik_required = True
+
+    def _update_tracking_face_lost(self, timestamp: float) -> None:
+        """Decay tracking influence when the detector temporarily loses the face."""
+        if self._tracking_loss_started_at is None:
+            self._tracking_loss_started_at = timestamp
+            self._tracking_loss_start_weight = self._tracking_weight
+
+        elapsed = max(0.0, timestamp - self._tracking_loss_started_at)
+        if self._tracking_decay_s <= 0.0:
+            self._tracking_weight = 0.0
+        else:
+            remaining = max(0.0, 1.0 - elapsed / self._tracking_decay_s)
+            self._tracking_weight = self._tracking_loss_start_weight * remaining
+
+        if self._tracking_weight <= 0.0:
+            self._tracking_weight = 0.0
+            self._tracking_aim = None
+
+        self._face_target = FaceTarget(detected=False, ts=timestamp)
+        self.ik_required = True
+
+    def get_tracked_face(self) -> FaceTarget:
+        """Return the latest face target observed by daemon-side tracking."""
+        return self._face_target
 
     def set_target_head_joint_current(
         self,
@@ -983,10 +1107,12 @@ class Backend:
             - If we are close to the initial position, we move directly to the sleep position.
         """
         # Stop head wobbling so leftover speech offsets don't fight the
-        # sleep pose during the goto.
+        # sleep pose during the goto. Head tracking is also a primary
+        # aim source, so it must be disabled before moving to sleep.
         if self._media_server is not None:
             self._media_server.disable_wobbling()
         self.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+        self.disable_head_tracking()
 
         # Magic units
         _, _, dist_to_sleep_pose = distance_between_poses(
@@ -1191,6 +1317,34 @@ class Backend:
                     self.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
             send_response({"status": "ok", "command": "set_wobbling"})
 
+        elif isinstance(cmd, SetHeadTrackingCmd):
+            if cmd.enabled:
+                enabled = self.enable_head_tracking(weight=cmd.weight)
+                send_response(
+                    {
+                        "status": "ok" if enabled else "unavailable",
+                        "command": "set_head_tracking",
+                        "enabled": enabled,
+                    }
+                )
+            else:
+                self.disable_head_tracking()
+                send_response(
+                    {
+                        "status": "ok",
+                        "command": "set_head_tracking",
+                        "enabled": False,
+                    }
+                )
+
+        elif isinstance(cmd, GetTrackedFaceCmd):
+            send_response(
+                {
+                    "command": "get_tracked_face",
+                    "face_target": self.get_tracked_face().model_dump(),
+                }
+            )
+
         elif isinstance(cmd, SetMotorModeCmd):
             self.set_motor_control_mode(MotorControlMode(cmd.mode))
             send_response({"motor_mode": cmd.mode, "status": "ok"})
@@ -1234,6 +1388,7 @@ class Backend:
                 "motor_mode": self.get_motor_control_mode().value,
                 "is_recording": self.is_recording,
                 "is_move_running": self.is_move_running,
+                "face_target": self.get_tracked_face().model_dump(),
             }
             send_response({"state": state})
 

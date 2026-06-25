@@ -13,7 +13,8 @@ Client->Server command types:
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
     play_uploaded_move, cancel_move,
     play_uploaded_audio, cancel_audio, clear_incoming_audio,
-    apply_audio_config, read_audio_parameter
+    apply_audio_config, read_audio_parameter,
+    set_speech_offsets, set_wobbling, set_head_tracking, get_tracked_face
 
 Server->Client message types:
     joint_positions, head_pose, imu_data, recorded_data,
@@ -83,6 +84,16 @@ class MockupSimBackendStatus(BaseModel):
     error: str | None = None
 
 
+class FaceTarget(BaseModel):
+    """Latest daemon-side face target used for head tracking."""
+
+    detected: bool = False
+    x: float | None = None
+    y: float | None = None
+    roll: float | None = None
+    ts: float | None = None
+
+
 class DaemonStatus(BaseModel):
     """Status of the Reachy Mini daemon."""
 
@@ -103,6 +114,7 @@ class DaemonStatus(BaseModel):
     wlan_ip: Optional[str] = None
     version: Optional[str] = None
     hardware_id: Optional[str] = None
+    face_target: FaceTarget = Field(default_factory=FaceTarget)
 
 
 # ------------------------------------------------------------------
@@ -281,6 +293,7 @@ class GetMicrophoneVolumeCmd(BaseModel):
 
     type: Literal["get_microphone_volume"] = "get_microphone_volume"
 
+
 class SetSpeechOffsetsCmd(BaseModel):
     """Set head-wobbler speech offsets (composed with target pose before IK)."""
 
@@ -293,6 +306,21 @@ class SetWobblingCmd(BaseModel):
 
     type: Literal["set_wobbling"] = "set_wobbling"
     enabled: bool
+
+
+class SetHeadTrackingCmd(BaseModel):
+    """Enable or disable daemon-side visual head tracking."""
+
+    type: Literal["set_head_tracking"] = "set_head_tracking"
+    enabled: bool
+    weight: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class GetTrackedFaceCmd(BaseModel):
+    """Query the latest face seen by daemon-side head tracking."""
+
+    type: Literal["get_tracked_face"] = "get_tracked_face"
+
 
 # ------------------------------------------------------------------
 # Daemon log streaming over the DataChannel.
@@ -719,6 +747,8 @@ AnyCommand = Annotated[
     | AppendRecordCmd
     | SetSpeechOffsetsCmd
     | SetWobblingCmd
+    | SetHeadTrackingCmd
+    | GetTrackedFaceCmd
     | SetVolumeCmd
     | GetVolumeCmd
     | SetMicrophoneVolumeCmd
