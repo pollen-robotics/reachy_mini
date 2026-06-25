@@ -56,19 +56,39 @@ def minimum_jerk(
 
 
 def linear_pose_interpolation(
-    start_pose: npt.NDArray[np.float64], target_pose: npt.NDArray[np.float64], t: float
+    start_pose: npt.NDArray[np.float64],
+    target_pose: npt.NDArray[np.float64],
+    t: float,
+    yaw_as_scalar: bool = False,
 ) -> npt.NDArray[np.float64]:
-    """Linearly interpolate between two poses in 6D space."""
+    """Linearly interpolate between two poses in 6D space.
+
+    Use `yaw_as_scalar` to interpolate yaw as a signed scalar Euler angle instead of along the SO(3) geodesic.
+    This keeps the path through the front rather than taking the shortest 3D rotation through +-180° (the back).
+    """
     # Extract rotations
     rot_start = R.from_matrix(start_pose[:3, :3])
     rot_end = R.from_matrix(target_pose[:3, :3])
 
-    # Compute relative rotation q_rel such that rot_start * q_rel = rot_end
-    q_rel = rot_start.inv() * rot_end
-    # Convert to rotation vector (axis-angle)
-    rotvec_rel = q_rel.as_rotvec()
-    # Scale the rotation vector by t (allows t<0 or >1 for overshoot)
-    rot_interp = (rot_start * R.from_rotvec(rotvec_rel * t)).as_matrix()
+    if yaw_as_scalar:
+        # Factor yaw out (outermost factor) and interpolate it as a signed scalar,
+        yaw_start = rot_start.as_euler("xyz")[2]
+        yaw_end = rot_end.as_euler("xyz")[2]
+        yaw_interp = yaw_start + (yaw_end - yaw_start) * t
+        res_start = R.from_euler("z", -yaw_start) * rot_start
+        res_end = R.from_euler("z", -yaw_end) * rot_end
+        # SLERPing only the pitch/roll residual.
+        rotvec_rel = (res_start.inv() * res_end).as_rotvec()
+        res_interp = res_start * R.from_rotvec(rotvec_rel * t)
+        rot_interp = (R.from_euler("z", yaw_interp) * res_interp).as_matrix()
+    else:
+        # Geodesic (shortest-path) SLERP via rotation vector.
+        # Compute relative rotation q_rel such that rot_start * q_rel = rot_end
+        q_rel = rot_start.inv() * rot_end
+        # Convert to rotation vector (axis-angle)
+        rotvec_rel = q_rel.as_rotvec()
+        # Scale the rotation vector by t (allows t<0 or >1 for overshoot)
+        rot_interp = (rot_start * R.from_rotvec(rotvec_rel * t)).as_matrix()
 
     # Extract translations
     pos_start = start_pose[:3, 3]
