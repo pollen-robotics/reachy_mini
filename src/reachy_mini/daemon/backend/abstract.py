@@ -504,6 +504,8 @@ class Backend:
 
         """
         self.target_head_pose = pose
+        if self._tracking_aim is not None and self._tracking_weight >= 1.0:
+            return
         self.ik_required = True
 
     def set_target_body_yaw(self, body_yaw: float) -> None:
@@ -515,8 +517,13 @@ class Backend:
             body_yaw (float): The yaw angle of the body
 
         """
+        if (
+            self.target_body_yaw is not None
+            and abs(self.target_body_yaw - body_yaw) <= 1e-9
+        ):
+            return
         self.target_body_yaw = body_yaw
-        self.ik_required = True  # Do we need that here?
+        self.ik_required = True
 
     def set_target_head_joint_positions(
         self, positions: Annotated[NDArray[np.float64], (7,)] | None

@@ -146,6 +146,24 @@ def test_tracking_blend_respects_zero_and_full_weight() -> None:
     np.testing.assert_allclose(kinematics.pose, aim, atol=1e-12)
 
 
+def test_full_weight_tracking_ignores_unrelated_app_head_updates() -> None:
+    """App head targets should not dirty IK while full tracking owns the head."""
+    backend = _make_backend()
+    app_pose = np.eye(4, dtype=np.float64)
+    app_pose[0, 3] = 0.05
+    backend._tracking_aim = np.eye(4, dtype=np.float64)
+    backend._tracking_weight = 1.0
+
+    backend.ik_required = False
+    backend.set_target_head_pose(app_pose)
+    assert backend.target_head_pose is app_pose
+    assert backend.ik_required is False
+
+    backend.target_body_yaw = 0.0
+    backend.set_target_body_yaw(0.0)
+    assert backend.ik_required is False
+
+
 def test_tracking_face_loss_decays_weight_and_clears_aim() -> None:
     """Face loss should decay tracking influence to zero."""
     backend = _make_backend()
