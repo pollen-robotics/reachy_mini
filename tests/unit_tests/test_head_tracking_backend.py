@@ -166,12 +166,13 @@ def test_full_weight_tracking_ignores_unrelated_app_head_updates() -> None:
     assert backend.ik_required is False
 
 
-def test_tracking_face_loss_decays_weight_and_clears_aim() -> None:
-    """Face loss should decay tracking influence to zero."""
+def test_tracking_face_loss_holds_last_aim() -> None:
+    """A transient face loss holds the aim so the head doesn't lurch to neutral."""
     backend = _make_backend()
     backend._tracking_enabled = True
-    backend._tracking_aim = np.eye(4, dtype=np.float64)
-    backend._tracking_weight = 0.6
+    aim = np.eye(4, dtype=np.float64)
+    backend._tracking_aim = aim
+    backend._tracking_weight = 1.0
 
     backend.set_tracking_face(
         eye_center=None,
@@ -182,21 +183,10 @@ def test_tracking_face_loss_decays_weight_and_clears_aim() -> None:
         distortion=np.zeros(5, dtype=np.float64),
         timestamp=10.0,
     )
-    assert backend.get_tracked_face().detected is False
-    assert backend._tracking_weight == 0.6
 
-    backend.set_tracking_face(
-        eye_center=None,
-        roll=None,
-        width=640,
-        height=480,
-        camera_matrix=np.eye(3, dtype=np.float64),
-        distortion=np.zeros(5, dtype=np.float64),
-        timestamp=10.4,
-    )
-    assert backend._tracking_weight == 0.0
-    assert backend._tracking_aim is None
-    assert backend._tracking_smoothed_eye_center is None
+    assert backend.get_tracked_face().detected is False
+    assert backend._tracking_weight == 1.0
+    assert backend._tracking_aim is aim
 
 
 def test_tracking_face_updates_are_smoothed() -> None:

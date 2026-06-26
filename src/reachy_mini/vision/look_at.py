@@ -73,14 +73,9 @@ def look_at_image_pose(
     x_n, y_n = undistort_points(u, v, K, D)
 
     ray_cam = np.array([x_n, y_n, 1.0], dtype=np.float64)
-    ray_cam /= np.linalg.norm(ray_cam)
 
-    T_world_cam = T_world_head @ T_head_cam
-    ray_world = T_world_cam[:3, :3] @ ray_cam
-    p_world = T_world_cam[:3, 3] + ray_world
-
+    # Aim along the ray direction; adding the camera-head offset biases it up.
+    ray_world = (T_world_head @ T_head_cam)[:3, :3] @ ray_cam
     return look_at_world_pose(
-        x=float(p_world[0]),
-        y=float(p_world[1]),
-        z=float(p_world[2]),
+        float(ray_world[0]), float(ray_world[1]), float(ray_world[2])
     )

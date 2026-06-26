@@ -309,9 +309,6 @@ class Backend:
         self._tracking_enabled = False
         self._tracking_requested_weight = 1.0
         self._tracking_weight = 0.0
-        self._tracking_loss_started_at: float | None = None
-        self._tracking_loss_start_weight = 0.0
-        self._tracking_decay_s = 0.3
         self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
         self._tracking_smoothed_eye_center: NDArray[np.float64] | None = None
         self._tracking_filter_alpha = 0.25
@@ -606,8 +603,6 @@ class Backend:
         """Clear the tracking aim and latest detected face."""
         self._tracking_aim = None
         self._tracking_weight = 0.0
-        self._tracking_loss_started_at = None
-        self._tracking_loss_start_weight = 0.0
         self._tracking_smoothed_eye_center = None
         self._face_target = FaceTarget()
         self.ik_required = True
@@ -627,7 +622,8 @@ class Backend:
             return
 
         if eye_center is None:
-            self._update_tracking_face_lost(timestamp)
+            # Hold the last aim on a transient loss so the head doesn't lurch to neutral.
+            self._face_target = FaceTarget(detected=False, ts=timestamp)
             return
 
         raw_eye_center = np.array(
@@ -653,8 +649,6 @@ class Backend:
         y_norm = float(self._tracking_smoothed_eye_center[1])
         weight_changed = self._tracking_weight != self._tracking_requested_weight
         self._tracking_weight = self._tracking_requested_weight
-        self._tracking_loss_started_at = None
-        self._tracking_loss_start_weight = 0.0
         self._face_target = FaceTarget(
             detected=True,
             x=x_norm,
@@ -688,27 +682,6 @@ class Backend:
         self._tracking_aim = linear_pose_interpolation(
             current_pose, aim, self._tracking_gain
         )
-        self.ik_required = True
-
-    def _update_tracking_face_lost(self, timestamp: float) -> None:
-        """Decay tracking influence when the detector temporarily loses the face."""
-        if self._tracking_loss_started_at is None:
-            self._tracking_loss_started_at = timestamp
-            self._tracking_loss_start_weight = self._tracking_weight
-
-        elapsed = max(0.0, timestamp - self._tracking_loss_started_at)
-        if self._tracking_decay_s <= 0.0:
-            self._tracking_weight = 0.0
-        else:
-            remaining = max(0.0, 1.0 - elapsed / self._tracking_decay_s)
-            self._tracking_weight = self._tracking_loss_start_weight * remaining
-
-        if self._tracking_weight <= 0.0:
-            self._tracking_weight = 0.0
-            self._tracking_aim = None
-            self._tracking_smoothed_eye_center = None
-
-        self._face_target = FaceTarget(detected=False, ts=timestamp)
         self.ik_required = True
 
     def get_tracked_face(self) -> FaceTarget:
