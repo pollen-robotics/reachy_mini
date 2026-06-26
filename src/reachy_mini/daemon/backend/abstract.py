@@ -316,6 +316,7 @@ class Backend:
         self._tracking_smoothed_eye_center: NDArray[np.float64] | None = None
         self._tracking_filter_alpha = 0.25
         self._tracking_deadzone_norm = 0.06
+        self._tracking_gain = 0.4
         self._face_target = FaceTarget()
         self.T_head_cam = default_head_to_camera_transform()
 
@@ -670,19 +671,23 @@ class Backend:
         v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)
 
         try:
+            current_pose = self.get_current_head_pose()
             aim = look_at_image_pose(
                 u=u,
                 v=v,
                 K=camera_matrix,
                 D=distortion,
-                T_world_head=self.get_current_head_pose(),
+                T_world_head=current_pose,
                 T_head_cam=self.T_head_cam,
             )
         except Exception as e:
             self.logger.warning("Head-tracking aim update failed: %s", e)
             return
 
-        self._tracking_aim = aim
+        # Ease toward the aim instead of snapping so capture latency can't drive overshoot.
+        self._tracking_aim = linear_pose_interpolation(
+            current_pose, aim, self._tracking_gain
+        )
         self.ik_required = True
 
     def _update_tracking_face_lost(self, timestamp: float) -> None:

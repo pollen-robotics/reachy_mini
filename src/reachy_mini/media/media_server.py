@@ -26,11 +26,10 @@ import logging
 import os
 import platform
 import time
-import typing
 from dataclasses import dataclass, field
 from importlib.util import find_spec
 from threading import Event, Lock, Thread
-from typing import Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 import gi
 import numpy as np
@@ -56,6 +55,9 @@ from reachy_mini.media.device_detection import get_audio_device, get_video_devic
 from reachy_mini.media.gstreamer_utils import handle_default_bus_message
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
+
+if TYPE_CHECKING:
+    from reachy_mini.vision.head_tracker import HeadTracker
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
@@ -86,9 +88,9 @@ ICE_NEGOTIATION_DEADLINE_S = 12
 SESSION_FAILED_REASON_ICE_TIMEOUT = "ice_negotiation_timeout"
 SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 
+# Tracker runs well under the 50 Hz control loop to limit CM4 CPU contention.
 TRACKER_WIDTH = 640
-TRACKER_HEIGHT = 480
-TRACKER_FPS = 15
+TRACKER_FPS = 10
 
 HeadTrackingCallback = Callable[
     [
@@ -102,15 +104,6 @@ HeadTrackingCallback = Callable[
     ],
     None,
 ]
-
-
-class _HeadTracker(typing.Protocol):
-    def get_head_position(
-        self,
-        img: npt.NDArray[np.uint8],
-    ) -> tuple[npt.NDArray[np.float64], float] | tuple[None, None]: ...
-
-    def close(self) -> None: ...
 
 
 @dataclass
@@ -238,9 +231,11 @@ class GstMediaServer:
         if self._resolution is None:
             raise RuntimeError("Failed to get default camera resolution.")
 
-        self._tracking_K = self._scaled_intrinsics_for_size(
-            (TRACKER_WIDTH, TRACKER_HEIGHT)
-        )
+        src_w, src_h = self.resolution
+        tracker_w = min(TRACKER_WIDTH, src_w)
+        tracker_h = max(2, round(tracker_w * src_h / src_w / 2) * 2)
+        self._tracking_size = (tracker_w, tracker_h)
+        self._tracking_K = self._scaled_intrinsics_for_size(self._tracking_size)
 
         self._cam_path = cam_path
 
@@ -277,7 +272,7 @@ class GstMediaServer:
         self._tracking_stop = Event()
         self._tracking_callback: Optional[HeadTrackingCallback] = None
         self._tracking_lock = Lock()
-        self._head_tracker: _HeadTracker | None = None
+        self._head_tracker: HeadTracker | None = None
         self._last_tracking_error_log = 0.0
         # Software AEC: set in _configure_audio; the probe is created there and
         # reused across per-peer playback pipelines (see _on_consumer_pad_added).
@@ -1096,8 +1091,8 @@ class GstMediaServer:
         valve.set_property("drop-mode", "transform-to-gap")
 
         caps = Gst.Caps.from_string(
-            f"video/x-raw,format=RGB,width={TRACKER_WIDTH},"
-            f"height={TRACKER_HEIGHT},framerate={TRACKER_FPS}/1"
+            f"video/x-raw,format=RGB,width={self._tracking_size[0]},"
+            f"height={self._tracking_size[1]},framerate={TRACKER_FPS}/1"
         )
         capsfilter.set_property("caps", caps)
         appsink.set_property("drop", True)
@@ -1636,7 +1631,7 @@ class GstMediaServer:
         try:
             from reachy_mini.vision.head_tracker import HeadTracker
 
-            tracker: _HeadTracker | None = HeadTracker()
+            tracker: HeadTracker | None = HeadTracker()
         except ImportError as e:
             self._logger.warning("Head tracking unavailable: %s", e)
             tracker = None

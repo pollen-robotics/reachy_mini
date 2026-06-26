@@ -1,72 +1,40 @@
 """Tests for SDK head-tracking controls."""
 
 import logging
-from collections.abc import Mapping
-
-import requests
 
 from reachy_mini import ReachyMini
+from reachy_mini.io.protocol import SetHeadTrackingCmd
 
 
-class HeadTrackingResponse:
-    """Small response object for head-tracking REST calls."""
+class _FakeClient:
+    """Capture commands the SDK sends to the daemon."""
 
-    def __init__(self, payload: Mapping[str, object]) -> None:
-        """Initialize the fake response payload."""
-        self._payload = payload
+    def __init__(self) -> None:
+        """Initialize the recorded-command list."""
+        self.commands: list[object] = []
 
-    def raise_for_status(self) -> None:
-        """Mirror requests.Response.raise_for_status."""
-
-    def json(self) -> Mapping[str, object]:
-        """Return the fake JSON payload."""
-        return self._payload
+    def send_command(self, cmd: object) -> None:
+        """Record a command instead of sending it."""
+        self.commands.append(cmd)
 
 
 def _make_robot() -> ReachyMini:
     """Create a ReachyMini instance without opening daemon connections."""
     robot = ReachyMini.__new__(ReachyMini)
-    robot._daemon_http_url = "http://reachy-mini.local:8000"
+    robot.client = _FakeClient()
     robot.logger = logging.getLogger("test_head_tracking_sdk")
     return robot
 
 
-def test_start_head_tracking_returns_enabled_state(
-    monkeypatch,
-) -> None:
-    """The SDK should expose whether the daemon accepted tracking."""
-    calls: list[tuple[str, Mapping[str, float] | None, float]] = []
-
-    def post(
-        url: str,
-        json: Mapping[str, float] | None = None,
-        timeout: float = 0.0,
-    ) -> HeadTrackingResponse:
-        calls.append((url, json, timeout))
-        return HeadTrackingResponse({"status": "ok", "enabled": True})
-
-    monkeypatch.setattr(requests, "post", post)
-
-    assert _make_robot().start_head_tracking(weight=0.6) is True
-    assert calls == [
-        (
-            "http://reachy-mini.local:8000/api/media/tracking/enable",
-            {"weight": 0.6},
-            5.0,
-        )
-    ]
+def test_start_head_tracking_sends_enable_command() -> None:
+    """Starting tracking sends a weighted enable command over the SDK client."""
+    robot = _make_robot()
+    robot.start_head_tracking(weight=0.6)
+    assert robot.client.commands == [SetHeadTrackingCmd(enabled=True, weight=0.6)]
 
 
-def test_start_head_tracking_returns_false_when_unavailable(monkeypatch) -> None:
-    """The SDK should not report success when the daemon rejects tracking."""
-
-    def post(
-        url: str,
-        json: Mapping[str, float] | None = None,
-        timeout: float = 0.0,
-    ) -> HeadTrackingResponse:
-        return HeadTrackingResponse({"status": "unavailable", "enabled": False})
-
-    monkeypatch.setattr(requests, "post", post)
-
-    assert _make_robot().start_head_tracking(weight=0.6) is False
+def test_stop_head_tracking_sends_disable_command() -> None:
+    """Stopping tracking sends a disable command over the SDK client."""
+    robot = _make_robot()
+    robot.stop_head_tracking()
+    assert robot.client.commands == [SetHeadTrackingCmd(enabled=False)]

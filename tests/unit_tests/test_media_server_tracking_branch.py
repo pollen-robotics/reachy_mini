@@ -18,7 +18,6 @@ from gi.repository import Gst  # noqa: E402
 from reachy_mini.media import media_server as media_server_module  # noqa: E402
 from reachy_mini.media.media_server import (  # noqa: E402
     TRACKER_FPS,
-    TRACKER_HEIGHT,
     TRACKER_WIDTH,
     GstMediaServer,
 )
@@ -65,6 +64,7 @@ def test_tracking_branch_starts_dropped_without_blocking_preroll() -> None:
     server._tracking_stop = Event()
     server._tracking_callback = None
     server._head_tracker = None
+    server._tracking_size = (TRACKER_WIDTH, 360)
 
     pipeline = Gst.Pipeline.new("tracking-branch-test")
     tee = Gst.ElementFactory.make("tee", "tracking_test_tee")
@@ -83,7 +83,7 @@ def test_tracking_branch_starts_dropped_without_blocking_preroll() -> None:
     assert appsink.get_property("sync") is False
     assert capsfilter.get_property("caps").to_string() == (
         f"video/x-raw, format=(string)RGB, width=(int){TRACKER_WIDTH}, "
-        f"height=(int){TRACKER_HEIGHT}, framerate=(fraction){TRACKER_FPS}/1"
+        f"height=(int)360, framerate=(fraction){TRACKER_FPS}/1"
     )
 
 

@@ -2,6 +2,7 @@
 
 import numpy as np
 import numpy.typing as npt
+from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.media.camera_utils import undistort_points
 
@@ -19,37 +20,6 @@ DEFAULT_HEAD_TO_CAMERA_TRANSFORM[:3, :3] = np.array(
 def default_head_to_camera_transform() -> npt.NDArray[np.float64]:
     """Return the default transform from head frame to camera frame."""
     return DEFAULT_HEAD_TO_CAMERA_TRANSFORM.copy()
-
-
-def _rotation_matrix_from_axis_angle(
-    axis: npt.NDArray[np.float64],
-    angle: float,
-) -> npt.NDArray[np.float64]:
-    """Build a 3x3 rotation matrix from a unit axis and an angle."""
-    x, y, z = axis
-    c = np.cos(angle)
-    s = np.sin(angle)
-    one_minus_c = 1.0 - c
-    return np.array(
-        [
-            [
-                c + x * x * one_minus_c,
-                x * y * one_minus_c - z * s,
-                x * z * one_minus_c + y * s,
-            ],
-            [
-                y * x * one_minus_c + z * s,
-                c + y * y * one_minus_c,
-                y * z * one_minus_c - x * s,
-            ],
-            [
-                z * x * one_minus_c - y * s,
-                z * y * one_minus_c + x * s,
-                c + z * z * one_minus_c,
-            ],
-        ],
-        dtype=np.float64,
-    )
 
 
 def look_at_world_pose(x: float, y: float, z: float) -> npt.NDArray[np.float64]:
@@ -75,18 +45,13 @@ def look_at_world_pose(x: float, y: float, z: float) -> npt.NDArray[np.float64]:
             )
             axis = np.cross(straight_head_vector, perp)
             axis /= np.linalg.norm(axis)
-            rot_mat = _rotation_matrix_from_axis_angle(
-                axis.astype(np.float64),
-                np.pi,
-            )
+            rot_mat = R.from_rotvec(np.pi * axis).as_matrix()
     else:
         axis /= axis_norm
         angle = np.arccos(
             np.clip(np.dot(straight_head_vector, target_vector), -1.0, 1.0)
         )
-        rot_mat = _rotation_matrix_from_axis_angle(
-            axis.astype(np.float64), float(angle)
-        )
+        rot_mat = R.from_rotvec(angle * axis).as_matrix()
 
     target_head_pose = np.eye(4, dtype=np.float64)
     target_head_pose[:3, :3] = rot_mat

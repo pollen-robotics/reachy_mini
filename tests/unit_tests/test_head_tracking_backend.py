@@ -3,6 +3,7 @@
 from typing import Callable
 
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackend
 from reachy_mini.io.protocol import (
@@ -10,6 +11,7 @@ from reachy_mini.io.protocol import (
     SetHeadTrackingCmd,
     command_adapter,
 )
+from reachy_mini.vision.look_at import look_at_image_pose
 
 
 class DummyKinematics:
@@ -227,3 +229,40 @@ def test_tracking_face_updates_are_smoothed() -> None:
     )
 
     assert backend.get_tracked_face().x == 0.25
+
+
+def test_tracking_aim_eases_toward_face_instead_of_snapping() -> None:
+    """The stored aim turns toward the face but by less than the full look-at.
+
+    Snapping to the absolute aim (gain 1.0) overshoots under capture-to-actuation
+    latency and oscillates; easing keeps the head stable.
+    """
+    backend = _make_backend()
+    backend._tracking_enabled = True
+    camera_matrix = np.array(
+        [[640.0, 0.0, 320.0], [0.0, 640.0, 240.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    distortion = np.zeros(5, dtype=np.float64)
+    backend.set_tracking_face(
+        eye_center=np.array([0.6, 0.0], dtype=np.float64),
+        roll=0.0,
+        width=640,
+        height=480,
+        camera_matrix=camera_matrix,
+        distortion=distortion,
+        timestamp=1.0,
+    )
+
+    full_aim = look_at_image_pose(
+        u=(0.6 + 1.0) * 0.5 * 639,
+        v=(0.0 + 1.0) * 0.5 * 479,
+        K=camera_matrix,
+        D=distortion,
+        T_world_head=np.eye(4, dtype=np.float64),
+        T_head_cam=backend.T_head_cam,
+    )
+    assert backend._tracking_aim is not None
+    eased = np.linalg.norm(R.from_matrix(backend._tracking_aim[:3, :3]).as_rotvec())
+    full = np.linalg.norm(R.from_matrix(full_aim[:3, :3]).as_rotvec())
+    assert 0.0 < eased < full
