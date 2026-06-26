@@ -1,5 +1,6 @@
 """Head tracker locating the nearest face with MediaPipe BlazeFace."""
 
+import time
 from importlib.resources import files
 
 try:
@@ -27,16 +28,22 @@ class HeadTracker:
         self._detector = mp_vision.FaceDetector.create_from_options(
             mp_vision.FaceDetectorOptions(
                 base_options=mp_tasks.BaseOptions(model_asset_path=_MODEL_PATH),
+                running_mode=mp_vision.RunningMode.VIDEO,
                 min_detection_confidence=min_detection_confidence,
             )
         )
+        self._last_timestamp_ms = -1
 
     def get_head_position(
         self, img: NDArray[np.uint8]
     ) -> tuple[NDArray[np.float64], float] | tuple[None, None]:
         """Return eye-center (normalized to [-1, 1]) and roll (radians) of the nearest face in an RGB image."""
-        detections = self._detector.detect(
-            mp.Image(image_format=mp.ImageFormat.SRGB, data=img)
+        timestamp_ms = max(
+            time.monotonic_ns() // 1_000_000, self._last_timestamp_ms + 1
+        )
+        self._last_timestamp_ms = timestamp_ms
+        detections = self._detector.detect_for_video(
+            mp.Image(image_format=mp.ImageFormat.SRGB, data=img), timestamp_ms
         ).detections
         if not detections:
             return None, None

@@ -88,9 +88,10 @@ ICE_NEGOTIATION_DEADLINE_S = 12
 SESSION_FAILED_REASON_ICE_TIMEOUT = "ice_negotiation_timeout"
 SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 
-# Tracker runs well under the 50 Hz control loop to limit CM4 CPU contention.
-TRACKER_WIDTH = 640
-TRACKER_FPS = 10
+# BlazeFace resizes to 128x128 internally, so a small frame keeps detection
+# quality while cutting per-frame CPU on the wireless CM4.
+TRACKER_WIDTH = 320
+TRACKER_FPS = 30
 
 HeadTrackingCallback = Callable[
     [

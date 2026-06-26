@@ -310,10 +310,9 @@ class Backend:
         self._tracking_requested_weight = 1.0
         self._tracking_weight = 0.0
         self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
-        self._tracking_smoothed_eye_center: NDArray[np.float64] | None = None
-        self._tracking_filter_alpha = 0.25
-        self._tracking_deadzone_norm = 0.06
-        self._tracking_gain = 0.4
+        self._tracking_last_eye_center: NDArray[np.float64] | None = None
+        self._tracking_deadzone_norm = 0.03
+        self._tracking_gain = 0.5
         self._face_target = FaceTarget()
         self.T_head_cam = default_head_to_camera_transform()
 
@@ -603,7 +602,7 @@ class Backend:
         """Clear the tracking aim and latest detected face."""
         self._tracking_aim = None
         self._tracking_weight = 0.0
-        self._tracking_smoothed_eye_center = None
+        self._tracking_last_eye_center = None
         self._face_target = FaceTarget()
         self.ik_required = True
 
@@ -631,22 +630,18 @@ class Backend:
             dtype=np.float64,
         )
         target_changed = False
-        if self._tracking_smoothed_eye_center is None:
-            self._tracking_smoothed_eye_center = raw_eye_center
+        if self._tracking_last_eye_center is None:
+            self._tracking_last_eye_center = raw_eye_center
             target_changed = True
         elif (
-            np.linalg.norm(raw_eye_center - self._tracking_smoothed_eye_center)
+            np.linalg.norm(raw_eye_center - self._tracking_last_eye_center)
             >= self._tracking_deadzone_norm
         ):
-            alpha = min(max(self._tracking_filter_alpha, 0.0), 1.0)
-            self._tracking_smoothed_eye_center = (
-                self._tracking_smoothed_eye_center
-                + alpha * (raw_eye_center - self._tracking_smoothed_eye_center)
-            )
+            self._tracking_last_eye_center = raw_eye_center
             target_changed = True
 
-        x_norm = float(self._tracking_smoothed_eye_center[0])
-        y_norm = float(self._tracking_smoothed_eye_center[1])
+        x_norm = float(self._tracking_last_eye_center[0])
+        y_norm = float(self._tracking_last_eye_center[1])
         weight_changed = self._tracking_weight != self._tracking_requested_weight
         self._tracking_weight = self._tracking_requested_weight
         self._face_target = FaceTarget(
