@@ -279,7 +279,6 @@ class GstMediaServer:
         self._tracking_lock = Lock()
         self._head_tracker: _HeadTracker | None = None
         self._last_tracking_error_log = 0.0
-        self._last_tracking_status_log = 0.0
         # Software AEC: set in _configure_audio; the probe is created there and
         # reused across per-peer playback pipelines (see _on_consumer_pad_added).
         self._aec_enabled = False
@@ -1598,7 +1597,6 @@ class GstMediaServer:
             )
             self._tracking_thread.start()
 
-        self._logger.info("Head tracking starting (daemon-side)")
         return True
 
     def disable_tracking(self) -> None:
@@ -1669,10 +1667,6 @@ class GstMediaServer:
         while not self._tracking_stop.is_set():
             sample = appsink.emit("try-pull-sample", 200_000_000)
             if sample is None:
-                now = time.monotonic()
-                if now - self._last_tracking_status_log > 2.0:
-                    self._logger.debug("Head tracking waiting for video frames.")
-                    self._last_tracking_status_log = now
                 continue
 
             frame = self._rgb_frame_from_sample(sample)
@@ -1696,17 +1690,6 @@ class GstMediaServer:
                 continue
 
             height, width = frame.shape[:2]
-            if timestamp - self._last_tracking_status_log > 2.0:
-                if eye_center is None:
-                    self._logger.debug("Head tracking running: no face detected.")
-                else:
-                    self._logger.debug(
-                        "Head tracking face detected: x=%.3f y=%.3f roll=%s",
-                        eye_center[0],
-                        eye_center[1],
-                        roll,
-                    )
-                self._last_tracking_status_log = timestamp
             callback(
                 eye_center,
                 roll,
