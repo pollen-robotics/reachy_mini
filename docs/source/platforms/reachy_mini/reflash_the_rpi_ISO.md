@@ -91,7 +91,9 @@ https://www.raspberrypi.com/software/
      sudo ./rpiboot -d mass-storage-gadget64
      ```
 
-   - **Windows**: run the **RPiBoot** executable that you installed in the previous step.
+   - **Windows**: run the **RPiBoot** executable that you installed in the previous step. Make sure to use `rpiboot-CM4-CM5 - Mass storage Gadget` and not `rpiboot-CM-CM2-CM3`.
+  
+   ⚠️ In both cases, make sure you do not close the terminal window opened by rpiboot.
    
 3. Set the switch to **DOWNLOAD (SW1)** on the head PCB:
 
