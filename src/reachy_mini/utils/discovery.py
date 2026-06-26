@@ -15,9 +15,17 @@ from typing import Dict, List
 
 from zeroconf import ServiceBrowser, ServiceInfo, ServiceListener, Zeroconf
 
+from reachy_mini.utils.hardware_id import get_hardware_id
+
 logger = logging.getLogger(__name__)
 
 SERVICE_TYPE = "_reachy-mini._tcp.local."
+
+# Comma-separated so clients can check capabilities without parsing JSON.
+_CAPS = "camera,mic,speaker,motion,apps"
+_MANUFACTURER = "Pollen Robotics"
+_MODEL_WIRELESS = "Reachy Mini Wireless"
+_MODEL_LITE = "Reachy Mini Lite"
 
 
 @dataclass
@@ -54,10 +62,16 @@ def _get_local_ip() -> str:
 class MdnsServiceRegistration:
     """Register a Reachy Mini daemon as an mDNS service."""
 
-    def __init__(self, robot_name: str, port: int) -> None:
-        """Initialize with robot name and port to advertise."""
+    def __init__(
+        self,
+        robot_name: str,
+        port: int,
+        wireless_version: bool = False,
+    ) -> None:
+        """Initialize with robot name, port, and SKU variant to advertise."""
         self._robot_name = robot_name
         self._port = port
+        self._wireless_version = wireless_version
         self._zeroconf: Zeroconf | None = None
         self._info: ServiceInfo | None = None
         self._register_thread: threading.Thread | None = None
@@ -100,7 +114,14 @@ class MdnsServiceRegistration:
             "robot_name": self._robot_name,
             "ws_path": "/ws/sdk",
             "address": _get_local_ip(),
+            "model": _MODEL_WIRELESS if self._wireless_version else _MODEL_LITE,
+            "manufacturer": _MANUFACTURER,
+            "caps": _CAPS,
+            "api": "rest+ws",
         }
+        unit_id = get_hardware_id()
+        if unit_id is not None:
+            properties["unit_id"] = unit_id
 
         try:
             self._zeroconf = Zeroconf()

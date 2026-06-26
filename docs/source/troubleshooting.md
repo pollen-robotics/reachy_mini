@@ -14,17 +14,33 @@ To restart your robot, press OFF, wait 5 seconds, then press ON. This simple pro
 
 **How to update the software:**
 
-- **If you are using the dashboard in a web browser**  
-  Open `Settings`, then click **Check for updates**.  
-  ![Update](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/update.png)
-- **If you are using the new dashboard/app**  
-  Since 0.8.5 of the app, 
+- **If you are using Reachy Mini Control**
+  From the "⚙️" settings tab, "Check for updates". If an update is available, click on "Update now".
 - **If you are using a cloned repository**  
   Make sure you are either:
   - On the latest tagged release, or
-  - Up to date with the `develop` branch (`git pull`).
+  - Up to date with the `main` branch (`git pull`).
 
 **Wireless Reachy Mini**: run `reachyminios_check` to make sure everything is fine (see [Get Started](./platforms/reachy_mini/get_started.md))  
+
+</details>
+
+
+<details><summary><strong>Bootstrap or update fails / Python environment issues (Lite & Simulation)</strong></summary>
+
+If Reachy Mini Control fails during the initial bootstrap, gets stuck while creating the virtual environment, or an update leaves the Python environment in a broken state, you can reset the virtual environments directly from the desktop app.
+
+Two reset options are available:
+
+- **Reset apps environment** — recreates only the `apps_venv` (the environment used by installed apps). Installed apps will need to be reinstalled. Use this first if only apps fail to start or install.
+- **Full Environment Reset** — deletes all Python files and re-downloads everything (interpreter + both venvs). Use this if the bootstrap itself fails or if "Reset apps environment" didn't help. This may take a few minutes.
+
+**Where to find these buttons:**
+
+- **Before connecting** (Finding Robot screen): click the ⚙️ icon in the top-right corner. A menu appears under "Local environment (USB & Sim)" with "Reset apps environment" and the full reset option.
+- **Once connected** (USB / Simulation mode): open the Settings overlay and go to the "Environment" section, which contains the "Reset Apps Environment" and "Full Environment Reset" buttons.
+
+After a full reset, the desktop app will re-run the bootstrap on next launch.
 
 </details>
 
@@ -64,7 +80,7 @@ If you have one of the following symptoms:
 You may have plugged the microphone cable upside down.
 - If your cable is white and blue, please check again the assembly instruction to be sure the blue side is up.
 - If your cable is black, check that the side with the writing "Main Board" is up (see picture below).
-![mic_cable](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/black_fpc_cable.png)
+![mic_cable](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/black_fpc_cable.png)
 
 
 If your cable is plugged properly and you still have issues, it is likely that the FPC cable of the microphone is damaged. Please refer to the tutorial [How to change the FPC cable of the microphone of Reachy Mini?](./troubleshooting/change_mic_fpc_cable.md) to fix this issue.
@@ -104,13 +120,29 @@ It is easy to fix by following this guide:
 <details>
 <summary><strong>A motor is shaky</strong></summary>
 
-This can happen if the motor's PID values are not optimal. Often, motors 10 (foot), 17 and 18 (the antennas) can exhibit slight jitters when holding position.
-These are fine "adjustments" that the motor is making, which in this case is an overcorrection.
-The good news is that you can [tune PID Control values](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/config/hardware_config.yaml#L66C1-L67C1) to calm these jitters. 
+**Antennas shaking**
 
-You can try first to reduce P to 180 on motors, 10, 17, and 18.
+This is the most common case. The antennas (motors 17 and 18) tend to shake when set to their vertical position (0°). At this angle, the gearbox backlash puts the motor in an unstable equilibrium — like an inverted pendulum. The motor constantly tries to correct its position around a point where friction is very low, which causes the oscillation.
+
+The simplest fix is to offset the antennas by a few degrees (typically 10° is enough). This lets gravity apply a small bias that takes up the mechanical play in one direction, eliminating the shaking.
+
+This is now the default behavior in Reachy Mini — see [PR #952](https://github.com/pollen-robotics/reachy_mini/pull/952) for details.
+
+**Tuning PID values**
+
+Another option is to [tune PID Control values](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/config/hardware_config.yaml#L66C1-L67C1). The optimal values may vary between robot units, as tiny differences in friction from manufacturing are enough to change the behavior.
+
+You can try first to reduce P to 180 on motors 10 (foot), 17 and 18 (antennas).
 If it doesn't help, you can also try to increase D to 10 on the same motors.
 
+</details>
+
+<details>
+<summary><strong>Head makes squeaking or friction noises during movement</strong></summary>
+
+If you hear high-pitched squeaking or friction noises when the robot's head moves, the spherical joints (ball joints) on the Stewart platform rods likely need maintenance. You may also notice dark dust or residue around the connecting rods.
+
+This is normal wear over time. Follow the [Spherical Joints Maintenance guide](./troubleshooting/spherical_joints_maintenance.md) to clean and re-grease the joints.
 
 </details>
 
@@ -156,7 +188,7 @@ To fix the darkness issue specifically, set `auto-exposure-priority=1` using the
 
 Be sure to unpack everything first. Some parts are pre-assembled (e.g the bottom head part is already placed in the back head part).
 
-![head_parts](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/head_parts.jpg)
+![head_parts](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/head_parts.jpg)
 
 Then, check the assembly guide's parts list to see if you really miss a part:
 If you are 100% sure you miss a part, please contact sales@pollen-robotics.com with a picture of all the parts you have and order number or invoice number.  
@@ -171,7 +203,7 @@ Wireless units do not expose the robot over USB the way the Lite version does, s
 Instead:
 
 - Join the robot to your Wi-Fi network and use the SDK client on your laptop to control it remotely.
-- If you want to run code directly on the embedded Raspberry Pi, SSH in and execute your scripts there (this is what the Dashboard does after you publish/install an app).
+- If you want to run code directly on the embedded Raspberry Pi, SSH in and execute your scripts there (this is what Reachy Mini Control does after you publish/install an app).
 - For a tethered link, use a USB-C-to-Ethernet adapter plus an Ethernet cable—this simply replaces Wi-Fi with wired Ethernet.
 
 </details>
@@ -181,7 +213,7 @@ Instead:
 There is a switch on the board in the head that needs to be in a given position. And if it's not, the AP doesn't show. It's possible that this switch was moved during assembly or maybe even a factory mistake.
 Please check that the switch is on the "debug" and not on "download" position. See the picture below:
 
-![switch_position](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/wireless_switch.png)
+![switch_position](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/wireless_switch.png)
 
 If this switch is in the right position and you still can't see the AP, you may need to re-flash the Raspberry Pi's iso, following the [reflash the RPI Iso tutorial](/docs/source/platforms/reachy_mini/reflash_the_rpi_ISO.md).
 
@@ -238,7 +270,7 @@ You do not need to install them.
 
 
 
-## 🔌 Connection & Dashboard
+## 🔌 Connection & Reachy Mini Control
 
 <details>
 <summary><strong>How do I connect the robot to Wi-Fi?</strong></summary>
@@ -251,33 +283,6 @@ See the [Reachy Mini Wireless guide](./platforms/reachy_mini/get_started.md) for
 <summary><strong>How do I reset the Wi-Fi hotspot?</strong></summary>
 
 If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connect or want to change the network), follow the instructions in the [Wi-Fi Reset Guide](./platforms/reachy_mini/reset.md).
-
-</details>
-
-<details>
-<summary><strong>The dashboard at http://localhost:8000 doesn't work.</strong></summary>
-
-1. **Check browser permissions**: Ensure your browser can access local networks.  On _macOS_, these permissions are found in System Settings → Privacy & Security → Local Network.
-
-2. **For Wireless Reachy Mini**: Ensure both your computer and the robot are connected to the **same network**, then verify connectivity by running the following command in your terminal:
-```bash
-ping reachy-mini
-```
-
-3. **For Lite Reachy Mini**: Perform these checks.
-- _Virtual Environment:_ Ensure you are running inside your virtual environment (`.venv`, `reachy_mini_env`,...).
-- _SDK Update:_ Ensure you have the latest version.
-
-With `pip`, run :
-```bash
-pip install -U reachy-mini
-```
-With `uv`, run :
-```bash
-uv pip install -U reachy-mini
-```
-
-- _Daemon:_ Make sure the daemon `reachy-mini-daemon` is running in a terminal.
 
 </details>
 
@@ -321,6 +326,87 @@ Helps prevent package conflicts during SDK installation.
 
 </details>
 
+<details>
+<summary><strong>reachy-mini.local doesn't resolve</strong></summary>
+
+A wireless unit advertises itself as `reachy-mini.local` via mDNS. This works on most home and office networks, but may fail on some enterprise, conference, or hotel networks.
+
+If `reachy-mini.local` doesn't resolve:
+- Check your router's DHCP client list for the robot's IP address.
+- Use the Reachy Mini Control app — it can discover the robot on the local network.
+- As a last resort, scan the subnet:
+```bash
+for i in $(seq 1 254); do
+  curl -sf --connect-timeout 0.3 "http://192.168.1.${i}:8000/api/daemon/status" > /dev/null 2>&1 && echo "Found: 192.168.1.${i}"
+done
+```
+Adjust the `192.168.1.` prefix to match your network.
+
+</details>
+
+<details>
+<summary><strong>Robot and computer can't communicate on conference/hotel WiFi</strong></summary>
+
+Many conference and hotel WiFi networks enable **client isolation**, which prevents devices on the same network from communicating with each other. Symptoms: both devices are connected to WiFi, both have IP addresses on the same subnet, but they cannot reach each other's HTTP endpoints.
+
+**Workaround:** Use a mobile phone hotspot. Connect both the robot and your computer to the hotspot. This provides a simple network where devices can see each other.
+
+Alternatively, use a USB-C-to-Ethernet adapter and an Ethernet cable to connect directly to the robot (Wireless version).
+
+</details>
+
+<details>
+<summary><strong>How to access to HuggingFace services from China?</strong></summary>
+
+You can use this mirror : https://hf-mirror.com/
+
+You will need to set the following environment variable :
+```bash
+export HF_ENDPOINT=https://hf-mirror.com/
+```
+
+Note that you may also need to use mirrors to reach services like PyPI and GitHub.
+
+</details>
+
+<details>
+<summary><strong>How to make the conversation app work in China?</strong></summary>
+
+Reachy Mini conversation app relies on OpenAI gpt-realtime API, which might be inaccessible from China.
+
+The best workaround at the moment is to set up a VPN on your machine (Lite version), on the robot (Wireless version), or directly on your router.
+
+When configuring the VPN routing rules:
+
+1) Route traffic through the VPN except for local network traffic, so the device remains accessible from your local network.
+
+You should whitelist:
+- Your local LAN IP range (for example 192.168.0.0/16, 192.168.1.0/24, etc., depending on your network setup).
+- The following ports:
+  - 22 (SSH)
+  - 8000 (Reachy Mini daemon)
+  - 5353 TCP/UDP (mDNS / local discovery)
+
+This ensures the robot remains reachable and discoverable locally, and mDNS (`reachy-mini.local`) should continue to work on the network.
+
+2) If your VPN supports selective routing, a better approach is to route only the required external services through the VPN, instead of tunneling all HTTPS traffic.
+
+If possible, configure the VPN to be used only for `huggingface.co` and `api.openai.com`.
+
+This minimizes network side effects and keeps local services functioning normally.
+
+For the Wireless version, once the VPN is configured on the robot, restart the daemon for the changes to take effect:
+```
+sudo systemctl restart reachy-mini-daemon
+```
+To verify the robot is reachable from a device on the same network, you can run:
+```
+ping reachy-mini.local
+```
+
+_Approaches based on open weight models are in the works, stay tuned!_
+
+</details>
 
 
 ## 🤖 Hardware, Motors & Limits
@@ -421,9 +507,9 @@ We only have the led indication for "low battery" when it's time to charge it. (
 
 - Check that the green led is not on first.
 - Remove the 3x screws at the bottom and take out the foot a little bit.
-![remove_foot](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/remove_foot.png)
+![remove_foot](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/remove_foot.png)
 - Unplug the indicated connector (red arrow) to be able to remove the battery. There should be some double-sided tape that maintain the battery in place, so it can be a bit hard to remove.
-![battery_location](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/battery_connector.png)
+![battery_location](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/battery_connector.png)
 - When you'll re-assemble it, do these step again in reverse order. Just be careful not to pinch any cable.
 
 </details>
@@ -480,17 +566,36 @@ with ReachyMini() as mini:
 <details>
 <summary><strong>How do I create a new App?</strong></summary>
 
-1.  Use the generator: `reachy-mini-make-app my_app_name`.
-2.  Edit `main.py` in the generated folder.
-3.  Run it: `python my_app_name/main.py`.
+Use the app assistant CLI:
 
-Check the [Hugging Face Tutorial](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps) for details.
+```bash
+reachy-mini-app-assistant create my_app_name /path/to/destination --publish
+```
+
+See the full guide: [Building & Publishing Apps](./SDK/apps.md) — covers app structure, testing, publishing, debugging, and deployment.
 
 </details>
 
-<details><summary><strong>Is installing apps directly from the dashboard supported?</strong></summary>
+<details>
+<summary><strong>My app crashes silently or doesn't start</strong></summary>
 
-Sure! You can install apps directly from your Dashboard if they’re native, or add them to your favourites if they’re web-based.
+If your app depends on a package not installed in the environment, it will crash on import with no visible error. Test imports manually:
+
+```bash
+# On Wireless
+ssh pollen@reachy-mini.local "/venvs/apps_venv/bin/python3 -c 'from my_app.main import MyApp'"
+
+# On Lite / local
+python -c "from my_app.main import MyApp"
+```
+
+For more debugging tips (viewing logs, common pitfalls), see [Debugging Apps](./SDK/apps.md#debugging-apps).
+
+</details>
+
+<details><summary><strong>Is installing apps directly from Reachy Mini Control supported?</strong></summary>
+
+Sure! You can install apps directly from Reachy Mini Control if they’re native, or add them to your favourites if they’re web-based.
 
 </details>
 
@@ -527,7 +632,7 @@ Yes, via MuJoCo. It is still a work in progress, but you can run code with the `
 <details>
 <summary><strong>How do I debug an app on the Wireless?</strong></summary>
 
-SSH into the embedded computer, clone (or copy) your app, and run it manually. This reproduces what the dashboard does when launching your app.
+SSH into the embedded computer, clone (or copy) your app, and run it manually. This reproduces what Reachy Mini Control does when launching your app.
 
 ```bash
 ssh pollen@reachy-mini.local
@@ -540,6 +645,12 @@ Your GUI will open at the usual address (for example, `http://reachy-mini.local:
 
 </details>
 
+<details>
+<summary><strong>The Web App can't connect to my Reachy</strong></summary>
+
+Make sure that your Reachy is logged in to your HF account using the desktop app. Make sure there is no other web app connected to it. You may want to restart your browser or clear your cache.
+
+</details>
 
 
 ## 🕹️ Moving the Robot
@@ -596,7 +707,7 @@ You can check that the motor control loop runs correctly by checking the daemon 
 mini = ReachyMini()
 print(mini.client.get_status())
 ```
-- via the dashboard API at `http://localhost:8000/docs` on a lite and `http://reachy-mini.local:8000/docs` for the wireless (look for `/api/daemon/status` endpoint)
+- via the REST API at `http://localhost:8000/docs` on a Lite and `http://reachy-mini.local:8000/docs` for the Wireless (look for `/api/daemon/status` endpoint)
 
 You should see values around 50Hz (~20ms period): 
 ```python
@@ -643,7 +754,7 @@ Use the `media` object.
 ```python
 with ReachyMini() as mini:
     frame = mini.media.get_frame()
-    # Returns an OpenCV-compatible numpy array
+    # Returns a numpy array (BGR format, compatible with OpenCV)
 ```
 
 </details>
@@ -672,7 +783,16 @@ mini.media.push_audio_sample(numpy_chunk)
 <details>
 <summary><strong>Face tracking feels slow.</strong></summary>
 
-Performance relies heavily on lighting conditions. Ensure the face is well-lit. Using the GStreamer backend can also improve latency compared to the default OpenCV backend.
+Performance relies heavily on lighting conditions. Ensure the face is well-lit. The LOCAL backend (GStreamer IPC) provides the lowest latency for on-device applications.
+
+</details>
+
+<details>
+<summary><strong>The camera can't focus.</strong></summary>
+
+When running the [look_at example](https://huggingface.co/docs/reachy_mini/examples/look_at), it's easy to see whether the camera is focusing by putting your hand in front of it. If it isn't, the camera may be physically blocked. It is held to the black part by 4 screws — loosen them very slightly, about 1/8 of a turn.
+
+![camera_focus](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/troubleshooting_screw_focus_camera.png)
 
 </details>
 
@@ -704,6 +824,9 @@ You can play back a sound while recording simultaneously to test the echo cancel
 - Ensure the `.asoundrc` file exists in the home directory
 - Check that the microphone is detected: `arecord -l`
 - Check that the speaker is detected: `aplay -l`
+- If audio-board configuration fails with `No Reachy Mini Audio USB device found!`,
+  run the SDK code on the machine that has the ReSpeaker audio board connected.
+  For Lite this is your computer; for Wireless this is the robot itself.
 
 </details>
 
@@ -717,20 +840,6 @@ We are using a higher voltage on Reachy Mini, it's on purpose :)
 
 </details>
 
-
-
-<details>
-<summary><strong>Error: "OSError: PortAudio library not found"</strong></summary>
-
-You are missing a system dependency. Run:
-
-```bash
-sudo apt-get install libportaudio2
-```
-Then restart the daemon.
-
-</details>
-
 <details>
 <summary><strong>Warning: "Circular buffer overrun" (Simulation/Mujoco)</strong></summary>
 
@@ -738,6 +847,28 @@ This appears if you connect to the robot but don't consume the video frames, cau
 * **Fix:** If you don't need video, initialize with `ReachyMini(media_backend="no_media")`.
 
 </details>
+
+<details>
+<summary><strong>Conversation app crashes on launch after update (custom profile)</strong></summary>
+
+If you created a custom profile for the Conversation app on an older version and the app now exits immediately after updating, the app is looking for the profile at a path that no longer exists — the default profile location changed in a recent release.
+
+**Symptoms** — the logs end with a `SystemExit: 1` raised from `prompts.py`, e.g.:
+```
+File ".../reachy_mini_conversation_app/prompts.py", line 88, in get_session_instructions
+    sys.exit(1)
+SystemExit: 1
+```
+
+**Fix (recommended):** From the Reachy Mini Control desktop app, click **Reset apps environment** (see "Bootstrap or update fails / Python environment issues" above). Apps will need to be reinstalled afterwards.
+
+**Alternative (advanced):** SSH into the robot (Wireless: `ssh pollen@reachy-mini.local`) and delete the apps venv directly, then reinstall the Conversation app:
+```bash
+rm -rf /venvs/apps_venv
+```
+
+</details>
+
 
 <details>
 <summary><strong>No Microphone Input / Direction of Arrival (Beta Units)</strong></summary>

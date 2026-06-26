@@ -1,11 +1,12 @@
 import asyncio
+import re
 import threading
 
 import numpy as np
 import pytest
 import uvicorn
 
-from reachy_mini.daemon.app.main import Args, create_app
+from reachy_mini.daemon.app.main import CORS_ORIGIN_REGEX, Args, create_app
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.reachy_mini import ReachyMini
 
@@ -21,7 +22,7 @@ async def _start_app_server(
         sim=True,
         headless=True,
         wake_up_on_start=False,
-        use_audio=False,
+        no_media=True,
         autostart=True,
         fastapi_port=0,  # let OS pick a free port
     )
@@ -43,9 +44,7 @@ async def _start_app_server(
     return app.state.daemon, server, thread, port
 
 
-async def _stop_app_server(
-    server: uvicorn.Server, thread: threading.Thread
-) -> None:
+async def _stop_app_server(server: uvicorn.Server, thread: threading.Thread) -> None:
     """Gracefully shut down the uvicorn server."""
     server.should_exit = True
     thread.join(timeout=10)
@@ -77,9 +76,7 @@ async def test_daemon_client_disconnection() -> None:
     client_connected = asyncio.Event()
 
     async def simple_client() -> None:
-        with ReachyMini(
-            host="localhost", port=port, media_backend="no_media"
-        ) as mini:
+        with ReachyMini(host="localhost", port=port, media_backend="no_media") as mini:
             status = mini.client.get_status()
             assert status.state == "running"
             assert status.simulation_enabled
@@ -96,6 +93,23 @@ async def test_daemon_client_disconnection() -> None:
         await _stop_app_server(server, thread)
 
     await asyncio.gather(simple_client(), wait_for_client())
+
+
+@pytest.mark.asyncio
+async def test_sdk_warns_on_daemon_version_mismatch() -> None:
+    daemon, server, thread, port = await _start_app_server()
+    daemon._status.version = "0.0.0"
+
+    try:
+        with pytest.warns(
+            RuntimeWarning,
+            match="Reachy Mini SDK and daemon versions do not match",
+        ):
+            with ReachyMini(host="localhost", port=port, media_backend="no_media"):
+                pass
+    finally:
+        await daemon.stop(goto_sleep_on_stop=False)
+        await _stop_app_server(server, thread)
 
 
 @pytest.mark.asyncio
@@ -141,12 +155,8 @@ async def test_multi_robot_isolation() -> None:
 
     try:
         with (
-            ReachyMini(
-                host="localhost", port=port1, media_backend="no_media"
-            ) as mini1,
-            ReachyMini(
-                host="localhost", port=port2, media_backend="no_media"
-            ) as mini2,
+            ReachyMini(host="localhost", port=port1, media_backend="no_media") as mini1,
+            ReachyMini(host="localhost", port=port2, media_backend="no_media") as mini2,
         ):
             # Both robots should be running independently
             status1 = mini1.client.get_status()
@@ -185,3 +195,27 @@ async def test_multi_robot_isolation() -> None:
         await daemon2.stop(goto_sleep_on_stop=False)
         await _stop_app_server(server1, thread1)
         await _stop_app_server(server2, thread2)
+
+
+def test_cors_origin_regex():
+    """Starlette fullmatches Origin against CORS_ORIGIN_REGEX (GHSA-p4cp-8gwf-3fgv)."""
+    pat = re.compile(CORS_ORIGIN_REGEX)
+    allowed = [
+        "http://localhost:3000",
+        "https://localhost",
+        "http://127.0.0.1:8000",
+        "tauri://localhost",
+        "https://tauri.localhost",
+        "capacitor://localhost",
+    ]
+    blocked = [
+        "http://evil.com",
+        "http://localhost.evil.com",
+        "https://reachy.tauri.localhost.evil.com",
+        "tauri://evil",
+        "capacitor://evil",
+    ]
+    for origin in allowed:
+        assert pat.fullmatch(origin), origin
+    for origin in blocked:
+        assert not pat.fullmatch(origin), origin

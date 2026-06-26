@@ -1,4 +1,3 @@
-
 import asyncio
 import threading
 from pathlib import Path
@@ -25,7 +24,7 @@ async def test_app() -> None:
         sim=True,
         headless=True,
         wake_up_on_start=False,
-        use_audio=False,
+        no_media=True,
         autostart=True,
         fastapi_port=0,
     )
@@ -55,7 +54,7 @@ async def test_app() -> None:
 
 @pytest.mark.asyncio
 async def test_app_manager() -> None:
-    daemon = Daemon()
+    daemon = Daemon(no_media=True)
     await daemon.start(
         sim=True,
         headless=True,
@@ -79,10 +78,16 @@ async def test_app_manager() -> None:
         assert len(after_installed_apps) == len(before_installed_apps) + 1
 
         status = await app_mngr.start_app("ok_app", media_backend="no_media")
-        assert status is not None and status.state in (AppState.STARTING, AppState.RUNNING)
+        assert status is not None and status.state in (
+            AppState.STARTING,
+            AppState.RUNNING,
+        )
         assert app_mngr.is_app_running()
         status = await app_mngr.current_app_status()
-        assert status is not None and status.state in (AppState.STARTING, AppState.RUNNING)
+        assert status is not None and status.state in (
+            AppState.STARTING,
+            AppState.RUNNING,
+        )
 
         await app_mngr.stop_current_app()
         assert not app_mngr.is_app_running()
@@ -90,7 +95,9 @@ async def test_app_manager() -> None:
         assert status is None
 
         await app_mngr.remove_app("ok_app", daemon.logger)
-        after_uninstalled_apps = await app_mngr.list_available_apps(SourceKind.INSTALLED)
+        after_uninstalled_apps = await app_mngr.list_available_apps(
+            SourceKind.INSTALLED
+        )
 
         assert len(after_uninstalled_apps) == len(before_installed_apps)
 
@@ -110,7 +117,7 @@ async def test_faulty_app() -> None:
         sim=True,
         headless=True,
         wake_up_on_start=False,
-        use_audio=False,
+        no_media=True,
         autostart=True,
         fastapi_port=8000,
     )

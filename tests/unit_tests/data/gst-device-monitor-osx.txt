@@ -1,0 +1,272 @@
+Probing devices...
+
+
+Device found:
+
+	name  : Reachy Mini Camera
+	class : Video/Source
+	caps  : video/x-raw(memory:GLMemory), width=3840, height=2592, format={ (string)UYVY, (string)YUY2 }, framerate={ (fraction)30/1, (fraction)1/1 }, texture-target=rectangle
+	        video/x-raw(memory:GLMemory), width=3840, height=2160, format={ (string)UYVY, (string)YUY2 }, framerate={ (fraction)30/1, (fraction)1/1 }, texture-target=rectangle
+	        video/x-raw(memory:GLMemory), width=3264, height=2448, format={ (string)UYVY, (string)YUY2 }, framerate={ (fraction)30/1, (fraction)1/1 }, texture-target=rectangle
+	        video/x-raw(memory:GLMemory), width=1920, height=1080, format={ (string)UYVY, (string)YUY2 }, framerate={ (fraction)60/1, (fraction)5/1 }, texture-target=rectangle
+	        video/x-raw, width=3840, height=2592, format={ (string)UYVY, (string)YUY2, (string)NV12, (string)ARGB, (string)BGRA }, framerate={ (fraction)30/1, (fraction)1/1 }
+	        video/x-raw, width=3840, height=2160, format={ (string)UYVY, (string)YUY2, (string)NV12, (string)ARGB, (string)BGRA }, framerate={ (fraction)30/1, (fraction)1/1 }
+	        video/x-raw, width=3264, height=2448, format={ (string)UYVY, (string)YUY2, (string)NV12, (string)ARGB, (string)BGRA }, framerate={ (fraction)30/1, (fraction)1/1 }
+	        video/x-raw, width=1920, height=1080, format={ (string)UYVY, (string)YUY2, (string)NV12, (string)ARGB, (string)BGRA }, framerate={ (fraction)60/1, (fraction)5/1 }
+	properties:
+		device.api = avf
+		avf.unique_id = 0x114000038fb1002
+		avf.model_id = UVC Camera VendorID_14587 ProductID_4098
+		avf.has_flash = false (gboolean)
+		avf.has_torch = false (gboolean)
+		avf.manufacturer = SunplusIT Inc
+	gst-launch-1.0 avfvideosrc device-index=0 ! ...
+
+
+Device found:
+
+	name  : MacBook Pro Camera
+	class : Video/Source
+	caps  : video/x-raw(memory:GLMemory), width=1080, height=1920, format={ (string)UYVY, (string)YUY2 }, framerate=[ 15/1, 30/1 ], texture-target=rectangle
+	        video/x-raw(memory:GLMemory), width=1920, height=1080, format={ (string)UYVY, (string)YUY2 }, framerate=[ 15/1, 30/1 ], texture-target=rectangle
+	        video/x-raw(memory:GLMemory), width=1552, height=1552, format={ (string)UYVY, (string)YUY2 }, framerate=[ 15/1, 30/1 ], texture-target=rectangle
+	        video/x-raw(memory:GLMemory), width=1328, height=1760, format={ (string)UYVY, (string)YUY2 }, framerate=[ 15/1, 30/1 ], texture-target=rectangle
+	        video/x-raw(memory:GLMemory), width=1760, height=1328, format={ (string)UYVY, (string)YUY2 }, framerate=[ 15/1, 30/1 ], texture-target=rectangle
+	        video/x-raw(memory:GLMemory), width=1280, height=720, format={ (string)UYVY, (string)YUY2 }, framerate=[ 15/1, 30/1 ], texture-target=rectangle
+	        video/x-raw(memory:GLMemory), width=640, height=480, format={ (string)UYVY, (string)YUY2 }, framerate=[ 15/1, 30/1 ], texture-target=rectangle
+	        video/x-raw, width=1080, height=1920, format={ (string)UYVY, (string)YUY2, (string)NV12, (string)ARGB, (string)BGRA }, framerate=[ 15/1, 30/1 ]
+	        video/x-raw, width=1920, height=1080, format={ (string)UYVY, (string)YUY2, (string)NV12, (string)ARGB, (string)BGRA }, framerate=[ 15/1, 30/1 ]
+	        video/x-raw, width=1552, height=1552, format={ (string)UYVY, (string)YUY2, (string)NV12, (string)ARGB, (string)BGRA }, framerate=[ 15/1, 30/1 ]
+	        video/x-raw, width=1328, height=1760, format={ (string)UYVY, (string)YUY2, (string)NV12, (string)ARGB, (string)BGRA }, framerate=[ 15/1, 30/1 ]
+	        video/x-raw, width=1760, height=1328, format={ (string)UYVY, (string)YUY2, (string)NV12, (string)ARGB, (string)BGRA }, framerate=[ 15/1, 30/1 ]
+	        video/x-raw, width=1280, height=720, format={ (string)UYVY, (string)YUY2, (string)NV12, (string)ARGB, (string)BGRA }, framerate=[ 15/1, 30/1 ]
+	        video/x-raw, width=640, height=480, format={ (string)UYVY, (string)YUY2, (string)NV12, (string)ARGB, (string)BGRA }, framerate=[ 15/1, 30/1 ]
+	properties:
+		device.api = avf
+		avf.unique_id = 6C707041-05AC-0010-0008-000000000001
+		avf.model_id = MacBook Pro Camera
+		avf.has_flash = false (gboolean)
+		avf.has_torch = false (gboolean)
+		avf.manufacturer = Apple Inc.
+	gst-launch-1.0 avfvideosrc device-index=1 ! ...
+
+
+Device found:
+
+	name  : OBS Virtual Camera
+	class : Video/Source
+	caps  : video/x-raw(memory:GLMemory), width=1920, height=1080, format={ (string)UYVY, (string)YUY2 }, framerate=60/1, texture-target=rectangle
+	        video/x-raw, width=1920, height=1080, format={ (string)UYVY, (string)YUY2, (string)NV12, (string)ARGB, (string)BGRA }, framerate=60/1
+	properties:
+		device.api = avf
+		avf.unique_id = 7626645E-4425-469E-9D8B-97E0FA59AC75
+		avf.model_id = OBS Camera Extension
+		avf.has_flash = false (gboolean)
+		avf.has_torch = false (gboolean)
+		avf.manufacturer = OBS Project
+	gst-launch-1.0 avfvideosrc device-index=2 ! ...
+
+
+Device found:
+
+	name  : VB-Cable
+	class : Audio/Sink
+	caps  : audio/x-raw, format=F32LE, layout=interleaved, rate=48000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=[ 1, 2147483647 ], channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=[ 1, 2147483647 ], channels=1
+	properties:
+		is-default = false (gboolean)
+		transport = virt
+		unique-id = com.vbaudio.vbcable:B6E6D02E-CD32-4C95-B60B-2FC2621CA4E0
+	gst-launch-1.0 ... ! osxaudiosink unique-id='com.vbaudio.vbcable:B6E6D02E-CD32-4C95-B60B-2FC2621CA4E0'
+
+
+Device found:
+
+	name  : VB-Cable
+	class : Audio/Source
+	caps  : audio/x-raw, format=F32LE, layout=interleaved, rate=48000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=48000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=48000, channels=1
+	properties:
+		is-default = false (gboolean)
+		transport = virt
+		unique-id = com.vbaudio.vbcable:B6E6D02E-CD32-4C95-B60B-2FC2621CA4E0
+	gst-launch-1.0 osxaudiosrc unique-id='com.vbaudio.vbcable:B6E6D02E-CD32-4C95-B60B-2FC2621CA4E0' ! ...
+
+
+Device found:
+
+	name  : MacBook Pro Speakers
+	class : Audio/Sink
+	caps  : audio/x-raw, format=F32LE, layout=interleaved, rate=48000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=[ 1, 2147483647 ], channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=[ 1, 2147483647 ], channels=1
+	properties:
+		is-default = false (gboolean)
+		transport = bltn
+		unique-id = BuiltInSpeakerDevice
+	gst-launch-1.0 ... ! osxaudiosink unique-id=BuiltInSpeakerDevice
+
+
+Device found:
+
+	name  : MacBook Pro Microphone
+	class : Audio/Source
+	caps  : audio/x-raw, format=F32LE, layout=interleaved, rate=48000, channels=1
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=48000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=48000, channels=1
+	properties:
+		is-default = true (gboolean)
+		transport = bltn
+		unique-id = BuiltInMicrophoneDevice
+	gst-launch-1.0 osxaudiosrc unique-id=BuiltInMicrophoneDevice ! ...
+
+
+Device found:
+
+	name  : BlackHole 2ch
+	class : Audio/Sink
+	caps  : audio/x-raw, format=F32LE, layout=interleaved, rate=48000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=[ 1, 2147483647 ], channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=[ 1, 2147483647 ], channels=1
+	properties:
+		is-default = false (gboolean)
+		transport = virt
+		unique-id = BlackHole2ch_UID
+	gst-launch-1.0 ... ! osxaudiosink unique-id='BlackHole2ch_UID'
+
+
+Device found:
+
+	name  : BlackHole 2ch
+	class : Audio/Source
+	caps  : audio/x-raw, format=F32LE, layout=interleaved, rate=48000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=48000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=48000, channels=1
+	properties:
+		is-default = false (gboolean)
+		transport = virt
+		unique-id = BlackHole2ch_UID
+	gst-launch-1.0 osxaudiosrc unique-id='BlackHole2ch_UID' ! ...
+
+
+Device found:
+
+	name  : Reachy Mini Camera
+	class : Audio/Source
+	caps  : audio/x-raw, format=F32LE, layout=interleaved, rate=48000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=48000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=48000, channels=1
+	properties:
+		is-default = false (gboolean)
+		transport = usb 
+		unique-id = AppleUSBAudioEngine:SunplusIT Inc:Reachy Mini Camera:J20251031V0:3
+	gst-launch-1.0 osxaudiosrc unique-id='AppleUSBAudioEngine:SunplusIT Inc:Reachy Mini Camera:J20251031V0:3' ! ...
+
+
+Device found:
+
+	name  : Reachy Mini Audio
+	class : Audio/Sink
+	caps  : audio/x-raw, format=F32LE, layout=interleaved, rate=16000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=[ 1, 2147483647 ], channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=[ 1, 2147483647 ], channels=1
+	properties:
+		is-default = true (gboolean)
+		transport = usb 
+		unique-id = AppleUSBAudioEngine:Pollen Robotics:Reachy Mini Audio:100025004254700542:1,2
+	gst-launch-1.0 ... ! osxaudiosink unique-id='AppleUSBAudioEngine:Pollen Robotics:Reachy Mini Audio:100025004254700542:1,2'
+
+
+Device found:
+
+	name  : Reachy Mini Audio
+	class : Audio/Source
+	caps  : audio/x-raw, format=F32LE, layout=interleaved, rate=16000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=16000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=16000, channels=1
+	properties:
+		is-default = false (gboolean)
+		transport = usb 
+		unique-id = AppleUSBAudioEngine:Pollen Robotics:Reachy Mini Audio:100025004254700542:1,2
+	gst-launch-1.0 osxaudiosrc unique-id='AppleUSBAudioEngine:Pollen Robotics:Reachy Mini Audio:100025004254700542:1,2' ! ...
+
+
+Device found:
+
+	name  : DELL S2421NX
+	class : Audio/Sink
+	caps  : audio/x-raw, format=F32LE, layout=interleaved, rate=48000, channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=[ 1, 2147483647 ], channels=2, channel-mask=0x0000000000000003
+	        audio/x-raw, format={ (string)F64LE, (string)F64BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)U32LE, (string)U32BE, (string)S24_32LE, (string)S24_32BE, (string)U24_32LE, (string)U24_32BE, (string)S24LE, (string)S24BE, (string)U24LE, (string)U24BE, (string)S20_32LE, (string)S20_32BE, (string)U20_32LE, (string)U20_32BE, (string)S20LE, (string)S20BE, (string)U20LE, (string)U20BE, (string)S18LE, (string)S18BE, (string)U18LE, (string)U18BE, (string)S16LE, (string)S16BE, (string)U16LE, (string)U16BE, (string)S8, (string)U8 }, layout=interleaved, rate=[ 1, 2147483647 ], channels=1
+	properties:
+		is-default = false (gboolean)
+		transport = hdmi
+		unique-id = 10ACFB41-0000-0000-2921-010380351E78
+	gst-launch-1.0 ... ! osxaudiosink unique-id='10ACFB41-0000-0000-2921-010380351E78'
+
+
+Device found:
+
+	name  : Apple M4 Pro
+	class : Video/Sink
+	caps  : video/x-raw(memory:VulkanImage)
+	properties:
+		vulkan.name = Apple M4 Pro
+		vulkan.type = integrated
+		vulkan.api.version = 1.2.283
+		vulkan.api.version.major = 1 (0x00000001) (guint)
+		vulkan.api.version.minor = 2 (0x00000002) (guint)
+		vulkan.api.version.patch = 283 (0x0000011b) (guint)
+		vulkan.driver.version = 0.2.2017
+		vulkan.driver.version.major = 0 (0x00000000) (guint)
+		vulkan.driver.version.minor = 2 (0x00000002) (guint)
+		vulkan.driver.version.patch = 2017 (0x000007e1) (guint)
+		vulkan.vendor.id = 4203 (0x0000106b) (guint)
+		vulkan.device.id = 252118001 (0x0f0703f1) (guint)
+		vulkan.memory.n_heaps = 1 (0x00000001) (guint)
+		vulkan.memory.heaps.0.size = 51539607552 (guint64)
+		vulkan.memory.heaps.0.flags = 1 (0x00000001) (guint)
+		vulkan.memory.heaps.0.flags.str = device-local
+		vulkan.memory.n_types = 3 (0x00000003) (guint)
+		vulkan.memory.types.0.heap = 0 (0x00000000) (guint)
+		vulkan.memory.types.0.flags = 1 (0x00000001) (guint)
+		vulkan.memory.types.0.flags.str = device-local
+		vulkan.memory.types.1.heap = 0 (0x00000000) (guint)
+		vulkan.memory.types.1.flags = 15 (0x0000000f) (guint)
+		vulkan.memory.types.1.flags.str = device-local|host-visible|host-coherent|host-cached
+		vulkan.memory.types.2.heap = 0 (0x00000000) (guint)
+		vulkan.memory.types.2.flags = 17 (0x00000011) (guint)
+		vulkan.memory.types.2.flags.str = device-local|lazily-allocated
+		vulkan.n_queue_families = 4 (0x00000004) (guint)
+		vulkan.queue_family.0.n_queues = 1 (0x00000001) (guint)
+		vulkan.queue_family.0.flags = 7 (0x00000007) (guint)
+		vulkan.queue_family.0.flags.str = graphics|compute|transfer
+		vulkan.queue_family.0.timestamp_resolution = 64 (0x00000040) (guint)
+		vulkan.queue_family.0.min_image_transfer_granuality.width = 1 (0x00000001) (guint)
+		vulkan.queue_family.0.min_image_transfer_granuality.height = 1 (0x00000001) (guint)
+		vulkan.queue_family.0.min_image_transfer_granuality.depth = 1 (0x00000001) (guint)
+		vulkan.queue_family.1.n_queues = 1 (0x00000001) (guint)
+		vulkan.queue_family.1.flags = 7 (0x00000007) (guint)
+		vulkan.queue_family.1.flags.str = graphics|compute|transfer
+		vulkan.queue_family.1.timestamp_resolution = 64 (0x00000040) (guint)
+		vulkan.queue_family.1.min_image_transfer_granuality.width = 1 (0x00000001) (guint)
+		vulkan.queue_family.1.min_image_transfer_granuality.height = 1 (0x00000001) (guint)
+		vulkan.queue_family.1.min_image_transfer_granuality.depth = 1 (0x00000001) (guint)
+		vulkan.queue_family.2.n_queues = 1 (0x00000001) (guint)
+		vulkan.queue_family.2.flags = 7 (0x00000007) (guint)
+		vulkan.queue_family.2.flags.str = graphics|compute|transfer
+		vulkan.queue_family.2.timestamp_resolution = 64 (0x00000040) (guint)
+		vulkan.queue_family.2.min_image_transfer_granuality.width = 1 (0x00000001) (guint)
+		vulkan.queue_family.2.min_image_transfer_granuality.height = 1 (0x00000001) (guint)
+		vulkan.queue_family.2.min_image_transfer_granuality.depth = 1 (0x00000001) (guint)
+		vulkan.queue_family.3.n_queues = 1 (0x00000001) (guint)
+		vulkan.queue_family.3.flags = 7 (0x00000007) (guint)
+		vulkan.queue_family.3.flags.str = graphics|compute|transfer
+		vulkan.queue_family.3.timestamp_resolution = 64 (0x00000040) (guint)
+		vulkan.queue_family.3.min_image_transfer_granuality.width = 1 (0x00000001) (guint)
+		vulkan.queue_family.3.min_image_transfer_granuality.height = 1 (0x00000001) (guint)
+		vulkan.queue_family.3.min_image_transfer_granuality.depth = 1 (0x00000001) (guint)
+		is-default = true (gboolean)
+	gst-launch-1.0 ... ! vulkansink

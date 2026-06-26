@@ -90,11 +90,19 @@ def reflash_motors_if_needed(
                 style="yellow",
             )
             continue
-        except RuntimeError:
-            console.print(
-                f"[INFO] Motor '{motor_name}' needs to be reflashed.",
-                style="blue",
-            )
+        except RuntimeError as e:
+            if "No motor with ID" in str(e):
+                console.print(
+                    f"[WARN] Motor '{motor_name}' (ID {motor_config.id}) not found on the bus. "
+                    "Check that the motor is properly connected.",
+                    style="red",
+                )
+                continue
+            else:
+                console.print(
+                    f"[INFO] Motor '{motor_name}' needs to be reflashed.",
+                    style="blue",
+                )
 
         from_id = motor_config.id
 

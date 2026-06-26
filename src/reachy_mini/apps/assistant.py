@@ -154,7 +154,7 @@ def create(console: Console, app_name: str, app_path: Path) -> Path:
 
     base_path = Path(app_path).resolve() / app_name
     if base_path.exists():
-        console.print(f"❌ Folder {base_path} already exists.", style="bold red")
+        console.print(f"[ERROR] Folder {base_path} already exists.", style="bold red")
         exit()
 
     module_name = app_name
@@ -209,7 +209,7 @@ def create(console: Console, app_name: str, app_path: Path) -> Path:
 
     # TODO assets dir with a .gif ?
 
-    console.print(f"✅ Created app '{app_name}' in {base_path}/", style="bold green")
+    console.print(f"[OK] Created app '{app_name}' in {base_path}/", style="bold green")
     return base_path
 
 
@@ -286,7 +286,7 @@ def check(console: Console, app_path: str) -> None:
     # Check if there is a pyproject.toml file in the root of the app
     pyproject_file = abs_app_path / "pyproject.toml"
     if not pyproject_file.exists():
-        console.print("❌ pyproject.toml is missing", style="bold red")
+        console.print("[ERROR] pyproject.toml is missing", style="bold red")
         console.print(
             "Make sure you are providing the path to the root of the app. This is the folder that contains pyproject.toml.",
             style="bold blue",
@@ -300,7 +300,7 @@ def check(console: Console, app_path: str) -> None:
         app_name = project.get("name", None)
         if app_name is None:
             console.print(
-                "❌ Project name is missing in pyproject.toml", style="bold red"
+                "[ERROR] Project name is missing in pyproject.toml", style="bold red"
             )
             sys.exit(1)
 
@@ -329,32 +329,32 @@ def check(console: Console, app_path: str) -> None:
     # - index.html, style.css exist in the root of the app
 
     if not os.path.exists(os.path.join(abs_app_path, "index.html")):
-        console.print("❌ index.html is missing", style="bold red")
+        console.print("[ERROR] index.html is missing", style="bold red")
         sys.exit(1)
 
     if not os.path.exists(os.path.join(abs_app_path, "style.css")):
-        console.print("❌ style.css is missing", style="bold red")
+        console.print("[ERROR] style.css is missing", style="bold red")
         sys.exit(1)
-    console.print("✅ index.html and style.css exist in the root of the app.")
+    console.print("[OK] index.html and style.css exist in the root of the app.")
 
     # Check both flat and src layout
     pkg_path = abs_app_path / pkg_name
     if not (pkg_path / "__init__.py").exists():
         pkg_path = abs_app_path / "src" / pkg_name
         if not (pkg_path / "__init__.py").exists():
-            console.print(f"❌ Package folder '{pkg_name}' not found", style="bold red")
+            console.print(f"[ERROR] Package folder '{pkg_name}' not found", style="bold red")
             console.print(f"   Checked: {abs_app_path / pkg_name}/", style="dim")
             console.print(
                 f"   Checked: {abs_app_path / 'src' / pkg_name}/", style="dim"
             )
             sys.exit(1)
     console.print(
-        f"✅ Package '{pkg_name}' found at {pkg_path.relative_to(abs_app_path)}/"
+        f"[OK] Package '{pkg_name}' found at {pkg_path.relative_to(abs_app_path)}/"
     )
 
     if "entry-points" not in pyproject_content["project"]:
         console.print(
-            "❌ pyproject.toml is missing the entry-points section",
+            "[ERROR] pyproject.toml is missing the entry-points section",
             style="bold red",
         )
         sys.exit(1)
@@ -363,7 +363,7 @@ def check(console: Console, app_path: str) -> None:
 
     if "reachy_mini_apps" not in entry_points:
         console.print(
-            "❌ pyproject.toml is missing the reachy_mini_apps entry-points section",
+            "[ERROR] pyproject.toml is missing the reachy_mini_apps entry-points section",
             style="bold red",
         )
         sys.exit(1)
@@ -373,12 +373,12 @@ def check(console: Console, app_path: str) -> None:
         console.print(f'Found entrypoint: {k} = "{v}"', style="dim")
         if k == entrypoint_name and v == f"{pkg_name}.main:{class_name}":
             console.print(
-                "✅ pyproject.toml contains the correct entrypoint for the app."
+                "[OK] pyproject.toml contains the correct entrypoint for the app."
             )
             break
     else:
         console.print(
-            f'❌ pyproject.toml is missing the entrypoint for the app: {entrypoint_name} = "{pkg_name}.main:{class_name}"',
+            f'[ERROR] pyproject.toml is missing the entrypoint for the app: {entrypoint_name} = "{pkg_name}.main:{class_name}"',
             style="bold red",
         )
         sys.exit(1)
@@ -386,28 +386,28 @@ def check(console: Console, app_path: str) -> None:
     # - main.py exists
     main_file = pkg_path / "main.py"
     if not main_file.exists():
-        console.print("❌ main.py is missing", style="bold red")
+        console.print("[ERROR] main.py is missing", style="bold red")
         sys.exit(1)
-    console.print(f"✅ {pkg_path.relative_to(abs_app_path)}/main.py exists.")
+    console.print(f"[OK] {pkg_path.relative_to(abs_app_path)}/main.py exists.")
 
     # - <app_name>/main.py contains a class named <AppName> that inherits from ReachyMiniApp
     with open(main_file, "r") as f:
         main_content = f.read()
     if f"class {class_name}(ReachyMiniApp)" not in str(main_content):
         console.print(
-            f"❌ main.py is missing the class {class_name} that inherits from ReachyMiniApp",
+            f"[ERROR] main.py is missing the class {class_name} that inherits from ReachyMiniApp",
             style="bold red",
         )
         sys.exit(1)
     console.print(
-        f"✅ main.py contains the class {class_name} that inherits from ReachyMiniApp."
+        f"[OK] main.py contains the class {class_name} that inherits from ReachyMiniApp."
     )
 
     # - README.md exists in the root of the app
     if not os.path.exists(os.path.join(abs_app_path, "README.md")):
-        console.print("❌ README.md is missing", style="bold red")
+        console.print("[ERROR] README.md is missing", style="bold red")
         sys.exit(1)
-    console.print("✅ README.md exists in the root of the app.")
+    console.print("[OK] README.md exists in the root of the app.")
 
     def parse_readme(file_path: str) -> Any:
         """Parse the metadata section of the README.md file."""
@@ -429,7 +429,7 @@ def check(console: Console, app_path: str) -> None:
         try:
             metadata = yaml.safe_load(metadata)
         except yaml.YAMLError as e:
-            console.print(f"❌ Error parsing YAML metadata: {e}", style="bold red")
+            console.print(f"[ERROR] Error parsing YAML metadata: {e}", style="bold red")
             sys.exit(1)
 
         return metadata
@@ -437,26 +437,26 @@ def check(console: Console, app_path: str) -> None:
     #   - README.md contains at least a title and the tags "reachy_mini" and "reachy_mini_{python/js}_app"
     readme_metadata = parse_readme(os.path.join(abs_app_path, "README.md"))
     if readme_metadata is None or len(readme_metadata) == 0:
-        console.print("❌ README.md is missing metadata section.", style="bold red")
+        console.print("[ERROR] README.md is missing metadata section.", style="bold red")
         sys.exit(1)
     if "title" not in readme_metadata.keys():
         console.print(
-            "❌ README.md is missing the title key in metadata.", style="bold red"
+            "[ERROR] README.md is missing the title key in metadata.", style="bold red"
         )
         sys.exit(1)
     if readme_metadata["title"] == "":
-        console.print("❌ README.md title cannot be empty.", style="bold red")
+        console.print("[ERROR] README.md title cannot be empty.", style="bold red")
         sys.exit(1)
 
     if "tags" not in readme_metadata.keys():
         console.print(
-            "❌ README.md is missing the tags key in metadata.", style="bold red"
+            "[ERROR] README.md is missing the tags key in metadata.", style="bold red"
         )
         sys.exit(1)
 
     if "reachy_mini" not in readme_metadata["tags"]:
         console.print(
-            '❌ README.md must contain the "reachy_mini" tag', style="bold red"
+            '[ERROR] README.md must contain the "reachy_mini" tag', style="bold red"
         )
         sys.exit(1)
 
@@ -465,12 +465,12 @@ def check(console: Console, app_path: str) -> None:
         and "reachy_mini_js_app" not in readme_metadata["tags"]
     ):
         console.print(
-            '❌ README.md must contain either the "reachy_mini_python_app" or "reachy_mini_js_app" tag',
+            '[ERROR] README.md must contain either the "reachy_mini_python_app" or "reachy_mini_js_app" tag',
             style="bold red",
         )
         sys.exit(1)
 
-    console.print("✅ README.md contains the required metadata.")
+    console.print("[OK] README.md contains the required metadata.")
     # - <app_name>/main.py exists
 
     # Now, create a temporary python venv in a temp dir, `pip install . the app, check that it works and that the entrypoint is registered
@@ -521,11 +521,11 @@ def check(console: Console, app_path: str) -> None:
                 != 0
             ):
                 console.print(
-                    f"❌ App '{app_name}' entrypoint is not registered correctly.",
+                    f"[ERROR] App '{app_name}' entrypoint is not registered correctly.",
                     style="bold red",
                 )
                 sys.exit(1)
-            console.print("✅ App entrypoint is registered correctly.")
+            console.print("[OK] App entrypoint is registered correctly.")
 
             # Now try to uninstall the app and check that it uninstalls correctly
             console.print(
@@ -562,15 +562,15 @@ def check(console: Console, app_path: str) -> None:
                 == 0
             ):
                 console.print(
-                    f"❌ App '{app_name}' was not uninstalled correctly.",
+                    f"[ERROR] App '{app_name}' was not uninstalled correctly.",
                     style="bold red",
                 )
                 sys.exit(1)
 
-            console.print("✅ App installation and uninstallation tests passed.")
+            console.print("[OK] App installation and uninstallation tests passed.")
         finally:
             os.chdir(original_cwd)
-    console.print(f"\n✅ App '{app_name}' passed all checks!", style="bold green")
+    console.print(f"\n[OK] App '{app_name}' passed all checks!", style="bold green")
 
 
 def request_app_addition(new_app_repo_id: str) -> bool:
@@ -650,6 +650,13 @@ def request_app_addition(new_app_repo_id: str) -> bool:
     return True
 
 
+def _git_env() -> dict[str, str]:
+    """Return env vars that prevent git from prompting for credentials."""
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return env
+
+
 def try_to_push(console: Console, _app_path: Path) -> bool:
     """Try to push changes to the remote repository."""
     console.print("Pushing changes to the remote repository ...", style="bold blue")
@@ -658,6 +665,7 @@ def try_to_push(console: Console, _app_path: Path) -> bool:
         cwd=_app_path,
         capture_output=True,
         text=True,
+        env=_git_env(),
     )
     if push_result.returncode != 0:
         console.print(
@@ -665,6 +673,38 @@ def try_to_push(console: Console, _app_path: Path) -> bool:
         )
         return False
     return True
+
+
+def _upload_via_api(
+    console: Console, app_path: Path, repo_id: str, commit_message: str
+) -> bool:
+    """Upload app folder to HuggingFace Space via HTTP API.
+
+    Used as a fallback when git push fails (e.g. no git credentials,
+    only an OAuth token from the desktop app).
+    """
+    import huggingface_hub as hf
+
+    token = hf.get_token()
+    if not token:
+        console.print("[red]No HuggingFace token found.[/red]")
+        return False
+    console.print(
+        "Trying upload via HuggingFace API instead ...", style="bold yellow"
+    )
+    try:
+        api = HfApi(token=token)
+        api.upload_folder(
+            folder_path=str(app_path),
+            repo_id=repo_id,
+            repo_type="space",
+            commit_message=commit_message,
+            delete_patterns=["*"],
+        )
+        return True
+    except Exception as e:
+        console.print(f"[red]API upload failed: {e}[/red]")
+        return False
 
 
 def publish(
@@ -745,92 +785,113 @@ def publish(
             exit()
 
         console.print("App already exists on Hugging Face Spaces.", style="bold blue")
-        pull_result = subprocess.run(
-            ["git", "pull", repo_url, "main"],
-            cwd=app_path,
-            capture_output=True,
-            text=True,
-        )
-        if pull_result.returncode != 0:
-            console.print(
-                f"[red]Failed to pull latest changes: {pull_result.stderr}[/red]"
-            )
-            sys.exit(1)
 
-        status_output = (
-            subprocess.check_output(["git", "status", "--porcelain"], cwd=app_path)
-            .decode("utf-8")
-            .strip()
-        )
+        has_git = (Path(app_path) / ".git").exists()
 
-        if status_output == "":
-            console.print(
-                "✅ No changes to commit.",
-                style="bold green",
-            )
-            push_anyway = questionary.confirm(
-                "Do you want to try to push anyway?"
-            ).ask()
-            if not push_anyway:
-                console.print("[red]Aborted.[/red]")
-                exit()
+        if not has_git:
+            # No local git repo — skip git flow, upload directly via API.
+            if no_check:
+                console.print("[WARNING] Skipping checks as per --nocheck flag.", style="bold yellow")
             else:
-                console.print("Trying to push anyway...")
-                pushed = try_to_push(console, Path(app_path))
-            exit()
+                console.print(f"\n[CHECK] Running checks on the app at {app_path}/...")
+                check(console, str(app_path))
 
-        if no_check:
-            console.print(
-                "⚠️ Skipping checks as per --nocheck flag.",
-                style="bold yellow",
-            )
-        else:
-            console.print(f"\n🔎 Running checks on the app at {app_path}/...")
-            check(console, str(app_path))
-
-        if commit_message is None:
-            commit_message = questionary.text(
-                "\n$ Enter a commit message for the update:",
-                default="Update app",
-            ).ask()
             if commit_message is None:
-                console.print("[red]Aborted.[/red]")
+                commit_message = questionary.text(
+                    "\n$ Enter a commit message for the update:",
+                    default="Update app",
+                ).ask()
+                if commit_message is None:
+                    console.print("[red]Aborted.[/red]")
+                    exit()
+
+            if not _upload_via_api(console, Path(app_path), repo_path, commit_message):
+                sys.exit(1)
+            console.print("[OK] App updated successfully.")
+        else:
+            # Git repo exists — try the git-based flow with API fallback.
+            pull_result = subprocess.run(
+                ["git", "pull", repo_url, "main"],
+                cwd=app_path,
+                capture_output=True,
+                text=True,
+                env=_git_env(),
+            )
+            if pull_result.returncode != 0:
+                console.print(
+                    "[yellow]Could not pull latest changes (git credentials may be missing).[/yellow]"
+                )
+
+            status_output = (
+                subprocess.check_output(["git", "status", "--porcelain"], cwd=app_path)
+                .decode("utf-8")
+                .strip()
+            )
+
+            if status_output == "":
+                console.print("[OK] No changes to commit.", style="bold green")
+                push_anyway = questionary.confirm(
+                    "Do you want to try to push anyway?"
+                ).ask()
+                if not push_anyway:
+                    console.print("[red]Aborted.[/red]")
+                    exit()
+                else:
+                    console.print("Trying to push anyway...")
+                    pushed = try_to_push(console, Path(app_path))
+                    if not pushed:
+                        pushed = _upload_via_api(console, Path(app_path), repo_path, "Update app")
+                    if not pushed:
+                        sys.exit(1)
                 exit()
 
-        # commit local changes
-        console.print("Committing changes locally ...", style="bold blue")
-        add_result = subprocess.run(
-            ["git", "add", "."], cwd=app_path, capture_output=True, text=True
-        )
-        if add_result.returncode != 0:
-            console.print(f"[red]git add failed: {add_result.stderr}[/red]")
-            sys.exit(1)
+            if no_check:
+                console.print("[WARNING] Skipping checks as per --nocheck flag.", style="bold yellow")
+            else:
+                console.print(f"\n[CHECK] Running checks on the app at {app_path}/...")
+                check(console, str(app_path))
 
-        commit_result = subprocess.run(
-            ["git", "commit", "-m", commit_message],
-            cwd=app_path,
-            capture_output=True,
-            text=True,
-        )
-        if commit_result.returncode != 0:
-            console.print(f"[red]git commit failed: {commit_result.stderr}[/red]")
-            sys.exit(1)
+            if commit_message is None:
+                commit_message = questionary.text(
+                    "\n$ Enter a commit message for the update:",
+                    default="Update app",
+                ).ask()
+                if commit_message is None:
+                    console.print("[red]Aborted.[/red]")
+                    exit()
 
-        # && git push HEAD:main"
+            console.print("Committing changes locally ...", style="bold blue")
+            add_result = subprocess.run(
+                ["git", "add", "."], cwd=app_path, capture_output=True, text=True
+            )
+            if add_result.returncode != 0:
+                console.print(f"[red]git add failed: {add_result.stderr}[/red]")
+                sys.exit(1)
 
-        pushed = try_to_push(console, Path(app_path))
-        if not pushed:
-            exit()
+            commit_result = subprocess.run(
+                ["git", "commit", "-m", commit_message],
+                cwd=app_path,
+                capture_output=True,
+                text=True,
+            )
+            if commit_result.returncode != 0:
+                console.print(f"[red]git commit failed: {commit_result.stderr}[/red]")
+                sys.exit(1)
 
-        console.print("✅ App updated successfully.")
+            pushed = try_to_push(console, Path(app_path))
+            if not pushed:
+                pushed = _upload_via_api(console, Path(app_path), repo_path, commit_message)
+            if not pushed:
+                sys.exit(1)
+            console.print("[OK] App updated successfully.")
     else:
         if no_check:
             console.print(
-                "⚠️ Skipping checks as per --nocheck flag.",
+                "[WARNING] Skipping checks as per --nocheck flag.",
                 style="bold yellow",
             )
         else:
-            console.print(f"\n🔎 Running checks on the app at {app_path}/...")
+            console.print(f"\n[CHECK] Running checks on the app at {app_path}/...")
             check(console, str(app_path))
 
         # Determine privacy setting
@@ -912,12 +973,14 @@ def publish(
             cwd=app_path,
             capture_output=True,
             text=True,
+            env=_git_env(),
         )
         if push_result.returncode != 0:
             console.print(f"[red]git push failed: {push_result.stderr}[/red]")
-            sys.exit(1)
+            if not _upload_via_api(console, Path(app_path), repo_path, "Initial commit"):
+                sys.exit(1)
 
-        console.print("✅ App published successfully.", style="bold green")
+        console.print("[OK] App published successfully.", style="bold green")
 
         if official:
             # ask for confirmation

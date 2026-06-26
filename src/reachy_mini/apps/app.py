@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -52,6 +52,16 @@ class ReachyMiniApp(ABC):
         self.settings_app: FastAPI | None = None
         if self.custom_app_url is not None and not self.dont_start_webserver:
             self.settings_app = FastAPI()
+
+            # Prevent browser from caching static files across different apps
+            # that reuse the same port.
+            @self.settings_app.middleware("http")
+            async def no_cache_middleware(
+                request: Request, call_next: Any
+            ) -> Response:
+                response: Response = await call_next(request)
+                response.headers["Cache-Control"] = "no-store"
+                return response
 
             static_dir = self._get_instance_path().parent / "static"
             if static_dir.exists():

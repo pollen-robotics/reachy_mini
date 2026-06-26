@@ -16,22 +16,15 @@ from pydantic import BaseModel, Field
 from reachy_mini.daemon.app.dependencies import get_backend
 from reachy_mini.daemon.backend.abstract import Backend
 
-from .volume_control import VolumeControl, create_volume_control
+from .volume_control import VolumeControl, get_volume_control
 
 router = APIRouter(prefix="/volume")
 logger = logging.getLogger(__name__)
 
-# Lazily-initialised singleton – created on first request
-# Remark: removing this could be an over-kill yet efficient way to account for dynamic changes in the audio devices :eyes:
-_volume_control: VolumeControl | None = None
-
-
-def _get_volume_control() -> VolumeControl:
-    """Return the shared VolumeControl instance, creating it on first call."""
-    global _volume_control  # noqa: PLW0603
-    if _volume_control is None:
-        _volume_control = create_volume_control()
-    return _volume_control
+# The VolumeControl singleton now lives in volume_control.get_volume_control()
+# so the WebRTC command handler in the backend can share the same instance.
+# Kept as a thin alias here to minimise this diff.
+_get_volume_control = get_volume_control
 
 
 class VolumeRequest(BaseModel):
@@ -110,13 +103,11 @@ async def set_volume(
 
     daemon = getattr(request.app.state, "daemon", None)
     backend: Backend | None = daemon.backend if daemon is not None else None
-    if backend is not None and backend.ready.is_set() and backend.audio:
+    if backend is not None and backend.ready.is_set():
         try:
-            backend.audio.play_sound("impatient1.wav")
+            backend.play_sound("impatient1.wav")
         except Exception as e:
             logger.warning("Failed to play test sound: %s", e)
-    else:
-        logger.warning("No audio backend available, skipping test sound.")
 
     return response
 
@@ -124,11 +115,8 @@ async def set_volume(
 @router.post("/test-sound")
 async def play_test_sound(backend: Backend = Depends(get_backend)) -> TestSoundResponse:
     """Play a test sound."""
-    if not backend.audio:
-        raise HTTPException(status_code=503, detail="Audio device not available")
-
     try:
-        backend.audio.play_sound("impatient1.wav")
+        backend.play_sound("impatient1.wav")
         return TestSoundResponse(status="ok", message="Test sound played")
     except Exception as e:
         msg = str(e).lower()

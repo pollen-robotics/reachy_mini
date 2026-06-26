@@ -1,5 +1,15 @@
 # Skill: Safe Torque Handling
 
+## Motor Control Modes
+
+Three modes selected via `setMotorMode(...)` (JS) or `enable_motors()` / `disable_motors()` / `enable_gravity_compensation()` (Python):
+
+- **`enabled`** — torque on, position control. Motors hold the commanded pose. Default working state.
+- **`disabled`** — torque off. The head is fully compliant; it falls under gravity. Used during motion recording so the user can move the head by hand.
+- **`gravity_compensation`** — torque on, current control. Motors actively cancel gravity, so the head feels weightless and can be pushed around by hand without falling. Requires the Placo kinematics engine.
+
+`enable_motors()` pins all targets to the present pose before flipping torque on, so the head never snaps to an old goal. Set targets *after* enabling, not before — targets set before are overwritten.
+
 ## When to Use
 
 - Enabling or disabling motor torque

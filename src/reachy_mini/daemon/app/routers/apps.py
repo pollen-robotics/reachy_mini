@@ -66,6 +66,16 @@ async def install_app(
     app_manager: "AppManager" = Depends(get_app_manager),
 ) -> dict[str, str]:
     """Install a new app by its info (background, returns job_id)."""
+    # HuggingFace Spaces are the only source kind installable via the API.
+    if app_info.source_kind != SourceKind.HF_SPACE:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"source_kind '{app_info.source_kind.value}' is not installable "
+                "via the API"
+            ),
+        )
+
     global _update_cache
     _update_cache = None  # Invalidate cache
 

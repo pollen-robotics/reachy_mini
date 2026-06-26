@@ -8,6 +8,76 @@
 
 [[autodoc]] reachy_mini.daemon.daemon.DaemonStatus
 
+## Robot App Lock
+
+The robot *app lock* is the daemon's single source of truth for which
+managed app currently holds the robot. It serializes the two managed
+entry points — local Python apps launched by :class:`AppManager` and
+remote WebRTC clients routed through the central signaling relay.
+
+It does **not** gate every code path that can drive the robot: SDK
+clients talking to the daemon directly over LAN/WebSocket bypass it.
+The name uses "app" deliberately to reflect that narrower scope.
+
+### Concurrency model
+
+Two managed entry points can open a session with the robot:
+
+1. **Local path** — a Python app launched via
+   ``POST /api/apps/start``. Runs as a subprocess of the daemon,
+   talks to the backend directly.
+2. **Remote path** — a browser client authenticated through the
+   HuggingFace central signaling server, routed to the robot over
+   WebRTC. Handled by ``CentralSignalingRelay`` in its own thread.
+
+Without coordination, both paths can grab the robot at the same time
+and fight over motor commands, camera, and audio. :class:`RobotAppLock`
+prevents that with three mutually exclusive states:
+
+- ``free`` — no managed app holds the slot.
+- ``local_app(name)`` — a Python app is running.
+- ``remote_session(name)`` — a remote WebRTC client is connected.
+
+**Acquire rules:**
+
+- The local path uses :meth:`RobotAppLock.acquire_local_evicting_remote`.
+  If a remote session is active, the lock is transitioned atomically
+  to ``local_app`` and the relay is asked to send ``endSession`` to
+  the remote peer and to local GStreamer so the existing WebRTC
+  connection tears down cleanly. If another Python app already holds
+  the lock, the acquire raises ``RuntimeError``.
+- The remote path uses :meth:`RobotAppLock.try_acquire_remote`. This
+  fails fast (returns ``False``) whenever the lock is not ``free`` —
+  incoming remote sessions are refused with
+  ``{"type": "endSession", "reason": "robot_busy_local_app"}``.
+
+**Release rules:**
+
+- :meth:`RobotAppLock.release_local` is called from the subprocess
+  monitor's ``finally`` block, so clean exits, crashes, ``SIGKILL``,
+  OOM and task cancellation all release the lock.
+- :meth:`RobotAppLock.release_remote` is called from every
+  ``endSession`` handler (both directions), from
+  ``_close_connections`` on disconnect/reconnect, and from the relay's
+  ``stop()``. All release calls are idempotent — they no-op if the
+  lock is not in the corresponding state.
+
+**Cross-thread considerations:** the lock state is guarded by a
+``threading.Lock``. The eviction callback is registered by the relay
+and invoked by AppManager from the main asyncio loop, but dispatches
+the actual session tear-down onto the relay's own event loop via
+``asyncio.run_coroutine_threadsafe``. AppManager awaits the tear-down
+before spawning the Python subprocess, so the remote peer has
+released its media handles before the local app opens them.
+
+### API reference
+
+[[autodoc]] reachy_mini.daemon.robot_app_lock.RobotAppLock
+
+[[autodoc]] reachy_mini.daemon.robot_app_lock.RobotAppLockState
+
+[[autodoc]] reachy_mini.daemon.robot_app_lock.RobotAppLockStatus
+
 ## Backend Classes
 
 ### Abstract Backend
@@ -97,6 +167,8 @@
 [[autodoc]] reachy_mini.daemon.app.routers.daemon.restart_daemon
 
 [[autodoc]] reachy_mini.daemon.app.routers.daemon.get_daemon_status
+
+[[autodoc]] reachy_mini.daemon.app.routers.daemon.get_robot_app_lock_status
 
 ### State Router
 

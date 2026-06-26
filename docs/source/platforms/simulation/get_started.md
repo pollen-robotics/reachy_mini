@@ -38,9 +38,11 @@ mjpython -m reachy_mini.daemon.app.main --sim
 
 > **⚠️ macOS Users:** `uv` may have compatibility issues with MuJoCo on macOS. If you encounter installation or runtime problems, it's recommended to use `pip` directly instead of `uv` for MuJoCo-related packages.
 
-## 3. Dashboard and Apps
+## 3. Reachy Mini Control and Apps
 
-You can access the Dashboard at **[http://localhost:8000](http://localhost:8000)**.
+You can use **Reachy Mini Control** to interact with the simulated robot. Simply open the app and connect to the local simulation.
+
+![Control App with local daemon](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/control-app-external-daemon.png)
 
 * **Apps:** You can install and run Apps! They will execute inside the simulation (e.g., the robot will move in the 3D viewer).
 
@@ -59,6 +61,9 @@ reachy-mini-daemon --sim --scene minimal
 ## 5. Connecting your Code
 
 Once the simulation is running, it behaves exactly like a real **Reachy Mini Lite** connected via USB. The daemon listens on `localhost`, and you can run any Python SDK script without modification:
+
+> **Note:** in simulation mode the Reachy Mini Audio USB card is not present, so hardware acoustic echo cancellation (XMOS) is unavailable. Echo cancellation is instead performed in software by GStreamer (`webrtcdsp` + `webrtcechoprobe`) on the default system microphone and speakers.
+
 
 ```python
 from reachy_mini import ReachyMini
@@ -96,4 +101,25 @@ with ReachyMini() as mini:
 
 ## ❓ Troubleshooting
 
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../../troubleshooting.md)**
+<details><summary><strong>Segmentation fault from <code>libgstpython.dylib</code> when using <code>mjpython</code> (macOS)</strong></summary>
+
+You may see an error like:
+
+```
+ERROR: Caught a segmentation fault while loading plugin file:
+.../gstreamer_python/lib/gstreamer-1.0/libgstpython.dylib
+```
+
+This GStreamer plugin segfault is a known issue, which also happens with the real robot, but it occurs in a parallel process and doesn't cause any visible issue. With `mjpython` however, it crashes the main process. The fix is to rename the plugin so GStreamer no longer loads it:
+
+```bash
+# Find the file inside your environment (adjust the path to match yours)
+mv $(python -c "import gstreamer_python, pathlib; print(pathlib.Path(gstreamer_python.__file__).parent / 'lib/gstreamer-1.0/libgstpython.dylib')") \
+   $(python -c "import gstreamer_python, pathlib; print(pathlib.Path(gstreamer_python.__file__).parent / 'lib/gstreamer-1.0/libgstpython_.dylib')")
+```
+
+This simply prevents GStreamer from auto-loading the plugin. It does not affect normal audio/video functionality.
+
+</details>
+
+Encountering another issue? 👉 **[Check the Troubleshooting & FAQ Guide](../../troubleshooting.md)**

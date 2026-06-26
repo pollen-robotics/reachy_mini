@@ -32,7 +32,7 @@ rpicam-still -t 1 -r -o test.jpg --width 4608 --height 2592 --autofocus-mode man
 rpicam-still -t 1 -r -o test.jpg --width 4608 --height 2592 --autofocus-mode manual --lens-position 1000
 ```
 
-At the SDK level, the camera is controlled by GStreamer using the [libcamerasrc](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/webrtc_daemon.py) component. You can view available parameters with the following command:
+At the daemon level, the camera is controlled by GStreamer using the [libcamerasrc](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/media_server.py) component. You can view available parameters with the following command:
 
 ```bash
 gst-inspect-1.0 libcamerasrc
@@ -73,6 +73,40 @@ python src/reachy_mini/media/audio_control_utils.py PP_MIN_NS --values 0
 # Writing to PP_MIN_NS with values: [0.0]
 # Write operation completed successfully
 ```
+
+Apps can also apply a group of custom audio parameters through the SDK when
+they run on the same machine as the audio board:
+
+```python
+from reachy_mini import ReachyMini
+
+# Replace the parameter names and values with the config for your app.
+custom_audio_config = (
+    ("PARAMETER_NAME", (value_1, value_2)),
+)
+
+with ReachyMini(media_backend="local") as mini:
+    applied = mini.media.audio.apply_audio_config(custom_audio_config)
+```
+
+For Reachy Mini Wireless, the USB audio board is attached to the on-board
+CM4. Remote apps (browser/Space or other non-local clients) can apply and
+read parameters over the daemon's REST API or the WebRTC DataChannel,
+without SSHing into the robot:
+
+```bash
+# Read a parameter over REST
+curl http://reachy-mini.local:8000/api/audio/config/parameter/AUDIO_MGR_MIC_GAIN
+
+# Apply a config over REST
+curl -X POST http://reachy-mini.local:8000/api/audio/config/apply \
+    -H 'Content-Type: application/json' \
+    -d '{"config": [{"name": "AUDIO_MGR_MIC_GAIN", "values": [1.0]}], "verify": true}'
+```
+
+From a JS app, the SDK exposes `robot.applyAudioConfig(config)` and
+`robot.readAudioParameter(name)` (same trusted transport that carries
+`setVolume` / `getVolume`).
 
 The microphone array outputs a stereo channel, so it is not possible to get the raw output of all 4 mics at once. However, you can output two raw microphones at a time:
 

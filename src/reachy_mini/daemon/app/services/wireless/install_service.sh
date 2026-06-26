@@ -16,6 +16,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# Cap glibc malloc arenas on the 4GB Pi 4 (see issue #1165 and launcher.sh).
+Environment=MALLOC_ARENA_MAX=2
 ExecStart=$LAUNCHER_PATH
 Restart=on-failure
 RestartSec=3s

@@ -1,106 +1,132 @@
 """GStreamer audio backend.
 
-This module provides an implementation of the AudioBase class using GStreamer.
-It offers advanced audio processing capabilities including microphone input,
-speaker output, and integration with the ReSpeaker microphone array for
-Direction of Arrival (DoA) estimation.
+Handles microphone input, speaker output, and sound-file playback using
+GStreamer pipelines.  Also provides Direction of Arrival (DoA) estimation
+via the ReSpeaker microphone array (see ``AudioDoA``).
 
-The GStreamer audio backend supports:
-- High-quality audio capture and playback
-- ReSpeaker microphone array integration
-- Direction of Arrival (DoA) estimation
-- Advanced audio processing pipelines
-- Multiple audio formats and sample rates
+Recording pipeline::
+
+    platform_source → queue → audioconvert → audioresample → appsink(F32LE)
+
+Playback pipeline::
+
+    appsrc(F32LE) → audioconvert → audioresample → platform_sink
+
+Platform audio sources / sinks are discovered at runtime:
+
+* **Linux (PipeWire / PulseAudio)**: ``pulsesrc`` / ``pulsesink``
+* **Linux (ALSA, Reachy Mini Wireless)**: ``alsasrc`` / ``alsasink``
+  with the preconfigured ``reachymini_audio_src`` / ``reachymini_audio_sink``
+  devices from ``~/.asoundrc``.
+* **Windows**: ``wasapi2src`` / ``wasapi2sink``
+* **macOS**: ``osxaudiosrc`` / ``osxaudiosink``
+* **Fallback**: ``autoaudiosrc`` / ``autoaudiosink``
+
+The "Reachy Mini Audio" card is located by name via ``Gst.DeviceMonitor``.
+If no matching card is found the platform default is used instead.
 
 Note:
-    This class is typically used internally by the MediaManager when the GSTREAMER
-    backend is selected. Direct usage is possible but usually not necessary.
+    This class is typically used internally by ``MediaManager`` when the
+    ``LOCAL`` backend is selected.  Direct usage is possible but usually
+    not necessary.
 
-Example usage via MediaManager:
-    >>> from reachy_mini.media.media_manager import MediaManager, MediaBackend
-    >>>
-    >>> # Create media manager with GStreamer backend
-    >>> media = MediaManager(backend=MediaBackend.GSTREAMER, log_level="INFO")
-    >>>
-    >>> # Start audio recording
-    >>> media.start_recording()
-    >>>
-    >>> # Get audio samples
-    >>> samples = media.get_audio_sample()
-    >>> if samples is not None:
-    ...     print(f"Captured {len(samples)} audio samples")
-    >>>
-    >>> # Get Direction of Arrival
-    >>> doa = media.get_DoA()
-    >>> if doa is not None:
-    ...     angle, speech_detected = doa
-    ...     print(f"Sound direction: {angle} radians, speech detected: {speech_detected}")
-    >>>
-    >>> # Clean up
-    >>> media.stop_recording()
-    >>> media.close()
+Example usage via MediaManager::
+
+    from reachy_mini.media.media_manager import MediaManager, MediaBackend
+
+    media = MediaManager(backend=MediaBackend.LOCAL)
+    media.start_recording()
+
+    samples = media.get_audio_sample()
+    if samples is not None:
+        print(f"Captured {len(samples)} audio samples")
+
+    doa = media.get_DoA()
+    if doa is not None:
+        angle, speech_detected = doa
+        print(f"Sound direction: {angle} rad, speech detected: {speech_detected}")
+
+    media.stop_recording()
+    media.close()
 
 """
 
 import os
 import platform
+import time
+from collections.abc import Callable
 from threading import Thread
 from typing import Optional
 
 import numpy as np
-import numpy.typing as npt
 
-from reachy_mini.media.audio_utils import (
-    has_reachymini_asoundrc,
-)
+from reachy_mini.media.audio_base import AEC_PROBE_NAME, AEC_RATE, AudioBase
+from reachy_mini.media.audio_utils import has_reachymini_asoundrc
+from reachy_mini.media.device_detection import get_audio_device
+from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 try:
     import gi
 except ImportError as e:
     raise ImportError(
-        "The 'gi' module is required for GStreamerAudio but could not be imported. \
-        Please check the gstreamer installation."
+        "The 'gi' module is required for GStreamerAudio but could not be imported. "
+        "Please check the gstreamer installation."
     ) from e
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
-
-from gi.repository import GLib, Gst, GstApp  # noqa: E402
-
-from .audio_base import AudioBase  # noqa: E402
+from gi.repository import GLib, Gst  # noqa: E402
 
 
 class GStreamerAudio(AudioBase):
-    """Audio implementation using GStreamer."""
+    """Audio implementation using GStreamer.
+
+    Extends ``AudioBase`` with a GStreamer-specific helper:
+
+    - ``clear_player()``: flush the playback appsrc immediately via GStreamer
+      flush events, dropping any queued audio.
+
+    (``clear_output_buffer()`` is deprecated and does nothing; use
+    ``clear_player()`` instead.)
+
+    """
+
+    PLAYBACK_SINK_BUFFER_TIME_US = 50_000
+    PLAYBACK_SINK_LATENCY_TIME_US = 5_000
 
     def __init__(self, log_level: str = "INFO") -> None:
-        """Initialize the GStreamer audio."""
+        """Initialize recording and playback pipelines.
+
+        Args:
+            log_level: Logging level for audio operations.
+                Options: ``'DEBUG'``, ``'INFO'``, ``'WARNING'``, ``'ERROR'``,
+                ``'CRITICAL'``.
+
+        """
         super().__init__(log_level=log_level)
+
+        self._head_wobbler: Optional[HeadWobbler] = None
+
         Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
-        # self._id_audio_card = get_respeaker_card_number()
+        self._webrtcechoprobe: Optional[Gst.Element] = None
 
-        self._pipeline_record = Gst.Pipeline.new("audio_recorder")
-        self._appsink_audio: Optional[GstApp] = None
-        self._init_pipeline_record(self._pipeline_record)
-        self._bus_record = self._pipeline_record.get_bus()
-        self._bus_record.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
-        )
+        # Single pipeline holds both record and playback chains so that
+        # webrtcdsp + webrtcechoprobe share a clock (required by the
+        # GStreamer webrtcdsp docs to align the far-end reference with
+        # the mic capture).
+        self._pipeline = Gst.Pipeline.new("reachymini_audio")
+        self._init_pipeline_record(self._pipeline)
+        self._bus = self._pipeline.get_bus()
+        self._bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline)
 
         self._playbin: Optional[Gst.Element] = None
-        self._pipeline_playback = Gst.Pipeline.new("audio_player")
-        self._appsrc: Optional[GstApp] = None
-        self._init_pipeline_playback(self._pipeline_playback)
-        self._bus_playback = self._pipeline_playback.get_bus()
-        self._bus_playback.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
-        )
+        self._init_pipeline_playback(self._pipeline)
 
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
@@ -112,28 +138,47 @@ class GStreamerAudio(AudioBase):
         self._appsink_audio.set_property("max-buffers", 200)
 
         audiosrc: Optional[Gst.Element] = None
+        webrtcdsp: Optional[Gst.Element] = None
 
-        id_audio_card = self._get_audio_device("Source")
+        if has_reachymini_asoundrc():
+            # Wireless CM4: use the preconfigured .asoundrc ALSA devices
+            # which route through the XMOS AEC loopback properly.
+            audiosrc = Gst.ElementFactory.make("alsasrc")
+            audiosrc.set_property("device", "reachymini_audio_src")
+            self.logger.info("Using .asoundrc audio source: reachymini_audio_src")
+        else:
+            id_audio_card = get_audio_device("Source")
 
-        if id_audio_card is None:
-            if has_reachymini_asoundrc():
-                # reachy mini wireless has a preconfigured asoundrc
-                audiosrc = Gst.ElementFactory.make("alsasrc")
-                audiosrc.set_property("device", "reachymini_audio_src")
-            else:
+            if id_audio_card is None:
                 self.logger.warning(
                     "No specific audio card found, using default audio source."
                 )
                 audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
-        elif platform.system() == "Windows":
-            audiosrc = Gst.ElementFactory.make("wasapi2src")
-            audiosrc.set_property("device", id_audio_card)
-        elif platform.system() == "Darwin":
-            audiosrc = Gst.ElementFactory.make("osxaudiosrc")
-            audiosrc.set_property("unique-id", id_audio_card)
-        else:
-            audiosrc = Gst.ElementFactory.make("pulsesrc")
-            audiosrc.set_property("device", f"{id_audio_card}")
+                self._webrtcechoprobe = Gst.ElementFactory.make("webrtcechoprobe")
+                webrtcdsp = Gst.ElementFactory.make("webrtcdsp")
+                if self._webrtcechoprobe is None or webrtcdsp is None:
+                    self.logger.warning(
+                        "Cannot enable webrtcdsp. Check if gst-plugins-bad are available."
+                    )
+                    # Drop both so the playback chain doesn't wire a probe
+                    # without a matching DSP (or vice versa).
+                    self._webrtcechoprobe = None
+                    webrtcdsp = None
+                else:
+                    # Pair probe ↔ dsp so the playback signal is used as the
+                    # far-end reference for echo cancellation on the mic path.
+                    self._webrtcechoprobe.set_property("name", AEC_PROBE_NAME)
+                    webrtcdsp.set_property("probe", AEC_PROBE_NAME)
+                    self.logger.info("Enabling webRTC echo cancellation.")
+            elif platform.system() == "Windows":
+                audiosrc = Gst.ElementFactory.make("wasapi2src")
+                audiosrc.set_property("device", id_audio_card)
+            elif platform.system() == "Darwin":
+                audiosrc = Gst.ElementFactory.make("osxaudiosrc")
+                audiosrc.set_property("unique-id", id_audio_card)
+            else:
+                audiosrc = Gst.ElementFactory.make("pulsesrc")
+                audiosrc.set_property("device", f"{id_audio_card}")
 
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
@@ -148,35 +193,170 @@ class GStreamerAudio(AudioBase):
         pipeline.add(audioresample)
         pipeline.add(self._appsink_audio)
 
-        audiosrc.link(queue)
+        if webrtcdsp:
+            # webrtcdsp requires S16LE at 8/16/32/48 kHz — convert/resample
+            # in, then convert back to F32LE at SAMPLE_RATE for the appsink.
+            ac_in = Gst.ElementFactory.make("audioconvert")
+            ar_in = Gst.ElementFactory.make("audioresample")
+            cf_in = Gst.ElementFactory.make("capsfilter")
+            cf_in.set_property(
+                "caps",
+                Gst.Caps.from_string(
+                    f"audio/x-raw,format=S16LE,rate={AEC_RATE},"
+                    f"channels={self.CHANNELS},layout=interleaved"
+                ),
+            )
+            for el in (ac_in, ar_in, cf_in, webrtcdsp):
+                pipeline.add(el)
+            audiosrc.link(ac_in)
+            ac_in.link(ar_in)
+            ar_in.link(cf_in)
+            cf_in.link(webrtcdsp)
+            webrtcdsp.link(queue)
+        else:
+            audiosrc.link(queue)
+
         queue.link(audioconvert)
         audioconvert.link(audioresample)
         audioresample.link(self._appsink_audio)
 
-    def __del__(self) -> None:
-        """Destructor to ensure gstreamer resources are released."""
-        super().__del__()
-        self._loop.quit()
-        self._bus_record.remove_watch()
-        self._bus_playback.remove_watch()
+    def _build_audiosink_element(self) -> Gst.Element:
+        """Create a platform-appropriate audio sink element."""
+        audiosink: Optional[Gst.Element] = None
 
-    def set_max_output_buffers(self, max_buffers: int) -> None:
-        """Set the maximum number of output buffers to queue in the player.
+        if has_reachymini_asoundrc():
+            audiosink = Gst.ElementFactory.make("alsasink")
+            audiosink.set_property("device", "reachymini_audio_sink")
+            self.logger.info("Using .asoundrc audio sink: reachymini_audio_sink")
+        else:
+            id_audio_card = get_audio_device("Sink")
 
-        Args:
-            max_buffers (int): Maximum number of buffers to queue.
+            if id_audio_card is None:
+                self.logger.warning(
+                    "No specific audio card found, using default audio sink."
+                )
+                audiosink = Gst.ElementFactory.make("autoaudiosink")
+            elif platform.system() == "Windows":
+                audiosink = Gst.ElementFactory.make("wasapi2sink")
+                audiosink.set_property("device", id_audio_card)
+            elif platform.system() == "Darwin":
+                audiosink = Gst.ElementFactory.make("osxaudiosink")
+                audiosink.set_property("unique-id", id_audio_card)
+            else:
+                audiosink = Gst.ElementFactory.make("pulsesink")
+                audiosink.set_property("device", f"{id_audio_card}")
+
+        if audiosink is None:
+            raise RuntimeError("Failed to create audio sink element")
+
+        if audiosink.find_property("buffer-time") is not None:
+            audiosink.set_property("buffer-time", self.PLAYBACK_SINK_BUFFER_TIME_US)
+        if audiosink.find_property("latency-time") is not None:
+            audiosink.set_property("latency-time", self.PLAYBACK_SINK_LATENCY_TIME_US)
+
+        return audiosink
+
+    def _make_wobbler_appsink(self) -> Gst.Element:
+        """Create an appsink that feeds audio to the head wobbler.
+
+        ``sync=True`` so new-sample fires at the buffer's PTS on the
+        pipeline clock — i.e. when the audiosink outputs it. The local
+        pipeline has a deterministic clock and no network jitter, so
+        PTS-based sync gives correct A/V timing for both playbin
+        (``play_sound``) and push (``push_audio_sample``) paths.
+        """
+        appsink = Gst.ElementFactory.make("appsink")
+        # Force mono so the speech tapper receives a 1-D float32 array.
+        # The per-branch audioconvert in _build_audiosink_tee_bin /
+        # _init_pipeline_playback handles the downmix.
+        caps = Gst.Caps.from_string(
+            f"audio/x-raw,format=F32LE,channels=1,"
+            f"rate={self.SAMPLE_RATE},layout=interleaved"
+        )
+        appsink.set_property("caps", caps)
+        appsink.set_property("drop", True)
+        appsink.set_property("max-buffers", 5)
+        appsink.set_property("sync", True)
+        appsink.set_property("emit-signals", True)
+        appsink.connect("new-sample", self._on_wobbler_sample)
+        return appsink
+
+    def _on_wobbler_sample(self, appsink: Gst.Element) -> Gst.FlowReturn:
+        """GStreamer callback: forward audio buffer to the head wobbler.
+
+        The appsink is ``sync=True``, so this callback fires at the
+        buffer's PTS on the pipeline clock — audio is playing NOW.
+        """
+        sample = appsink.pull_sample()
+        if sample is None or self._head_wobbler is None:
+            return Gst.FlowReturn.OK
+        buf = sample.get_buffer()
+        data = buf.extract_dup(0, buf.get_size())
+        pcm = np.frombuffer(data, dtype=np.float32)
+        self._head_wobbler.feed(pcm, time.monotonic_ns())
+        return Gst.FlowReturn.OK
+
+    def _build_audiosink_tee_bin(self) -> Gst.Bin:
+        """Build a Gst.Bin with a tee splitting audio to speaker and wobbler.
+
+        Per-branch audioconvert+audioresample isolate each leaf's caps
+        from the other (the wobbler appsink demands F32LE/2/16000; the
+        audiosink wants whatever the device prefers — e.g. on the
+        wireless XMOS PCM, anything but its native rate triggers an
+        IEC958 fallback that fails to open).
+
+        The bin exposes a single ghost sink pad for use as a playbin audio-sink::
+
+            ghost_sink → tee ─┬→ queue → audioconvert → audioresample → audiosink
+                               └→ queue → audioconvert → audioresample → appsink
 
         """
-        if self._appsrc is not None:
-            self._appsrc.set_property("max-buffers", max_buffers)
-            self._appsrc.set_property("leaky-type", 2)  # drop old buffers
-        else:
-            self.logger.warning(
-                "AppSrc is not initialized. Call start_playing() first."
-            )
+        audio_bin = Gst.Bin.new("audio_tee_bin")
+
+        tee = Gst.ElementFactory.make("tee")
+        queue_speaker = Gst.ElementFactory.make("queue")
+        ac_speaker = Gst.ElementFactory.make("audioconvert")
+        ar_speaker = Gst.ElementFactory.make("audioresample")
+        audiosink = self._build_audiosink_element()
+        queue_wobbler = Gst.ElementFactory.make("queue")
+        ac_wobbler = Gst.ElementFactory.make("audioconvert")
+        ar_wobbler = Gst.ElementFactory.make("audioresample")
+        appsink_wobbler = self._make_wobbler_appsink()
+
+        for el in (
+            tee,
+            queue_speaker,
+            ac_speaker,
+            ar_speaker,
+            audiosink,
+            queue_wobbler,
+            ac_wobbler,
+            ar_wobbler,
+            appsink_wobbler,
+        ):
+            audio_bin.add(el)
+
+        tee.link(queue_speaker)
+        queue_speaker.link(ac_speaker)
+        ac_speaker.link(ar_speaker)
+        ar_speaker.link(audiosink)
+
+        tee.link(queue_wobbler)
+        queue_wobbler.link(ac_wobbler)
+        ac_wobbler.link(ar_wobbler)
+        ar_wobbler.link(appsink_wobbler)
+
+        ghost_pad = Gst.GhostPad.new("sink", tee.get_static_pad("sink"))
+        audio_bin.add_pad(ghost_pad)
+
+        return audio_bin
 
     def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
         self._appsrc = Gst.ElementFactory.make("appsrc")
+        # We stamp the first buffer of each utterance ourselves (DISCONT +
+        # running-time PTS) and leave follow-up buffers with no timestamp
+        # so the audiomixer places them contiguously by byte offset.
+        self._appsrc.set_property("do-timestamp", False)
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
         caps = Gst.Caps.from_string(
@@ -184,171 +364,157 @@ class GStreamerAudio(AudioBase):
         )
         self._appsrc.set_property("caps", caps)
 
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        audioresample = Gst.ElementFactory.make("audioresample")
+        mixer = Gst.ElementFactory.make("audiomixer")
+        appsrc_queue = Gst.ElementFactory.make("queue")
 
-        audiosink: Optional[Gst.Element] = None
+        silence = Gst.ElementFactory.make("audiotestsrc")
+        silence.set_property("is-live", True)
+        silence.set_property("wave", 4)  # silence
+        # Pin silence caps to the appsrc format so audiomixer sees matching
+        # inputs (it can't aggregate F32LE@N and S16@44100 together).
+        silence_caps = Gst.ElementFactory.make("capsfilter")
+        silence_caps.set_property(
+            "caps",
+            Gst.Caps.from_string(
+                f"audio/x-raw,format=F32LE,channels={self.CHANNELS},"
+                f"rate={self.SAMPLE_RATE},layout=interleaved"
+            ),
+        )
+        silence_queue = Gst.ElementFactory.make("queue")
 
-        id_audio_card = self._get_audio_device("Sink")
+        tee = Gst.ElementFactory.make("tee")
+        queue_speaker = Gst.ElementFactory.make("queue")
+        ac_speaker = Gst.ElementFactory.make("audioconvert")
+        ar_speaker = Gst.ElementFactory.make("audioresample")
+        audiosink = self._build_audiosink_element()
+        queue_wobbler = Gst.ElementFactory.make("queue")
+        ac_wobbler = Gst.ElementFactory.make("audioconvert")
+        ar_wobbler = Gst.ElementFactory.make("audioresample")
+        appsink_wobbler = self._make_wobbler_appsink()
 
-        if id_audio_card is None:
-            if has_reachymini_asoundrc():
-                # reachy mini wireless has a preconfigured asoundrc
-                audiosink = Gst.ElementFactory.make("alsasink")
-                audiosink.set_property("device", "reachymini_audio_sink")
-            else:
-                self.logger.warning(
-                    "No specific audio card found, using default audio sink."
-                )
-                audiosink = Gst.ElementFactory.make(
-                    "autoaudiosink"
-                )  # use default speaker
-        elif platform.system() == "Windows":
-            audiosink = Gst.ElementFactory.make("wasapi2sink")
-            audiosink.set_property("device", id_audio_card)
-        elif platform.system() == "Darwin":
-            audiosink = Gst.ElementFactory.make("osxaudiosink")
-            audiosink.set_property("unique-id", id_audio_card)
+        for el in (
+            self._appsrc,
+            appsrc_queue,
+            silence,
+            silence_caps,
+            silence_queue,
+            mixer,
+            tee,
+            queue_speaker,
+            ac_speaker,
+            ar_speaker,
+            audiosink,
+            queue_wobbler,
+            ac_wobbler,
+            ar_wobbler,
+            appsink_wobbler,
+        ):
+            pipeline.add(el)
+
+        self._appsrc.link(appsrc_queue)
+        appsrc_queue.link(mixer)
+        silence.link(silence_caps)
+        silence_caps.link(silence_queue)
+        silence_queue.link(mixer)
+
+        if self._webrtcechoprobe is not None:
+            # webrtcechoprobe requires S16LE at 8/16/32/48 kHz.
+            ac_probe = Gst.ElementFactory.make("audioconvert")
+            ar_probe = Gst.ElementFactory.make("audioresample")
+            cf_probe = Gst.ElementFactory.make("capsfilter")
+            cf_probe.set_property(
+                "caps",
+                Gst.Caps.from_string(
+                    f"audio/x-raw,format=S16LE,rate={AEC_RATE},"
+                    f"channels={self.CHANNELS},layout=interleaved"
+                ),
+            )
+            for el in (ac_probe, ar_probe, cf_probe, self._webrtcechoprobe):
+                pipeline.add(el)
+            mixer.link(ac_probe)
+            ac_probe.link(ar_probe)
+            ar_probe.link(cf_probe)
+            cf_probe.link(self._webrtcechoprobe)
+            self._webrtcechoprobe.link(tee)
         else:
-            audiosink = Gst.ElementFactory.make("pulsesink")
-            audiosink.set_property("device", f"{id_audio_card}")
+            mixer.link(tee)
 
-        pipeline.add(audiosink)
-        pipeline.add(self._appsrc)
-        pipeline.add(audioconvert)
-        pipeline.add(audioresample)
+        tee.link(queue_speaker)
+        queue_speaker.link(ac_speaker)
+        ac_speaker.link(ar_speaker)
+        ar_speaker.link(audiosink)
+        tee.link(queue_wobbler)
+        queue_wobbler.link(ac_wobbler)
+        ac_wobbler.link(ar_wobbler)
+        ar_wobbler.link(appsink_wobbler)
 
-        self._appsrc.link(audioconvert)
-        audioconvert.link(audioresample)
-        audioresample.link(audiosink)
-
-    def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
-        t = msg.type
-        if t == Gst.MessageType.EOS:
-            self.logger.warning("End-of-stream")
-            return False
-
-        elif t == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
-            self.logger.error(f"Error: {err} {debug}")
-            return False
-
-        return True
+    def _on_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
+    ) -> bool:
+        if msg.type == Gst.MessageType.EOS and self._head_wobbler is not None:
+            self._head_wobbler.stop()
+        return super()._on_bus_message(bus, msg, pipeline)
 
     def _dump_latency(self) -> None:
         query = Gst.Query.new_latency()
-        self._pipeline_playback.query(query)
+        self._pipeline.query(query)
         self.logger.info(f"Audio pipeline latency {query.parse_latency()}")
 
     def start_recording(self) -> None:
-        """Open the audio card using GStreamer.
-
-        See AudioBase.start_recording() for complete documentation.
-        """
-        self._pipeline_record.set_state(Gst.State.PLAYING)
-
-    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
-        sample = appsink.try_pull_sample(20_000_000)
-        if sample is None:
-            return None
-        data = None
-        if isinstance(sample, Gst.Sample):
-            buf = sample.get_buffer()
-            if buf is None:
-                self.logger.warning("Buffer is None")
-
-            data = buf.extract_dup(0, buf.get_size())
-        return data
-
-    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
-        """Read a sample from the audio card. Returns the sample or None if error.
-
-        See AudioBase.get_audio_sample() for complete documentation.
-
-        Returns:
-            Optional[npt.NDArray[np.float32]]: The captured sample in raw format, or None if error.
-
-        """
-        sample = self._get_sample(self._appsink_audio)
-        if sample is None:
-            return None
-        return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
-
-    def get_input_audio_samplerate(self) -> int:
-        """Get the input samplerate of the audio device.
-
-        See AudioBase.get_input_audio_samplerate() for complete documentation.
-        """
-        return self.SAMPLE_RATE
-
-    def get_output_audio_samplerate(self) -> int:
-        """Get the output samplerate of the audio device.
-
-        See AudioBase.get_output_audio_samplerate() for complete documentation.
-        """
-        return self.SAMPLE_RATE
-
-    def get_input_channels(self) -> int:
-        """Get the number of input channels of the audio device.
-
-        See AudioBase.get_input_channels() for complete documentation.
-        """
-        return self.CHANNELS
-
-    def get_output_channels(self) -> int:
-        """Get the number of output channels of the audio device.
-
-        See AudioBase.get_output_channels() for complete documentation.
-        """
-        return self.CHANNELS
+        """Start capturing audio from the microphone."""
+        self._pipeline.set_state(Gst.State.PLAYING)
 
     def stop_recording(self) -> None:
-        """Release the camera resource.
-
-        See AudioBase.stop_recording() for complete documentation.
-        """
-        self._pipeline_record.set_state(Gst.State.NULL)
+        """Stop the recording pipeline."""
+        self._pipeline.set_state(Gst.State.NULL)
 
     def start_playing(self) -> None:
-        """Open the audio output using GStreamer.
-
-        See AudioBase.start_playing() for complete documentation.
-        """
-        self._pipeline_playback.set_state(Gst.State.PLAYING)
+        """Start the playback pipeline so ``push_audio_sample`` can feed data."""
+        if self._head_wobbler is not None:
+            self._head_wobbler.start()
+        self._appsrc_pts = -1
+        self._pipeline.set_state(Gst.State.PLAYING)
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def stop_playing(self) -> None:
-        """Stop playing audio and release resources.
-
-        See AudioBase.stop_playing() for complete documentation.
-        """
-        self._pipeline_playback.set_state(Gst.State.NULL)
+        """Stop the playback pipeline."""
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
+        self._appsrc_pts = -1
+        self._pipeline.set_state(Gst.State.NULL)
         if self._playbin is not None:
             self._playbin.set_state(Gst.State.NULL)
             self._playbin = None
 
-    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push audio data to the output device.
-
-        See AudioBase.push_audio_sample() for complete documentation.
-        """
+    def clear_player(self) -> None:
+        """Flush the player's appsrc to drop any queued audio immediately."""
+        if self._head_wobbler is not None:
+            self._head_wobbler.reset()
         if self._appsrc is not None:
-            buf = Gst.Buffer.new_wrapped(data.tobytes())
-            self._appsrc.push_buffer(buf)
+            self._appsrc_pts = -1
+            self._pipeline.set_state(Gst.State.PAUSED)
+            self._appsrc.send_event(Gst.Event.new_flush_start())
+            self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=True))
+            self._pipeline.set_state(Gst.State.PLAYING)
+            self.logger.info("Cleared player queue")
         else:
             self.logger.warning(
                 "AppSrc is not initialized. Call start_playing() first."
             )
 
     def play_sound(self, sound_file: str) -> None:
-        """Play a sound file.
+        """Play a sound file through the Reachy Mini Audio card.
 
-        See AudioBase.play_sound() for complete documentation.
-
-        Todo: for now this function is mean to be used on the wireless version.
+        The file is played via a GStreamer ``playbin`` routed to the same
+        audio sink used by the push-based playback pipeline.  When the head
+        wobbler is enabled the audio is also forked to it via a tee.
 
         Args:
-            sound_file (str): Path to the sound file to play.
+            sound_file: Absolute path **or** filename relative to the
+                built-in assets directory.
+
+        Raises:
+            FileNotFoundError: If the file cannot be found.
 
         """
         if not os.path.exists(sound_file):
@@ -359,33 +525,6 @@ class GStreamerAudio(AudioBase):
                 )
         else:
             file_path = sound_file
-
-        audiosink: Optional[Gst.Element] = None
-
-        if has_reachymini_asoundrc():
-            # reachy mini wireless has a preconfigured asoundrc
-            audiosink = Gst.ElementFactory.make("alsasink")
-            audiosink.set_property("device", "reachymini_audio_sink")
-            self.logger.info("Using audio device reachymini_audio_sink for playback.")
-        elif platform.system() == "Windows":
-            id_audio_card = self._get_audio_device("Sink")
-            audiosink = Gst.ElementFactory.make("wasapi2sink")
-            audiosink.set_property("device", id_audio_card)
-            self.logger.info(
-                f"Using audio device {id_audio_card} for playback on Windows."
-            )
-        elif platform.system() == "Darwin":
-            id_audio_card = self._get_audio_device("Sink")
-            audiosink = Gst.ElementFactory.make("osxaudiosink")
-            audiosink.set_property("unique-id", id_audio_card)
-            self.logger.info(
-                f"Using audio device {id_audio_card} for playback on macOS."
-            )
-        else:
-            id_audio_card = self._get_audio_device("Sink")
-            audiosink = Gst.ElementFactory.make("pulsesink")
-            audiosink.set_property("device", f"{id_audio_card}")
-            self.logger.info(f"Using audio device {id_audio_card} for playback.")
 
         if self._playbin is not None:
             self._playbin.set_state(Gst.State.NULL)
@@ -406,98 +545,80 @@ class GStreamerAudio(AudioBase):
         else:
             uri = f"file://{file_path}"
         playbin.set_property("uri", uri)
-        if audiosink is not None:
-            playbin.set_property("audio-sink", audiosink)
+
+        playbin.set_property("audio-sink", self._build_audiosink_tee_bin())
+        if self._head_wobbler is not None:
+            self._head_wobbler.reset()
+            self._head_wobbler.start()
 
         self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
 
-    def clear_player(self) -> None:
-        """Flush the player's appsrc to drop any queued audio immediately."""
-        if self._appsrc is not None:
-            self._pipeline_playback.set_state(Gst.State.PAUSED)
-            self._appsrc.send_event(Gst.Event.new_flush_start())
-            self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=True))
-            self._pipeline_playback.set_state(Gst.State.PLAYING)
-            self.logger.info("Cleared player queue")
-        else:
-            self.logger.warning(
-                "AppSrc is not initialized. Call start_playing() first."
-            )
+    def upload_sound(self, sound_file: str) -> str:
+        """No-op for the local backend — the file is already accessible.
 
-    def _get_audio_device(self, device_type: str = "Source") -> Optional[str]:
-        """Use Gst.DeviceMonitor to find the pipeire audio card.
+        Returns:
+            The unchanged *sound_file* path.
 
-        Returns the device ID of the found audio card, None if not.
         """
-        monitor = Gst.DeviceMonitor()
-        monitor.add_filter(f"Audio/{device_type}")
-        monitor.start()
+        return sound_file
 
-        snd_card_name = "Reachy Mini Audio"
-        try:
-            devices = monitor.get_devices()
-            for device in devices:
-                name = device.get_display_name()
-                device_props = device.get_properties()
+    def list_sounds(self) -> list[str]:
+        """No-op for the local backend.
 
-                if snd_card_name in name:
-                    if device_props and device_props.has_field("node.name"):
-                        node_name = device_props.get_string("node.name")
-                        self.logger.debug(
-                            f"Found audio input device with node name {node_name}"
-                        )
-                        return str(node_name)
-                    elif (
-                        platform.system() == "Windows"
-                        and device_props.has_field("device.api")
-                        and device_props.get_string("device.api") == "wasapi2"
-                    ):
-                        if device_type == "Source" and device_props.get_value(
-                            "wasapi2.device.loopback"
-                        ):
-                            continue  # skip loopback devices for source
-                        device_id = device_props.get_string("device.id")
-                        self.logger.debug(
-                            f"Found audio input device {name} for Windows"
-                        )
-                        return str(device_id)
-                    elif platform.system() == "Darwin":
-                        device_id = device_props.get_string("unique-id")
-                        self.logger.debug(f"Found audio input device {name} for macOS")
-                        return str(device_id)
-                    elif platform.system() == "Linux":
-                        # Linux PulseAudio / ALSA fallback
-                        # Construct PulseAudio device name from udev.id
-                        udev_id = (
-                            device_props.get_string("udev.id")
-                            if device_props.has_field("udev.id")
-                            else None
-                        )
-                        profile = (
-                            device_props.get_string("device.profile.name")
-                            if device_props.has_field("device.profile.name")
-                            else None
-                        )
-                        if udev_id and profile:
-                            prefix = (
-                                "alsa_output" if device_type == "Sink" else "alsa_input"
-                            )
-                            pa_device = f"{prefix}.{udev_id}.{profile}"
-                            self.logger.debug(
-                                f"Found audio {device_type} device {name} via PulseAudio: {pa_device}"
-                            )
-                            return pa_device
-                        elif device_props.has_field("device.string"):
-                            device_id = device_props.get_string("device.string")
-                            self.logger.debug(
-                                f"Found audio {device_type} device {name} via ALSA: {device_id}"
-                            )
-                            return str(device_id)
+        Returns:
+            An empty list.
 
-            self.logger.warning(f"No Reachy Mini Audio {device_type} card found.")
-        except Exception as e:
-            self.logger.error(f"Error while getting audio input device: {e}")
-        finally:
-            monitor.stop()
-        return None
+        """
+        return []
+
+    def delete_sound(self, filename: str) -> bool:
+        """No-op for the local backend.
+
+        Returns:
+            Always ``False``.
+
+        """
+        return False
+
+    def get_DoA(self) -> tuple[float, bool] | None:
+        """Get the Direction of Arrival (DoA) from the ReSpeaker.
+
+        Returns:
+            A tuple ``(angle_radians, speech_detected)`` or ``None``
+            if the device is unavailable.
+
+        """
+        return self._doa.get_DoA()
+
+    def enable_wobbling(self, callback: Callable[[SpeechOffsets], None]) -> None:
+        """Enable head wobbling driven by audio playback.
+
+        Args:
+            callback: Called with ``(x_m, y_m, z_m, roll_rad, pitch_rad,
+                yaw_rad)`` for each movement hop.
+
+        """
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
+        self._head_wobbler = HeadWobbler(callback, sample_rate=self.SAMPLE_RATE)
+        self.logger.info("Head wobbler enabled")
+
+    def disable_wobbling(self) -> None:
+        """Disable head wobbling."""
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
+            self._head_wobbler = None
+            self.logger.info("Head wobbler disabled")
+
+    def cleanup(self) -> None:
+        """Release all resources (pipelines, USB devices)."""
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
+        self._doa.close()
+
+    def __del__(self) -> None:
+        """Ensure GStreamer resources are released."""
+        self.cleanup()
+        self._loop.quit()
+        self._bus.remove_watch()
