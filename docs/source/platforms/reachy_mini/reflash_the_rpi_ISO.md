@@ -91,16 +91,18 @@ https://www.raspberrypi.com/software/
      sudo ./rpiboot -d mass-storage-gadget64
      ```
 
-   - **Windows**: run the **RPiBoot** executable that you installed in the previous step.
-   
-3. Set the switch to **DOWNLOAD (SW1)** on the head PCB:
+   - **Windows**: run the **RPiBoot** executable that you installed in the previous step. Make sure to use `rpiboot-CM4-CM5 - Mass Storage Gadget` and not `rpiboot-CM-CM2-CM3`.
+     
+   ⚠️ In both cases, make sure you do not close the terminal window opened by rpiboot.
+    
+4. Set the switch to **DOWNLOAD (SW1)** on the head PCB:
 
    [![pcb_usb_and_switch](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/pcb_usb_and_switch.png)]()
 
-4. Plug the USB cable (the one shown in the image above, named **USB2**).
+5. Plug the USB cable (the one shown in the image above, named **USB2**).
 
-5. **Power on the robot**.  
-   The internal eMMC should now appear as a mass-storage device.
+6. **Power on the robot**.  
+   Once rpiboot finishes processing, the internal eMMC should appear as a mass-storage device.
 
 ---
 
@@ -192,6 +194,15 @@ sudo bmaptool copy image_2025-11-19-reachyminios-lite-v0.0.10.zip --bmap 2025-11
 
 </hfoption>
 <hfoption id="Windows (Raspberry Pi Imager)">
+
+> [!WARNING]
+> ⚠️ Make sure the device is unmounted before flashing.
+
+### Check and Unmount the Device
+
+Open a new Windows Explorer window, and click `This PC` on the left pannel. There should be a new disk named `bootfs`: right click on the disk and click **Eject**.
+
+### Flash the ISO
 
 Use the **Raspberry Pi Imager** executable to flash the OS image:
 
