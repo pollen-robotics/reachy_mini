@@ -15,6 +15,7 @@ from typing import Dict, List, Literal, Optional, Union, cast
 
 import numpy as np
 import numpy.typing as npt
+import requests
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
@@ -261,7 +262,7 @@ class ReachyMini:
         self.client.send_command(SetWobblingCmd(enabled=False))
         self.logger.info("Head wobbling disabled")
 
-    def start_head_tracking(self, weight: float = 1.0) -> None:
+    def start_head_tracking(self, weight: float = 1.0) -> bool:
         """Enable daemon-side visual head tracking.
 
         Args:
@@ -269,13 +270,44 @@ class ReachyMini:
                 own the head orientation; lower values let app motion show
                 through while still biasing the head toward the detected face.
 
+        Returns:
+            True when the daemon accepts head tracking, False otherwise.
+
         """
-        self.client.send_command(SetHeadTrackingCmd(enabled=True, weight=weight))
-        self.logger.info("Head tracking enabled")
+        try:
+            response = requests.post(
+                f"{self._daemon_http_url}/api/media/tracking/enable",
+                json={"weight": weight},
+                timeout=5.0,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except (requests.RequestException, ValueError) as e:
+            self.logger.warning("Head tracking enable request failed: %s", e)
+            return False
+
+        if not isinstance(payload, dict):
+            self.logger.warning("Head tracking enable returned an invalid response.")
+            return False
+
+        if payload.get("enabled") is True:
+            self.logger.info("Head tracking enabled")
+            return True
+
+        self.logger.warning("Head tracking unavailable on daemon.")
+        return False
 
     def stop_head_tracking(self) -> None:
         """Disable daemon-side visual head tracking."""
-        self.client.send_command(SetHeadTrackingCmd(enabled=False))
+        try:
+            response = requests.post(
+                f"{self._daemon_http_url}/api/media/tracking/disable",
+                timeout=5.0,
+            )
+            response.raise_for_status()
+        except requests.RequestException as e:
+            self.logger.warning("Head tracking disable request failed: %s", e)
+            self.client.send_command(SetHeadTrackingCmd(enabled=False))
         self.logger.info("Head tracking disabled")
 
     def get_tracked_face(self, wait: bool = True, timeout: float = 5.0) -> FaceTarget:
