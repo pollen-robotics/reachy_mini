@@ -153,7 +153,7 @@ def test_enable_tracking_initializes_detector_off_command_thread(
         distortion: npt.NDArray[np.float64],
         timestamp: float,
     ) -> None:
-        pass
+        return None
 
     def enable() -> None:
         result.append(server.enable_tracking(callback))

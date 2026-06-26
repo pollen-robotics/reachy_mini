@@ -315,7 +315,7 @@ class Backend:
         self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
         self._tracking_smoothed_eye_center: NDArray[np.float64] | None = None
         self._tracking_filter_alpha = 0.25
-        self._tracking_deadzone_norm = 0.02
+        self._tracking_deadzone_norm = 0.06
         self._face_target = FaceTarget()
         self.T_head_cam = default_head_to_camera_transform()
 
@@ -626,8 +626,10 @@ class Backend:
             [float(eye_center[0]), float(eye_center[1])],
             dtype=np.float64,
         )
+        target_changed = False
         if self._tracking_smoothed_eye_center is None:
             self._tracking_smoothed_eye_center = raw_eye_center
+            target_changed = True
         elif (
             np.linalg.norm(raw_eye_center - self._tracking_smoothed_eye_center)
             >= self._tracking_deadzone_norm
@@ -637,9 +639,26 @@ class Backend:
                 self._tracking_smoothed_eye_center
                 + alpha * (raw_eye_center - self._tracking_smoothed_eye_center)
             )
+            target_changed = True
 
         x_norm = float(self._tracking_smoothed_eye_center[0])
         y_norm = float(self._tracking_smoothed_eye_center[1])
+        weight_changed = self._tracking_weight != self._tracking_requested_weight
+        self._tracking_weight = self._tracking_requested_weight
+        self._tracking_loss_started_at = None
+        self._tracking_loss_start_weight = 0.0
+        self._face_target = FaceTarget(
+            detected=True,
+            x=x_norm,
+            y=y_norm,
+            roll=roll,
+            ts=timestamp,
+        )
+        if not target_changed and self._tracking_aim is not None:
+            if weight_changed:
+                self.ik_required = True
+            return
+
         u = (x_norm + 1.0) * 0.5 * max(width - 1, 1)
         v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)
 
@@ -657,16 +676,6 @@ class Backend:
             return
 
         self._tracking_aim = aim
-        self._tracking_weight = self._tracking_requested_weight
-        self._tracking_loss_started_at = None
-        self._tracking_loss_start_weight = 0.0
-        self._face_target = FaceTarget(
-            detected=True,
-            x=x_norm,
-            y=y_norm,
-            roll=roll,
-            ts=timestamp,
-        )
         self.ik_required = True
 
     def _update_tracking_face_lost(self, timestamp: float) -> None:

@@ -744,11 +744,16 @@ class ReachyMini:
         if self.media.camera is None or self.media.camera.camera_specs is None:
             raise RuntimeError("Camera specs not set.")
 
+        camera_matrix = self.media.camera.K
+        distortion = self.media.camera.D
+        if camera_matrix is None or distortion is None:
+            raise RuntimeError("Camera calibration is not set.")
+
         target_head_pose = look_at_image_pose(
             u=u,
             v=v,
-            K=self.media.camera.K,  # type: ignore
-            D=self.media.camera.D,  # type: ignore
+            K=camera_matrix,
+            D=distortion,
             T_world_head=self.get_current_head_pose(),
             T_head_cam=self.T_head_cam,
         )
@@ -986,6 +991,9 @@ class ReachyMini:
         """
         if not isinstance(record, dict):
             raise ValueError("Record must be a dictionary.")
+
+        if not self.is_recording:
+            return
 
         # Send the record data to the backend
         self.client.send_command(AppendRecordCmd(record=record))
