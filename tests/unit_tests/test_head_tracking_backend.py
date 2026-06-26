@@ -176,3 +176,36 @@ def test_tracking_face_loss_decays_weight_and_clears_aim() -> None:
     )
     assert backend._tracking_weight == 0.0
     assert backend._tracking_aim is None
+    assert backend._tracking_smoothed_eye_center is None
+
+
+def test_tracking_face_updates_are_smoothed() -> None:
+    """Tracking should smooth detector jumps before updating the aim."""
+    backend = _make_backend()
+    backend._tracking_enabled = True
+    camera_matrix = np.array(
+        [[640.0, 0.0, 320.0], [0.0, 640.0, 240.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    distortion = np.zeros(5, dtype=np.float64)
+
+    backend.set_tracking_face(
+        eye_center=np.array([0.0, 0.0], dtype=np.float64),
+        roll=0.0,
+        width=640,
+        height=480,
+        camera_matrix=camera_matrix,
+        distortion=distortion,
+        timestamp=1.0,
+    )
+    backend.set_tracking_face(
+        eye_center=np.array([1.0, 0.0], dtype=np.float64),
+        roll=0.0,
+        width=640,
+        height=480,
+        camera_matrix=camera_matrix,
+        distortion=distortion,
+        timestamp=1.1,
+    )
+
+    assert backend.get_tracked_face().x == 0.25

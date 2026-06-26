@@ -313,6 +313,9 @@ class Backend:
         self._tracking_loss_start_weight = 0.0
         self._tracking_decay_s = 0.3
         self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
+        self._tracking_smoothed_eye_center: NDArray[np.float64] | None = None
+        self._tracking_filter_alpha = 0.25
+        self._tracking_deadzone_norm = 0.02
         self._face_target = FaceTarget()
         self.T_head_cam = default_head_to_camera_transform()
 
@@ -597,6 +600,7 @@ class Backend:
         self._tracking_weight = 0.0
         self._tracking_loss_started_at = None
         self._tracking_loss_start_weight = 0.0
+        self._tracking_smoothed_eye_center = None
         self._face_target = FaceTarget()
         self.ik_required = True
 
@@ -618,8 +622,24 @@ class Backend:
             self._update_tracking_face_lost(timestamp)
             return
 
-        x_norm = float(eye_center[0])
-        y_norm = float(eye_center[1])
+        raw_eye_center = np.array(
+            [float(eye_center[0]), float(eye_center[1])],
+            dtype=np.float64,
+        )
+        if self._tracking_smoothed_eye_center is None:
+            self._tracking_smoothed_eye_center = raw_eye_center
+        elif (
+            np.linalg.norm(raw_eye_center - self._tracking_smoothed_eye_center)
+            >= self._tracking_deadzone_norm
+        ):
+            alpha = min(max(self._tracking_filter_alpha, 0.0), 1.0)
+            self._tracking_smoothed_eye_center = (
+                self._tracking_smoothed_eye_center
+                + alpha * (raw_eye_center - self._tracking_smoothed_eye_center)
+            )
+
+        x_norm = float(self._tracking_smoothed_eye_center[0])
+        y_norm = float(self._tracking_smoothed_eye_center[1])
         u = (x_norm + 1.0) * 0.5 * max(width - 1, 1)
         v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)
 
@@ -665,6 +685,7 @@ class Backend:
         if self._tracking_weight <= 0.0:
             self._tracking_weight = 0.0
             self._tracking_aim = None
+            self._tracking_smoothed_eye_center = None
 
         self._face_target = FaceTarget(detected=False, ts=timestamp)
         self.ik_required = True
