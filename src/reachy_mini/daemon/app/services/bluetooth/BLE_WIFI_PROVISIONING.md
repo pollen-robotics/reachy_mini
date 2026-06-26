@@ -53,6 +53,20 @@ privileged commands are refused again (write `PIN_…` to renew).
 an owner-location fingerprint). `WIFI_KEYEX` is public because a bare public
 key is useless without the PIN.
 
+## Robot identification
+
+| Command | Auth | Result (via notification) |
+|---|---|---|
+| `IDENTIFY` | public | `OK: Playing identification sound` or `ERROR: …` |
+
+`IDENTIFY` plays a short sound on the robot speaker so the user can tell which
+physical Reachy maps to a given entry in the BLE scan list. It is **public**
+(no PIN) because identification happens *before* the user authenticates — the
+action is benign and BLE range already bounds who can trigger it. Like the WiFi
+commands it proxies to the daemon (`/api/media/play_sound`) off the mainloop, so
+the write returns `OK: working` and the real result arrives as a later
+notification.
+
 ## Sealed password scheme — `x25519-hkdf-sha256-aesgcm`
 
 The WiFi password is **never** transmitted in cleartext (App-Store-review

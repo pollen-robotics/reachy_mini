@@ -66,6 +66,7 @@ def get_hardware_id() -> str | None:
         return None
     return hashlib.sha256(raw.encode("ascii")).hexdigest()[:16]
 
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -351,7 +352,7 @@ class ResponseCharacteristic(Characteristic):
         self.notifying = False
         logger.info("Response notifications disabled")
         # Stop journal streaming if running (client disconnected without JOURNAL_STOP)
-        if hasattr(self.service, '_bt_service') and self.service._bt_service:
+        if hasattr(self.service, "_bt_service") and self.service._bt_service:
             self.service._bt_service._stop_journal()
 
     def send_notification(self, text: str):
@@ -717,7 +718,17 @@ class BluetoothCommandService:
         try:
             self._journal_buffer = ""
             self._journal_proc = subprocess.Popen(
-                ["stdbuf", "-oL", "journalctl", "-f", "-n", "20", "--no-pager", "-u", "reachy-mini-daemon"],
+                [
+                    "stdbuf",
+                    "-oL",
+                    "journalctl",
+                    "-f",
+                    "-n",
+                    "20",
+                    "--no-pager",
+                    "-u",
+                    "reachy-mini-daemon",
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
             )
@@ -746,7 +757,9 @@ class BluetoothCommandService:
                 if data:
                     text = data.decode("utf-8", errors="replace")
                     self._journal_buffer += text
-                    logger.info(f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}")
+                    logger.info(
+                        f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}"
+                    )
                     # Cap buffer to ~32KB to avoid unbounded growth
                     if len(self._journal_buffer) > 32768:
                         self._journal_buffer = self._journal_buffer[-32768:]
@@ -869,6 +882,14 @@ class BluetoothCommandService:
             except Exception as e:
                 logger.error(f"Error executing command: {e}")
             return "OK: System running"
+        elif upper == "IDENTIFY":
+            # Play a short sound on the robot so the user can tell which
+            # physical Reachy maps to this entry in the BLE scan list. Public
+            # (no PIN): identification happens BEFORE authenticating, the action
+            # is benign and the BLE range already bounds who can trigger it.
+            # Runs OFF the mainloop because it proxies to the daemon over HTTP.
+            self._run_async(_identify)
+            return "OK: working"
         elif command_str.upper() == "JOURNAL_START":
             return self._start_journal()
         elif command_str.upper() == "JOURNAL_READ":
@@ -882,9 +903,7 @@ class BluetoothCommandService:
                 # Locked out: reject WITHOUT comparing the PIN, so a correct
                 # guess landed mid-spree doesn't win and the lockout window is
                 # the real bottleneck. int()+1 rounds up so we never show "0s".
-                return (
-                    f"ERROR: Too many attempts. Try again in {int(remaining) + 1}s."
-                )
+                return f"ERROR: Too many attempts. Try again in {int(remaining) + 1}s."
             pin = command_str[4:].strip()
             if pin == self.pin_code:
                 self._reset_pin_throttle()
@@ -1109,7 +1128,9 @@ class BluetoothCommandService:
             self._ad_manager.RegisterAdvertisement(
                 self.adv.get_path(),
                 {},
-                reply_handler=lambda: logger.info("Advertisement re-asserted after disconnect"),
+                reply_handler=lambda: logger.info(
+                    "Advertisement re-asserted after disconnect"
+                ),
                 error_handler=lambda e: logger.warning(
                     f"Re-assert advertisement failed (non-fatal): {e}"
                 ),
@@ -1272,6 +1293,33 @@ def _daemon_request(
             return json.loads(raw.decode("utf-8"))
         except json.JSONDecodeError:
             return raw.decode("utf-8", errors="replace")
+
+
+# --- Robot identification proxy (reuses _daemon_request above) ---------------
+# Plays a short sound on the robot speaker so the user can pick their Reachy out
+# of the BLE scan list before connecting. Proxies to the daemon's
+# /api/media/play_sound route — note the /api prefix: the media router is
+# mounted under the prefixed APIRouter, unlike the /wifi and /update routes.
+_IDENTIFY_SOUND_FILE = "wake_up.wav"
+
+
+def _identify() -> str:
+    """Play the identification sound on the robot speaker."""
+    try:
+        _daemon_request(
+            "POST",
+            "/api/media/play_sound",
+            data={"file": _IDENTIFY_SOUND_FILE},
+        )
+        return "OK: Playing identification sound"
+    except urllib.error.HTTPError as e:
+        if e.code == 503:
+            return "ERROR: Audio not ready"
+        return "ERROR: Identify failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
 
 
 # --- Daemon software update proxy (reuses _daemon_request above) -------------

@@ -31,9 +31,11 @@ from reachy_mini.io.protocol import (
     CancelAudioCmd,
     CancelMoveCmd,
     ClearIncomingAudioCmd,
+    GetFirstWakeUpCmd,
     GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
+    GetRobotNameCmd,
     GetStateCmd,
     GetVersionCmd,
     GetVolumeCmd,
@@ -54,11 +56,13 @@ from reachy_mini.io.protocol import (
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
     SetBodyYawCmd,
+    SetFirstWakeUpCmd,
     SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
     SetMicrophoneVolumeCmd,
     SetMotorModeCmd,
+    SetRobotNameCmd,
     SetSpeechOffsetsCmd,
     SetTargetCmd,
     SetTorqueCmd,
@@ -296,7 +300,12 @@ class Backend:
 
         # Head wobbler speech offsets (x_m, y_m, z_m, roll_rad, pitch_rad, yaw_rad)
         self._speech_offsets: tuple[float, float, float, float, float, float] = (
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
         )
 
         # WebRTC support
@@ -452,8 +461,12 @@ class Backend:
         if any(o != 0.0 for o in self._speech_offsets):
             x_m, y_m, z_m, roll_r, pitch_r, yaw_r = self._speech_offsets
             offset_pose = create_head_pose(
-                x=x_m, y=y_m, z=z_m,
-                roll=roll_r, pitch=pitch_r, yaw=yaw_r,
+                x=x_m,
+                y=y_m,
+                z=z_m,
+                roll=roll_r,
+                pitch=pitch_r,
+                yaw=yaw_r,
                 degrees=False,
             )
             pose = compose_world_offset(pose, offset_pose)
@@ -1178,7 +1191,14 @@ class Backend:
             offsets = cmd.offsets
             if len(offsets) == 6:
                 self.set_speech_offsets(
-                    (offsets[0], offsets[1], offsets[2], offsets[3], offsets[4], offsets[5])
+                    (
+                        offsets[0],
+                        offsets[1],
+                        offsets[2],
+                        offsets[3],
+                        offsets[4],
+                        offsets[5],
+                    )
                 )
             send_response({"status": "ok", "command": "set_speech_offsets"})
 
@@ -1246,6 +1266,60 @@ class Backend:
             from reachy_mini.utils.hardware_id import get_hardware_id
 
             send_response({"hardware_id": get_hardware_id()})
+
+        elif isinstance(cmd, (GetFirstWakeUpCmd, SetFirstWakeUpCmd)):
+            # First wake-up wizard completion is a persistent, robot-wide
+            # flag stored on disk so the post-connection setup wizard only
+            # ever shows once, whichever client connects. Read/write helpers
+            # are fail-safe (never raise) so a storage error can't break the
+            # command loop.
+            from reachy_mini.utils.first_wake_up import (
+                get_first_wake_up_completed,
+                set_first_wake_up_completed,
+            )
+
+            if isinstance(cmd, SetFirstWakeUpCmd):
+                ok = set_first_wake_up_completed(cmd.is_completed)
+                send_response(
+                    {
+                        "command": "set_first_wake_up",
+                        "status": "ok" if ok else "error",
+                        "is_completed": cmd.is_completed
+                        if ok
+                        else get_first_wake_up_completed(),
+                    }
+                )
+            else:  # GetFirstWakeUpCmd
+                send_response(
+                    {
+                        "command": "get_first_wake_up",
+                        "is_completed": get_first_wake_up_completed(),
+                    }
+                )
+
+        elif isinstance(cmd, (GetRobotNameCmd, SetRobotNameCmd)):
+            # Robot display name is a persistent, robot-wide string stored on
+            # disk (same fail-safe helpers as the first-wake-up flag). A rename
+            # takes effect on the next daemon start, where the persisted value
+            # overrides the --robot-name default.
+            from reachy_mini.utils.robot_name import get_robot_name, set_robot_name
+
+            if isinstance(cmd, SetRobotNameCmd):
+                stored = set_robot_name(cmd.name)
+                send_response(
+                    {
+                        "command": "set_robot_name",
+                        "status": "ok" if stored is not None else "error",
+                        "name": stored if stored is not None else get_robot_name(),
+                    }
+                )
+            else:  # GetRobotNameCmd
+                send_response(
+                    {
+                        "command": "get_robot_name",
+                        "name": get_robot_name(),
+                    }
+                )
 
         elif isinstance(
             cmd,
@@ -1346,9 +1420,7 @@ class Backend:
                         }
                     )
             except Exception as e:
-                self.logger.warning(
-                    "Audio config command %s failed: %s", cmd.type, e
-                )
+                self.logger.warning("Audio config command %s failed: %s", cmd.type, e)
                 send_response(
                     {
                         "error": f"Audio config command failed: {e}",
@@ -1460,16 +1532,13 @@ class Backend:
         """
         now = time.time()
         stale = [
-            uid for uid, ts in self._upload_ts.items()
-            if now - ts > self._upload_ttl_s
+            uid for uid, ts in self._upload_ts.items() if now - ts > self._upload_ttl_s
         ]
         for uid in stale:
             self._upload_chunks.pop(uid, None)
             self._upload_meta.pop(uid, None)
             self._upload_ts.pop(uid, None)
-            self.logger.warning(
-                f"upload_move: evicted stale slot {uid} (TTL exceeded)"
-            )
+            self.logger.warning(f"upload_move: evicted stale slot {uid} (TTL exceeded)")
 
     # All upload_* handlers are fire-and-forget. The client pipelines
     # chunks at line rate (relying on SCTP's ordered, reliable delivery)
@@ -1536,8 +1605,7 @@ class Backend:
         """
         now = time.time()
         stale = [
-            uid for uid, ts in self._audio_ts.items()
-            if now - ts > self._upload_ttl_s
+            uid for uid, ts in self._audio_ts.items() if now - ts > self._upload_ttl_s
         ]
         for uid in stale:
             self._audio_chunks.pop(uid, None)
@@ -1618,9 +1686,7 @@ class Backend:
         meta = self._audio_meta.pop(cmd.upload_id, None)
         self._audio_ts.pop(cmd.upload_id, None)
         if slot is None or meta is None:
-            self.logger.warning(
-                f"upload_audio_finish: no such slot {cmd.upload_id}"
-            )
+            self.logger.warning(f"upload_audio_finish: no such slot {cmd.upload_id}")
             return
         if len(slot) != meta["total_chunks"]:
             self.logger.warning(
@@ -1631,6 +1697,7 @@ class Backend:
         payload = "".join(slot)
         try:
             import base64
+
             raw = base64.b64decode(payload, validate=False)
             os.makedirs(self._audio_temp_dir, exist_ok=True)
             # encoding "<container>-base64" → file extension; wav for legacy clients.
@@ -1651,9 +1718,7 @@ class Backend:
             except OSError:
                 pass
         self._uploaded_audios[cmd.upload_id] = path
-        self.logger.info(
-            f"upload_audio_finish: stored {len(raw)} bytes at {path}"
-        )
+        self.logger.info(f"upload_audio_finish: stored {len(raw)} bytes at {path}")
 
     def _handle_play_uploaded_audio(self, cmd: PlayUploadedAudioCmd) -> None:
         """Play an uploaded audio standalone (no motion).
@@ -1674,18 +1739,26 @@ class Backend:
         upload_id = cmd.upload_id
         audio_path = self._uploaded_audios.get(upload_id)
         if not audio_path:
-            self.broadcast_to_all_clients(json.dumps({
-                "type": "play_uploaded_audio",
-                "upload_id": upload_id,
-                "error": "no such uploaded audio",
-            }))
+            self.broadcast_to_all_clients(
+                json.dumps(
+                    {
+                        "type": "play_uploaded_audio",
+                        "upload_id": upload_id,
+                        "error": "no such uploaded audio",
+                    }
+                )
+            )
             return
         # Broadcast BEFORE play_sound, matching play_uploaded_move.
-        self.broadcast_to_all_clients(json.dumps({
-            "type": "play_uploaded_audio",
-            "upload_id": upload_id,
-            "started": True,
-        }))
+        self.broadcast_to_all_clients(
+            json.dumps(
+                {
+                    "type": "play_uploaded_audio",
+                    "upload_id": upload_id,
+                    "started": True,
+                }
+            )
+        )
         # Claim the active-audio slot before kicking off playback so a
         # cancel_audio arriving immediately after the start broadcast
         # finds the right id. Best-effort: GStreamer doesn't notify on
@@ -1700,11 +1773,15 @@ class Backend:
                 self._active_audio_upload_id = None
             # Broadcast a follow-up error so the client knows the
             # started event isn't actionable.
-            self.broadcast_to_all_clients(json.dumps({
-                "type": "play_uploaded_audio",
-                "upload_id": upload_id,
-                "error": str(e),
-            }))
+            self.broadcast_to_all_clients(
+                json.dumps(
+                    {
+                        "type": "play_uploaded_audio",
+                        "upload_id": upload_id,
+                        "error": str(e),
+                    }
+                )
+            )
 
     def _handle_cancel_audio(self, cmd: CancelAudioCmd) -> None:
         """Stop play_uploaded_audio iff its upload_id matches.
@@ -1741,9 +1818,7 @@ class Backend:
         meta = self._upload_meta.pop(cmd.upload_id, None)
         self._upload_ts.pop(cmd.upload_id, None)
         if slot is None or meta is None:
-            self.logger.warning(
-                f"upload_move_finish: no such slot {cmd.upload_id}"
-            )
+            self.logger.warning(f"upload_move_finish: no such slot {cmd.upload_id}")
             return
         if len(slot) != meta["total_chunks"]:
             self.logger.warning(
@@ -1765,11 +1840,13 @@ class Backend:
                 # moves (gzip is fast on the CM4).
                 import base64
                 import gzip
+
                 raw = base64.b64decode(payload, validate=False)
                 # gzip.decompress reads the whole stream into RAM; use
                 # GzipFile.read(max_decoded_bytes + 1) so a bomb can't
                 # exhaust memory before we notice it's oversize.
                 import io
+
                 with gzip.GzipFile(fileobj=io.BytesIO(raw), mode="rb") as gz:
                     raw_text = gz.read(max_decoded_bytes + 1)
                 if len(raw_text) > max_decoded_bytes:
@@ -1796,6 +1873,7 @@ class Backend:
             # Reuse the RecordedMove parser; same JSON shape as the
             # HF dance/emotion datasets, no on-disk sound path.
             from reachy_mini.motion.recorded_move import RecordedMove
+
             parsed = RecordedMove(move_dict, sound_path=None)
         except Exception as e:
             self.logger.warning(
@@ -1949,7 +2027,7 @@ class Backend:
         """Execute goto_sleep and send response when done."""
         try:
             await self.goto_sleep()
-            send_response({"status": "ok", "command": "goto_sleep", "completed": True })
+            send_response({"status": "ok", "command": "goto_sleep", "completed": True})
         except Exception as e:
             send_response({"error": str(e), "command": "goto_sleep"})
 
@@ -1986,11 +2064,15 @@ class Backend:
                     os.remove(audio_path)
                 except OSError:
                     pass
-            self.broadcast_to_all_clients(json.dumps({
-                "type": "play_uploaded_move",
-                "upload_id": upload_id,
-                "error": "no such uploaded move (upload first)",
-            }))
+            self.broadcast_to_all_clients(
+                json.dumps(
+                    {
+                        "type": "play_uploaded_move",
+                        "upload_id": upload_id,
+                        "error": "no such uploaded move (upload first)",
+                    }
+                )
+            )
             return
 
         # Attach the uploaded audio to the move so Backend.play_move
@@ -2003,13 +2085,17 @@ class Backend:
 
         # Broadcast start with the declared duration so any client
         # waiting on the started event knows the loop is live.
-        self.broadcast_to_all_clients(json.dumps({
-            "type": "play_uploaded_move",
-            "upload_id": upload_id,
-            "started": True,
-            "duration_s": move.duration,
-            "has_audio": audio_path is not None,
-        }))
+        self.broadcast_to_all_clients(
+            json.dumps(
+                {
+                    "type": "play_uploaded_move",
+                    "upload_id": upload_id,
+                    "started": True,
+                    "duration_s": move.duration,
+                    "has_audio": audio_path is not None,
+                }
+            )
+        )
 
         result: dict[str, Any] = {
             "type": "play_uploaded_move",
