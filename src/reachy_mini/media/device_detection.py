@@ -251,8 +251,9 @@ def gst_devices_to_device_infos(gst_devices: Any) -> list[DeviceInfo]:
 def gst_monitor_devices(filter_class: str) -> list[DeviceInfo]:
     """Start a ``Gst.DeviceMonitor``, query devices, and return :class:`DeviceInfo` list.
 
-    This is meant to be called by the media server / audio classes as a
-    thin wrapper around the monitor lifecycle.
+    This is the only function in this module that actually imports and uses
+    GStreamer.  It is meant to be called by the media server / audio classes
+    as a thin wrapper around the monitor lifecycle.
 
     Args:
         filter_class: GStreamer device class filter, e.g.
@@ -272,25 +273,6 @@ def gst_monitor_devices(filter_class: str) -> list[DeviceInfo]:
         return gst_devices_to_device_infos(monitor.get_devices())
     finally:
         monitor.stop()
-
-
-def gst_v4l2_devices() -> list[DeviceInfo]:
-    """Query Linux V4L2 devices directly through GStreamer's provider.
-
-    ``Gst.DeviceMonitor`` can sometimes expose a matching camera without
-    the concrete ``/dev/videoN`` path needed by ``v4l2src``.  The V4L2
-    provider has a narrower scope and tends to expose ``device.path`` for
-    those cameras.
-    """
-    factory = Gst.DeviceProviderFactory.find("v4l2deviceprovider")
-    if factory is None:
-        return []
-
-    provider = factory.get()
-    if provider is None:
-        return []
-
-    return gst_devices_to_device_infos(provider.get_devices())
 
 
 def find_audio_device(
@@ -404,58 +386,6 @@ def _make_camera_specs(cam_name: str) -> CameraSpecs:
     return ReachyMiniLiteCamSpecs()
 
 
-def _linux_video_path(props: dict[str, str]) -> str:
-    """Return a usable V4L2 path from GStreamer device properties."""
-    return props.get("api.v4l2.path") or props.get("device.path") or ""
-
-
-def _find_video_device(
-    devices: Sequence[DeviceInfo],
-    current_platform: str,
-    cam_names: Sequence[str],
-    log_context: str = "",
-) -> Tuple[str, Optional[CameraSpecs]]:
-    log_suffix = f" ({log_context})" if log_context else ""
-
-    for cam_name in cam_names:
-        for device in devices:
-            if cam_name not in device.display_name:
-                continue
-
-            props = device.properties
-
-            match current_platform:
-                case "Linux":
-                    device_path = _linux_video_path(props)
-                    if device_path:
-                        _logger.debug(
-                            "Found %s camera at %s%s",
-                            cam_name,
-                            device_path,
-                            log_suffix,
-                        )
-                        return device_path, _make_camera_specs(cam_name)
-                    elif cam_name == "imx708":
-                        _logger.debug("Found %s camera (CSI)", cam_name)
-                        return cam_name, ReachyMiniWirelessCamSpecs()
-                case "Windows":
-                    _logger.debug(
-                        "Found %s camera on Windows: %s",
-                        cam_name,
-                        device.display_name,
-                    )
-                    return device.display_name, _make_camera_specs(cam_name)
-                case "Darwin":
-                    _logger.debug(
-                        "Found %s camera on macOS at index %d",
-                        cam_name,
-                        device.index,
-                    )
-                    return str(device.index), _make_camera_specs(cam_name)
-
-    return "", None
-
-
 def find_video_device(
     devices: List[DeviceInfo],
     current_platform: str | None = None,
@@ -468,7 +398,8 @@ def find_video_device(
 
     The returned path string is platform-specific:
 
-    * **Linux V4L2** — ``/dev/videoN`` from ``api.v4l2.path``.
+    * **Linux V4L2** — ``/dev/videoN`` from ``api.v4l2.path`` or
+      ``device.path``.
     * **RPi CSI (imx708)** — the literal string ``"imx708"``.
     * **Windows** — the display name (for ``mfvideosrc``).
     * **macOS** — the device index as a string (for ``avfvideosrc``).
@@ -487,9 +418,36 @@ def find_video_device(
     if current_platform is None:
         current_platform = platform.system()
 
-    device_path, camera_specs = _find_video_device(devices, current_platform, cam_names)
-    if camera_specs is not None:
-        return device_path, camera_specs
+    for cam_name in cam_names:
+        for device in devices:
+            if cam_name not in device.display_name:
+                continue
+
+            props = device.properties
+
+            match current_platform:
+                case "Linux":
+                    device_path = props.get("api.v4l2.path") or props.get("device.path")
+                    if device_path:
+                        _logger.debug("Found %s camera at %s", cam_name, device_path)
+                        return device_path, _make_camera_specs(cam_name)
+                    elif cam_name == "imx708":
+                        _logger.debug("Found %s camera (CSI)", cam_name)
+                        return cam_name, ReachyMiniWirelessCamSpecs()
+                case "Windows":
+                    _logger.debug(
+                        "Found %s camera on Windows: %s",
+                        cam_name,
+                        device.display_name,
+                    )
+                    return device.display_name, _make_camera_specs(cam_name)
+                case "Darwin":
+                    _logger.debug(
+                        "Found %s camera on macOS at index %d",
+                        cam_name,
+                        device.index,
+                    )
+                    return str(device.index), _make_camera_specs(cam_name)
 
     _logger.warning("No camera found.")
     return "", None
@@ -529,31 +487,9 @@ def get_video_device() -> Tuple[str, Optional[CameraSpecs]]:
         ``""`` and ``camera_specs`` is ``None`` when no camera is found.
 
     """
-    current_platform = platform.system()
     try:
         devices = gst_monitor_devices("Video/Source")
+        return find_video_device(devices)
     except Exception:
         _logger.exception("Error detecting video device")
-        devices = []
-
-    device_path, camera_specs = _find_video_device(
-        devices, current_platform, DEFAULT_CAM_NAMES
-    )
-    if camera_specs is not None:
-        return device_path, camera_specs
-
-    if current_platform == "Linux":
-        try:
-            device_path, camera_specs = _find_video_device(
-                gst_v4l2_devices(),
-                current_platform,
-                DEFAULT_CAM_NAMES,
-                "v4l2deviceprovider",
-            )
-            if camera_specs is not None:
-                return device_path, camera_specs
-        except Exception:
-            _logger.debug("V4L2 device provider fallback failed", exc_info=True)
-
-    _logger.warning("No camera found.")
-    return "", None
+        return "", None
