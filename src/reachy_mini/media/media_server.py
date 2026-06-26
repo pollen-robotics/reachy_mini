@@ -1092,6 +1092,7 @@ class GstMediaServer:
         queue.set_property("max-size-bytes", 0)
         queue.set_property("max-size-time", 0)
         valve.set_property("drop", True)
+        valve.set_property("drop-mode", "transform-to-gap")
 
         caps = Gst.Caps.from_string(
             f"video/x-raw,format=RGB,width={TRACKER_WIDTH},"
@@ -1101,6 +1102,7 @@ class GstMediaServer:
         appsink.set_property("drop", True)
         appsink.set_property("max-buffers", 1)
         appsink.set_property("sync", False)
+        appsink.set_property("async", False)
         appsink.set_property("emit-signals", False)
 
         for elem in elements:
