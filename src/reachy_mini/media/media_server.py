@@ -28,6 +28,7 @@ import platform
 import time
 import typing
 from dataclasses import dataclass, field
+from importlib.util import find_spec
 from threading import Event, Lock, Thread
 from typing import Any, Callable, Dict, Optional
 
@@ -1573,10 +1574,11 @@ class GstMediaServer:
             self._logger.warning("Head tracking unavailable: video branch not ready.")
             return False
 
-        try:
-            from reachy_mini.vision.head_tracker import HeadTracker
-        except ImportError as e:
-            self._logger.warning("Head tracking unavailable: %s", e)
+        if find_spec("mediapipe") is None:
+            self._logger.warning(
+                "Head tracking unavailable: mediapipe is not installed. "
+                "Add the reachy_mini[vision] optional extra to your dependencies."
+            )
             return False
 
         with self._tracking_lock:
@@ -1584,12 +1586,6 @@ class GstMediaServer:
                 self._tracking_callback = callback
                 self._tracking_valve.set_property("drop", False)
                 return True
-
-            try:
-                self._head_tracker = HeadTracker()
-            except Exception as e:
-                self._logger.warning("Head tracker initialization failed: %s", e)
-                return False
 
             self._tracking_callback = callback
             self._tracking_stop.clear()
@@ -1601,7 +1597,7 @@ class GstMediaServer:
             )
             self._tracking_thread.start()
 
-        self._logger.info("Head tracking enabled (daemon-side)")
+        self._logger.info("Head tracking starting (daemon-side)")
         return True
 
     def disable_tracking(self) -> None:
@@ -1638,6 +1634,37 @@ class GstMediaServer:
         if appsink is None:
             return
 
+        try:
+            from reachy_mini.vision.head_tracker import HeadTracker
+
+            tracker: _HeadTracker | None = HeadTracker()
+        except ImportError as e:
+            self._logger.warning("Head tracking unavailable: %s", e)
+            tracker = None
+        except Exception as e:
+            self._logger.warning("Head tracker initialization failed: %s", e)
+            tracker = None
+
+        if tracker is None:
+            with self._tracking_lock:
+                self._tracking_callback = None
+                if self._tracking_valve is not None:
+                    self._tracking_valve.set_property("drop", True)
+            return
+
+        close_tracker = False
+        with self._tracking_lock:
+            if self._tracking_stop.is_set():
+                close_tracker = True
+            else:
+                self._head_tracker = tracker
+
+        if close_tracker:
+            tracker.close()
+            return
+
+        self._logger.info("Head tracking enabled (daemon-side)")
+
         while not self._tracking_stop.is_set():
             sample = appsink.emit("try-pull-sample", 200_000_000)
             if sample is None:
@@ -1649,10 +1676,9 @@ class GstMediaServer:
 
             timestamp = time.monotonic()
             with self._tracking_lock:
-                tracker = self._head_tracker
                 callback = self._tracking_callback
 
-            if tracker is None or callback is None:
+            if callback is None:
                 continue
 
             try:
