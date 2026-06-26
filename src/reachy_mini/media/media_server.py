@@ -1036,27 +1036,6 @@ class GstMediaServer:
             )
             return
 
-        # Prevent PulseAudio/PipeWire audio sources from becoming the
-        # pipeline clock provider.  Their clock causes unixfdsink to stall
-        # because it cannot synchronise video buffers against the audio
-        # clock.  ALSA sources (wireless CM4) don't have this issue and
-        # must keep their default clock behaviour to match the original
-        # daemon.  autoaudiosrc is a GstBin and does not expose the
-        # property at all.
-        factory = audiosrc.get_factory()
-        factory_name = factory.get_name() if factory else ""
-        if (
-            factory_name != "alsasrc"
-            and factory_name != "osxaudiosrc"
-            and audiosrc.find_property("provide-clock") is not None
-        ):
-            audiosrc.set_property("provide-clock", False)
-            self._logger.debug(f"Set provide-clock=False on {factory_name}")
-        else:
-            self._logger.debug(
-                f"{factory_name} — keeping default provide-clock behaviour."
-            )
-
         queue = Gst.ElementFactory.make("queue", "queue_audiosrc")
         pipeline.add(audiosrc)
         pipeline.add(queue)
@@ -1068,6 +1047,8 @@ class GstMediaServer:
         # needed, so disable AEC if either is unavailable.
         self._aec_enabled = False
         webrtcdsp = None
+        factory = audiosrc.get_factory()
+        factory_name = factory.get_name() if factory else ""
         if factory_name == "autoaudiosrc":
             if self._webrtcechoprobe is None:
                 self._webrtcechoprobe = Gst.ElementFactory.make("webrtcechoprobe")
