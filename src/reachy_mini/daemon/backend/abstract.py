@@ -304,15 +304,17 @@ class Backend:
 
         # Head wobbler speech offsets (x_m, y_m, z_m, roll_rad, pitch_rad, yaw_rad)
         self._speech_offsets: tuple[float, float, float, float, float, float] = (
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
         )
         self._tracking_enabled = False
         self._tracking_requested_weight = 1.0
         self._tracking_weight = 0.0
         self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
-        self._tracking_last_eye_center: NDArray[np.float64] | None = None
-        self._tracking_deadzone_norm = 0.03
-        self._tracking_gain = 0.5
         self._face_target = FaceTarget()
         self.T_head_cam = default_head_to_camera_transform()
 
@@ -473,8 +475,12 @@ class Backend:
         if any(o != 0.0 for o in self._speech_offsets):
             x_m, y_m, z_m, roll_r, pitch_r, yaw_r = self._speech_offsets
             offset_pose = create_head_pose(
-                x=x_m, y=y_m, z=z_m,
-                roll=roll_r, pitch=pitch_r, yaw=yaw_r,
+                x=x_m,
+                y=y_m,
+                z=z_m,
+                roll=roll_r,
+                pitch=pitch_r,
+                yaw=yaw_r,
                 degrees=False,
             )
             pose = compose_world_offset(pose, offset_pose)
@@ -581,28 +587,17 @@ class Backend:
         """Enable daemon-side visual head tracking."""
         self._tracking_requested_weight = min(max(float(weight), 0.0), 1.0)
         self._tracking_enabled = True
-        if self._media_server is None:
-            self.logger.warning("Cannot enable head tracking: media server unavailable")
-            self._tracking_enabled = False
-            return False
-        enabled = self._media_server.enable_tracking(self.set_tracking_face)
-        if not enabled:
-            self._tracking_enabled = False
-            self.clear_tracking_aim()
-        return bool(enabled)
+        return True
 
     def disable_head_tracking(self) -> None:
         """Disable daemon-side visual head tracking and clear its aim."""
         self._tracking_enabled = False
-        if self._media_server is not None:
-            self._media_server.disable_tracking()
         self.clear_tracking_aim()
 
     def clear_tracking_aim(self) -> None:
         """Clear the tracking aim and latest detected face."""
         self._tracking_aim = None
         self._tracking_weight = 0.0
-        self._tracking_last_eye_center = None
         self._face_target = FaceTarget()
         self.ik_required = True
 
@@ -616,7 +611,7 @@ class Backend:
         distortion: NDArray[np.float64],
         timestamp: float,
     ) -> None:
-        """Update tracking aim from a face observation in tracker-frame pixels."""
+        """Latch the tracking aim from a face observation in tracker-frame pixels."""
         if not self._tracking_enabled:
             return
 
@@ -625,24 +620,8 @@ class Backend:
             self._face_target = FaceTarget(detected=False, ts=timestamp)
             return
 
-        raw_eye_center = np.array(
-            [float(eye_center[0]), float(eye_center[1])],
-            dtype=np.float64,
-        )
-        target_changed = False
-        if self._tracking_last_eye_center is None:
-            self._tracking_last_eye_center = raw_eye_center
-            target_changed = True
-        elif (
-            np.linalg.norm(raw_eye_center - self._tracking_last_eye_center)
-            >= self._tracking_deadzone_norm
-        ):
-            self._tracking_last_eye_center = raw_eye_center
-            target_changed = True
-
-        x_norm = float(self._tracking_last_eye_center[0])
-        y_norm = float(self._tracking_last_eye_center[1])
-        weight_changed = self._tracking_weight != self._tracking_requested_weight
+        x_norm = float(eye_center[0])
+        y_norm = float(eye_center[1])
         self._tracking_weight = self._tracking_requested_weight
         self._face_target = FaceTarget(
             detected=True,
@@ -651,32 +630,23 @@ class Backend:
             roll=roll,
             ts=timestamp,
         )
-        if not target_changed and self._tracking_aim is not None:
-            if weight_changed:
-                self.ik_required = True
-            return
 
         u = (x_norm + 1.0) * 0.5 * max(width - 1, 1)
         v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)
-
         try:
-            current_pose = self.get_current_head_pose()
             aim = look_at_image_pose(
                 u=u,
                 v=v,
                 K=camera_matrix,
                 D=distortion,
-                T_world_head=current_pose,
+                T_world_head=self.get_current_head_pose(),
                 T_head_cam=self.T_head_cam,
             )
         except Exception as e:
             self.logger.warning("Head-tracking aim update failed: %s", e)
             return
 
-        # Ease toward the aim instead of snapping so capture latency can't drive overshoot.
-        self._tracking_aim = linear_pose_interpolation(
-            current_pose, aim, self._tracking_gain
-        )
+        self._tracking_aim = aim
         self.ik_required = True
 
     def get_tracked_face(self) -> FaceTarget:
@@ -1314,7 +1284,14 @@ class Backend:
             offsets = cmd.offsets
             if len(offsets) == 6:
                 self.set_speech_offsets(
-                    (offsets[0], offsets[1], offsets[2], offsets[3], offsets[4], offsets[5])
+                    (
+                        offsets[0],
+                        offsets[1],
+                        offsets[2],
+                        offsets[3],
+                        offsets[4],
+                        offsets[5],
+                    )
                 )
             send_response({"status": "ok", "command": "set_speech_offsets"})
 
@@ -1511,9 +1488,7 @@ class Backend:
                         }
                     )
             except Exception as e:
-                self.logger.warning(
-                    "Audio config command %s failed: %s", cmd.type, e
-                )
+                self.logger.warning("Audio config command %s failed: %s", cmd.type, e)
                 send_response(
                     {
                         "error": f"Audio config command failed: {e}",
@@ -1625,16 +1600,13 @@ class Backend:
         """
         now = time.time()
         stale = [
-            uid for uid, ts in self._upload_ts.items()
-            if now - ts > self._upload_ttl_s
+            uid for uid, ts in self._upload_ts.items() if now - ts > self._upload_ttl_s
         ]
         for uid in stale:
             self._upload_chunks.pop(uid, None)
             self._upload_meta.pop(uid, None)
             self._upload_ts.pop(uid, None)
-            self.logger.warning(
-                f"upload_move: evicted stale slot {uid} (TTL exceeded)"
-            )
+            self.logger.warning(f"upload_move: evicted stale slot {uid} (TTL exceeded)")
 
     # All upload_* handlers are fire-and-forget. The client pipelines
     # chunks at line rate (relying on SCTP's ordered, reliable delivery)
@@ -1701,8 +1673,7 @@ class Backend:
         """
         now = time.time()
         stale = [
-            uid for uid, ts in self._audio_ts.items()
-            if now - ts > self._upload_ttl_s
+            uid for uid, ts in self._audio_ts.items() if now - ts > self._upload_ttl_s
         ]
         for uid in stale:
             self._audio_chunks.pop(uid, None)
@@ -1783,9 +1754,7 @@ class Backend:
         meta = self._audio_meta.pop(cmd.upload_id, None)
         self._audio_ts.pop(cmd.upload_id, None)
         if slot is None or meta is None:
-            self.logger.warning(
-                f"upload_audio_finish: no such slot {cmd.upload_id}"
-            )
+            self.logger.warning(f"upload_audio_finish: no such slot {cmd.upload_id}")
             return
         if len(slot) != meta["total_chunks"]:
             self.logger.warning(
@@ -1796,6 +1765,7 @@ class Backend:
         payload = "".join(slot)
         try:
             import base64
+
             raw = base64.b64decode(payload, validate=False)
             os.makedirs(self._audio_temp_dir, exist_ok=True)
             # encoding "<container>-base64" → file extension; wav for legacy clients.
@@ -1816,9 +1786,7 @@ class Backend:
             except OSError:
                 pass
         self._uploaded_audios[cmd.upload_id] = path
-        self.logger.info(
-            f"upload_audio_finish: stored {len(raw)} bytes at {path}"
-        )
+        self.logger.info(f"upload_audio_finish: stored {len(raw)} bytes at {path}")
 
     def _handle_play_uploaded_audio(self, cmd: PlayUploadedAudioCmd) -> None:
         """Play an uploaded audio standalone (no motion).
@@ -1839,18 +1807,26 @@ class Backend:
         upload_id = cmd.upload_id
         audio_path = self._uploaded_audios.get(upload_id)
         if not audio_path:
-            self.broadcast_to_all_clients(json.dumps({
-                "type": "play_uploaded_audio",
-                "upload_id": upload_id,
-                "error": "no such uploaded audio",
-            }))
+            self.broadcast_to_all_clients(
+                json.dumps(
+                    {
+                        "type": "play_uploaded_audio",
+                        "upload_id": upload_id,
+                        "error": "no such uploaded audio",
+                    }
+                )
+            )
             return
         # Broadcast BEFORE play_sound, matching play_uploaded_move.
-        self.broadcast_to_all_clients(json.dumps({
-            "type": "play_uploaded_audio",
-            "upload_id": upload_id,
-            "started": True,
-        }))
+        self.broadcast_to_all_clients(
+            json.dumps(
+                {
+                    "type": "play_uploaded_audio",
+                    "upload_id": upload_id,
+                    "started": True,
+                }
+            )
+        )
         # Claim the active-audio slot before kicking off playback so a
         # cancel_audio arriving immediately after the start broadcast
         # finds the right id. Best-effort: GStreamer doesn't notify on
@@ -1865,11 +1841,15 @@ class Backend:
                 self._active_audio_upload_id = None
             # Broadcast a follow-up error so the client knows the
             # started event isn't actionable.
-            self.broadcast_to_all_clients(json.dumps({
-                "type": "play_uploaded_audio",
-                "upload_id": upload_id,
-                "error": str(e),
-            }))
+            self.broadcast_to_all_clients(
+                json.dumps(
+                    {
+                        "type": "play_uploaded_audio",
+                        "upload_id": upload_id,
+                        "error": str(e),
+                    }
+                )
+            )
 
     def _handle_cancel_audio(self, cmd: CancelAudioCmd) -> None:
         """Stop play_uploaded_audio iff its upload_id matches.
@@ -1906,9 +1886,7 @@ class Backend:
         meta = self._upload_meta.pop(cmd.upload_id, None)
         self._upload_ts.pop(cmd.upload_id, None)
         if slot is None or meta is None:
-            self.logger.warning(
-                f"upload_move_finish: no such slot {cmd.upload_id}"
-            )
+            self.logger.warning(f"upload_move_finish: no such slot {cmd.upload_id}")
             return
         if len(slot) != meta["total_chunks"]:
             self.logger.warning(
@@ -1930,11 +1908,13 @@ class Backend:
                 # moves (gzip is fast on the CM4).
                 import base64
                 import gzip
+
                 raw = base64.b64decode(payload, validate=False)
                 # gzip.decompress reads the whole stream into RAM; use
                 # GzipFile.read(max_decoded_bytes + 1) so a bomb can't
                 # exhaust memory before we notice it's oversize.
                 import io
+
                 with gzip.GzipFile(fileobj=io.BytesIO(raw), mode="rb") as gz:
                     raw_text = gz.read(max_decoded_bytes + 1)
                 if len(raw_text) > max_decoded_bytes:
@@ -1961,6 +1941,7 @@ class Backend:
             # Reuse the RecordedMove parser; same JSON shape as the
             # HF dance/emotion datasets, no on-disk sound path.
             from reachy_mini.motion.recorded_move import RecordedMove
+
             parsed = RecordedMove(move_dict, sound_path=None)
         except Exception as e:
             self.logger.warning(
@@ -2114,7 +2095,7 @@ class Backend:
         """Execute goto_sleep and send response when done."""
         try:
             await self.goto_sleep()
-            send_response({"status": "ok", "command": "goto_sleep", "completed": True })
+            send_response({"status": "ok", "command": "goto_sleep", "completed": True})
         except Exception as e:
             send_response({"error": str(e), "command": "goto_sleep"})
 
@@ -2151,11 +2132,15 @@ class Backend:
                     os.remove(audio_path)
                 except OSError:
                     pass
-            self.broadcast_to_all_clients(json.dumps({
-                "type": "play_uploaded_move",
-                "upload_id": upload_id,
-                "error": "no such uploaded move (upload first)",
-            }))
+            self.broadcast_to_all_clients(
+                json.dumps(
+                    {
+                        "type": "play_uploaded_move",
+                        "upload_id": upload_id,
+                        "error": "no such uploaded move (upload first)",
+                    }
+                )
+            )
             return
 
         # Attach the uploaded audio to the move so Backend.play_move
@@ -2168,13 +2153,17 @@ class Backend:
 
         # Broadcast start with the declared duration so any client
         # waiting on the started event knows the loop is live.
-        self.broadcast_to_all_clients(json.dumps({
-            "type": "play_uploaded_move",
-            "upload_id": upload_id,
-            "started": True,
-            "duration_s": move.duration,
-            "has_audio": audio_path is not None,
-        }))
+        self.broadcast_to_all_clients(
+            json.dumps(
+                {
+                    "type": "play_uploaded_move",
+                    "upload_id": upload_id,
+                    "started": True,
+                    "duration_s": move.duration,
+                    "has_audio": audio_path is not None,
+                }
+            )
+        )
 
         result: dict[str, Any] = {
             "type": "play_uploaded_move",

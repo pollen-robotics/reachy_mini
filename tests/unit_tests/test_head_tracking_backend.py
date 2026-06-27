@@ -1,9 +1,6 @@
 """Unit tests for daemon-side head-tracking backend plumbing."""
 
-from typing import Callable
-
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackend
 from reachy_mini.io.protocol import (
@@ -11,7 +8,6 @@ from reachy_mini.io.protocol import (
     SetHeadTrackingCmd,
     command_adapter,
 )
-from reachy_mini.vision.look_at import look_at_image_pose
 
 
 class DummyKinematics:
@@ -27,37 +23,15 @@ class DummyKinematics:
         return np.zeros(7, dtype=np.float64)
 
 
-class DummyMediaServer:
-    """Small media-server spy for head-tracking command tests."""
-
-    def __init__(self) -> None:
-        """Initialize spy state."""
-        self.enabled = False
-        self.disabled = False
-        self.callback: Callable[..., None] | None = None
-
-    def enable_tracking(self, callback: Callable[..., None]) -> bool:
-        """Record that tracking was enabled."""
-        self.enabled = True
-        self.callback = callback
-        return True
-
-    def disable_tracking(self) -> None:
-        """Record that tracking was disabled."""
-        self.disabled = True
-
-
 def _make_backend() -> MockupSimBackend:
     backend = MockupSimBackend(use_audio=False)
     backend.current_head_pose = np.eye(4, dtype=np.float64)
     return backend
 
 
-def test_set_head_tracking_command_toggles_media_server() -> None:
-    """The protocol command should mirror wobbling's media-server hook pattern."""
+def test_set_head_tracking_command_toggles_tracking() -> None:
+    """The protocol command arms and disarms daemon-side tracking."""
     backend = _make_backend()
-    media = DummyMediaServer()
-    backend._media_server = media
 
     responses: list[dict[str, object]] = []
     cmd = command_adapter.validate_python(
@@ -66,8 +40,8 @@ def test_set_head_tracking_command_toggles_media_server() -> None:
     backend.process_command(cmd, send_response=responses.append)
 
     assert isinstance(cmd, SetHeadTrackingCmd)
-    assert media.enabled is True
-    assert media.callback == backend.set_tracking_face
+    assert backend._tracking_enabled is True
+    assert backend._tracking_requested_weight == 0.6
     assert responses[-1] == {
         "status": "ok",
         "command": "set_head_tracking",
@@ -78,7 +52,7 @@ def test_set_head_tracking_command_toggles_media_server() -> None:
         SetHeadTrackingCmd(enabled=False), send_response=responses.append
     )
 
-    assert media.disabled is True
+    assert backend._tracking_enabled is False
     assert responses[-1] == {
         "status": "ok",
         "command": "set_head_tracking",
@@ -187,69 +161,3 @@ def test_tracking_face_loss_holds_last_aim() -> None:
     assert backend.get_tracked_face().detected is False
     assert backend._tracking_weight == 1.0
     assert backend._tracking_aim is aim
-
-
-def test_tracking_face_holds_within_deadzone() -> None:
-    """The aim snaps to the raw eye-center past the deadzone and holds within it."""
-    backend = _make_backend()
-    backend._tracking_enabled = True
-    camera_matrix = np.array(
-        [[640.0, 0.0, 320.0], [0.0, 640.0, 240.0], [0.0, 0.0, 1.0]],
-        dtype=np.float64,
-    )
-    distortion = np.zeros(5, dtype=np.float64)
-
-    def feed(x: float) -> None:
-        backend.set_tracking_face(
-            eye_center=np.array([x, 0.0], dtype=np.float64),
-            roll=0.0,
-            width=640,
-            height=480,
-            camera_matrix=camera_matrix,
-            distortion=distortion,
-            timestamp=1.0,
-        )
-
-    feed(0.0)
-    feed(0.5)
-    assert backend.get_tracked_face().x == 0.5
-
-    feed(0.51)
-    assert backend.get_tracked_face().x == 0.5
-
-
-def test_tracking_aim_eases_toward_face_instead_of_snapping() -> None:
-    """The stored aim turns toward the face but by less than the full look-at.
-
-    Snapping to the absolute aim (gain 1.0) overshoots under capture-to-actuation
-    latency and oscillates; easing keeps the head stable.
-    """
-    backend = _make_backend()
-    backend._tracking_enabled = True
-    camera_matrix = np.array(
-        [[640.0, 0.0, 320.0], [0.0, 640.0, 240.0], [0.0, 0.0, 1.0]],
-        dtype=np.float64,
-    )
-    distortion = np.zeros(5, dtype=np.float64)
-    backend.set_tracking_face(
-        eye_center=np.array([0.6, 0.0], dtype=np.float64),
-        roll=0.0,
-        width=640,
-        height=480,
-        camera_matrix=camera_matrix,
-        distortion=distortion,
-        timestamp=1.0,
-    )
-
-    full_aim = look_at_image_pose(
-        u=(0.6 + 1.0) * 0.5 * 639,
-        v=(0.0 + 1.0) * 0.5 * 479,
-        K=camera_matrix,
-        D=distortion,
-        T_world_head=np.eye(4, dtype=np.float64),
-        T_head_cam=backend.T_head_cam,
-    )
-    assert backend._tracking_aim is not None
-    eased = np.linalg.norm(R.from_matrix(backend._tracking_aim[:3, :3]).as_rotvec())
-    full = np.linalg.norm(R.from_matrix(full_aim[:3, :3]).as_rotvec())
-    assert 0.0 < eased < full
