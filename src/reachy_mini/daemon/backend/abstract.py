@@ -98,6 +98,7 @@ from reachy_mini.utils.interpolation import (
     linear_pose_interpolation,
     time_trajectory,
 )
+from reachy_mini.vision.face_tracking import FaceTrackerProcess
 from reachy_mini.vision.look_at import (
     default_head_to_camera_transform,
     look_at_image_pose,
@@ -314,7 +315,11 @@ class Backend:
         self._tracking_enabled = False
         self._tracking_requested_weight = 1.0
         self._tracking_weight = 0.0
+        self._tracking_alpha = 0.15
         self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
+        self._tracking_target_pose: Annotated[NDArray[np.float64], (4, 4)] | None = None
+        self._tracker: FaceTrackerProcess | None = None
+        self._tracking_lock = threading.Lock()
         self._face_target = FaceTarget()
         self.T_head_cam = default_head_to_camera_transform()
 
@@ -467,9 +472,10 @@ class Backend:
         if body_yaw is None:
             body_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
 
-        if self._tracking_aim is not None and self._tracking_weight > 0.0:
+        aim = self._tracking_aim
+        if aim is not None and self._tracking_weight > 0.0:
             weight = min(max(self._tracking_weight, 0.0), 1.0)
-            pose = linear_pose_interpolation(pose, self._tracking_aim, weight)
+            pose = linear_pose_interpolation(pose, aim, weight)
 
         # Compose speech wobbler offsets (if any) before IK
         if any(o != 0.0 for o in self._speech_offsets):
@@ -584,26 +590,65 @@ class Backend:
         self.ik_required = True
 
     def enable_head_tracking(self, weight: float = 1.0) -> bool:
-        """Enable daemon-side visual head tracking."""
-        self._tracking_requested_weight = min(max(float(weight), 0.0), 1.0)
-        self._tracking_enabled = True
+        """Enable daemon-side visual head tracking, spawning the detector process."""
+        with self._tracking_lock:
+            self._tracking_requested_weight = min(max(float(weight), 0.0), 1.0)
+            if self._media_server is None:
+                self.logger.warning("Cannot enable head tracking: no camera available")
+                return False
+            if self._tracker is None:
+                self._tracker = FaceTrackerProcess()
+            self._tracker.start(self._media_server.camera_specs)
+            self._tracking_enabled = True
         return True
 
     def disable_head_tracking(self) -> None:
-        """Disable daemon-side visual head tracking and clear its aim."""
-        self._tracking_enabled = False
-        self.clear_tracking_aim()
+        """Disable daemon-side visual head tracking, stopping the detector process."""
+        with self._tracking_lock:
+            self._tracking_enabled = False
+            tracker = self._tracker
+            self._tracker = None
+            self.clear_tracking_aim()
+        if tracker is not None:
+            tracker.stop()
 
     def clear_tracking_aim(self) -> None:
-        """Clear the tracking aim and latest detected face."""
+        """Clear the tracking aim, latched target, and latest detected face."""
         self._tracking_aim = None
+        self._tracking_target_pose = None
         self._tracking_weight = 0.0
         self._face_target = FaceTarget()
         self.ik_required = True
 
+    def step_head_tracking(self) -> None:
+        """Ingest the latest detector target and ease the aim toward it for one tick."""
+        with self._tracking_lock:
+            if not self._tracking_enabled:
+                return
+            if self._tracker is not None:
+                obs = self._tracker.latest()
+                if obs is not None:
+                    self.set_tracking_face(
+                        obs.eye_center,
+                        obs.roll,
+                        obs.width,
+                        obs.height,
+                        obs.camera_matrix,
+                        obs.distortion,
+                        obs.timestamp,
+                    )
+            if self._tracking_target_pose is None:
+                return
+            if self._tracking_aim is None:
+                self._tracking_aim = self.get_current_head_pose()
+            self._tracking_aim = linear_pose_interpolation(
+                self._tracking_aim, self._tracking_target_pose, self._tracking_alpha
+            )
+            self.ik_required = True
+
     def set_tracking_face(
         self,
-        eye_center: NDArray[np.float64] | None,
+        eye_center: tuple[float, float] | None,
         roll: float | None,
         width: int,
         height: int,
@@ -611,12 +656,12 @@ class Backend:
         distortion: NDArray[np.float64],
         timestamp: float,
     ) -> None:
-        """Latch the tracking aim from a face observation in tracker-frame pixels."""
+        """Latch the tracking target from a face observation in tracker-frame pixels."""
         if not self._tracking_enabled:
             return
 
         if eye_center is None:
-            # Hold the last aim on a transient loss so the head doesn't lurch to neutral.
+            # Hold the last target on a transient loss so the head doesn't lurch to neutral.
             self._face_target = FaceTarget(detected=False, ts=timestamp)
             return
 
@@ -634,7 +679,7 @@ class Backend:
         u = (x_norm + 1.0) * 0.5 * max(width - 1, 1)
         v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)
         try:
-            aim = look_at_image_pose(
+            self._tracking_target_pose = look_at_image_pose(
                 u=u,
                 v=v,
                 K=camera_matrix,
@@ -644,10 +689,6 @@ class Backend:
             )
         except Exception as e:
             self.logger.warning("Head-tracking aim update failed: %s", e)
-            return
-
-        self._tracking_aim = aim
-        self.ik_required = True
 
     def get_tracked_face(self) -> FaceTarget:
         """Return the latest face target observed by daemon-side tracking."""
