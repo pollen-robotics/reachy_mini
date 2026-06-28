@@ -1048,6 +1048,12 @@ class GstMediaServer:
         # Forward sticky events while closed so unixfdsink stays negotiated (CAPS reach it
         # with no buffers); the default "drop-all" drops CAPS and the sink never flows.
         valve.set_property("drop-mode", "forward-sticky-events")
+        # The sink starts behind a closed valve: an async sink parks the branch waiting for
+        # a preroll buffer that never arrives while shut, and never recovers when it opens.
+        # Disable preroll and clock sync — this is a detector feed, not a display.
+        for prop in ("async", "sync"):
+            if sink.find_property(prop) is not None:
+                sink.set_property(prop, False)
         capsfilter.set_property(
             "caps",
             Gst.Caps.from_string(
