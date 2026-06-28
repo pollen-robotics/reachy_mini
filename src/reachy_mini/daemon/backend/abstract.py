@@ -598,6 +598,7 @@ class Backend:
                 return False
             if self._tracker is None:
                 self._tracker = FaceTrackerProcess()
+            self._media_server.set_tracking_active(True)
             self._tracker.start(self._media_server.camera_specs)
             self._tracking_enabled = True
         return True
@@ -606,6 +607,8 @@ class Backend:
         """Disable daemon-side visual head tracking, stopping the detector process."""
         with self._tracking_lock:
             self._tracking_enabled = False
+            if self._media_server is not None:
+                self._media_server.set_tracking_active(False)
             tracker = self._tracker
             self._tracker = None
             self.clear_tracking_aim()

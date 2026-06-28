@@ -56,7 +56,9 @@ def _make_backend() -> MockupSimBackend:
 def test_set_head_tracking_command_toggles_tracking() -> None:
     """The protocol command arms the gate and starts/stops the tracker process."""
     backend = _make_backend()
-    backend._media_server = SimpleNamespace(camera_specs=object())
+    backend._media_server = SimpleNamespace(
+        camera_specs=object(), set_tracking_active=lambda active: None
+    )
     tracker = DummyTracker()
     backend._tracker = tracker
 
