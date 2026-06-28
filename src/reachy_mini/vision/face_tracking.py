@@ -34,37 +34,83 @@ class FaceObservation:
     timestamp: float
 
 
-def observe(
-    faces: "list[Face]",
+def _area(face: "Face") -> float:
+    return face.bbox[2] * face.bbox[3]
+
+
+def _eye_center(face: "Face", width: int, height: int) -> tuple[float, float]:
+    cx = (face.right_eye[0] + face.left_eye[0]) / 2
+    cy = (face.right_eye[1] + face.left_eye[1]) / 2
+    return (cx / max(width - 1, 1) * 2 - 1, cy / max(height - 1, 1) * 2 - 1)
+
+
+def _dist2(a: tuple[float, float], b: tuple[float, float]) -> float:
+    return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
+
+
+class Tracker:
+    """Greedy single-face track that rejects spurious detections.
+
+    Acquires the largest face above a minimum size, then sticks to the face
+    nearest the current track, so a stray detection elsewhere can't yank the
+    head around. Drops the track after a run of misses so a new person can be
+    acquired.
+    """
+
+    def __init__(
+        self,
+        min_area_frac: float = 0.003,
+        max_jump: float = 0.5,
+        max_misses: int = 20,
+    ) -> None:
+        """Create a tracker with the given acquisition and association gates."""
+        self._min_area_frac = min_area_frac
+        self._max_jump = max_jump
+        self._max_misses = max_misses
+        self._center: tuple[float, float] | None = None
+        self._misses = 0
+
+    def select(self, faces: "list[Face]", width: int, height: int) -> "Face | None":
+        """Pick the face to aim at, or None when no plausible target is present."""
+        if not faces:
+            self._miss()
+            return None
+        if self._center is None:
+            face = max(faces, key=_area)
+            if _area(face) < self._min_area_frac * width * height:
+                self._miss()
+                return None
+        else:
+            center = self._center
+            face = min(
+                faces, key=lambda f: _dist2(_eye_center(f, width, height), center)
+            )
+            if _dist2(_eye_center(face, width, height), center) > self._max_jump**2:
+                self._miss()
+                return None
+        self._center = _eye_center(face, width, height)
+        self._misses = 0
+        return face
+
+    def _miss(self) -> None:
+        self._misses += 1
+        if self._misses > self._max_misses:
+            self._center = None
+
+
+def to_observation(
+    face: "Face | None",
     width: int,
     height: int,
     camera_matrix: NDArray[np.float64],
     distortion: NDArray[np.float64],
     timestamp: float,
-    prev: tuple[float, float] | None = None,
 ) -> FaceObservation:
-    """Reduce detected faces to one normalized observation.
-
-    Picks the face nearest the previous target, or the largest when prev is None.
-    """
-    if not faces:
+    """Reduce the tracked face (or its absence) to one normalized observation."""
+    if face is None:
         return FaceObservation(
             None, None, width, height, camera_matrix, distortion, timestamp
         )
-
-    def center(face: "Face") -> tuple[float, float]:
-        cx = (face.right_eye[0] + face.left_eye[0]) / 2
-        cy = (face.right_eye[1] + face.left_eye[1]) / 2
-        return (cx / max(width - 1, 1) * 2 - 1, cy / max(height - 1, 1) * 2 - 1)
-
-    if prev is None:
-        face = max(faces, key=lambda f: f.bbox[2] * f.bbox[3])
-    else:
-        face = min(
-            faces,
-            key=lambda f: (center(f)[0] - prev[0]) ** 2 + (center(f)[1] - prev[1]) ** 2,
-        )
-    eye_center = center(face)
     roll = float(
         np.arctan2(
             face.left_eye[1] - face.right_eye[1],
@@ -72,7 +118,13 @@ def observe(
         )
     )
     return FaceObservation(
-        eye_center, roll, width, height, camera_matrix, distortion, timestamp
+        _eye_center(face, width, height),
+        roll,
+        width,
+        height,
+        camera_matrix,
+        distortion,
+        timestamp,
     )
 
 
@@ -110,13 +162,13 @@ def run(conn: Connection, stop: EventType, camera_specs: "CameraSpecs") -> None:
         pipeline.set_state(Gst.State.PLAYING)
         appsink = pipeline.get_by_name("sink")
         detector = FaceDetector()
+        tracker = Tracker()
     except Exception as e:
         _logger.warning("Face tracker failed to start: %s", e)
         return
 
     crop_scale = camera_specs.default_resolution.value[3]
     camera_matrix: NDArray[np.float64] | None = None
-    prev: tuple[float, float] | None = None
     try:
         while not stop.is_set():
             sample = appsink.emit("try-pull-sample", 200_000_000)
@@ -133,16 +185,15 @@ def run(conn: Connection, stop: EventType, camera_specs: "CameraSpecs") -> None:
                 camera_matrix = intrinsics_for_size(
                     camera_specs.K, crop_scale, (width, height)
                 )
-            obs = observe(
-                detector.detect(frame),
+            face = tracker.select(detector.detect(frame), width, height)
+            obs = to_observation(
+                face,
                 width,
                 height,
                 camera_matrix,
                 camera_specs.D,
                 time.monotonic(),
-                prev,
             )
-            prev = obs.eye_center
             try:
                 conn.send(obs)
             except (BrokenPipeError, OSError):

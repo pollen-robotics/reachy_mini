@@ -316,8 +316,12 @@ class Backend:
         self._tracking_requested_weight = 1.0
         self._tracking_weight = 0.0
         self._tracking_alpha = 0.15
+        self._tracking_deadband = 0.03
+        self._tracking_lost_timeout = 2.0
         self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
         self._tracking_target_pose: Annotated[NDArray[np.float64], (4, 4)] | None = None
+        self._tracking_last_center: tuple[float, float] | None = None
+        self._last_face_seen: float | None = None
         self._tracker: FaceTrackerProcess | None = None
         self._tracking_lock = threading.Lock()
         self._face_target = FaceTarget()
@@ -620,14 +624,22 @@ class Backend:
         self._tracking_aim = None
         self._tracking_target_pose = None
         self._tracking_weight = 0.0
+        self._tracking_last_center = None
+        self._last_face_seen = None
         self._face_target = FaceTarget()
         self.ik_required = True
 
     def step_head_tracking(self) -> None:
-        """Ingest the latest detector target and ease the aim toward it for one tick."""
+        """Ease the aim toward the latest target, holding then recentering on loss.
+
+        A brief detection gap holds the last aim; a sustained loss returns the aim
+        to the neutral head pose so the robot recenters instead of freezing where
+        the person left the frame.
+        """
         with self._tracking_lock:
             if not self._tracking_enabled:
                 return
+            now = time.monotonic()
             if self._tracker is not None:
                 obs = self._tracker.latest()
                 if obs is not None:
@@ -640,6 +652,13 @@ class Backend:
                         obs.distortion,
                         obs.timestamp,
                     )
+                    if obs.eye_center is not None:
+                        self._last_face_seen = now
+            if (
+                self._last_face_seen is not None
+                and now - self._last_face_seen >= self._tracking_lost_timeout
+            ):
+                self._tracking_target_pose = self.INIT_HEAD_POSE.copy()
             if self._tracking_target_pose is None:
                 return
             if self._tracking_aim is None:
@@ -678,6 +697,14 @@ class Backend:
             roll=roll,
             ts=timestamp,
         )
+
+        # Deadband sub-threshold jitter so a still person keeps a still head.
+        if self._tracking_last_center is not None and (
+            abs(x_norm - self._tracking_last_center[0]) < self._tracking_deadband
+            and abs(y_norm - self._tracking_last_center[1]) < self._tracking_deadband
+        ):
+            return
+        self._tracking_last_center = (x_norm, y_norm)
 
         u = (x_norm + 1.0) * 0.5 * max(width - 1, 1)
         v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)
