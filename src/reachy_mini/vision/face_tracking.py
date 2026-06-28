@@ -119,7 +119,7 @@ def run(conn: Connection, stop: EventType, camera_specs: "CameraSpecs") -> None:
     prev: tuple[float, float] | None = None
     try:
         while not stop.is_set():
-            sample = appsink.try_pull_sample(200_000_000)
+            sample = appsink.emit("try-pull-sample", 200_000_000)
             if sample is None:
                 continue
             structure = sample.get_caps().get_structure(0)
