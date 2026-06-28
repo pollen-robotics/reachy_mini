@@ -2,6 +2,7 @@
 
 import logging
 import multiprocessing as mp
+import os
 import time
 from dataclasses import dataclass
 from multiprocessing.connection import Connection
@@ -17,6 +18,10 @@ if TYPE_CHECKING:
     from reachy_mini.vision.face_detector import Face
 
 _logger = logging.getLogger("reachymini-face-tracker")
+
+# Cheap detector: a small frame at a capped rate; smoothness comes from the daemon's easing.
+DETECT_WIDTH = 640
+DETECT_FPS = 15
 
 
 @dataclass
@@ -39,19 +44,30 @@ def observe(
     camera_matrix: NDArray[np.float64],
     distortion: NDArray[np.float64],
     timestamp: float,
+    prev: tuple[float, float] | None = None,
 ) -> FaceObservation:
-    """Reduce detected faces to the nearest (largest) one as a normalized observation."""
+    """Reduce detected faces to one normalized observation.
+
+    Picks the face nearest the previous target, or the largest when prev is None.
+    """
     if not faces:
         return FaceObservation(
             None, None, width, height, camera_matrix, distortion, timestamp
         )
-    face = max(faces, key=lambda f: f.bbox[2] * f.bbox[3])
-    cx = (face.right_eye[0] + face.left_eye[0]) / 2
-    cy = (face.right_eye[1] + face.left_eye[1]) / 2
-    eye_center = (
-        cx / max(width - 1, 1) * 2 - 1,
-        cy / max(height - 1, 1) * 2 - 1,
-    )
+
+    def center(face: "Face") -> tuple[float, float]:
+        cx = (face.right_eye[0] + face.left_eye[0]) / 2
+        cy = (face.right_eye[1] + face.left_eye[1]) / 2
+        return (cx / max(width - 1, 1) * 2 - 1, cy / max(height - 1, 1) * 2 - 1)
+
+    if prev is None:
+        face = max(faces, key=lambda f: f.bbox[2] * f.bbox[3])
+    else:
+        face = min(
+            faces,
+            key=lambda f: (center(f)[0] - prev[0]) ** 2 + (center(f)[1] - prev[1]) ** 2,
+        )
+    eye_center = center(face)
     roll = float(
         np.arctan2(
             face.left_eye[1] - face.right_eye[1],
@@ -70,7 +86,12 @@ def run(
     log_level: str = "INFO",
 ) -> None:
     """Read camera frames, detect faces, and stream observations until stopped."""
+    # Lowest priority so YuNet bursts never preempt the daemon's 50 Hz control loop.
+    if hasattr(os, "nice"):
+        os.nice(19)
     try:
+        import cv2
+
         from reachy_mini.media.camera_gstreamer import GStreamerCamera
         from reachy_mini.media.camera_utils import intrinsics_for_size
         from reachy_mini.vision.face_detector import FaceDetector
@@ -82,30 +103,36 @@ def run(
         _logger.warning("Face tracker failed to start: %s", e)
         return
 
-    crop_scale = camera_specs.default_resolution.value[3]
-    camera_matrix: NDArray[np.float64] | None = None
+    res = camera_specs.default_resolution.value
+    det_size = (DETECT_WIDTH, max(1, round(res[1] * DETECT_WIDTH / res[0])))
+    camera_matrix = intrinsics_for_size(camera_specs.K, res[3], det_size)
+    distortion = camera_specs.D
+    period = 1.0 / DETECT_FPS
+    prev: tuple[float, float] | None = None
     try:
         while not stop.is_set():
+            start = time.monotonic()
             frame = camera.read()
             if frame is None:
                 continue
-            height, width = frame.shape[0], frame.shape[1]
-            if camera_matrix is None:
-                camera_matrix = intrinsics_for_size(
-                    camera_specs.K, crop_scale, (width, height)
-                )
+            small = np.asarray(cv2.resize(frame, det_size), dtype=np.uint8)
             obs = observe(
-                detector.detect(frame),
-                width,
-                height,
+                detector.detect(small),
+                det_size[0],
+                det_size[1],
                 camera_matrix,
-                camera_specs.D,
+                distortion,
                 time.monotonic(),
+                prev,
             )
+            prev = obs.eye_center
             try:
                 conn.send(obs)
             except (BrokenPipeError, OSError):
                 break
+            elapsed = time.monotonic() - start
+            if elapsed < period:
+                stop.wait(period - elapsed)
     finally:
         camera.close()
 

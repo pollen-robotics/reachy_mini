@@ -32,3 +32,15 @@ def test_observe_picks_largest_face_and_normalizes() -> None:
 
     assert obs.eye_center == (0.0, 0.0)
     assert obs.roll == float(np.arctan2(2.0, 2.0))
+
+
+def test_observe_prefers_face_nearest_previous() -> None:
+    """A previous target keeps continuity: the nearest face wins over the largest."""
+    big = _face((0.0, 0.0, 3.0, 3.0), (0.0, 0.0), (2.0, 0.0))  # norm center (0, -1), large
+    near = _face((0.0, 0.0, 1.0, 1.0), (0.0, 1.0), (2.0, 1.0))  # norm center (0, 0), small
+
+    no_prev = observe([big, near], 3, 3, np.eye(3), np.zeros(5), 1.0)
+    assert no_prev.eye_center == (0.0, -1.0)  # largest wins without a previous target
+
+    with_prev = observe([big, near], 3, 3, np.eye(3), np.zeros(5), 1.0, (0.0, 0.0))
+    assert with_prev.eye_center == (0.0, 0.0)  # nearest to prev wins despite smaller
