@@ -1045,6 +1045,9 @@ class GstMediaServer:
         queue.set_property("leaky", 2)
         queue.set_property("max-size-buffers", 1)
         valve.set_property("drop", True)
+        # Forward sticky events while closed so unixfdsink stays negotiated (CAPS reach it
+        # with no buffers); the default "drop-all" drops CAPS and the sink never flows.
+        valve.set_property("drop-mode", "forward-sticky-events")
         capsfilter.set_property(
             "caps",
             Gst.Caps.from_string(
