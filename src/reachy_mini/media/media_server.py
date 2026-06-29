@@ -41,17 +41,18 @@ from reachy_mini.daemon.utils import (
 )
 from reachy_mini.media.audio_base import AEC_CHANNELS, AEC_PROBE_NAME, AEC_RATE
 from reachy_mini.media.audio_control_utils import init_respeaker_usb
-from reachy_mini.media.audio_utils import (
-    get_audio_device_node_name,
-    has_reachymini_asoundrc,
-)
+from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.camera_constants import (
     CameraSpecs,
     GenericWebcamSpecs,
     MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
-from reachy_mini.media.device_detection import get_audio_device, get_video_device
+from reachy_mini.media.device_detection import (
+    DEFAULT_AUDIO_TARGET,
+    get_audio_device,
+    get_video_device,
+)
 from reachy_mini.media.gstreamer_utils import handle_default_bus_message
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
@@ -1128,18 +1129,14 @@ class GstMediaServer:
         )
         return [audioconvert, audioresample, capsfilter]
 
-    def _selected_audio_node(self, direction: str) -> Optional[str]:
-        """Resolve the user-selected audio device to a PipeWire node name.
+    def _selected_device_name(self, direction: str) -> Optional[str]:
+        """Return the user-selected audio device name, or ``None``.
 
-        Reads the selection set via the audio-devices API. Returns ``None``
-        when nothing is selected (use auto-detection) or when the selected
-        device cannot be resolved to a PipeWire node.
+        Reads the selection set via the audio-devices API. ``None`` means
+        nothing is selected, so auto-detection (the Reachy Mini card) is used.
 
         Args:
             direction: ``"input"`` (source) or ``"output"`` (sink).
-
-        Returns:
-            The PipeWire ``node.name`` for the current selection, or ``None``.
 
         """
         from reachy_mini.daemon.app.routers.audio_devices import (
@@ -1147,23 +1144,7 @@ class GstMediaServer:
             get_selected_output,
         )
 
-        if direction == "input":
-            selected = get_selected_input()
-            device_class = "Audio/Source"
-        else:
-            selected = get_selected_output()
-            device_class = "Audio/Sink"
-
-        if selected is None:
-            return None
-
-        node = get_audio_device_node_name([selected], device_class)
-        if node is None:
-            self._logger.warning(
-                f"Selected {direction} device '{selected}' could not be resolved "
-                "to a PipeWire node; falling back to auto-detection."
-            )
-        return node
+        return get_selected_input() if direction == "input" else get_selected_output()
 
     def _build_audio_source(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio source element.
@@ -1186,17 +1167,14 @@ class GstMediaServer:
             A GStreamer audio source element, or None if no audio is available.
 
         """
-        # An explicit user selection (via the audio-devices API) takes
-        # precedence over auto-detection. Applied on this (re)build only.
-        node = self._selected_audio_node("input")
-        if node is not None:
-            audiosrc = Gst.ElementFactory.make("pulsesrc")
-            audiosrc.set_property("device", node)
-            self._logger.info(f"Using selected input device node {node} for capture.")
-            return audiosrc
+        # An explicit user selection (via the audio-devices API) overrides the
+        # .asoundrc / auto-detected source. It is resolved platform-correctly
+        # below via get_audio_device's target_name.
+        selected = self._selected_device_name("input")
 
-        # Wireless CM4: .asoundrc defines reachymini_audio_src alias
-        if has_reachymini_asoundrc():
+        # Wireless CM4 (no explicit selection): .asoundrc defines the
+        # reachymini_audio_src alias routing through the XMOS AEC loopback.
+        if selected is None and has_reachymini_asoundrc():
             respeaker = init_respeaker_usb()
             if respeaker is None:
                 self._logger.warning(
@@ -1211,7 +1189,9 @@ class GstMediaServer:
             self._logger.info("Using ALSA device reachymini_audio_src for capture.")
             return audiosrc
 
-        id_audio_card = get_audio_device("Source")
+        id_audio_card = get_audio_device(
+            "Source", target_name=selected or DEFAULT_AUDIO_TARGET
+        )
 
         if id_audio_card is not None:
             if platform.system() == "Windows":
@@ -1326,23 +1306,22 @@ class GstMediaServer:
             A GStreamer audio sink element, or None to use the default.
 
         """
-        # An explicit user selection (via the audio-devices API) takes
-        # precedence over auto-detection. Applied on this (re)build only.
-        node = self._selected_audio_node("output")
-        if node is not None:
-            audiosink = Gst.ElementFactory.make("pulsesink")
-            audiosink.set_property("device", node)
-            self._logger.info(f"Using selected output device node {node} for playback.")
-            return audiosink
+        # An explicit user selection (via the audio-devices API) overrides the
+        # .asoundrc / auto-detected sink. It is resolved platform-correctly
+        # below via get_audio_device's target_name.
+        selected = self._selected_device_name("output")
 
-        # Wireless CM4: .asoundrc defines reachymini_audio_sink alias
-        if has_reachymini_asoundrc():
+        # Wireless CM4 (no explicit selection): .asoundrc defines the
+        # reachymini_audio_sink alias.
+        if selected is None and has_reachymini_asoundrc():
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", "reachymini_audio_sink")
             self._logger.info("Using ALSA device reachymini_audio_sink for playback.")
             return audiosink
 
-        id_audio_card = get_audio_device("Sink")
+        id_audio_card = get_audio_device(
+            "Sink", target_name=selected or DEFAULT_AUDIO_TARGET
+        )
 
         if id_audio_card is not None:
             if platform.system() == "Windows":

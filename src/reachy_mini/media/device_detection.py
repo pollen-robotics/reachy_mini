@@ -475,8 +475,10 @@ def find_video_device(
     return "", None
 
 
-def get_audio_device(device_type: str = "Source") -> Optional[str]:
-    """Detect the Reachy Mini audio device via ``Gst.DeviceMonitor``.
+def get_audio_device(
+    device_type: str = "Source", target_name: str = DEFAULT_AUDIO_TARGET
+) -> Optional[str]:
+    """Detect an audio device by name via ``Gst.DeviceMonitor``.
 
     This is the high-level entry point that both ``GstMediaServer`` and
     ``GStreamerAudio`` should call.  It handles the full monitor
@@ -485,6 +487,11 @@ def get_audio_device(device_type: str = "Source") -> Optional[str]:
 
     Args:
         device_type: ``"Source"`` for microphone or ``"Sink"`` for speaker.
+        target_name: Substring matched against device display names. Defaults
+            to the Reachy Mini Audio card; pass a user-selected device name to
+            resolve that device instead. The returned identifier is always
+            platform-specific so the right element (pulsesink / osxaudiosink /
+            wasapi2sink) can be used.
 
     Returns:
         The platform-specific device identifier, or ``None``.
@@ -492,7 +499,7 @@ def get_audio_device(device_type: str = "Source") -> Optional[str]:
     """
     try:
         devices = gst_monitor_devices(f"Audio/{device_type}")
-        return find_audio_device(devices, device_type)
+        return find_audio_device(devices, device_type, target_name=target_name)
     except Exception:
         _logger.exception("Error detecting audio %s device", device_type)
         return None

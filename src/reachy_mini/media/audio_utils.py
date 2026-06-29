@@ -124,53 +124,6 @@ def get_respeaker_card_number(device_names: list[str] = DEFAULT_DEVICE_NAMES) ->
         return -1
 
 
-def get_audio_device_node_name(
-    device_names: list[str] = DEFAULT_DEVICE_NAMES, device_class: str = "Audio/Source"
-) -> str | None:
-    """Return the device identifier for the first device whose name matches.
-
-    Thin wrapper around the shared GStreamer device discovery in
-    :mod:`reachy_mini.media.device_detection` so that all device enumeration
-    and matching goes through a single implementation.
-
-    Args:
-        device_names: Device name substrings to search for, in priority order.
-                     Defaults to DEFAULT_DEVICE_NAMES (["Reachy Mini Audio", "ReSpeaker"]).
-        device_class: GStreamer device class ("Audio/Source" or "Audio/Sink").
-
-    Returns:
-        The platform-specific device identifier (PipeWire ``node.name`` on
-        Linux/PipeWire), or ``None`` if no matching device is found.
-
-    Example:
-        >>> node = get_audio_device_node_name(["Reachy Mini Audio"], "Audio/Source")
-        >>> if node:
-        ...     print(f"Device id: {node}")
-
-    """
-    # Imported lazily: device_detection pulls in GStreamer (gi), while this
-    # module is also imported in GStreamer-free contexts (e.g. daemon startup).
-    from reachy_mini.media.device_detection import (
-        find_audio_device,
-        gst_monitor_devices,
-    )
-
-    device_type = "Sink" if device_class.endswith("Sink") else "Source"
-    try:
-        devices = gst_monitor_devices(device_class)
-    except Exception as e:
-        logging.error(f"Could not enumerate {device_class} devices: {e}")
-        return None
-
-    for name in device_names:
-        identifier = find_audio_device(devices, device_type, target_name=name)
-        if identifier is not None:
-            return identifier
-
-    logging.warning(f"No audio device found matching {device_names}")
-    return None
-
-
 def has_reachymini_asoundrc() -> bool:
     """Check if ~/.asoundrc exists and contains both reachymini_audio_sink and reachymini_audio_src.
 
