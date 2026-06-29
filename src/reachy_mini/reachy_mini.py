@@ -265,9 +265,10 @@ class ReachyMini:
         """Enable daemon-side visual head tracking.
 
         Args:
-            weight: Blend factor in ``[0, 1]``. ``1`` lets tracking fully own
-                the head orientation; lower values let app motion show through
-                while still biasing the head toward the detected face.
+            weight: Blend factor in ``[0, 1]``. ``1`` lets tracking fully own the
+                head orientation; intermediate values let app motion show through
+                while biasing toward the face; ``0`` pauses detection (freeing the
+                head and CPU) without tearing the process down, for cheap on/off.
 
         """
         self.client.send_command(SetHeadTrackingCmd(enabled=True, weight=weight))

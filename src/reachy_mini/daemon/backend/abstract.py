@@ -594,16 +594,25 @@ class Backend:
         self.ik_required = True
 
     def enable_head_tracking(self, weight: float = 1.0) -> bool:
-        """Enable daemon-side visual head tracking, spawning the detector process."""
+        """Enable daemon-side visual head tracking, spawning the detector process.
+
+        ``weight`` 0 pauses detection (closes the video branch) and hands the head
+        back to app motion without tearing the process down, so callers can toggle
+        tracking on/off per turn cheaply.
+        """
         with self._tracking_lock:
             self._tracking_requested_weight = min(max(float(weight), 0.0), 1.0)
             if self._media_server is None:
                 self.logger.warning("Cannot enable head tracking: no camera available")
                 return False
-            if self._tracker is None:
-                self._tracker = FaceTrackerProcess()
-            self._media_server.set_tracking_active(True)
-            self._tracker.start(self._media_server.camera_specs)
+            if self._tracking_requested_weight > 0.0:
+                if self._tracker is None:
+                    self._tracker = FaceTrackerProcess()
+                self._tracker.start(self._media_server.camera_specs)
+                self._media_server.set_tracking_active(True)
+            else:
+                self._media_server.set_tracking_active(False)
+                self.clear_tracking_aim()
             self._tracking_enabled = True
         return True
 
@@ -637,7 +646,7 @@ class Backend:
         the person left the frame.
         """
         with self._tracking_lock:
-            if not self._tracking_enabled:
+            if not self._tracking_enabled or self._tracking_requested_weight <= 0.0:
                 return
             now = time.monotonic()
             if self._tracker is not None:

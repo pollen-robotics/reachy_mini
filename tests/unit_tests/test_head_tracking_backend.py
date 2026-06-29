@@ -250,3 +250,22 @@ def test_tracking_sustained_loss_recenters_to_neutral() -> None:
     backend.step_head_tracking()
 
     np.testing.assert_allclose(backend._tracking_target_pose, np.eye(4), atol=1e-9)
+
+
+def test_enable_head_tracking_weight_zero_pauses_without_stopping() -> None:
+    """Weight 0 closes the tracking branch and frees the head, keeping the process."""
+    backend = _make_backend()
+    active_calls: list[bool] = []
+    backend._media_server = SimpleNamespace(
+        camera_specs=object(), set_tracking_active=active_calls.append
+    )
+    tracker = DummyTracker()
+    backend._tracker = tracker
+    backend._tracking_aim = np.eye(4, dtype=np.float64)
+    backend._tracking_weight = 1.0
+
+    backend.enable_head_tracking(weight=0.0)
+
+    assert active_calls[-1] is False
+    assert backend._tracking_weight == 0.0
+    assert tracker.stopped is False
