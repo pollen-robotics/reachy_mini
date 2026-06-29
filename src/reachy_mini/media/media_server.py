@@ -41,7 +41,10 @@ from reachy_mini.daemon.utils import (
 )
 from reachy_mini.media.audio_base import AEC_CHANNELS, AEC_PROBE_NAME, AEC_RATE
 from reachy_mini.media.audio_control_utils import init_respeaker_usb
-from reachy_mini.media.audio_utils import has_reachymini_asoundrc
+from reachy_mini.media.audio_utils import (
+    get_audio_device_node_name,
+    has_reachymini_asoundrc,
+)
 from reachy_mini.media.camera_constants import (
     CameraSpecs,
     GenericWebcamSpecs,
@@ -1125,6 +1128,43 @@ class GstMediaServer:
         )
         return [audioconvert, audioresample, capsfilter]
 
+    def _selected_audio_node(self, direction: str) -> Optional[str]:
+        """Resolve the user-selected audio device to a PipeWire node name.
+
+        Reads the selection set via the audio-devices API. Returns ``None``
+        when nothing is selected (use auto-detection) or when the selected
+        device cannot be resolved to a PipeWire node.
+
+        Args:
+            direction: ``"input"`` (source) or ``"output"`` (sink).
+
+        Returns:
+            The PipeWire ``node.name`` for the current selection, or ``None``.
+
+        """
+        from reachy_mini.daemon.app.routers.audio_devices import (
+            get_selected_input,
+            get_selected_output,
+        )
+
+        if direction == "input":
+            selected = get_selected_input()
+            device_class = "Audio/Source"
+        else:
+            selected = get_selected_output()
+            device_class = "Audio/Sink"
+
+        if selected is None:
+            return None
+
+        node = get_audio_device_node_name([selected], device_class)
+        if node is None:
+            self._logger.warning(
+                f"Selected {direction} device '{selected}' could not be resolved "
+                "to a PipeWire node; falling back to auto-detection."
+            )
+        return node
+
     def _build_audio_source(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio source element.
 
@@ -1146,6 +1186,15 @@ class GstMediaServer:
             A GStreamer audio source element, or None if no audio is available.
 
         """
+        # An explicit user selection (via the audio-devices API) takes
+        # precedence over auto-detection. Applied on this (re)build only.
+        node = self._selected_audio_node("input")
+        if node is not None:
+            audiosrc = Gst.ElementFactory.make("pulsesrc")
+            audiosrc.set_property("device", node)
+            self._logger.info(f"Using selected input device node {node} for capture.")
+            return audiosrc
+
         # Wireless CM4: .asoundrc defines reachymini_audio_src alias
         if has_reachymini_asoundrc():
             respeaker = init_respeaker_usb()
@@ -1277,6 +1326,15 @@ class GstMediaServer:
             A GStreamer audio sink element, or None to use the default.
 
         """
+        # An explicit user selection (via the audio-devices API) takes
+        # precedence over auto-detection. Applied on this (re)build only.
+        node = self._selected_audio_node("output")
+        if node is not None:
+            audiosink = Gst.ElementFactory.make("pulsesink")
+            audiosink.set_property("device", node)
+            self._logger.info(f"Using selected output device node {node} for playback.")
+            return audiosink
+
         # Wireless CM4: .asoundrc defines reachymini_audio_sink alias
         if has_reachymini_asoundrc():
             audiosink = Gst.ElementFactory.make("alsasink")

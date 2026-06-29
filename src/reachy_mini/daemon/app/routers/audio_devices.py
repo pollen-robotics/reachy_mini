@@ -132,7 +132,9 @@ async def get_selected_output_device() -> SelectedDeviceResponse:
 
 
 @router.post("/output/selected")
-async def set_selected_output_device(request: SetDeviceRequest) -> SelectedDeviceResponse:
+async def set_selected_output_device(
+    request: SetDeviceRequest,
+) -> SelectedDeviceResponse:
     """Set the output device to use."""
     global _selected_output_device
 
@@ -146,6 +148,10 @@ async def set_selected_output_device(request: SetDeviceRequest) -> SelectedDevic
 
     _selected_output_device = request.device_name
     logger.info(f"Output device set to: {_selected_output_device}")
+    logger.warning(
+        "Audio output device selection updated; it will take effect on the next "
+        "audio pipeline (re)start (e.g. new session or app launch)."
+    )
 
     return SelectedDeviceResponse(device_name=_selected_output_device)
 
@@ -156,6 +162,10 @@ async def clear_selected_output_device() -> SelectedDeviceResponse:
     global _selected_output_device
     _selected_output_device = None
     logger.info("Output device cleared, using default")
+    logger.warning(
+        "Audio output device selection cleared; it will take effect on the next "
+        "audio pipeline (re)start (e.g. new session or app launch)."
+    )
 
     return SelectedDeviceResponse(device_name=None)
 
@@ -167,7 +177,9 @@ async def get_selected_input_device() -> SelectedDeviceResponse:
 
 
 @router.post("/input/selected")
-async def set_selected_input_device(request: SetDeviceRequest) -> SelectedDeviceResponse:
+async def set_selected_input_device(
+    request: SetDeviceRequest,
+) -> SelectedDeviceResponse:
     """Set the input device to use."""
     global _selected_input_device
 
@@ -181,6 +193,10 @@ async def set_selected_input_device(request: SetDeviceRequest) -> SelectedDevice
 
     _selected_input_device = request.device_name
     logger.info(f"Input device set to: {_selected_input_device}")
+    logger.warning(
+        "Audio input device selection updated; it will take effect on the next "
+        "audio pipeline (re)start (e.g. new session or app launch)."
+    )
 
     return SelectedDeviceResponse(device_name=_selected_input_device)
 
@@ -191,6 +207,10 @@ async def clear_selected_input_device() -> SelectedDeviceResponse:
     global _selected_input_device
     _selected_input_device = None
     logger.info("Input device cleared, using default")
+    logger.warning(
+        "Audio input device selection cleared; it will take effect on the next "
+        "audio pipeline (re)start (e.g. new session or app launch)."
+    )
 
     return SelectedDeviceResponse(device_name=None)
 

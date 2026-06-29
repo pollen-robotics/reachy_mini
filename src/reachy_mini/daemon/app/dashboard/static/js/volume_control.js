@@ -246,6 +246,12 @@ const audioDeviceControl = {
   selectedOutput: null,
   selectedInput: null,
 
+  // Reveal the "applies on next restart" notice next to a device selector.
+  showRestartNotice: (noticeId) => {
+    const notice = document.getElementById(noticeId);
+    if (notice) notice.classList.remove('hidden');
+  },
+
   init: async () => {
     const outputSelect = document.getElementById('output-device-select');
     const inputSelect = document.getElementById('input-device-select');
@@ -352,6 +358,7 @@ const audioDeviceControl = {
         if (response.ok) {
           audioDeviceControl.selectedOutput = null;
           console.log('Output device cleared (using default)');
+          audioDeviceControl.showRestartNotice('output-device-notice');
         }
       } else {
         // Set specific device
@@ -363,6 +370,7 @@ const audioDeviceControl = {
         if (response.ok) {
           audioDeviceControl.selectedOutput = deviceName;
           console.log('Output device set to:', deviceName);
+          audioDeviceControl.showRestartNotice('output-device-notice');
         } else {
           console.error('Failed to set output device');
           await audioDeviceControl.loadOutputDevices();
@@ -389,6 +397,7 @@ const audioDeviceControl = {
         if (response.ok) {
           audioDeviceControl.selectedInput = null;
           console.log('Input device cleared (using default)');
+          audioDeviceControl.showRestartNotice('input-device-notice');
         }
       } else {
         // Set specific device
@@ -400,6 +409,7 @@ const audioDeviceControl = {
         if (response.ok) {
           audioDeviceControl.selectedInput = deviceName;
           console.log('Input device set to:', deviceName);
+          audioDeviceControl.showRestartNotice('input-device-notice');
         } else {
           console.error('Failed to set input device');
           await audioDeviceControl.loadInputDevices();
