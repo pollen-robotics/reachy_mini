@@ -1140,11 +1140,17 @@ class GstMediaServer:
 
         """
         from reachy_mini.daemon.app.routers.audio_devices import (
-            get_selected_input,
-            get_selected_output,
+            get_local_selected_input,
+            get_local_selected_output,
         )
 
-        return get_selected_input() if direction == "input" else get_selected_output()
+        # Read the in-process selection directly (no self-HTTP call): the media
+        # server runs inside the daemon.
+        return (
+            get_local_selected_input()
+            if direction == "input"
+            else get_local_selected_output()
+        )
 
     def _build_audio_source(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio source element.

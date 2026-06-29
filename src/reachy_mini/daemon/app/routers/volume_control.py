@@ -65,13 +65,18 @@ class VolumeControl(ABC):
         pass
 
     def _selected_targets(self) -> tuple[str | None, str | None]:
-        """Return the (input, output) device names currently selected via API."""
+        """Return the (input, output) device names currently selected via API.
+
+        Reads the in-process selection directly (no HTTP): this runs inside the
+        daemon, often on the event loop while serving a volume request, so a
+        self-HTTP call would stall until it times out.
+        """
         from reachy_mini.daemon.app.routers.audio_devices import (
-            get_selected_input,
-            get_selected_output,
+            get_local_selected_input,
+            get_local_selected_output,
         )
 
-        return get_selected_input(), get_selected_output()
+        return get_local_selected_input(), get_local_selected_output()
 
     @staticmethod
     def _find_device(

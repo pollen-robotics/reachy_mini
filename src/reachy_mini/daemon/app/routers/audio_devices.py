@@ -200,10 +200,32 @@ async def clear_selected_input_device(http_request: Request) -> SelectedDeviceRe
 # Helper functions for other modules
 
 
+def get_local_selected_input() -> Optional[str]:
+    """Return the in-process selected input device name (no HTTP).
+
+    For daemon-internal consumers (volume control, media server) that run in
+    the same process as this router. Reading the module state directly avoids a
+    blocking self-HTTP call — calling the daemon's own API from within a request
+    can't be served by the busy event loop and would stall until it times out.
+    """
+    return _selected_input_device
+
+
+def get_local_selected_output() -> Optional[str]:
+    """Return the in-process selected output device name (no HTTP).
+
+    See :func:`get_local_selected_input` for why daemon-internal callers must
+    not go through the HTTP helper.
+    """
+    return _selected_output_device
+
+
 def get_selected_input() -> Optional[str]:
     """Get the currently selected input device name.
 
-    Tries to fetch from the daemon API first, falls back to local config file.
+    For out-of-process clients (e.g. the SDK ``MediaManager``): tries the
+    daemon API first, then falls back to local module state. Daemon-internal
+    callers should use :func:`get_local_selected_input` instead.
     """
     try:
         response = requests.get(
