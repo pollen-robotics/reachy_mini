@@ -1,47 +1,53 @@
-"""GStreamer WebRTC client implementation.
+"""GStreamer WebRTC client — camera + audio over WebRTC.
 
-The class is a client for the webrtc server hosted on the Reachy Mini Wireless robot.
+Connects to the WebRTC server hosted by the Reachy Mini daemon and provides
+both video frames and bidirectional audio.  The class exposes the same
+public methods as ``GStreamerCamera`` and ``GStreamerAudio`` so that
+``MediaManager`` can use it as a drop-in replacement.
 
-This module provides a GStreamer-based WebRTC client that implements both CameraBase
-and AudioBase interfaces, allowing it to be used as a drop-in replacement for
-traditional camera and audio devices in the media system.
+Video pipeline (receive)::
 
-The WebRTC client supports real-time audio and video streaming over WebRTC protocol,
-making it suitable for remote operation and telepresence applications.
+    webrtcsrc pad → queue → videoconvert → videoscale → videorate → appsink(BGR)
+
+Audio pipeline (receive)::
+
+    webrtcsrc pad → audioconvert → audioresample → appsink(F32LE)
+
+Audio pipeline (send)::
+
+    appsrc(F32LE) → audioconvert → audioresample → opusenc → rtpopuspay → webrtcbin
 
 Note:
-    This class is typically used internally by the MediaManager when the WEBRTC
-    backend is selected. Direct usage is possible but usually not necessary.
+    This class is used internally by ``MediaManager`` when the ``WEBRTC``
+    backend is selected.  Direct usage is possible but usually not needed.
 
-Example usage via MediaManager:
-    >>> from reachy_mini.media.media_manager import MediaManager, MediaBackend
-    >>>
-    >>> # Create media manager with WebRTC backend
-    >>> media = MediaManager(
-    ...     backend=MediaBackend.WEBRTC,
-    ...     signalling_host="192.168.1.100",
-    ...     log_level="INFO"
-    ... )
-    >>>
-    >>> # Use camera functionality
-    >>> frame = media.get_frame()
-    >>> if frame is not None:
-    ...     cv2.imshow("WebRTC Stream", frame)
-    ...     cv2.waitKey(1)
-    >>>
-    >>> # Use audio functionality
-    >>> media.start_recording()
-    >>> audio_samples = media.get_audio_sample()
-    >>>
-    >>> # Clean up
-    >>> media.close()
+Example usage via MediaManager::
+
+    from reachy_mini.media.media_manager import MediaManager, MediaBackend
+
+    media = MediaManager(
+        backend=MediaBackend.WEBRTC,
+        signalling_host="192.168.1.100",
+    )
+    frame = media.get_frame()
+    media.close()
 
 """
 
+import os
 from threading import Thread
-from typing import Iterator, Optional, cast
+from typing import Iterator, Optional
 
-import gi
+import requests as _requests
+
+try:
+    import gi
+except ImportError as e:
+    raise ImportError(
+        "The 'gi' module is required for GstWebRTCClient but could not be imported. "
+        "Please check the gstreamer installation."
+    ) from e
+
 import numpy as np
 import numpy.typing as npt
 
@@ -50,25 +56,22 @@ from reachy_mini.media.camera_base import CameraBase
 from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
-    ReachyMiniWirelessCamSpecs,
+    ReachyMiniLiteCamSpecs,
 )
+from reachy_mini.media.gstreamer_utils import get_sample
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
-from gi.repository import GLib, Gst, GstApp  # noqa: E402, F401
+from gi.repository import GLib, GObject, Gst, GstApp  # noqa: E402, F401
 
 
 class GstWebRTCClient(CameraBase, AudioBase):
-    """GStreamer WebRTC client implementation.
+    """WebRTC client that provides both camera frames and audio.
 
-    This class implements a WebRTC client using GStreamer that can connect to
-    a WebRTC server (such as the one hosted on Reachy Mini Wireless) to stream
-    audio and video in real-time. It implements both CameraBase and AudioBase
-    interfaces, allowing seamless integration with the media system.
-
-    Attributes:
-        Inherits all attributes from CameraBase and AudioBase.
-        Additionally manages GStreamer pipelines for WebRTC communication.
+    Implements the same public API surface as ``GStreamerCamera`` (for
+    video) and ``GStreamerAudio`` (for audio) so that ``MediaManager``
+    can assign the same instance to both its ``camera`` and ``audio``
+    slots.
 
     """
 
@@ -78,33 +81,24 @@ class GstWebRTCClient(CameraBase, AudioBase):
         peer_id: str = "",
         signaling_host: str = "",
         signaling_port: int = 8443,
+        camera_specs: Optional[CameraSpecs] = None,
     ):
-        """Initialize the GStreamer WebRTC client.
+        """Initialize the WebRTC client.
 
         Args:
-            log_level (str): Logging level for WebRTC operations.
-                          Default: 'INFO'.
-            peer_id (str): WebRTC peer ID to connect to. Default: ''.
-            signaling_host (str): Host address of the WebRTC signaling server.
-                               Default: ''.
-            signaling_port (int): Port of the WebRTC signaling server.
-                               Default: 8443.
-
-        Note:
-            This constructor initializes the GStreamer environment and sets up
-            the necessary pipelines for WebRTC communication. The WebRTC connection
-            is established when open() is called.
-
-        Example:
-            >>> client = GstWebRTCClient(
-            ...     peer_id="reachymini",
-            ...     signaling_host="192.168.1.100",
-            ...     signaling_port=8443
-            ... )
+            log_level: Logging level.
+            peer_id: WebRTC peer ID to connect to.
+            signaling_host: Host address of the signaling server.
+            signaling_port: Port of the signaling server.
+            camera_specs: Camera specifications detected by the daemon.
+                When ``None`` falls back to ``ReachyMiniLiteCamSpecs``
+                with a warning.
 
         """
-        super().__init__(log_level=log_level)
-        Gst.init(None)
+        CameraBase.__init__(self, log_level=log_level)
+        AudioBase.__init__(self, log_level=log_level)
+
+        Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
@@ -112,7 +106,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._bus_record = self._pipeline_record.get_bus()
         self._bus_record.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_record
         )
 
         self._appsink_audio = Gst.ElementFactory.make("appsink")
@@ -124,39 +118,52 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._appsink_audio.set_property("max-buffers", 500)
         self._pipeline_record.add(self._appsink_audio)
 
-        self.camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
-        self.set_resolution(self.camera_specs.default_resolution)
+        if camera_specs is not None:
+            self.camera_specs: CameraSpecs = camera_specs
+        else:
+            self.logger.warning(
+                "No camera_specs provided — defaulting to ReachyMiniLiteCamSpecs."
+            )
+            self.camera_specs = ReachyMiniLiteCamSpecs()
+        self._resolution: Optional[CameraResolution] = None
+        self.resized_K: Optional[npt.NDArray[np.float64]] = self.camera_specs.K
 
         self._appsink_video = Gst.ElementFactory.make("appsink")
-        caps_video = Gst.Caps.from_string("video/x-raw,format=BGR")
-        self._appsink_video.set_property("caps", caps_video)
         self._appsink_video.set_property("drop", True)  # avoid overflow
         self._appsink_video.set_property("max-buffers", 1)  # keep last image only
         self._pipeline_record.add(self._appsink_video)
 
-        webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
-        self._pipeline_record.add(webrtcsrc)
+        # Set resolution after appsink is created so caps can be properly configured
+        self.set_resolution(self.camera_specs.default_resolution)
 
-        self._pipeline_playback = Gst.Pipeline.new("audio_player")
-        self._init_pipeline_playback(
-            self._pipeline_playback, signaling_host, signaling_port
+        self._webrtcsrc = self._configure_webrtcsrc(
+            signaling_host, signaling_port, peer_id
         )
-        self._bus_playback = self._pipeline_playback.get_bus()
-        self._bus_playback.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
-        )
+        self._pipeline_record.add(self._webrtcsrc)
 
-    def __del__(self) -> None:
-        """Destructor to ensure gstreamer resources are released."""
-        super().__del__()
-        self._loop.quit()
-        self._bus_record.remove_watch()
-        self._bus_playback.remove_watch()
+        self._webrtcbin = None
+        self._audio_send_ready = False
+        self._appsrc = None
+        self.daemon_url: str = ""  # set by MediaManager for remote sound ops
+        self._webrtcsrc.connect("deep-element-added", self._on_deep_element_added)
+        self.logger.info("GstWebRTCClient initialized (bidirectional audio support)")
 
-    def set_resolution(self, resolution: CameraResolution) -> None:
-        """Set the camera resolution."""
-        super().set_resolution(resolution)
+    def _apply_resolution(self, resolution: CameraResolution) -> None:
+        """Raise if pipeline is playing — WebRTC cannot restart mid-stream."""
+        if self._pipeline_record.get_state(0).state == Gst.State.PLAYING:
+            raise RuntimeError(
+                "Cannot change resolution while the camera is streaming. "
+                "Please close the camera first."
+            )
+
         self._resolution = resolution
+        caps_video = Gst.Caps.from_string(
+            f"video/x-raw,format=BGR,"
+            f"width={self._resolution.value[0]},"
+            f"height={self._resolution.value[1]},"
+            f"framerate={self.framerate}/1"
+        )
+        self._appsink_video.set_property("caps", caps_video)
 
     def _configure_webrtcsrc(
         self, signaling_host: str, signaling_port: int, peer_id: str
@@ -164,7 +171,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
         source = Gst.ElementFactory.make("webrtcsrc")
         if not source:
             raise RuntimeError(
-                "Failed to create webrtcsrc element. Is the GStreamer webrtc rust plugin installed?"
+                "Failed to create webrtcsrc element. "
+                "Is the GStreamer webrtc rust plugin installed?"
             )
 
         source.connect("pad-added", self._webrtcsrc_pad_added_cb)
@@ -172,6 +180,48 @@ class GstWebRTCClient(CameraBase, AudioBase):
         signaller.set_property("producer-peer-id", peer_id)
         signaller.set_property("uri", f"ws://{signaling_host}:{signaling_port}")
         return source
+
+    def _on_deep_element_added(
+        self, bin: Gst.Bin, sub_bin: Gst.Bin, element: Gst.Element
+    ) -> None:
+        """Detect the internal webrtcbin element created by webrtcsrc."""
+        factory = element.get_factory()
+        if factory and factory.get_name() == "webrtcbin":
+            self.logger.info(f"Captured webrtcbin: {element.get_name()}")
+            self._webrtcbin = element
+            element.connect("on-new-transceiver", self._on_new_transceiver)
+
+    def _on_new_transceiver(
+        self, webrtcbin: Gst.Element, transceiver: GObject.Object
+    ) -> None:
+        """Set transceivers to SENDRECV for bidirectional audio.
+
+        When ``codec-preferences`` indicates audio, we set SENDRECV so
+        the client can push audio samples back to the daemon.
+
+        When ``codec-preferences`` is absent (video transceiver created
+        by webrtcsrc before SDP caps propagate), we also set SENDRECV to
+        match the daemon's offer.  This causes webrtcsrc to create an
+        internal appsrc for video that emits a non-fatal
+        ``not-negotiated`` error — the bus-message handler ignores it.
+
+        Only transceivers explicitly identified as non-audio with known
+        caps are left unchanged.
+        """
+        caps = transceiver.get_property("codec-preferences")
+        if caps is not None and caps.get_size() > 0:
+            media = caps.get_structure(0).get_string("media")
+            if media != "audio":
+                return
+        transceiver.set_property(
+            "direction", 4
+        )  # GstWebRTCRTPTransceiverDirection.SENDRECV
+        self.logger.info("Transceiver configured for SENDRECV")
+
+    def _dump_latency(self) -> None:
+        query = Gst.Query.new_latency()
+        self._pipeline_record.query(query)
+        self.logger.debug(f"Pipeline latency {query.parse_latency()}")
 
     def _iterate_gst(self, iterator: Gst.Iterator) -> Iterator[Gst.Element]:
         """Iterate over GStreamer iterators."""
@@ -186,27 +236,29 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def _configure_webrtcbin(self, webrtcsrc: Gst.Element) -> None:
         if isinstance(webrtcsrc, Gst.Bin):
-            # Try to find by standard name first (fast path)
             webrtcbin = webrtcsrc.get_by_name("webrtcbin0")
-            
+
             if webrtcbin is None:
-                # If not found by name (e.g. re-init scenarios), fallback to recursive search by factory type
-                self.logger.debug(f"webrtcbin0 not found, scanning elements in {webrtcsrc.get_name()} recursively...")
+                self.logger.debug(
+                    f"webrtcbin0 not found, scanning elements in {webrtcsrc.get_name()} recursively..."
+                )
                 for elem in self._iterate_gst(webrtcsrc.iterate_recurse()):
                     if elem.get_factory().get_name() == "webrtcbin":
                         webrtcbin = elem
-                        self.logger.debug(f"Found webrtcbin by factory search: {elem.get_name()}")
+                        self.logger.debug(
+                            f"Found webrtcbin by factory search: {elem.get_name()}"
+                        )
                         break
 
-            assert webrtcbin is not None, "Could not find webrtcbin element in webrtcsrc"
-            # jitterbuffer has a default 200 ms buffer. Should be ok to lower this in localnetwork config
-            webrtcbin.set_property("latency", 100)
+            assert webrtcbin is not None, (
+                "Could not find webrtcbin element in webrtcsrc"
+            )
+            webrtcbin.set_property("latency", 10)
 
     def _webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
         self._configure_webrtcbin(webrtcsrc)
         if pad.get_name().startswith("video"):
             queue = Gst.ElementFactory.make("queue")
-
             videoconvert = Gst.ElementFactory.make("videoconvert")
             videoscale = Gst.ElementFactory.make("videoscale")
             videorate = Gst.ElementFactory.make("videorate")
@@ -242,176 +294,384 @@ class GstWebRTCClient(CameraBase, AudioBase):
             audioconvert.sync_state_with_parent()
             audioresample.sync_state_with_parent()
 
-    def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
-        t = msg.type
-        if t == Gst.MessageType.EOS:
-            self.logger.warning("End-of-stream")
-            return False
+            # Send path: appsrc → encode → webrtcbin for bidirectional audio
+            self._setup_audio_send_chain()
 
-        elif t == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
-            self.logger.error(f"Error: {err} {debug}")
-            return False
+        GLib.timeout_add_seconds(5, self._dump_latency)
 
-        return True
+    def _on_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
+    ) -> bool:
+        # webrtcsrc may emit non-fatal errors from its internal
+        # elements (e.g. appsrc not-negotiated when a sendrecv
+        # transceiver has no data to send).  GStreamer wraps the
+        # actual reason as "Internal data stream error." in the
+        # GError, with "not-negotiated" only in the debug string.
+        # These should not tear down the whole pipeline.
+        if msg.type == Gst.MessageType.LATENCY:
+            # A live element (audiomixer/audiotestsrc) is added to the send
+            # chain after the pipeline is already PLAYING; redistribute latency.
+            pipeline.recalculate_latency()
+            return True
+        if msg.type == Gst.MessageType.ERROR:
+            err, _ = msg.parse_error()
+            src = msg.src
+            if (
+                src is not None
+                and src.get_factory() is not None
+                and src.get_factory().get_name() == "appsrc"
+                and (
+                    "not-negotiated" in str(err)
+                    or "Internal data stream error" in str(err)
+                )
+            ):
+                self.logger.debug(f"Ignoring non-fatal webrtcsrc internal error: {err}")
+                return True
+        return super()._on_bus_message(bus, msg, pipeline)
 
     def open(self) -> None:
-        """Open the video stream.
-
-        See CameraBase.open() for complete documentation.
-        """
+        """Start the WebRTC pipeline (both video and audio)."""
         self._pipeline_record.set_state(Gst.State.PLAYING)
 
-    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
-        sample = appsink.try_pull_sample(20_000_000)
-        if sample is None:
-            return None
-        data = None
-        if isinstance(sample, Gst.Sample):
-            buf = sample.get_buffer()
-            if buf is None:
-                self.logger.warning("Buffer is None")
-
-            data = buf.extract_dup(0, buf.get_size())
-        return data
-
-    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
-        """Read a sample from the audio card. Returns the sample or None if error.
-
-        See AudioBase.get_audio_sample() for complete documentation.
-
-        Returns:
-            Optional[npt.NDArray[np.float32]]: The captured sample in raw format, or None if error.
-
-        """
-        sample = self._get_sample(self._appsink_audio)
-        if sample is None:
-            return None
-        return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
-
     def read(self) -> Optional[npt.NDArray[np.uint8]]:
-        """Read a frame from the camera. Returns the frame or None if error.
-
-        See CameraBase.read() for complete documentation.
+        """Pull the latest BGR video frame.
 
         Returns:
-            Optional[npt.NDArray[np.uint8]]: The captured frame in BGR format, or None if error.
+            A NumPy array of shape ``(height, width, 3)`` or ``None``.
 
         """
-        data = self._get_sample(self._appsink_video)
+        data = get_sample(self._appsink_video, self.logger)
         if data is None:
             return None
-
-        arr = np.frombuffer(data, dtype=np.uint8).reshape(
+        return np.frombuffer(data, dtype=np.uint8).reshape(
             (self.resolution[1], self.resolution[0], 3)
         )
-        return arr
 
     def close(self) -> None:
-        """Stop the pipeline.
-
-        See CameraBase.close() for complete documentation.
-        """
-        # self._loop.quit()
+        """Stop the WebRTC pipeline."""
         self._pipeline_record.set_state(Gst.State.NULL)
 
     def start_recording(self) -> None:
-        """Open the audio card using GStreamer.
-
-        See AudioBase.start_recording() for complete documentation.
-        """
-        pass  # already started in open()
+        """No-op — recording starts automatically with ``open()``."""
+        pass
 
     def stop_recording(self) -> None:
-        """Release the camera resource.
+        """No-op — managed by ``close()``."""
+        pass
 
-        See AudioBase.stop_recording() for complete documentation.
+    def _setup_audio_send_chain(self) -> None:
+        """Set up the audio send chain through the existing webrtcbin.
+
+        Builds::
+
+            appsrc ─────────┐
+                            ├→ audiomixer → capsfilter → opusenc → rtpopuspay → webrtcbin
+            audiotestsrc ───┘
+
+        A silent ``audiotestsrc`` keeps the ``audiomixer`` producing a
+        continuous output stream between utterances, so the Opus encoder /
+        webrtcbin stay warm (no first-word swallowing) and the RTP stream
+        stays alive across barge-in flushes.
         """
-        pass  # managed in close()
+        if self._audio_send_ready:
+            return
+        self._audio_send_ready = True  # prevent re-entry
 
-    def _init_pipeline_playback(
-        self, pipeline: Gst.Pipeline, signaling_host: str, signaling_port: int
-    ) -> None:
-        """Initialize the audio playback pipeline."""
-        self._appsrc = Gst.ElementFactory.make("appsrc")
-        self._appsrc.set_property("format", Gst.Format.TIME)
-        self._appsrc.set_property("is-live", True)
+        self.logger.info("Setting up audio send chain...")
+        if self._webrtcbin is None:
+            self.logger.error("webrtcbin not found, cannot set up audio send chain")
+            self._audio_send_ready = False
+            return
+
+        # Find the audio sink pad on webrtcbin
+        sink_pad = None
+        pt = 96
+        for pad in self._iterate_gst(self._webrtcbin.iterate_sink_pads()):
+            if pad.is_linked():
+                continue
+            caps = pad.query_caps(None)
+            if caps and caps.get_size() > 0:
+                s = caps.get_structure(0)
+                enc = s.get_string("encoding-name")
+                if enc and enc.upper() == "OPUS":
+                    sink_pad = pad
+                    ok, val = s.get_int("payload")
+                    if ok:
+                        pt = val
+                    self.logger.info(f"Found audio sink pad: {pad.get_name()}, pt={pt}")
+                    break
+
+        if sink_pad is None:
+            self.logger.error(
+                "No OPUS sink pad found on webrtcbin, audio send disabled"
+            )
+            self._audio_send_ready = False
+            return
+
+        appsrc = Gst.ElementFactory.make("appsrc", "send_appsrc")
+        appsrc.set_property("format", Gst.Format.TIME)
+        appsrc.set_property("is-live", True)
+        # We stamp the cue-start buffer ourselves; don't let appsrc timestamp.
+        appsrc.set_property("do-timestamp", False)
+
         caps = Gst.Caps.from_string(
             f"audio/x-raw,format=F32LE,channels={self.CHANNELS},rate={self.SAMPLE_RATE},layout=interleaved"
         )
-        self._appsrc.set_property("caps", caps)
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        audioresample = Gst.ElementFactory.make("audioresample")
-        opusenc = Gst.ElementFactory.make("opusenc")
-        queue = Gst.ElementFactory.make("queue")
-        rtpopuspay = Gst.ElementFactory.make("rtpopuspay")
-        udpsink = Gst.ElementFactory.make("udpsink")
+        appsrc.set_property("caps", caps)
 
-        udpsink.set_property("host", signaling_host)
-        udpsink.set_property("port", 5000)
+        # Decouple the push thread from the mixer.
+        appsrc_queue = Gst.ElementFactory.make("queue", "send_queue")
+        appsrc_queue.set_property("max-size-time", 0)
+        appsrc_queue.set_property("max-size-buffers", 0)
+        appsrc_queue.set_property("max-size-bytes", 10_000_000)
 
-        pipeline.add(self._appsrc)
-        pipeline.add(audioconvert)
-        pipeline.add(audioresample)
-        pipeline.add(opusenc)
-        pipeline.add(queue)
-        pipeline.add(rtpopuspay)
-        pipeline.add(udpsink)
+        audioconvert = Gst.ElementFactory.make("audioconvert", "send_ac")
+        audioresample = Gst.ElementFactory.make("audioresample", "send_ar")
 
-        self._appsrc.link(audioconvert)
+        # Silent live source feeding a second mixer pad — keeps the mixer
+        # producing output continuously so the encoder/webrtcbin stay warm.
+        silence = Gst.ElementFactory.make("audiotestsrc", "send_silence")
+        silence.set_property("is-live", True)
+        silence.set_property("wave", 4)  # silence
+        silence_queue = Gst.ElementFactory.make("queue", "send_silence_queue")
+
+        audiomixer = Gst.ElementFactory.make("audiomixer", "send_mixer")
+
+        # Pin the mixer output to our rate/channels so opusenc/rtpopuspay
+        # advertise sprop-maxcapturerate=SAMPLE_RATE and stereo encoding-params,
+        # matching the negotiated webrtcbin OPUS sink pad. Without this the
+        # mixer can settle on 48 kHz / mono and webrtcbin rejects it
+        # (not-negotiated) the moment audio flows.
+        mixer_caps = Gst.ElementFactory.make("capsfilter", "send_caps")
+        mixer_caps.set_property(
+            "caps",
+            Gst.Caps.from_string(
+                f"audio/x-raw,rate={self.SAMPLE_RATE},channels={self.CHANNELS}"
+            ),
+        )
+
+        opusenc = Gst.ElementFactory.make("opusenc", "send_opusenc")
+        opusenc.set_property("audio-type", "restricted-lowdelay")
+        opusenc.set_property("frame-size", 10)
+        rtpopuspay = Gst.ElementFactory.make("rtpopuspay", "send_rtppay")
+        rtpopuspay.set_property("pt", pt)
+
+        elems = (
+            appsrc,
+            appsrc_queue,
+            audioconvert,
+            audioresample,
+            silence,
+            silence_queue,
+            audiomixer,
+            mixer_caps,
+            opusenc,
+            rtpopuspay,
+        )
+
+        target_bin = self._pipeline_record
+        for elem in elems:
+            target_bin.add(elem)
+            if elem.get_parent() is None:
+                self.logger.error(
+                    f"Failed to add {elem.get_name()} to {target_bin.get_name()}"
+                )
+                self._audio_send_ready = False
+                return
+
+        appsrc.link(appsrc_queue)
+        appsrc_queue.link(audioconvert)
         audioconvert.link(audioresample)
-        audioresample.link(opusenc)
-        opusenc.link(queue)
-        queue.link(rtpopuspay)
-        rtpopuspay.link(udpsink)
+        audioresample.link(audiomixer)
+        silence.link(silence_queue)
+        silence_queue.link(audiomixer)
+        audiomixer.link(mixer_caps)
+        mixer_caps.link(opusenc)
+        opusenc.link(rtpopuspay)
 
-    def set_max_output_buffers(self, max_buffers: int) -> None:
-        """Set the maximum number of output buffers to queue in the player.
+        src_pad = rtpopuspay.get_static_pad("src")
+        link_result = src_pad.link_full(sink_pad, Gst.PadLinkCheck.NOTHING)
+        if link_result != Gst.PadLinkReturn.OK:
+            self.logger.error(f"Failed to link rtpopuspay to webrtcbin: {link_result}")
+            self._audio_send_ready = False
+            return
 
-        Args:
-            max_buffers (int): Maximum number of buffers to queue.
+        for elem in elems:
+            elem.sync_state_with_parent()
 
-        """
-        if self._appsrc is not None:
-            self._appsrc.set_property("max-buffers", max_buffers)
-            self._appsrc.set_property("leaky-type", 2)  # drop old buffers
-        else:
-            self.logger.warning(
-                "AppSrc is not initialized. Call start_playing() first."
-            )
+        self._appsrc = appsrc
+        # A live element was added after the pipeline reached PLAYING.
+        self._pipeline_record.recalculate_latency()
+        self.logger.info("Audio send chain ready (bidirectional audio enabled)")
 
     def start_playing(self) -> None:
-        """Open the audio output using GStreamer.
-
-        See AudioBase.start_playing() for complete documentation.
-        """
-        self._pipeline_playback.set_state(Gst.State.PLAYING)
+        """No-op — audio send chain is set up automatically on WebRTC connection."""
+        pass
 
     def stop_playing(self) -> None:
-        """Stop playing audio and release resources.
+        """Reset the PTS counter for the send chain and stop daemon-side sound."""
+        self._appsrc_pts = -1
+        # Also stop any sound file playing on the daemon's speaker.
+        if self.daemon_url:
+            try:
+                _requests.post(
+                    f"{self.daemon_url}/api/media/stop_sound",
+                    timeout=5,
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to stop daemon sound: {e}")
 
-        See AudioBase.stop_playing() for complete documentation.
+    def clear_player(self) -> None:
+        """Drop queued playback audio during barge-in.
+
+        Flushes the local audio *send* chain so any not-yet-sent samples
+        are dropped, then asks the daemon to flush the audio it has
+        already received and queued for the robot's speaker (where the
+        bulk of buffered audio actually sits).
         """
-        self._pipeline_playback.set_state(Gst.State.NULL)
-
-    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push audio data to the output device."""
+        #     Flush only the audio send branch on the SHARED pipeline.
+        #     Send flush events on self._appsrc directly — do NOT pause or
+        #     flush _pipeline_record (it also carries video + recording).
         if self._appsrc is not None:
-            buf = Gst.Buffer.new_wrapped(data.tobytes())
-            self._appsrc.push_buffer(buf)
-
+            self._appsrc.send_event(Gst.Event.new_flush_start())
+            self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=False))
+            self._appsrc_pts = -1  # re-anchor PTS on next push
+            self.logger.info("Cleared player queue (WebRTC send chain flushed)")
         else:
-            self.logger.warning(
-                "AppSrc is not initialized. Call start_playing() first."
-            )
+            self.logger.warning("Audio send chain not ready; nothing to flush.")
+
+        if self.daemon_url:
+            try:
+                _requests.post(
+                    f"{self.daemon_url}/api/media/clear_incoming_audio",
+                    timeout=5,
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to clear daemon incoming audio: {e}")
 
     def play_sound(self, sound_file: str) -> None:
-        """Play a sound file.
+        """Play a sound file on the robot's speaker via the daemon REST API.
 
-        See AudioBase.play_sound() for complete documentation.
+        If *sound_file* is a local path that exists on this machine the
+        file is uploaded to the daemon's temporary sound directory
+        (overwriting any previous upload with the same basename).
+        Otherwise the filename is sent as-is and the daemon resolves it
+        from its built-in assets or filesystem.
 
         Args:
-            sound_file (str): Path to the sound file to play.
+            sound_file: Absolute local path **or** asset filename
+                (e.g. ``"wake_up.wav"``).
 
         """
-        self.logger.warning("Audio playback not implemented in WebRTC client.")
+        if not self.daemon_url:
+            self.logger.error("No daemon URL configured — cannot play sound remotely.")
+            return
+
+        remote_file = sound_file
+        if os.path.isfile(sound_file):
+            remote_file = self.upload_sound(sound_file)
+
+        try:
+            resp = _requests.post(
+                f"{self.daemon_url}/api/media/play_sound",
+                json={"file": remote_file},
+                timeout=10,
+            )
+            if not resp.ok:
+                self.logger.error(f"play_sound failed: {resp.status_code} {resp.text}")
+        except Exception as e:
+            self.logger.error(f"play_sound request error: {e}")
+
+    def upload_sound(self, sound_file: str) -> str:
+        """Upload a local sound file to the daemon's temporary directory.
+
+        Args:
+            sound_file: Local path to the sound file.
+
+        Returns:
+            The absolute path of the file on the daemon.
+
+        Raises:
+            FileNotFoundError: If *sound_file* does not exist locally.
+            requests.HTTPError: If the upload request fails.
+
+        """
+        if not os.path.isfile(sound_file):
+            raise FileNotFoundError(f"Local sound file not found: {sound_file}")
+        if not self.daemon_url:
+            self.logger.error("No daemon URL configured — cannot upload sound.")
+            return sound_file
+
+        with open(sound_file, "rb") as f:
+            resp = _requests.post(
+                f"{self.daemon_url}/api/media/sounds/upload",
+                files={"file": (os.path.basename(sound_file), f)},
+                timeout=30,
+            )
+        resp.raise_for_status()
+        path: str = resp.json()["path"]
+        return path
+
+    def list_sounds(self) -> list[str]:
+        """List sound files in the daemon's temporary sound directory.
+
+        Returns:
+            A list of filenames, or an empty list on error.
+
+        """
+        if not self.daemon_url:
+            self.logger.error("No daemon URL configured — cannot list sounds.")
+            return []
+        try:
+            resp = _requests.get(
+                f"{self.daemon_url}/api/media/sounds",
+                timeout=5,
+            )
+            resp.raise_for_status()
+            files: list[str] = resp.json()["files"]
+            return files
+        except Exception as e:
+            self.logger.warning(f"list_sounds request error: {e}")
+            return []
+
+    def delete_sound(self, filename: str) -> bool:
+        """Delete a sound file from the daemon's temporary sound directory.
+
+        Args:
+            filename: Name of the file to delete (not a full path).
+
+        Returns:
+            ``True`` if the file was deleted, ``False`` otherwise.
+
+        """
+        if not self.daemon_url:
+            self.logger.error("No daemon URL configured — cannot delete sound.")
+            return False
+        try:
+            resp = _requests.delete(
+                f"{self.daemon_url}/api/media/sounds/{filename}",
+                timeout=5,
+            )
+            return resp.ok
+        except Exception as e:
+            self.logger.warning(f"delete_sound request error: {e}")
+            return False
+
+    def get_DoA(self) -> tuple[float, bool] | None:
+        """Get the Direction of Arrival from the ReSpeaker.
+
+        Returns:
+            A tuple ``(angle_radians, speech_detected)`` or ``None``.
+
+        """
+        return self._doa.get_DoA()
+
+    def cleanup(self) -> None:
+        """Release all resources."""
+        self._doa.close()
+
+    def __del__(self) -> None:
+        """Ensure GStreamer resources are released."""
+        self.cleanup()
+        self._loop.quit()
+        self._bus_record.remove_watch()

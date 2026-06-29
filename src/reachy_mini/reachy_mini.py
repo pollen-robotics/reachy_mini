@@ -7,22 +7,38 @@ It also includes methods for multimedia interactions like playing sounds and loo
 """
 
 import asyncio
-import json
 import logging
-import platform
 import time
+import warnings
+from importlib.metadata import PackageNotFoundError, version
 from typing import Dict, List, Literal, Optional, Union, cast
 
-import cv2
 import numpy as np
 import numpy.typing as npt
-import zenoh
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
-from reachy_mini.io.protocol import GotoTaskRequest
-from reachy_mini.io.zenoh_client import ZenohClient
+from reachy_mini.io.protocol import (
+    AppendRecordCmd,
+    DaemonStatus,
+    GotoTaskRequest,
+    SetAntennasCmd,
+    SetAutomaticBodyYawCmd,
+    SetBodyYawCmd,
+    SetFullTargetCmd,
+    SetGravityCompensationCmd,
+    SetHeadJointsCmd,
+    SetSpeechOffsetsCmd,
+    SetTargetCmd,
+    SetTorqueCmd,
+    SetWobblingCmd,
+    StartRecordingCmd,
+    StopRecordingCmd,
+)
+from reachy_mini.io.ws_client import WSClient
+from reachy_mini.media.camera_constants import get_camera_specs_by_name
+from reachy_mini.media.camera_utils import undistort_points
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
@@ -41,6 +57,7 @@ SLEEP_HEAD_JOINT_POSITIONS = [
 ]
 
 
+INIT_ANTENNAS_JOINT_POSITIONS = [-0.1745, 0.1745]  # ~10° offset to reduce shaking at vertical
 SLEEP_ANTENNAS_JOINT_POSITIONS = [-3.05, 3.05]
 SLEEP_HEAD_POSE = np.array(
     [
@@ -58,10 +75,17 @@ class ReachyMini:
     """Reachy Mini class for controlling a simulated or real Reachy Mini robot.
 
     Args:
+        robot_name: Name of the robot, defaults to "reachy_mini".
+        host: Hostname or IP of the daemon. Defaults to "reachy-mini.local".
+            In ``"auto"`` mode this is only used as a fallback when localhost
+            is unreachable, so the default works out of the box for local
+            development.
+        port: Port of the daemon's FastAPI server. Defaults to 8000.
         connection_mode: Select how to connect to the daemon. Use
             `"localhost_only"` to restrict connections to daemons running on
-            localhost, `"network"` to scout for daemons on the LAN, or `"auto"`
-            (default) to try localhost first then fall back to the network.
+            localhost, `"network"` to connect to a remote daemon at *host:port*,
+            or `"auto"` (default) to try localhost first then fall back to
+            *host:port*.
         spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
         use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
 
@@ -70,6 +94,8 @@ class ReachyMini:
     def __init__(
         self,
         robot_name: str = "reachy_mini",
+        host: str = "reachy-mini.local",
+        port: int = 8000,
         connection_mode: ConnectionMode = "auto",
         spawn_daemon: bool = False,
         use_sim: bool = False,
@@ -83,9 +109,14 @@ class ReachyMini:
 
         Args:
             robot_name (str): Name of the robot, defaults to "reachy_mini".
+            host (str): Hostname or IP of the daemon. Defaults to
+                "reachy-mini.local".  In ``"auto"`` mode (the default) the
+                client first tries ``localhost``; *host* is only used as a
+                fallback or when *connection_mode* is ``"network"``.
+            port (int): Port of the daemon's FastAPI server. Defaults to 8000.
             connection_mode: `"auto"` (default), `"localhost_only"` or `"network"`.
                 `"auto"` will first try daemons on localhost and fall back to
-                network discovery if no local daemon responds.
+                *host:port* if no local daemon responds.
             localhost_only (Optional[bool]): Deprecated alias for the connection
                 mode. Set `False` to search for network daemons. Will be removed
                 in a future release.
@@ -94,9 +125,9 @@ class ReachyMini:
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
             log_level (str): Logging level, defaults to "INFO".
-            media_backend (str): Use "no_media" to disable media entirely. Any other value
-                triggers auto-detection: Lite uses OpenCV, Wireless uses GStreamer (local)
-                or WebRTC (remote) based on environment.
+            media_backend (str): ``"default"`` for auto-detection (LOCAL if on the
+                same machine as the daemon, otherwise WebRTC), ``"no_media"`` to
+                skip all media, or a specific ``MediaBackend`` value name.
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -104,6 +135,8 @@ class ReachyMini:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         self.robot_name = robot_name
+        self.host = host
+        self.port = port
         daemon_check(spawn_daemon, use_sim)
         normalized_mode = self._normalize_connection_mode(
             connection_mode, localhost_only
@@ -111,9 +144,14 @@ class ReachyMini:
         self.client, self.connection_mode = self._initialize_client(
             normalized_mode, timeout
         )
+        self._daemon_http_url = f"http://{self.client.host}:{self.client.port}"
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
+        self._move_cancelled = False
+        self._media_released = False
+        self._log_level = log_level
+        self._media_backend = media_backend
 
         self.T_head_cam = np.eye(4)
         self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
@@ -142,6 +180,8 @@ class ReachyMini:
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:  # type: ignore [no-untyped-def]
         """Context manager exit point for Reachy Mini."""
+        if self._media_released:
+            self.acquire_media()
         self.media_manager.close()
         self.client.disconnect()
 
@@ -149,6 +189,79 @@ class ReachyMini:
     def media(self) -> MediaManager:
         """Expose the MediaManager instance used by ReachyMini."""
         return self.media_manager
+
+    @property
+    def media_released(self) -> bool:
+        """Whether the daemon's media hardware has been released for direct access."""
+        return self._media_released
+
+    def release_media(self) -> None:
+        """Tell the daemon to release camera and audio hardware.
+
+        After calling this, the camera and microphone are available for direct
+        access via OpenCV / sounddevice / etc.  The SDK's media_manager is
+        switched to NO_MEDIA.
+
+        Idempotent: safe to call multiple times.
+        """
+        if self._media_released:
+            return
+
+        self.client.release_media()
+
+        if hasattr(self, "media_manager"):
+            self.media_manager.close()
+        self._media_released = True
+        self.logger.info("Media released — camera/mic available for direct access.")
+
+    def acquire_media(self) -> None:
+        """Tell the daemon to re-acquire camera and audio hardware.
+
+        The SDK's media_manager is re-created with the original backend
+        auto-detection logic.
+
+        Idempotent: safe to call multiple times.
+        """
+        if not self._media_released:
+            return
+
+        if not self.client.acquire_media():
+            self.logger.error("Failed to re-acquire media on daemon.")
+            return
+
+        self.media_manager.close()
+        self.media_manager = self._configure_mediamanager(self._media_backend, self._log_level)
+        self._media_released = False
+        self.logger.info("Media re-acquired by daemon.")
+
+    def enable_wobbling(self) -> None:
+        """Enable audio-reactive head wobbling.
+
+        When enabled, audio played through ``media.play_sound()`` or
+        ``media.push_audio_sample()`` is analysed and converted into
+        subtle head movements that are composed with the current target
+        pose on the daemon side.
+
+        For LOCAL backend: wobbling runs on the SDK side; offsets are sent
+        over WebSocket.  For all backends the daemon is also told to enable
+        wobbling so that daemon-side sounds (wake-up, sleep, etc.) and
+        incoming WebRTC audio also produce head movement.
+
+        """
+        def _send_offsets(offsets: tuple[float, float, float, float, float, float]) -> None:
+            self.client.send_command(SetSpeechOffsetsCmd(offsets=list(offsets)))
+
+        # Enable SDK-side wobbling (LOCAL backend only, no-op for WEBRTC)
+        self.media_manager.enable_wobbling(_send_offsets)
+        # Enable daemon-side wobbling (media server play_sound + incoming audio)
+        self.client.send_command(SetWobblingCmd(enabled=True))
+        self.logger.info("Head wobbling enabled")
+
+    def disable_wobbling(self) -> None:
+        """Disable audio-reactive head wobbling and reset offsets to zero."""
+        self.media_manager.disable_wobbling()
+        self.client.send_command(SetWobblingCmd(enabled=False))
+        self.logger.info("Head wobbling disabled")
 
     @property
     def imu(self) -> Dict[str, List[float] | float] | None:
@@ -163,7 +276,7 @@ class ReachyMini:
             - 'temperature': float in °C
 
         Note:
-            - Data is cached from the last Zenoh update at 50Hz
+            - Data is cached from the last update at 50Hz
             - Quaternion is in [w, x, y, z] format
 
         Example:
@@ -175,78 +288,115 @@ class ReachyMini:
             >>>     temp = imu_data['temperature']
 
         """
-        return self.client.get_current_imu_data()
+        imu_msg = self.client.get_current_imu_data()
+        if imu_msg is None:
+            return None
+        return imu_msg.model_dump(exclude={"type"})
 
     def _configure_mediamanager(
         self, media_backend: str, log_level: str
     ) -> MediaManager:
-        daemon_status = self.client.get_status()
-        is_wireless = daemon_status.get("wireless_version", False)
+        """Select the right media backend and return a configured MediaManager.
 
-        # If no_media is requested, skip all media initialization
+        Decision logic (in order of priority):
+        1. User explicitly passed ``"no_media"`` → NO_MEDIA.
+        2. Daemon reports ``no_media=True`` → NO_MEDIA (daemon has no media).
+        3. The daemon's IPC camera endpoint is reachable locally → LOCAL.
+        4. Otherwise → WEBRTC (remote streaming from daemon).
+
+        If the user passes a specific backend string that maps to an enum
+        value it is honoured directly (with deprecation warnings for old
+        names handled by ``_resolve_backend``).
+        """
+        daemon_status = self.client.get_status()
+        self._warn_if_daemon_version_mismatch(daemon_status)
+
+        # Resolve camera specs from the daemon-detected camera name
+        specs_name = getattr(daemon_status, "camera_specs_name", "")
+        camera_specs = get_camera_specs_by_name(specs_name) if specs_name else None
+
+        # Honour explicit no_media from user or daemon
         if media_backend.lower() == "no_media":
-            self.logger.info("No media backend requested.")
+            self.logger.info("No media backend requested by user.")
+            # If the daemon owns media hardware, release it for direct access
+            if (
+                not getattr(daemon_status, "no_media", False)
+                and not self._media_released
+            ):
+                self.release_media()
             mbackend = MediaBackend.NO_MEDIA
-        else:
-            if is_wireless:
-                if is_local_camera_available():
-                    # Local client on CM4: use GStreamer to read from unix socket
-                    # This avoids WebRTC encode/decode overhead
-                    if "no_video" in media_backend.lower():
-                        mbackend = MediaBackend.GSTREAMER_NO_VIDEO
-                        self.logger.info(
-                            "Auto-detected: Wireless + local camera socket. "
-                            "Using GStreamer audio-only backend (no WebRTC overhead)."
-                        )
-                    else:
-                        mbackend = MediaBackend.GSTREAMER
-                        self.logger.info(
-                            "Auto-detected: Wireless + local camera socket. "
-                            "Using GStreamer backend (no WebRTC overhead)."
-                        )
-                else:
-                    # Remote client: use WebRTC for streaming
-                    self.logger.info(
-                        "Auto-detected: Wireless + remote client. "
-                        "Using WebRTC backend for streaming."
-                    )
-                    mbackend = MediaBackend.WEBRTC
+        elif getattr(daemon_status, "no_media", False):
+            self.logger.info(
+                "Daemon reports no_media=True — skipping media initialisation."
+            )
+            mbackend = MediaBackend.NO_MEDIA
+        elif media_backend.lower() in ("default", "auto"):
+            # Auto-detect: local IPC if available, else WebRTC.
+            # IPC only makes sense when the daemon runs on the same machine
+            # (connection_mode == "localhost_only").  For network connections
+            # (wireless robot) we always stream via WebRTC.
+            if self.connection_mode == "localhost_only" and is_local_camera_available():
+                self.logger.info(
+                    "Auto-detected local IPC endpoint. Using LOCAL backend."
+                )
+                mbackend = MediaBackend.LOCAL
             else:
-                # Lite version: use specified backend if compatible
-                try:
-                    mbackend = MediaBackend(media_backend.lower())
-                    if mbackend == MediaBackend.WEBRTC:
-                        self.logger.warning(
-                            f"Incompatible media backend on Lite: {media_backend}, using default backend."
-                        )
-                        mbackend = MediaBackend.DEFAULT
-                    # TODO : Remove when wheel is released !
-                    elif "gstreamer" in media_backend.lower() and (
-                        platform.system() == "Darwin" or platform.system() == "Windows"
-                    ):
-                        self.logger.warning(
-                            f"Unsupported media backend on Lite for {platform.system()}: {media_backend}, using default backend."
-                        )
-                        mbackend = (
-                            MediaBackend.DEFAULT_NO_VIDEO
-                            if "no_video" in media_backend.lower()
-                            else MediaBackend.DEFAULT
-                        )
-                    else:
-                        self.logger.info(
-                            f"Auto-detected: Lite. Using {mbackend} backend."
-                        )
-                except ValueError:
-                    self.logger.warning(
-                        f"Invalid media backend on Lite: {media_backend}, using default backend."
-                    )
-                    mbackend = MediaBackend.DEFAULT
+                self.logger.info(
+                    "No local IPC endpoint. Using WebRTC backend for streaming."
+                )
+                mbackend = MediaBackend.WEBRTC
+        else:
+            # User specified a particular backend name — try to resolve it
+            try:
+                mbackend = MediaBackend(media_backend.lower())
+            except ValueError:
+                self.logger.warning(
+                    f"Unknown media backend '{media_backend}', falling back to auto-detect."
+                )
+                if (
+                    self.connection_mode == "localhost_only"
+                    and is_local_camera_available()
+                ):
+                    mbackend = MediaBackend.LOCAL
+                else:
+                    mbackend = MediaBackend.WEBRTC
 
         return MediaManager(
-            use_sim=self.client.get_status()["simulation_enabled"],
             backend=mbackend,
             log_level=log_level,
-            signalling_host=self.client.get_status()["wlan_ip"],
+            signalling_host=daemon_status.wlan_ip or "localhost",
+            camera_specs=camera_specs,
+            daemon_url=self._daemon_http_url,
+        )
+
+    @staticmethod
+    def _get_sdk_version() -> str | None:
+        try:
+            return version("reachy_mini")
+        except PackageNotFoundError:
+            return None
+
+    def _warn_if_daemon_version_mismatch(self, daemon_status: DaemonStatus) -> None:
+        """Warn users when the SDK and daemon package versions differ."""
+        sdk_version = self._get_sdk_version()
+        daemon_version = daemon_status.version
+
+        if sdk_version is None or daemon_version is None:
+            return
+
+        sdk_version = sdk_version.strip()
+        daemon_version = daemon_version.strip()
+
+        if sdk_version == daemon_version:
+            return
+
+        warnings.warn(
+            "Reachy Mini SDK and daemon versions do not match: "
+            f"SDK={sdk_version}, daemon={daemon_version}. "
+            "Running different versions can create issues. "
+            "Install matching reachy_mini versions for the SDK and daemon.",
+            RuntimeWarning,
+            stacklevel=3,
         )
 
     def _normalize_connection_mode(
@@ -283,24 +433,29 @@ class ReachyMini:
 
     def _initialize_client(
         self, requested_mode: ConnectionMode, timeout: float
-    ) -> tuple[ZenohClient, ConnectionMode]:
+    ) -> tuple[WSClient, ConnectionMode]:
         """Create a client according to the requested mode, adding auto fallback."""
         requested_mode = cast(ConnectionMode, requested_mode.lower())
         if requested_mode == "auto":
             try:
-                client = self._connect_single(localhost_only=True, timeout=timeout)
+                client = self._connect_single(
+                    host="localhost", port=self.port, timeout=timeout
+                )
                 selected: ConnectionMode = "localhost_only"
             except Exception as err:
                 self.logger.info(
                     "Auto connection: localhost attempt failed (%s). "
-                    "Trying network discovery.",
+                    "Trying remote host %s.",
                     err,
+                    self.host,
                 )
                 try:
-                    client = self._connect_single(localhost_only=False, timeout=timeout)
-                except (zenoh.ZError, TimeoutError):
+                    client = self._connect_single(
+                        host=self.host, port=self.port, timeout=timeout
+                    )
+                except (ConnectionError, TimeoutError):
                     raise ConnectionError(
-                        "Auto connection: both localhost and network attempts failed. "
+                        "Auto connection: both localhost and remote attempts failed. "
                         "Make sure a Reachy Mini daemon is running and accessible."
                     )
 
@@ -310,16 +465,20 @@ class ReachyMini:
 
         if requested_mode == "localhost_only":
             try:
-                client = self._connect_single(localhost_only=True, timeout=timeout)
-            except (zenoh.ZError, TimeoutError):
+                client = self._connect_single(
+                    host="localhost", port=self.port, timeout=timeout
+                )
+            except (ConnectionError, TimeoutError):
                 raise ConnectionError(
                     "Could not connect to daemon on localhost. Is the Reachy Mini daemon running?"
                 )
             selected = "localhost_only"
         else:
             try:
-                client = self._connect_single(localhost_only=False, timeout=timeout)
-            except (zenoh.ZError, TimeoutError):
+                client = self._connect_single(
+                    host=self.host, port=self.port, timeout=timeout
+                )
+            except (ConnectionError, TimeoutError):
                 raise ConnectionError(
                     "Network connection attempt failed. "
                     "Make sure a Reachy Mini daemon is running and accessible."
@@ -329,9 +488,9 @@ class ReachyMini:
         self.logger.info("Connection mode selected: %s", selected)
         return client, selected
 
-    def _connect_single(self, localhost_only: bool, timeout: float) -> ZenohClient:
-        """Connect once with the requested tunneling mode and guard cleanup."""
-        client = ZenohClient(self.robot_name, localhost_only)
+    def _connect_single(self, host: str, port: int, timeout: float) -> WSClient:
+        """Connect once with the requested host/port and guard cleanup."""
+        client = WSClient(host, port)
         client.wait_for_connection(timeout=timeout)
         return client
 
@@ -353,6 +512,11 @@ class ReachyMini:
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
 
+        Note:
+            `enable_motors()` pins all targets to the present pose before flipping
+            torque on, so the pattern ``set_target(X); enable_motors()`` no longer
+            drives the robot to ``X``. Call ``set_target`` *after* ``enable_motors``.
+
         """
         if head is None and antennas is None and body_yaw is None:
             raise ValueError(
@@ -370,17 +534,13 @@ class ReachyMini:
         if body_yaw is not None and not isinstance(body_yaw, (int, float)):
             raise ValueError("body_yaw must be a float.")
 
-        if head is not None:
-            self.set_target_head_pose(head)
-
-        if antennas is not None:
-            self.set_target_antenna_joint_positions(list(antennas))
-            # self._set_joint_positions(
-            #     antennas_joint_positions=list(antennas),
-            # )
-
-        if body_yaw is not None:
-            self.set_target_body_yaw(body_yaw)
+        self.client.send_command(
+            SetFullTargetCmd(
+                head=head.flatten().tolist() if head is not None else None,
+                antennas=list(antennas) if antennas is not None else None,
+                body_yaw=body_yaw,
+            )
+        )
 
         self._last_head_pose = head
 
@@ -403,7 +563,7 @@ class ReachyMini:
             Union[npt.NDArray[np.float64], List[float]]
         ] = None,  # [right_angle, left_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk")
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease_in_out" or "cartoon", default is "minjerk")
         body_yaw: float | None = 0.0,  # Body yaw angle in radians
     ) -> None:
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
@@ -412,7 +572,7 @@ class ReachyMini:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the target head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
-            method (InterpolationTechnique): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            method (InterpolationTechnique): Interpolation method to use ("linear", "minjerk", "ease_in_out", "cartoon"). Default is "minjerk".
             body_yaw (float | None): Body yaw angle in radians. Use None to keep the current yaw.
 
         Raises:
@@ -450,7 +610,7 @@ class ReachyMini:
 
     def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
-        self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
+        self.goto_target(INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=2)
         time.sleep(0.1)
 
         # Toudoum
@@ -482,7 +642,7 @@ class ReachyMini:
         ]
         dist = np.linalg.norm(np.array(current_positions) - np.array(init_positions))
         if dist > 0.2:
-            self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1)
+            self.goto_target(INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=1)
             time.sleep(0.2)
 
         # Pfiou
@@ -535,12 +695,12 @@ class ReachyMini:
         if self.media.camera.D is None:
             raise RuntimeError("Camera distortion coefficients not set.")
 
-        points = np.array([[[u, v]]], dtype=np.float32)
-        x_n, y_n = cv2.undistortPoints(
-            points,
+        x_n, y_n = undistort_points(
+            u,
+            v,
             self.media.camera.K,  # type: ignore
             self.media.camera.D,
-        )[0, 0]
+        )
 
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)
@@ -741,24 +901,24 @@ class ReachyMini:
             record (Optional[Dict]): If provided, the command will be logged with the given record data.
 
         """
-        cmd = {}
-
         if head_joint_positions is not None:
             assert len(head_joint_positions) == 7, (
                 f"Head joint positions must have length 7, got {head_joint_positions}."
             )
-            cmd["head_joint_positions"] = list(head_joint_positions)
+            self.client.send_command(
+                SetHeadJointsCmd(joints=list(head_joint_positions))
+            )
 
         if antennas_joint_positions is not None:
             assert len(antennas_joint_positions) == 2, "Antennas must have length 2."
-            cmd["antennas_joint_positions"] = list(antennas_joint_positions)
+            self.client.send_command(
+                SetAntennasCmd(antennas=list(antennas_joint_positions))
+            )
 
-        if not cmd:
+        if head_joint_positions is None and antennas_joint_positions is None:
             raise ValueError(
                 "At least one of head_joint_positions or antennas must be provided."
             )
-
-        self.client.send_command(json.dumps(cmd))
 
     def set_target_head_pose(self, pose: npt.NDArray[np.float64]) -> None:
         """Set the head pose to a specific 4x4 matrix.
@@ -771,23 +931,18 @@ class ReachyMini:
             ValueError: If the shape of the pose is not (4, 4).
 
         """
-        cmd = {}
-
         if pose is not None:
             assert pose.shape == (
                 4,
                 4,
             ), f"Head pose should be a 4x4 matrix, got {pose.shape}."
-            cmd["head_pose"] = pose.tolist()
+            self.client.send_command(SetTargetCmd(head=pose.flatten().tolist()))
         else:
             raise ValueError("Pose must be provided as a 4x4 matrix.")
 
-        self.client.send_command(json.dumps(cmd))
-
     def set_target_antenna_joint_positions(self, antennas: List[float]) -> None:
         """Set the target joint positions of the antennas."""
-        cmd = {"antennas_joint_positions": antennas}
-        self.client.send_command(json.dumps(cmd))
+        self.client.send_command(SetAntennasCmd(antennas=antennas))
 
     def set_target_body_yaw(self, body_yaw: float) -> None:
         """Set the target body yaw.
@@ -796,19 +951,18 @@ class ReachyMini:
             body_yaw (float): The yaw angle of the body in radians.
 
         """
-        cmd = {"body_yaw": body_yaw}
-        self.client.send_command(json.dumps(cmd))
+        self.client.send_command(SetBodyYawCmd(body_yaw=body_yaw))
 
     def start_recording(self) -> None:
         """Start recording data."""
-        self.client.send_command(json.dumps({"start_recording": True}))
+        self.client.send_command(StartRecordingCmd())
         self.is_recording = True
 
     def stop_recording(
         self,
     ) -> Optional[List[Dict[str, float | List[float] | List[List[float]]]]]:
         """Stop recording data and return the recorded data."""
-        self.client.send_command(json.dumps({"stop_recording": True}))
+        self.client.send_command(StopRecordingCmd())
         self.is_recording = False
         if not self.client.wait_for_recorded_data(timeout=5):
             raise RuntimeError("Daemon did not provide recorded data in time!")
@@ -829,7 +983,7 @@ class ReachyMini:
             raise ValueError("Record must be a dictionary.")
 
         # Send the record data to the backend
-        self.client.send_command(json.dumps({"set_target_record": record}))
+        self.client.send_command(AppendRecordCmd(record=record))
 
     def enable_motors(self, ids: List[str] | None = None) -> None:
         """Enable the motors.
@@ -854,24 +1008,34 @@ class ReachyMini:
         self._set_torque(False, ids=ids)
 
     def _set_torque(self, on: bool, ids: List[str] | None = None) -> None:
-        self.client.send_command(json.dumps({"torque": on, "ids": ids}))
+        self.client.send_command(SetTorqueCmd(on=on, ids=ids))
 
     def enable_gravity_compensation(self) -> None:
         """Enable gravity compensation for the head motors."""
-        self.client.send_command(json.dumps({"gravity_compensation": True}))
+        self.client.send_command(SetGravityCompensationCmd(enabled=True))
 
     def disable_gravity_compensation(self) -> None:
         """Disable gravity compensation for the head motors."""
-        self.client.send_command(json.dumps({"gravity_compensation": False}))
+        self.client.send_command(SetGravityCompensationCmd(enabled=False))
 
-    def set_automatic_body_yaw(self, body_yaw: float) -> None:
-        """Set the automatic body yaw.
+    def set_automatic_body_yaw(self, enabled: bool) -> None:
+        """Enable or disable automatic body yaw.
 
         Args:
-            body_yaw (float): The yaw angle of the body in radians.
+            enabled (bool): Whether automatic body yaw is enabled.
 
         """
-        self.client.send_command(json.dumps({"automatic_body_yaw": body_yaw}))
+        self.client.send_command(SetAutomaticBodyYawCmd(enabled=enabled))
+
+    def cancel_move(self) -> None:
+        """Cancel the currently playing move.
+
+        This will cause any running play_move or async_play_move to stop
+        at the next iteration of the playback loop. Audio is also stopped.
+        """
+        self._move_cancelled = True
+        self.media_manager.stop_playing()
+        self.logger.info("Move cancellation requested")
 
     async def async_play_move(
         self,
@@ -889,6 +1053,8 @@ class ReachyMini:
             sound (bool): If True, play the sound associated with the move (if any).
 
         """
+        self._move_cancelled = False
+
         if initial_goto_duration > 0.0:
             start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
                 0.0
@@ -907,6 +1073,10 @@ class ReachyMini:
 
         t0 = time.time()
         while time.time() - t0 < move.duration:
+            if self._move_cancelled:
+                self.logger.info("Move cancelled, stopping playback")
+                break
+
             t = min(time.time() - t0, move.duration - 1e-2)
 
             head, antennas, body_yaw = move.evaluate(t)

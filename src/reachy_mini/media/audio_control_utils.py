@@ -24,14 +24,23 @@ import logging
 import struct
 import sys
 import time
+from collections.abc import Sequence
 from typing import Any, Optional
 
 import usb.core
 import usb.util
 from libusb_package import get_libusb1_backend
 
+logger = logging.getLogger(__name__)
+
 CONTROL_SUCCESS = 0
 SERVICER_COMMAND_RETRY = 64
+WRITE_SETTLE_SECONDS = 0.1
+VERIFY_TOLERANCE = 1e-3
+
+AudioControlValue = float | int
+AudioParameterValues = tuple[AudioControlValue, ...]
+AudioConfig = Sequence[tuple[str, Sequence[AudioControlValue]]]
 
 # name, resid, cmdid, length, type
 PARAMETERS = {
@@ -220,7 +229,7 @@ class ReSpeaker:
             for i in range(data_cnt):
                 payload += struct.pack(b"i", data_list[i])
 
-        logging.debug(
+        logger.debug(
             "WriteCMD: cmdid: {}, resid: {}, payload: {}".format(
                 wvalue, windex, payload
             )
@@ -290,7 +299,7 @@ class ReSpeaker:
                 raise ValueError("Unknown status code: {}".format(response[0]))
             time.sleep(0.01)
 
-        logging.info(
+        logger.debug(
             "ReadCMD: cmdid: {}, resid: {}, response: {}".format(
                 wvalue, windex, response
             )
@@ -314,6 +323,139 @@ class ReSpeaker:
 
         return result
 
+    def read_values(self, name: str) -> AudioParameterValues | None:
+        """Read a parameter and decode it into numeric values."""
+        raw_values = self.read(name)
+        return self._decode_parameter_values(name, raw_values)
+
+    def apply_audio_config(
+        self,
+        config: AudioConfig,
+        *,
+        verify: bool = True,
+        write_settle_seconds: float = WRITE_SETTLE_SECONDS,
+    ) -> bool:
+        """Apply a set of audio control parameters to the ReSpeaker.
+
+        Args:
+            config: Parameter names and values to write.
+            verify: When true, read each parameter back after writing it.
+            write_settle_seconds: Delay after each write before readback.
+
+        Returns:
+            True when all parameters were written and verified successfully.
+
+        """
+        failures = 0
+
+        for name, values in config:
+            expected_values = tuple(values)
+            try:
+                self.write(name, expected_values)
+                if write_settle_seconds > 0:
+                    time.sleep(write_settle_seconds)
+
+                if verify:
+                    actual_values = self.read_values(name)
+                    if not self._values_match(actual_values, expected_values):
+                        failures += 1
+                        logger.warning(
+                            "Audio parameter verification failed for %s: expected %s, got %s",
+                            name,
+                            self._format_values(expected_values),
+                            self._format_values(actual_values),
+                        )
+            except Exception as exc:
+                failures += 1
+                logger.warning(
+                    "Failed to apply audio parameter %s=%s: %s",
+                    name,
+                    self._format_values(expected_values),
+                    exc,
+                )
+
+        if failures:
+            logger.warning(
+                "Reachy Mini audio config completed with %d failed parameter(s).",
+                failures,
+            )
+            return False
+
+        logger.info("Applied Reachy Mini audio config: %s", self._format_config(config))
+        return True
+
+    def _decode_parameter_values(
+        self, name: str, raw_values: object
+    ) -> AudioParameterValues | None:
+        parameter = PARAMETERS.get(name)
+        if raw_values is None or parameter is None:
+            return None
+
+        value_count = int(parameter[2])
+        value_type = str(parameter[4])
+
+        if value_type in {"float", "radians"}:
+            if not isinstance(raw_values, Sequence):
+                return None
+            return tuple(float(value) for value in raw_values[:value_count])
+
+        if value_type in {"int32", "uint32"}:
+            return self._decode_int32_values(
+                raw_values, value_count, signed=value_type == "int32"
+            )
+
+        if value_type == "uint8":
+            if not isinstance(raw_values, Sequence):
+                return None
+            offset = 1 if len(raw_values) == value_count + 1 else 0
+            return tuple(
+                int(value) for value in raw_values[offset : offset + value_count]
+            )
+
+        return None
+
+    def _decode_int32_values(
+        self, raw_values: object, value_count: int, *, signed: bool
+    ) -> tuple[int, ...] | None:
+        if not isinstance(raw_values, Sequence):
+            return None
+
+        if len(raw_values) == value_count * 4 + 1:
+            payload = bytes(int(value) & 0xFF for value in raw_values[1:])
+            format_char = "i" if signed else "I"
+            return tuple(
+                int(value)
+                for value in struct.unpack("<" + format_char * value_count, payload)
+            )
+
+        if len(raw_values) >= value_count:
+            return tuple(int(value) for value in raw_values[:value_count])
+
+        return None
+
+    def _values_match(
+        self,
+        actual_values: Sequence[AudioControlValue] | None,
+        expected_values: Sequence[AudioControlValue],
+    ) -> bool:
+        if actual_values is None or len(actual_values) != len(expected_values):
+            return False
+
+        return all(
+            abs(float(actual) - float(expected)) <= VERIFY_TOLERANCE
+            for actual, expected in zip(actual_values, expected_values)
+        )
+
+    def _format_config(self, config: AudioConfig) -> str:
+        return ", ".join(
+            f"{name}={self._format_values(values)}" for name, values in config
+        )
+
+    def _format_values(self, values: Sequence[AudioControlValue] | None) -> str:
+        if values is None:
+            return "unreadable"
+        return " ".join(str(value) for value in values)
+
     def close(self) -> None:
         """Close the interface."""
         usb.util.dispose_resources(self.dev)
@@ -336,16 +478,18 @@ def find(vid: int = 0x2886, pid: int = 0x001A) -> ReSpeaker | None:
         XMOS XVF3800 devices used in ReSpeaker microphone arrays.
 
     Example:
-        >>> from reachy_mini.media.audio_control_utils import find
-        >>>
-        >>> # Find default ReSpeaker device
-        >>> respeaker = find()
-        >>> if respeaker is not None:
-        ...     print("Found ReSpeaker device")
-        ...     respeaker.close()
-        >>>
-        >>> # Find specific device
-        >>> custom_device = find(vid=0x1234, pid=0x5678)
+        ```python
+        from reachy_mini.media.audio_control_utils import find
+
+        # Find default ReSpeaker device
+        respeaker = find()
+        if respeaker is not None:
+            print("Found ReSpeaker device")
+            respeaker.close()
+
+        # Find specific device
+        custom_device = find(vid=0x1234, pid=0x5678)
+        ```
 
     """
     dev = usb.core.find(idVendor=vid, idProduct=pid, backend=get_libusb1_backend())
@@ -372,17 +516,19 @@ def init_respeaker_usb() -> Optional[ReSpeaker]:
         None if no compatible device is found or if initialization fails.
 
     Example:
-        >>> from reachy_mini.media.audio_control_utils import init_respeaker_usb
-        >>>
-        >>> # Initialize ReSpeaker device
-        >>> respeaker = init_respeaker_usb()
-        >>> if respeaker is not None:
-        ...     print("ReSpeaker initialized successfully")
-        ...     # Use the device...
-        ...     doa = respeaker.read("DOA_VALUE_RADIANS")
-        ...     respeaker.close()
-        ... else:
-        ...     print("No ReSpeaker device found")
+        ```python
+        from reachy_mini.media.audio_control_utils import init_respeaker_usb
+
+        # Initialize ReSpeaker device
+        respeaker = init_respeaker_usb()
+        if respeaker is not None:
+            print("ReSpeaker initialized successfully")
+            # Use the device...
+            doa = respeaker.read("DOA_VALUE_RADIANS")
+            respeaker.close()
+        else:
+            print("No ReSpeaker device found")
+        ```
 
     """
     try:
@@ -397,17 +543,17 @@ def init_respeaker_usb() -> Optional[ReSpeaker]:
                 idVendor=0x2886, idProduct=0x001A, backend=get_libusb1_backend()
             )
             if dev is not None:
-                logging.warning("Old firmware detected. Please update the firmware!")
+                logger.warning("Old firmware detected. Please update the firmware!")
 
         # If still not found, raise error
         if dev is None:
-            logging.error("No Reachy Mini Audio USB device found!")
+            logger.error("No Reachy Mini Audio USB device found!")
             return None
 
         return ReSpeaker(dev)
 
     except usb.core.NoBackendError:
-        logging.error(
+        logger.error(
             "No USB backend was found! Make sure libusb_package is correctly installed with `pip install libusb_package`."
         )
         return None

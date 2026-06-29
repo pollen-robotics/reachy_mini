@@ -168,41 +168,38 @@ const hfAppsStore = {
         username: null,
 
         init: async () => {
-            // Check if we're on wireless version
+            // Initialize advanced section for all versions (wireless and Lite)
             try {
-                const status = await fetch('/api/daemon/status').then(r => r.json());
-                const isWireless = status.wireless_version;
-
-                if (!isWireless) {
-                    // Don't show advanced section on non-wireless
-                    return;
-                }
-
                 // Show the advanced section
                 document.getElementById('hf-advanced-section').classList.remove('hidden');
 
                 // Set up event listeners
                 document.getElementById('hf-advanced-toggle').onclick = hfAppsStore.advanced.toggleSection;
-                document.getElementById('hf-login-button').onclick = hfAppsStore.advanced.login;
-                document.getElementById('hf-logout-button').onclick = hfAppsStore.advanced.logout;
-                document.getElementById('hf-install-private-button').onclick = hfAppsStore.advanced.installPrivateSpace;
 
-                // Add Enter key support for token input
-                document.getElementById('hf-token-input').addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        hfAppsStore.advanced.login();
-                    }
-                });
+                const installBtn = document.getElementById('hf-install-private-button');
+                if (installBtn) {
+                    installBtn.onclick = hfAppsStore.advanced.installPrivateSpace;
+                }
 
                 // Add Enter key support for space ID input
-                document.getElementById('hf-space-id-input').addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        hfAppsStore.advanced.installPrivateSpace();
-                    }
-                });
+                const spaceIdInput = document.getElementById('hf-space-id-input');
+                if (spaceIdInput) {
+                    spaceIdInput.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') {
+                            hfAppsStore.advanced.installPrivateSpace();
+                        }
+                    });
+                }
 
-                // Check authentication status
-                await hfAppsStore.advanced.checkAuthStatus();
+                // Sync auth status with global hfAuth (after a small delay to let hfAuth init first)
+                setTimeout(() => {
+                    if (typeof hfAuth !== 'undefined') {
+                        hfAppsStore.advanced.isAuthenticated = hfAuth.isAuthenticated;
+                        hfAppsStore.advanced.username = hfAuth.username;
+                    }
+                    hfAppsStore.advanced.updateAuthUI();
+                }, 100);
+
             } catch (error) {
                 console.error('Error initializing advanced section:', error);
             }
@@ -221,104 +218,30 @@ const hfAppsStore = {
             }
         },
 
-        checkAuthStatus: async () => {
-            try {
-                const response = await fetch('/api/hf-auth/status');
-                const data = await response.json();
-
-                hfAppsStore.advanced.isAuthenticated = data.is_logged_in;
-                hfAppsStore.advanced.username = data.username;
-
-                hfAppsStore.advanced.updateAuthUI();
-            } catch (error) {
-                console.error('Error checking auth status:', error);
-            }
-        },
-
         updateAuthUI: () => {
             const indicator = document.getElementById('hf-auth-indicator');
             const authText = document.getElementById('hf-auth-text');
             const loginForm = document.getElementById('hf-login-form');
             const loggedInView = document.getElementById('hf-logged-in-view');
-            const usernameSpan = document.getElementById('hf-username');
+
+            if (!indicator || !authText) return;
 
             if (hfAppsStore.advanced.isAuthenticated) {
-                // Authenticated state
+                // Connected state
                 indicator.classList.remove('bg-gray-400');
                 indicator.classList.add('bg-green-500');
-                authText.textContent = 'Authenticated';
-                loginForm.classList.add('hidden');
-                loggedInView.classList.remove('hidden');
-                usernameSpan.textContent = hfAppsStore.advanced.username || 'Unknown';
+                authText.textContent = `🤗 Connected as ${hfAppsStore.advanced.username || 'user'}`;
+                authText.style.color = '#065f46';
+                if (loginForm) loginForm.classList.add('hidden');
+                if (loggedInView) loggedInView.classList.remove('hidden');
             } else {
-                // Not authenticated state
+                // Not connected state
                 indicator.classList.remove('bg-green-500');
                 indicator.classList.add('bg-gray-400');
-                authText.textContent = 'Not authenticated';
-                loginForm.classList.remove('hidden');
-                loggedInView.classList.add('hidden');
-            }
-        },
-
-        login: async () => {
-            const tokenInput = document.getElementById('hf-token-input');
-            const errorDiv = document.getElementById('hf-login-error');
-            const loginButton = document.getElementById('hf-login-button');
-
-            const token = tokenInput.value.trim();
-
-            if (!token) {
-                errorDiv.textContent = 'Please enter a token';
-                errorDiv.classList.remove('hidden');
-                return;
-            }
-
-            // Disable button during request
-            loginButton.disabled = true;
-            loginButton.textContent = 'Logging in...';
-            errorDiv.classList.add('hidden');
-
-            try {
-                const response = await fetch('/api/hf-auth/save-token', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token })
-                });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Login failed');
-                }
-
-                const data = await response.json();
-
-                // Clear token input
-                tokenInput.value = '';
-
-                // Update state
-                hfAppsStore.advanced.isAuthenticated = true;
-                hfAppsStore.advanced.username = data.username;
-                hfAppsStore.advanced.updateAuthUI();
-
-            } catch (error) {
-                errorDiv.textContent = error.message;
-                errorDiv.classList.remove('hidden');
-            } finally {
-                loginButton.disabled = false;
-                loginButton.textContent = 'Login';
-            }
-        },
-
-        logout: async () => {
-            try {
-                await fetch('/api/hf-auth/token', { method: 'DELETE' });
-
-                hfAppsStore.advanced.isAuthenticated = false;
-                hfAppsStore.advanced.username = null;
-                hfAppsStore.advanced.updateAuthUI();
-
-            } catch (error) {
-                console.error('Error logging out:', error);
+                authText.textContent = 'Not connected';
+                authText.style.color = '#374151';
+                if (loginForm) loginForm.classList.remove('hidden');
+                if (loggedInView) loggedInView.classList.add('hidden');
             }
         },
 
@@ -327,25 +250,33 @@ const hfAppsStore = {
             const errorDiv = document.getElementById('hf-private-install-error');
             const installButton = document.getElementById('hf-install-private-button');
 
-            const spaceId = spaceIdInput.value.trim();
+            const spaceId = spaceIdInput?.value.trim();
 
             if (!spaceId) {
-                errorDiv.textContent = 'Please enter a space ID';
-                errorDiv.classList.remove('hidden');
+                if (errorDiv) {
+                    errorDiv.textContent = 'Please enter a space ID';
+                    errorDiv.classList.remove('hidden');
+                }
                 return;
             }
 
             // Validate format (should be "username/space-name")
             if (!spaceId.includes('/')) {
-                errorDiv.textContent = 'Space ID should be in format: username/space-name';
-                errorDiv.classList.remove('hidden');
+                if (errorDiv) {
+                    errorDiv.textContent = 'Space ID should be in format: username/space-name';
+                    errorDiv.classList.remove('hidden');
+                }
                 return;
             }
 
             // Disable button during request
-            installButton.disabled = true;
-            installButton.textContent = 'Installing...';
-            errorDiv.classList.add('hidden');
+            if (installButton) {
+                installButton.disabled = true;
+                installButton.textContent = 'Installing...';
+            }
+            if (errorDiv) {
+                errorDiv.classList.add('hidden');
+            }
 
             try {
                 const response = await fetch('/api/apps/install-private-space', {
@@ -363,7 +294,7 @@ const hfAppsStore = {
                 const jobId = data.job_id;
 
                 // Clear input
-                spaceIdInput.value = '';
+                if (spaceIdInput) spaceIdInput.value = '';
 
                 // Show installation modal (reuse existing modal)
                 const spaceName = spaceId.split('/')[1];
@@ -371,18 +302,27 @@ const hfAppsStore = {
 
             } catch (error) {
                 if (error.message.includes('authenticate') || error.message.includes('401')) {
-                    // Token expired or invalid - show login form
-                    errorDiv.textContent = 'Authentication expired. Please login again.';
+                    // Token expired or invalid - update global auth state
+                    if (typeof hfAuth !== 'undefined') {
+                        hfAuth.isAuthenticated = false;
+                        hfAuth.username = null;
+                        hfAuth.updateHeaderUI();
+                    }
                     hfAppsStore.advanced.isAuthenticated = false;
                     hfAppsStore.advanced.username = null;
                     hfAppsStore.advanced.updateAuthUI();
-                } else {
+                    if (errorDiv) {
+                        errorDiv.textContent = 'Authentication expired. Please login again from the header.';
+                    }
+                } else if (errorDiv) {
                     errorDiv.textContent = error.message;
                 }
-                errorDiv.classList.remove('hidden');
+                if (errorDiv) errorDiv.classList.remove('hidden');
             } finally {
-                installButton.disabled = false;
-                installButton.textContent = 'Install Private Space';
+                if (installButton) {
+                    installButton.disabled = false;
+                    installButton.textContent = 'Install Private Space';
+                }
             }
         },
     },

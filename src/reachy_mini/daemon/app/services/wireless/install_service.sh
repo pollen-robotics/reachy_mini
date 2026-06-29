@@ -11,12 +11,16 @@ LAUNCHER_PATH="$SCRIPT_DIR/launcher.sh"
 cat <<EOF | sudo tee $SERVICE_FILE > /dev/null
 [Unit]
 Description=Reachy Mini AP Launcher Service
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
+# Cap glibc malloc arenas on the 4GB Pi 4 (see issue #1165 and launcher.sh).
+Environment=MALLOC_ARENA_MAX=2
 ExecStart=$LAUNCHER_PATH
 Restart=on-failure
+RestartSec=3s
 User=$(whoami)
 WorkingDirectory=$(dirname "$LAUNCHER_PATH")
 

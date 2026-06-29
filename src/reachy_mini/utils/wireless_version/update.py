@@ -1,63 +1,49 @@
 """Module to handle software updates for the Reachy Mini wireless."""
 
 import logging
-import shutil
 from pathlib import Path
 
-from .utils import call_logger_wrapper
+from .utils import build_install_command, call_logger_wrapper
 
 
-async def update_reachy_mini(pre_release: bool, logger: logging.Logger) -> None:
-    """Perform a software update by upgrading the reachy_mini package and restarting the daemon.
+async def update_reachy_mini(
+    logger: logging.Logger,
+    pre_release: bool = False,
+    git_ref: str | None = None,
+) -> None:
+    """Update reachy_mini package and restart daemon.
 
-    This updates both:
-    - The daemon venv (where the daemon runs)
-    - The apps_venv (where apps run) - to keep SDK in sync
+    Args:
+        logger: Logger for streaming output.
+        pre_release: If True, install pre-release from PyPI (ignored if git_ref set).
+        git_ref: If set, install from this GitHub tag/branch instead of PyPI.
+
     """
-    extra_args = []
-    if pre_release:
-        extra_args.append("--pre")
-
     # Update daemon venv
     logger.info("Updating daemon venv...")
-    await call_logger_wrapper(
-        ["pip", "install", "--upgrade", "reachy_mini[wireless-version]"] + extra_args,
-        logger,
+    cmd, extra_env = build_install_command(
+        extras="wireless-version",
+        git_ref=git_ref, 
+        pre_release=pre_release, 
+        upgrade=True,
     )
+    await call_logger_wrapper(cmd, logger, env=extra_env or None)
 
     # Update apps_venv if it exists
     apps_venv_python = Path("/venvs/apps_venv/bin/python")
     if apps_venv_python.exists():
         logger.info("Updating apps_venv SDK...")
-
-        # Use uv if available for faster installs
-        use_uv = shutil.which("uv") is not None
-
-        if use_uv:
-            install_cmd = [
-                "uv",
-                "pip",
-                "install",
-                "--python",
-                str(apps_venv_python),
-                "--upgrade",
-                "reachy-mini[gstreamer]",
-            ] + extra_args
-        else:
-            apps_venv_pip = Path("/venvs/apps_venv/bin/pip")
-            install_cmd = [
-                str(apps_venv_pip),
-                "install",
-                "--upgrade",
-                "reachy-mini[gstreamer]",
-            ] + extra_args
-
-        await call_logger_wrapper(install_cmd, logger)
+        cmd, extra_env = build_install_command( 
+            extras="",
+            git_ref=git_ref, 
+            pre_release=pre_release,
+            python=apps_venv_python, 
+            upgrade=True,
+        )
+        await call_logger_wrapper(cmd, logger, env=extra_env or None)
         logger.info("Apps venv SDK updated successfully")
     else:
-        logger.info("apps_venv not found, skipping apps venv update")
+        logger.info("apps_venv not found, skipping")
 
     # Restart daemon to apply updates
-    await call_logger_wrapper(
-        ["sudo", "systemctl", "restart", "reachy-mini-daemon"], logger
-    )
+    await call_logger_wrapper("sudo systemctl restart reachy-mini-daemon", logger)

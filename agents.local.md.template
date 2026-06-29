@@ -1,0 +1,36 @@
+# Reachy Mini - Local Configuration
+
+This file contains user-specific settings for AI agents.
+Copy this to `agents.local.md` and customize, or let the AI create it during first-run setup.
+
+---
+
+## Setup Status
+
+- [x] Python virtual environment configured
+- [x] reachy_mini repo cloned
+- [ ] Additional repos cloned (list below)
+
+## Paths
+
+```
+resources_folder: ~/reachy_mini_resources
+```
+
+## Preferences
+
+```
+venv_tool: uv          # or: venv, conda
+shell: bash            # or: zsh, fish, powershell
+os: linux              # or: macos, windows
+```
+
+## Cloned Repos
+
+| Repo | Path | Last Updated |
+|------|------|--------------|
+| reachy_mini_conversation_app | ~/reachy_mini_resources/reachy_mini_conversation_app | 2026-01-19 |
+
+## Notes
+
+Add any user-specific notes here (e.g., preferred coding style, specific app ideas, etc.)

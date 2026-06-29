@@ -1,0 +1,38 @@
+"""Custom tool template - modify this to create your own tools."""
+
+import logging
+from typing import Any
+
+from {{ app_name }}.tools.core_tools import Tool, ToolDependencies
+
+logger = logging.getLogger(__name__)
+
+
+class CustomTool(Tool):
+    """A custom tool template. Modify this to create your own tool."""
+
+    name = "custom_tool"
+    description = "A placeholder custom tool - replace this with your own implementation"
+    parameters_schema = {
+        "type": "object",
+        "properties": {
+            "message": {
+                "type": "string",
+                "description": "An optional message to log",
+            },
+        },
+        "required": [],
+    }
+
+    async def __call__(self, deps: ToolDependencies, **kwargs: Any) -> dict[str, Any]:
+        """Execute the custom tool."""
+        message = kwargs.get("message", "no message")
+        logger.info(f"CustomTool called with message: {message}")
+
+        # TODO: Add your custom logic here
+        # You have access to:
+        # - deps.reachy_mini: the robot SDK
+        # - deps.movement_manager: for queueing movements
+        # - deps.state: current conversation state
+
+        return {"status": "ok"}

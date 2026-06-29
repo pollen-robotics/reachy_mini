@@ -1,13 +1,27 @@
 """HuggingFace authentication API routes."""
 
+import asyncio
+import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+import aiohttp
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
 from reachy_mini.apps.sources import hf_auth
+from reachy_mini.media.central_signaling_relay import CENTRAL_SIGNALING_SERVER
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/hf-auth")
+
+# We proxy the central /api/robot-status endpoint so the desktop frontend
+# never needs to see the raw HF token. Single source of truth for the
+# central base URL (and its REACHY_CENTRAL_URL override) is the relay
+# module — importing it here keeps the default in lock-step.
+CENTRAL_ROBOT_STATUS_URL = f"{CENTRAL_SIGNALING_SERVER}/api/robot-status"
+CENTRAL_ROBOT_STATUS_TIMEOUT = aiohttp.ClientTimeout(total=5)
 
 
 class TokenRequest(BaseModel):
@@ -22,6 +36,11 @@ class TokenResponse(BaseModel):
     status: str
     username: str | None = None
     message: str | None = None
+
+
+# =============================================================================
+# Token-based Authentication (Manual)
+# =============================================================================
 
 
 @router.post("/save-token")
@@ -46,6 +65,30 @@ async def get_auth_status() -> dict[str, Any]:
     return hf_auth.check_token_status()
 
 
+@router.get("/relay-status")
+async def get_relay_status(request: Request) -> dict[str, Any]:
+    """Get the central signaling relay connection status."""
+    # Check if this is a Lite version (no WebRTC support)
+    daemon = getattr(request.app.state, "daemon", None)
+    if daemon and not daemon.wireless_version:
+        return {
+            "state": "unavailable",
+            "message": "Coming soon to Lite version",
+            "is_connected": False,
+        }
+
+    try:
+        from reachy_mini.media.central_signaling_relay import get_relay_status
+
+        return get_relay_status()
+    except ImportError:
+        return {
+            "state": "unavailable",
+            "message": "Central relay not available",
+            "is_connected": False,
+        }
+
+
 @router.delete("/token")
 async def delete_token() -> dict[str, str]:
     """Delete stored HuggingFace token."""
@@ -55,3 +98,338 @@ async def delete_token() -> dict[str, str]:
         raise HTTPException(status_code=500, detail="Failed to delete token")
 
     return {"status": "success"}
+
+
+@router.post("/refresh-relay")
+async def refresh_relay() -> dict[str, Any]:
+    """Force the central signaling relay to reconnect — see ``notify_force_reconnect``.
+
+    Response shapes:
+      - ``{"status": "requested", "token_available": bool}`` — a
+        reconnect was kicked off.
+      - ``{"status": "skipped", "token_available": bool,
+            "reason": "relay_not_running" | "relay_unavailable"}`` — no
+        reconnect happened. The mobile app's auto-heal loop must NOT
+        wait for a state change in this case (it would hang forever).
+        ``relay_unavailable`` covers the import failure (Lite-only
+        build that ships no relay module); ``relay_not_running`` covers
+        the module-present-but-no-instance case (daemon started
+        without a token / pre-init / shutdown).
+    """
+    token = hf_auth.get_hf_token()
+
+    try:
+        from reachy_mini.media.central_signaling_relay import notify_force_reconnect
+
+        kicked_off = await notify_force_reconnect()
+    except ImportError:
+        return {
+            "status": "skipped",
+            "token_available": bool(token),
+            "reason": "relay_unavailable",
+        }
+    except Exception as e:
+        logger.warning("[refresh-relay] notify_force_reconnect failed: %s", e)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to refresh relay: {e}"
+        ) from e
+
+    if not kicked_off:
+        return {
+            "status": "skipped",
+            "token_available": bool(token),
+            "reason": "relay_not_running",
+        }
+
+    return {"status": "requested", "token_available": bool(token)}
+
+
+@router.get("/central-robot-status")
+async def get_central_robot_status() -> dict[str, Any]:
+    """Proxy to the central signaling server's /api/robot-status endpoint.
+
+    Uses the stored HF token server-side so the desktop frontend never
+    sees the raw token. The frontend polls this to know whether any of
+    the user's robots is currently held by a remote JS app, and if so
+    which one (so it can show "In use by Hand Tracker" in the UI).
+
+    Response shape:
+        { "available": bool, "robots": [...], "reason": str? }
+
+    `available` is false when:
+      - no HF token stored (user not logged in)
+      - central server is unreachable / returned an error
+    Callers should treat `available: false` as "unknown, don't block".
+    """
+    token = hf_auth.get_hf_token()
+    if not token:
+        return {"available": False, "robots": [], "reason": "not_authenticated"}
+
+    try:
+        async with aiohttp.ClientSession(
+            timeout=CENTRAL_ROBOT_STATUS_TIMEOUT
+        ) as session:
+            # Token goes in the Authorization header, not the URL —
+            # otherwise it leaks into central's access logs and any
+            # intermediate proxy's logs. The desktop frontend already
+            # never sees the raw token (we read it server-side via
+            # hf_auth.get_hf_token); header use keeps it off the
+            # wire-visible URL as well.
+            async with session.get(
+                CENTRAL_ROBOT_STATUS_URL,
+                headers={"Authorization": f"Bearer {token}"},
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return {
+                        "available": True,
+                        "robots": data.get("robots", []),
+                    }
+                if response.status == 401:
+                    return {"available": False, "robots": [], "reason": "token_invalid"}
+                logger.warning(
+                    "[central-robot-status] unexpected status %s", response.status
+                )
+                return {
+                    "available": False,
+                    "robots": [],
+                    "reason": f"http_{response.status}",
+                }
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        logger.debug("[central-robot-status] central unreachable: %s", e)
+        return {"available": False, "robots": [], "reason": "unreachable"}
+
+
+# =============================================================================
+# OAuth Authentication (One-click login)
+# =============================================================================
+#
+# Uses fixed redirect URIs:
+#   - Wireless: http://reachy-mini.local:8000/api/hf-auth/oauth/callback
+#   - Lite:     http://localhost:8000/api/hf-auth/oauth/callback
+#
+# Register both URIs with your HuggingFace OAuth app.
+# =============================================================================
+
+
+@router.get("/oauth/configured")
+async def is_oauth_configured() -> dict[str, Any]:
+    """Check if OAuth is configured."""
+    return {
+        "configured": hf_auth.is_oauth_configured(),
+    }
+
+
+@router.get("/oauth/start")
+async def start_oauth(request: Request, use_localhost: bool = False) -> dict[str, Any]:
+    """Start a new OAuth authorization session.
+
+    Returns the auth_url to redirect the user to HuggingFace.
+
+    Args:
+        request: The incoming HTTP request.
+        use_localhost: When True, use localhost:8000 as the OAuth callback URL.
+            Passed by the desktop app which proxies localhost:8000 to the robot.
+
+    """
+    # Get wireless_version from app state
+    wireless_version = getattr(request.app.state, "daemon", None)
+    if wireless_version:
+        wireless_version = wireless_version.wireless_version
+    else:
+        # Fallback: check if accessed via reachy-mini.local
+        host = request.headers.get("host", "")
+        wireless_version = "reachy-mini.local" in host
+
+    result = hf_auth.create_oauth_session(
+        wireless_version=wireless_version,
+        use_localhost=use_localhost,
+    )
+
+    if result["status"] == "error":
+        raise HTTPException(status_code=500, detail=result.get("message"))
+
+    return result
+
+
+@router.get("/oauth/begin")
+async def begin_oauth(request: Request) -> RedirectResponse:
+    """One-shot OAuth entry point for the mobile setup flow.
+
+    Creates a session and 302-redirects the browser straight to Hugging Face's
+    authorize page, so the phone only has to open this single URL. The existing
+    /oauth/callback finishes the job (exchange → store token → start relay).
+    """
+    daemon = getattr(request.app.state, "daemon", None)
+    if daemon is not None:
+        wireless_version = bool(daemon.wireless_version)
+    else:
+        wireless_version = "reachy-mini.local" in request.headers.get("host", "")
+
+    result = hf_auth.create_oauth_session(
+        wireless_version=wireless_version, use_localhost=False
+    )
+    if result.get("status") == "error":
+        raise HTTPException(status_code=500, detail=result.get("message"))
+    return RedirectResponse(url=result["auth_url"])
+
+
+@router.get("/oauth/status/{session_id}")
+async def get_oauth_status(session_id: str) -> dict[str, Any]:
+    """Poll for OAuth session status.
+
+    The frontend polls this endpoint to check if the user has
+    completed authorization.
+    """
+    return hf_auth.get_oauth_session_status(session_id)
+
+
+@router.delete("/oauth/session/{session_id}")
+async def cancel_oauth_session(session_id: str) -> dict[str, str]:
+    """Cancel an OAuth session."""
+    if hf_auth.cancel_oauth_session(session_id):
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="Session not found")
+
+
+@router.get("/oauth/callback")
+async def oauth_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
+) -> HTMLResponse:
+    """Handle OAuth callback from HuggingFace.
+
+    This is where HF redirects after user authorizes.
+    Shows a success/error page that the user can close.
+    """
+    if error:
+        # OAuth error from HF
+        session = hf_auth.get_session_by_state(state) if state else None
+        if session:
+            session.status = "error"
+            session.error_message = error_description or error
+
+        return HTMLResponse(
+            content=_oauth_result_page(
+                success=False,
+                message=error_description or error,
+            )
+        )
+
+    if not code or not state:
+        return HTMLResponse(
+            content=_oauth_result_page(
+                success=False,
+                message="Missing authorization code or state",
+            ),
+            status_code=400,
+        )
+
+    # Determine if wireless based on the callback URL
+    host = request.headers.get("host", "")
+    wireless_version = "reachy-mini.local" in host
+
+    # Exchange code for token
+    result = await hf_auth.exchange_code_for_token(
+        code=code,
+        state=state,
+        wireless_version=wireless_version,
+    )
+
+    if result["status"] == "success":
+        # Bring the central relay up now. exchange_code_for_token() persisted
+        # the token and notified a *running* relay, but on a token-less boot
+        # there is no relay instance yet, so start one (idempotent). Without
+        # this the robot wouldn't register with central until a daemon restart.
+        daemon = getattr(request.app.state, "daemon", None)
+        if daemon is not None:
+            try:
+                await daemon._start_central_signaling_relay()
+            except Exception as e:
+                logger.warning("[oauth/callback] relay start failed: %r", e)
+
+        return HTMLResponse(
+            content=_oauth_result_page(
+                success=True,
+                message=f"Successfully logged in as {result.get('username', 'user')}!",
+            )
+        )
+    else:
+        return HTMLResponse(
+            content=_oauth_result_page(
+                success=False,
+                message=result.get("message", "Authorization failed"),
+            )
+        )
+
+
+def _oauth_result_page(success: bool, message: str) -> str:
+    """Generate a simple HTML page showing OAuth result."""
+    icon = "✅" if success else "❌"
+    title = "Login Successful" if success else "Login Failed"
+    color = "#10b981" if success else "#ef4444"
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{title} - Reachy Mini</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+        }}
+        .container {{
+            text-align: center;
+            padding: 2rem;
+            max-width: 400px;
+        }}
+        .icon {{
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }}
+        h1 {{
+            color: {color};
+            margin-bottom: 0.5rem;
+        }}
+        p {{
+            color: #a0aec0;
+            font-size: 1.1rem;
+            line-height: 1.5;
+        }}
+        .hint {{
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">{icon}</div>
+        <h1>{title}</h1>
+        <p>{message}</p>
+        <div class="hint">
+            You can close this window and return to your robot's dashboard.
+        </div>
+    </div>
+    <script>
+        // Auto-close after 3 seconds if opened as popup
+        if (window.opener) {{
+            setTimeout(() => window.close(), 3000);
+        }}
+    </script>
+</body>
+</html>"""

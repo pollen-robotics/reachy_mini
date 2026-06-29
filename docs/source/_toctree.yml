@@ -1,0 +1,134 @@
+- sections:
+    - local: index
+      title: Reachy Mini
+    - local: vibe-code-with-your-agent
+      title: Vibe code with your agent
+    - local: sdk-tutorials
+      title: SDK Tutorials
+  title: Get Started
+- sections:
+    - local: platforms/reachy_mini/get_started
+      title: Getting started
+    - local: platforms/reachy_mini/hardware
+      title: Hardware
+    - local: platforms/reachy_mini/usage
+      title: Usage
+    - local: platforms/reachy_mini/media_advanced_controls
+      title: Media Advanced Controls
+    - local: platforms/reachy_mini/reset
+      title: Reset
+    - local: platforms/reachy_mini/install_daemon_from_branch
+      title: Install Daemon from Branch
+    - local: platforms/reachy_mini/development_workflow
+      title: Development Workflow
+    - local: platforms/reachy_mini/reflash_the_rpi_ISO
+      title: Reflash the ISO
+  title: Reachy Mini (Wireless)
+- sections:
+    - local: platforms/reachy_mini_lite/get_started
+      title: Getting started
+    - local: platforms/reachy_mini_lite/hardware
+      title: Hardware
+    - local: platforms/reachy_mini_lite/usage
+      title: Usage
+    - local: platforms/reachy_mini_lite/media_advanced_controls
+      title: Media Advanced Controls
+    - local: platforms/reachy_mini_lite/wizard
+      title: Wizard
+  title: Reachy Mini Lite
+- sections:
+    - local: platforms/simulation/get_started
+      title: Getting started
+  title: Simulation
+- sections:
+    - local: SDK/readme
+      title: SDK Overview
+    - local: SDK/installation
+      title: Installation
+    - local: SDK/core-concept
+      title: Core Concepts
+    - local: SDK/quickstart
+      title: Quickstart Guide
+    - local: SDK/python-sdk
+      title: Python SDK
+    - local: SDK/integration
+      title: AI Integrations
+    - local: SDK/apps
+      title: Building & Publishing Apps
+    - local: API/rest-api
+      title: REST API
+    - local: SDK/javascript-sdk
+      title: JavaScript SDK & Web Apps
+    - local: SDK/media-architecture
+      title: Media Architecture
+    - local: SDK/gstreamer-installation
+      title: GStreamer Installation
+  title: Software guide
+- sections:
+    - local: troubleshooting
+      title: Troubleshooting & FAQ
+    - local: troubleshooting/motors_diagnosis
+      title: Motors Diagnosis
+    - local: troubleshooting/change_mic_fpc_cable
+      title: Change Mic FPC Cable
+    - local: troubleshooting/spherical_joints_maintenance
+      title: Spherical Joints Maintenance
+    - local: troubleshooting/roadmap
+      title: Roadmap
+  title: Help and support
+- isExpanded: false
+  sections:
+    - local: examples/minimal_demo
+      title: Minimal demo
+    - local: examples/look_at
+      title: Look at
+    - local: examples/sequence
+      title: Sequence
+    - local: examples/goto_interpolation_playground
+      title: Goto Interpolation Playground
+    - local: examples/imu
+      title: IMU
+    - local: examples/reachy_compliant_demo
+      title: Compliant Mode Demo
+    - local: examples/recorded_moves
+      title: Recorded Moves
+    - local: examples/rerun_viewer
+      title: Rerun Viewer
+    - local: examples/take_picture
+      title: Take Picture
+    - local: examples/joy_controller
+      title: Joystick Controller
+    - local: examples/mini_head_position_gui
+      title: Head Position GUI
+    - local: examples/sound_doa
+      title: Sound Direction of Arrival
+    - local: examples/sound_play
+      title: Sound Playback
+    - local: examples/sound_record
+      title: Sound Recording
+    - local: examples/sound_tts
+      title: Sound TTS (with head wobbling)
+    - local: examples/custom_media_manager
+      title: Custom Media Manager
+  title: Examples
+- sections:
+    - local: integrations/home_assistant
+      title: Home Assistant
+  title: Integrations
+- isExpanded: false
+  sections:
+    - local: API/reachymini
+      title: Reachy Mini
+    - local: API/media
+      title: Media
+    - local: API/motion
+      title: Motion
+    - local: API/tools
+      title: Tools
+    - local: API/utils
+      title: Utils
+    - local: API/apps
+      title: Apps
+    - local: API/daemon
+      title: Daemon
+  title: API

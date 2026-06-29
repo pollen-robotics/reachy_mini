@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ display_name }} – Settings</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="ambient"></div>
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Loading…</p>
+    </div>
+    <div class="container">
+      <header class="hero">
+        <div class="pill">Headless control</div>
+        <h1>{{ display_name }}</h1>
+        <p class="subtitle">Configure your OpenAI API key for the conversation app.</p>
+      </header>
+
+      <div id="configured" class="panel hidden">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Credentials</p>
+            <h2>API key ready</h2>
+          </div>
+          <span class="chip chip-ok">Connected</span>
+        </div>
+        <p class="muted">OpenAI API key is configured. The conversation app is ready to use.</p>
+        <button id="change-key-btn" class="ghost">Change API key</button>
+      </div>
+
+      <div id="form-panel" class="panel hidden">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Credentials</p>
+            <h2>Connect OpenAI</h2>
+          </div>
+          <span class="chip">Required</span>
+        </div>
+        <p class="muted">Paste your API key once and we will store it locally for the conversation loop.</p>
+        <label for="api-key">OpenAI API Key</label>
+        <input id="api-key" type="password" placeholder="sk-..." autocomplete="off" />
+        <div class="actions">
+          <button id="save-btn">Save key</button>
+          <p id="status" class="status"></p>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/main.js"></script>
+  </body>
+</html>

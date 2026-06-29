@@ -22,8 +22,7 @@ const volumeControl = {
     }
 
     slider.addEventListener('input', (e) => {
-      const v = Number(e.target.value);
-      valueLabel.textContent = String(v);
+      valueLabel.textContent = e.target.value + '%';
     });
 
     slider.addEventListener('change', async (e) => {
@@ -47,20 +46,18 @@ const volumeControl = {
       }
 
       volumeControl.currentVolume = volume;
-      volumeControl.device = data.device ?? 'unknown';
-      volumeControl.platform = data.platform ?? 'unknown';
+      volumeControl.platform = data.platform || 'unknown';
+      volumeControl.device = data.device || 'unknown';
 
       const slider = document.getElementById('volume-slider');
       const valueLabel = document.getElementById('volume-value');
       const deviceInfo = document.getElementById('volume-device-info');
 
       if (slider) slider.value = String(volume);
-      if (valueLabel) valueLabel.textContent = String(volume);
-      if (deviceInfo) {
-        deviceInfo.textContent = `${volumeControl.platform} - ${volumeControl.device}`;
-      }
+      if (valueLabel) valueLabel.textContent = volume + '%';
+      if (deviceInfo) deviceInfo.textContent = `${volumeControl.platform} - ${volumeControl.device}`;
 
-      console.log('Loaded volume:', data);
+      console.log('Loaded volume:', volume);
     } catch (error) {
       console.error('Error loading current volume:', error);
       throw error;
@@ -73,7 +70,7 @@ const volumeControl = {
       return;
     }
 
-    const safeVolume = Math.max(0, Math.min(100, volume));
+    const safeVolume = Math.max(0, Math.min(100, Math.round(volume)));
     if (volumeControl.isUpdating) {
       console.log('Volume update already in progress, skipping...');
       return;
@@ -103,7 +100,7 @@ const volumeControl = {
         const s = document.getElementById('volume-slider');
         const valueLabel = document.getElementById('volume-value');
         if (s) s.value = String(serverVolume);
-        if (valueLabel) valueLabel.textContent = String(serverVolume);
+        if (valueLabel) valueLabel.textContent = serverVolume + '%';
       }
 
       console.log('Volume set to:', serverVolume);
@@ -146,8 +143,7 @@ const microphoneControl = {
     }
 
     slider.addEventListener('input', (e) => {
-      const v = Number(e.target.value);
-      valueLabel.textContent = String(v);
+      valueLabel.textContent = e.target.value + '%';
     });
 
     slider.addEventListener('change', async (e) => {
@@ -171,20 +167,18 @@ const microphoneControl = {
       }
 
       microphoneControl.currentVolume = volume;
-      microphoneControl.device = data.device ?? 'unknown';
-      microphoneControl.platform = data.platform ?? 'unknown';
+      microphoneControl.platform = data.platform || 'unknown';
+      microphoneControl.device = data.device || 'unknown';
 
       const slider = document.getElementById('microphone-slider');
       const valueLabel = document.getElementById('microphone-value');
       const deviceInfo = document.getElementById('microphone-device-info');
 
       if (slider) slider.value = String(volume);
-      if (valueLabel) valueLabel.textContent = String(volume);
-      if (deviceInfo) {
-        deviceInfo.textContent = `${microphoneControl.platform} - ${microphoneControl.device}`;
-      }
+      if (valueLabel) valueLabel.textContent = volume + '%';
+      if (deviceInfo) deviceInfo.textContent = `${microphoneControl.platform} - ${microphoneControl.device}`;
 
-      console.log('Loaded microphone volume:', data);
+      console.log('Loaded microphone volume:', volume);
     } catch (error) {
       console.error('Error loading current microphone volume:', error);
       throw error;
@@ -197,7 +191,7 @@ const microphoneControl = {
       return;
     }
 
-    const safeVolume = Math.max(0, Math.min(100, volume));
+    const safeVolume = Math.max(0, Math.min(100, Math.round(volume)));
     if (microphoneControl.isUpdating) {
       console.log('Microphone volume update already in progress, skipping...');
       return;
@@ -227,7 +221,7 @@ const microphoneControl = {
         const s = document.getElementById('microphone-slider');
         const valueLabel = document.getElementById('microphone-value');
         if (s) s.value = String(serverVolume);
-        if (valueLabel) valueLabel.textContent = String(serverVolume);
+        if (valueLabel) valueLabel.textContent = serverVolume + '%';
       }
 
       console.log('Microphone volume set to:', serverVolume);

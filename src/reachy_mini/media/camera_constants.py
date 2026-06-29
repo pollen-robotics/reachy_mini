@@ -15,7 +15,7 @@ Example usage:
     >>> # Get available resolutions for Reachy Mini Lite Camera
     >>> print("Available resolutions:")
     >>> for res in ReachyMiniLiteCamSpecs.available_resolutions:
-    ...     width, height, fps = res.value
+    ...     width, height, fps, crop_factor = res.value
     ...     print(f"  {width}x{height}@{fps}fps")
     >>>
     >>> # Access camera calibration parameters
@@ -23,12 +23,15 @@ Example usage:
     >>> print(f"Distortion coefficients: {ReachyMiniLiteCamSpecs.D}")
 """
 
-from dataclasses import dataclass, field
+import logging
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import List
 
 import numpy as np
 import numpy.typing as npt
+
+_logger = logging.getLogger(__name__)
 
 
 class CameraResolution(Enum):
@@ -55,48 +58,52 @@ class CameraResolution(Enum):
         R4608x2592at10fps: 4608x2592 resolution at 10 fps
 
     Note:
-        The enum values are tuples containing (width, height, frames_per_second).
+        The enum values are tuples containing (width, height, frames_per_second, crop_factor).
         Not all resolutions are supported by all camera models - check the specific
         camera specifications for available resolutions.
 
     Example:
-        >>> from reachy_mini.media.camera_constants import CameraResolution
-        >>>
-        >>> # Get resolution information
-        >>> res = CameraResolution.R1280x720at30fps
-        >>> width, height, fps = res.value
-        >>> print(f"Resolution: {width}x{height}@{fps}fps")
-        >>>
-        >>> # Check if a resolution is supported by a camera
-        >>> from reachy_mini.media.camera_constants import ReachyMiniLiteCamSpecs
-        >>> res = CameraResolution.R1920x1080at60fps
-        >>> if res in ReachyMiniLiteCamSpecs.available_resolutions:
-        ...     print("This resolution is supported")
+        ```python
+        from reachy_mini.media.camera_constants import CameraResolution
+
+        # Get resolution information
+        res = CameraResolution.R1280x720at30fps
+        width, height, fps, crop_factor = res.value
+        print(f"Resolution: {width}x{height}@{fps}fps")
+
+        # Check if a resolution is supported by a camera
+        from reachy_mini.media.camera_constants import ReachyMiniLiteCamSpecs
+        res = CameraResolution.R1920x1080at60fps
+        if res in ReachyMiniLiteCamSpecs.available_resolutions:
+            print("This resolution is supported")
+        ```
 
     """
 
-    R1536x864at40fps = (1536, 864, 40)
+    # TODO check that adding crop factor here doesn't break anything
+    # (width, height, fps, crop_factor)
+    R1536x864at40fps = (1536, 864, 40, 1.0)
 
-    R1280x720at60fps = (1280, 720, 60)
-    R1280x720at30fps = (1280, 720, 30)
+    R1280x720at60fps = (1280, 720, 60, 1.0)
+    R1280x720at30fps = (1280, 720, 30, 1.0)
 
-    R1920x1080at30fps = (1920, 1080, 30)
-    R1920x1080at60fps = (1920, 1080, 60)
+    R1920x1080at30fps = (1920, 1080, 30, 1.115)
+    R1920x1080at60fps = (1920, 1080, 60, 1.115)
 
-    R2304x1296at30fps = (2304, 1296, 30)
-    R1600x1200at30fps = (1600, 1200, 30)
+    R2304x1296at30fps = (2304, 1296, 30, 1.0)
+    R1600x1200at30fps = (1600, 1200, 30, 1.0)
 
-    R3264x2448at30fps = (3264, 2448, 30)
-    R3264x2448at10fps = (3264, 2448, 10)
+    R3264x2448at30fps = (3264, 2448, 30, 1.115)
+    R3264x2448at10fps = (3264, 2448, 10, 1.115)
 
-    R3840x2592at30fps = (3840, 2592, 30)
-    R3840x2592at10fps = (3840, 2592, 10)
-    R3840x2160at30fps = (3840, 2160, 30)
-    R3840x2160at10fps = (3840, 2160, 10)
+    R3840x2592at30fps = (3840, 2592, 30, 1.0)
+    R3840x2592at10fps = (3840, 2592, 10, 1.0)
+    R3840x2160at30fps = (3840, 2160, 30, 1.109)
+    R3840x2160at10fps = (3840, 2160, 10, 1.109)
 
-    R3072x1728at10fps = (3072, 1728, 10)
+    R3072x1728at10fps = (3072, 1728, 10, 1.0)
 
-    R4608x2592at10fps = (4608, 2592, 10)
+    R4608x2592at10fps = (4608, 2592, 10, 1.0)
 
 
 @dataclass
@@ -129,18 +136,20 @@ class CameraSpecs:
         point coordinates (typically near the image center).
 
     Example:
-        >>> from reachy_mini.media.camera_constants import CameraSpecs
-        >>>
-        >>> # Create a custom camera specification
-        >>> custom_specs = CameraSpecs(
-        ...     name="custom_camera",
-        ...     available_resolutions=[CameraResolution.R1280x720at30fps],
-        ...     default_resolution=CameraResolution.R1280x720at30fps,
-        ...     vid=0x1234,
-        ...     pid=0x5678,
-        ...     K=np.array([[800, 0, 640], [0, 800, 360], [0, 0, 1]]),
-        ...     D=np.zeros(5)
-        ... )
+        ```python
+        from reachy_mini.media.camera_constants import CameraSpecs
+
+        # Create a custom camera specification
+        custom_specs = CameraSpecs(
+            name="custom_camera",
+            available_resolutions=[CameraResolution.R1280x720at30fps],
+            default_resolution=CameraResolution.R1280x720at30fps,
+            vid=0x1234,
+            pid=0x5678,
+            K=np.array([[800, 0, 640], [0, 800, 360], [0, 0, 1]]),
+            D=np.zeros(5)
+        )
+        ```
 
     """
 
@@ -151,6 +160,20 @@ class CameraSpecs:
     pid = 0
     K: npt.NDArray[np.float64] = field(default_factory=lambda: np.eye(3))
     D: npt.NDArray[np.float64] = field(default_factory=lambda: np.zeros((5,)))
+
+    def __post_init__(self) -> None:
+        """Restore subclass class-variable overrides after dataclass __init__."""
+        # Subclasses override dataclass fields as class variables.
+        # The generated __init__ overwrites them with base-class defaults,
+        # so restore the class-level values here.
+        cls = type(self)
+        for f in fields(self):
+            for klass in cls.__mro__:
+                if klass is CameraSpecs:
+                    break
+                if f.name in klass.__dict__:
+                    setattr(self, f.name, klass.__dict__[f.name])
+                    break
 
 
 @dataclass
@@ -186,21 +209,35 @@ class ReachyMiniLiteCamSpecs(CameraSpecs):
     default_resolution = CameraResolution.R1920x1080at60fps
     vid = 0x38FB
     pid = 0x1002
+    # K = np.array(
+    # [
+    # [821.515, 0.0, 962.241],
+    # [0.0, 820.830, 542.459],
+    # [0.0, 0.0, 1.0],
+    # ]
+    # )
     K = np.array(
         [
-            [821.515, 0.0, 962.241],
-            [0.0, 820.830, 542.459],
+            [2001.8076426486707, 0.0, 1905.876059826701],
+            [0.0, 2003.0778885944105, 1328.3239717935594],
             [0.0, 0.0, 1.0],
         ]
     )
 
     D = np.array(
         [
-            -2.94475669e-02,
-            6.00511974e-02,
-            3.57813971e-06,
-            -2.96459394e-04,
-            -3.79243988e-02,
+            -1.4652320301298614,
+            0.6542714131667414,
+            0.012147809271745049,
+            -0.002677286460143648,
+            0.3035939941825349,
+            -1.4300809080461876,
+            0.570024082887235,
+            0.3567299243352951,
+            0.003057363348400015,
+            0.0003357614008682464,
+            -0.009897126394310923,
+            -0.002050919484589521,
         ]
     )
 
@@ -236,6 +273,7 @@ class OlderRPiCamSpecs(ReachyMiniLiteCamSpecs):
 class MujocoCameraSpecs(CameraSpecs):
     """Mujoco simulated camera specifications."""
 
+    name = "mujoco"
     available_resolutions = [
         CameraResolution.R1280x720at60fps,
     ]
@@ -278,3 +316,44 @@ class GenericWebcamSpecs(CameraSpecs):
         ]
     )
     D = np.zeros((5,))  # assume no distortion
+
+
+# -- Lookup by name --------------------------------------------------------
+
+_SPECS_BY_NAME: dict[str, type[CameraSpecs]] = {
+    "lite": ReachyMiniLiteCamSpecs,
+    "wireless": ReachyMiniWirelessCamSpecs,
+    "arducam": ArducamSpecs,
+    "older_rpi": OlderRPiCamSpecs,
+    "generic": GenericWebcamSpecs,
+    "mujoco": MujocoCameraSpecs,
+}
+
+
+def get_camera_specs_by_name(name: str) -> CameraSpecs:
+    """Look up ``CameraSpecs`` by name.
+
+    Args:
+        name: The specs name (e.g. ``"lite"``, ``"wireless"``, ``"mujoco"``).
+
+    Returns:
+        The matching ``CameraSpecs`` instance.  Falls back to
+        ``ReachyMiniLiteCamSpecs`` with a warning if *name* is unknown
+        or empty (e.g. older daemon that doesn't report specs).
+
+    """
+    if not name:
+        _logger.warning(
+            "Empty camera_specs_name received (older daemon?) "
+            "— falling back to ReachyMiniLiteCamSpecs."
+        )
+        return ReachyMiniLiteCamSpecs()
+
+    cls = _SPECS_BY_NAME.get(name)
+    if cls is None:
+        _logger.warning(
+            "Unknown camera specs name %r — falling back to ReachyMiniLiteCamSpecs.",
+            name,
+        )
+        return ReachyMiniLiteCamSpecs()
+    return cls()

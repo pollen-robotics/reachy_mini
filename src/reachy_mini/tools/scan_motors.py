@@ -1,5 +1,6 @@
 """Scan a serial bus to find which motor IDs respond at common baudrates."""
 
+import argparse
 import os
 import time
 from typing import List
@@ -23,6 +24,7 @@ XL_BAUDRATE_CONV_TABLE = {
     4000000: 6,
 }
 
+
 def find_serial_port(
     wireless_version: bool = False,
     vid: str = "1a86",
@@ -42,17 +44,22 @@ def find_serial_port(
 
     return [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
 
+
 def scan(port: str, baudrate: int) -> List[int]:
     """Scan the bus at the given baudrate and return detected IDs."""
     found_motors: list[int] = []
     try:
-        controller = Xl330PyController(port, baudrate, float(SERIAL_TIMEOUT) + float(COMMANDS_BITS_LENGTH["Ping"]) / baudrate)
+        controller = Xl330PyController(
+            port,
+            baudrate,
+            float(SERIAL_TIMEOUT) + float(COMMANDS_BITS_LENGTH["Ping"]) / baudrate,
+        )
         for motor_id in range(255):
             try:
                 if controller.ping(motor_id):
                     found_motors.append(motor_id)
             except Exception:
-                pass 
+                pass
     except Exception as e:
         print(f"Error while scanning port {port} at baudrate {baudrate}: {e}")
     finally:
@@ -66,13 +73,37 @@ def scan(port: str, baudrate: int) -> List[int]:
         time.sleep(SERIAL_TIMEOUT)
     return found_motors
 
+
 def main() -> None:
     """Iterate through baudrates and print the IDs found at each."""
-    try:
-        port = find_serial_port()[0]
-    except IndexError:
-        print("No serial port found. Please check your USB connection and permissions.")
-        return
+    parser = argparse.ArgumentParser(
+        description="Scan a serial bus to find which motor IDs respond at common baudrates.",
+    )
+    parser.add_argument(
+        "-p",
+        "--port",
+        type=str,
+        default=None,
+        help="Serial port (e.g. /dev/ttyUSB0 or COM3). Auto-detected if not specified.",
+    )
+    parser.add_argument(
+        "--wireless",
+        action="store_true",
+        help="Use the wireless version of Reachy Mini (Raspberry Pi UART).",
+    )
+    args = parser.parse_args()
+
+    if args.port:
+        port = args.port
+    else:
+        ports = find_serial_port(wireless_version=args.wireless)
+        if not ports:
+            print(
+                "No serial port found. Please check your USB connection and permissions."
+            )
+            return
+        port = ports[0]
+
     for baudrate in XL_BAUDRATE_CONV_TABLE.keys():
         print(f"Trying baudrate: {baudrate}")
         found_motors = scan(port, baudrate)

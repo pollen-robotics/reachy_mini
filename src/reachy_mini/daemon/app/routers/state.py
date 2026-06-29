@@ -63,9 +63,9 @@ async def get_doa(
     Returns the angle in radians (0=left, π/2=front, π=right) and speech detection status.
     Returns None if the audio device is not available.
     """
-    if not backend.audio:
+    if not backend.doa:
         return None
-    result = backend.audio.get_DoA()
+    result = backend.doa.get_DoA()
     if result is None:
         return None
     return DoAInfo(angle=result[0], speech_detected=result[1])
@@ -118,8 +118,8 @@ async def get_full_state(
             result["passive_joints"] = list(joints.values())
         else:
             result["passive_joints"] = None
-    if with_doa and backend.audio:
-        doa_result = backend.audio.get_DoA()
+    if with_doa and backend.doa:
+        doa_result = backend.doa.get_DoA()
         if doa_result:
             result["doa"] = DoAInfo(angle=doa_result[0], speech_detected=doa_result[1])
 
@@ -149,7 +149,7 @@ async def ws_full_state(
     period = 1.0 / frequency
 
     try:
-        while True:
+        while backend.ready.is_set():
             full_state = await get_full_state(
                 with_head_pose=with_head_pose,
                 with_target_head_pose=with_target_head_pose,

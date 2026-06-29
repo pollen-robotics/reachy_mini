@@ -7,6 +7,102 @@ const installedApps = {
     currentlyRunningApp: null,
     busy: false,
     toggles: {},
+    appUpdates: {},  // Store update status by app name
+
+    checkForUpdates: async (force = false) => {
+        try {
+            const url = force ? '/api/apps/check-updates?force=true' : '/api/apps/check-updates';
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                console.error('Failed to check for updates');
+                return;
+            }
+            const data = await resp.json();
+
+            const hadUpdates = Object.keys(installedApps.appUpdates).length > 0;
+            installedApps.appUpdates = {};
+            data.apps_with_updates.forEach(update => {
+                installedApps.appUpdates[update.app_name] = update;
+            });
+            const hasUpdates = data.apps_with_updates.length > 0;
+
+            console.log(`Update check: ${data.apps_checked} apps checked, ${data.apps_with_updates.length} updates available`);
+
+            // Only refresh the display if there are updates to show (or if updates were cleared)
+            if (hasUpdates || hadUpdates) {
+                await installedApps.refreshAppList();
+            }
+        } catch (error) {
+            console.error('Error checking for updates:', error);
+        }
+    },
+
+    updateApp: async (appName) => {
+        if (installedApps.busy) {
+            console.log('Busy, cannot update now.');
+            return;
+        }
+
+        // Check if app is running
+        if (installedApps.currentlyRunningApp === appName) {
+            alert(`Cannot update "${appName}" while it is running. Please stop it first.`);
+            return;
+        }
+
+        console.log(`Updating app: ${appName}...`);
+        const resp = await fetch(`/api/apps/update/${appName}`, { method: 'POST' });
+        const data = await resp.json();
+        const jobId = data.job_id;
+
+        installedApps.appUpdateLogHandler(appName, jobId);
+    },
+
+    appUpdateLogHandler: async (appName, jobId) => {
+        const installModal = document.getElementById('install-modal');
+        const modalTitle = installModal.querySelector('#modal-title');
+        modalTitle.textContent = `Updating ${appName}...`;
+        installModal.classList.remove('hidden');
+
+        const logsDiv = document.getElementById('install-logs');
+        logsDiv.textContent = '';
+
+        const closeButton = document.getElementById('modal-close-button');
+        closeButton.onclick = () => {
+            installModal.classList.add('hidden');
+        };
+        closeButton.classList = "hidden";
+        closeButton.textContent = '';
+
+        const ws = new WebSocket(`ws://${location.host}/api/apps/ws/apps-manager/${jobId}`);
+        ws.onmessage = (event) => {
+            try {
+                if (event.data.startsWith('{') && event.data.endsWith('}')) {
+                    const data = JSON.parse(event.data);
+
+                    if (data.status === "failed") {
+                        closeButton.classList = "text-white bg-red-700 hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-red-600 dark:hover:bg-red-700 dark:focus:ring-red-800";
+                        closeButton.textContent = 'Close';
+                        console.error(`Update of ${appName} failed.`);
+                    } else if (data.status === "done") {
+                        closeButton.classList = "text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:outline-none focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-800";
+                        closeButton.textContent = 'Update done';
+                        console.log(`Update of ${appName} completed.`);
+                        // Clear update status for this app
+                        delete installedApps.appUpdates[appName];
+                    }
+                } else {
+                    logsDiv.innerHTML += event.data + '\n';
+                    logsDiv.scrollTop = logsDiv.scrollHeight;
+                }
+            } catch {
+                logsDiv.innerHTML += event.data + '\n';
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+            }
+        };
+        ws.onclose = async () => {
+            await installedApps.refreshAppList();
+        };
+    },
 
     startApp: async (appName) => {
         if (installedApps.busy) {
@@ -108,7 +204,9 @@ const installedApps = {
     },
 
     createAppElement: (app, isRunning) => {
+        const hasUpdate = installedApps.appUpdates[app.name];
         const container = document.createElement('div');
+        // Original 3-column layout
         container.className = 'grid grid-cols-[auto_6rem_2rem] justify-stretch gap-x-2';
 
         const title = document.createElement('div');
@@ -124,6 +222,20 @@ const installedApps = {
         }
 
         title.appendChild(titleSpan);
+
+        // Add update button inline with title if update available
+        if (hasUpdate) {
+            const updateBtn = document.createElement('button');
+            updateBtn.innerHTML = '⬆️';
+            updateBtn.className = 'ml-2 text-lg';
+            updateBtn.title = 'Update available - click to update';
+            updateBtn.onclick = async (e) => {
+                e.stopPropagation();
+                installedApps.updateApp(app.name);
+            };
+            title.appendChild(updateBtn);
+        }
+
         if (app.extra && app.extra.custom_app_url) {
             const settingsLink = document.createElement('a');
             settingsLink.className = 'installed-app-settings ml-2 text-gray-500 cursor-pointer';
@@ -328,4 +440,6 @@ class ToggleSlider {
 
 window.addEventListener('load', async () => {
     await installedApps.refreshAppList();
+    // Check for updates in background after initial load (short delay to not block UI)
+    setTimeout(() => installedApps.checkForUpdates(), 500);
 });

@@ -6,21 +6,50 @@
     <div class="flex-1 py-2">
         <div class="flex justify-between items-center">
             <div class="daemon-status-title">Reachy Mini</div>
-            <!-- Toggle Daemon slider -->
-            <span>
-                <label>
-                    <input id="daemon-toggle" type="checkbox" value="" class="sr-only peer">
-                    <div id="daemon-toggle-slider"
-                        class="relative w-20 h-8 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gray-100 dark:peer-focus:ring-gray-100 rounded-full peer dark:bg-red-400 peer-checked:after:translate-x-[46px] rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all dark:border-gray-600 peer-checked:bg-green-400 dark:peer-checked:bg-green-400 hidden">
-                        <span id="daemon-toggle-on"
-                            class="absolute top-1/2 start-1.5 -translate-y-1/2 justify-center items-center size-7 text-white peer-checked:text-white transition-colors duration-200 hidden">ON</span>
-                        <span id="daemon-toggle-off"
-                            class="absolute top-1/2 end-2.5 -translate-y-1/2 flex justify-center items-center size-7 text-white">
-                            OFF
-                        </span>
+            <div class="flex items-center gap-3">
+                <!-- HuggingFace Auth -->
+                <div id="hf-header-auth" class="flex items-center gap-2">
+                    <!-- HF Space Apps status (shown when logged in) -->
+                    <div id="hf-relay-status" class="hidden px-2 py-1 rounded-md flex items-center gap-1.5 cursor-help"
+                        style="background-color: #f3f4f6; border: 1px solid #d1d5db;"
+                        title="HF Space Apps">
+                        <div id="hf-relay-indicator" class="w-2 h-2 rounded-full" style="background-color: #9ca3af;"></div>
+                        <span id="hf-relay-text" class="text-xs font-medium" style="color: #6b7280;">--</span>
                     </div>
-                </label>
-            </span>
+                    <!-- User badge (shown when logged in) -->
+                    <div id="hf-header-user-badge" class="hidden px-3 py-1.5 rounded-lg flex items-center gap-2"
+                        style="background-color: #d1fae5; border: 1px solid #86efac;">
+                        <div class="w-2 h-2 rounded-full" style="background-color: #10b981;"></div>
+                        <span class="text-sm font-medium" style="color: #065f46;">🤗 <span id="hf-header-username"></span></span>
+                    </div>
+                    <!-- Login/Logout button -->
+                    <button
+                        id="hf-header-auth-btn"
+                        onclick="hfAuth.isAuthenticated ? hfAuth.logout() : hfAuth.openLoginModal()"
+                        class="px-4 py-2 text-sm font-semibold rounded-xl shadow-sm transition-all hover:shadow-md"
+                        style="background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d;"
+                        onmouseover="this.style.backgroundColor='#fde68a'"
+                        onmouseout="this.style.backgroundColor='#fef3c7'"
+                    >
+                        🤗 Login
+                    </button>
+                </div>
+                <!-- Toggle Daemon slider -->
+                <span>
+                    <label>
+                        <input id="daemon-toggle" type="checkbox" value="" class="sr-only peer">
+                        <div id="daemon-toggle-slider"
+                            class="relative w-20 h-8 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gray-100 dark:peer-focus:ring-gray-100 rounded-full peer dark:bg-red-400 peer-checked:after:translate-x-[46px] rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all dark:border-gray-600 peer-checked:bg-green-400 dark:peer-checked:bg-green-400 hidden">
+                            <span id="daemon-toggle-on"
+                                class="absolute top-1/2 start-1.5 -translate-y-1/2 justify-center items-center size-7 text-white peer-checked:text-white transition-colors duration-200 hidden">ON</span>
+                            <span id="daemon-toggle-off"
+                                class="absolute top-1/2 end-2.5 -translate-y-1/2 flex justify-center items-center size-7 text-white">
+                                OFF
+                            </span>
+                        </div>
+                    </label>
+                </span>
+            </div>
         </div>
         <!-- Daemon status: -->
         <div id="backend-status" class="">

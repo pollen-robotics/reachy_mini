@@ -1,15 +1,9 @@
 """IO module."""
 
-from .audio_ws import AsyncWebSocketAudioStreamer
-from .video_ws import AsyncWebSocketFrameSender
-from .ws_controller import AsyncWebSocketController
-from .zenoh_client import ZenohClient
-from .zenoh_server import ZenohServer
+from .ws_client import WSClient
+from .ws_server import WSServer
 
 __all__ = [
-    "AsyncWebSocketAudioStreamer",
-    "AsyncWebSocketFrameSender",
-    "AsyncWebSocketController",
-    "ZenohClient",
-    "ZenohServer",
+    "WSClient",
+    "WSServer",
 ]

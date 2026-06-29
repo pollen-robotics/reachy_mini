@@ -4,17 +4,33 @@ When you click on the image, Reachy Mini will look at the point you clicked on.
 It uses OpenCV to capture video from a camera and display it, and Reachy Mini's
 look_at_image method to make the robot look at the specified point.
 
-Note: The daemon must be running before executing this script.
+Note:
+    This example requires the OpenCV optional dependency.
+    Install with: pip install reachy_mini[opencv]
+
+    The daemon must be running before executing this script.
+
 """
 
-import argparse
+# START doc_example
 
-import cv2
+import argparse
+import sys
+from typing import Any
+
+try:
+    import cv2
+except ImportError:
+    print("Error: OpenCV is required for this example but not installed.")
+    print("Install it with: pip install reachy_mini[opencv]")
+    sys.exit(1)
 
 from reachy_mini import ReachyMini
 
+# from reachy_mini.media.camera_constants import CameraResolution
 
-def click(event, x, y, flags, param):
+
+def click(event: int, x: int, y: int, flags: int, param: Any) -> None:
     """Handle mouse click events to get the coordinates of the click."""
     if event == cv2.EVENT_LBUTTONDOWN:
         param["just_clicked"] = True
@@ -32,6 +48,10 @@ def main(backend: str) -> None:
     print("Click on the image to make ReachyMini look at that point.")
     print("Press 'q' to quit the camera feed.")
     with ReachyMini(media_backend=backend) as reachy_mini:
+        # Uncomment these three lines to change resolution
+        # reachy_mini.media.camera.close()
+        # reachy_mini.media.camera.set_resolution(CameraResolution.R3072x1728at10fps)
+        # reachy_mini.media.camera.open()
         try:
             while True:
                 frame = reachy_mini.media.get_frame()
@@ -61,10 +81,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backend",
         type=str,
-        choices=["default", "gstreamer", "webrtc"],
+        choices=["default", "local", "webrtc"],
         default="default",
         help="Media backend to use.",
     )
 
     args = parser.parse_args()
     main(backend=args.backend)
+
+# END doc_example
