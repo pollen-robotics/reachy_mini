@@ -110,18 +110,19 @@ class Tracker:
         return face
 
     def roi(self, width: int, height: int) -> tuple[int, int, int, int] | None:
-        """Crop box around the current track for ROI detection, or None when unlocked."""
+        """Fixed-size crop box around the track, or None when unlocked.
+
+        The size is constant (the center is clamped, not the box) so the detector
+        keeps one input size across crop frames and skips regenerating its priors.
+        """
         if self._center is None:
             return None
+        half = self._crop // 2
         cx = round((self._center[0] + 1.0) * 0.5 * max(width - 1, 1))
         cy = round((self._center[1] + 1.0) * 0.5 * max(height - 1, 1))
-        half = self._crop // 2
-        return (
-            max(0, cx - half),
-            max(0, cy - half),
-            min(width, cx + half),
-            min(height, cy + half),
-        )
+        cx = min(max(cx, half), max(width - half, half))
+        cy = min(max(cy, half), max(height - half, half))
+        return (cx - half, cy - half, cx + half, cy + half)
 
     def _miss(self) -> None:
         self._misses += 1

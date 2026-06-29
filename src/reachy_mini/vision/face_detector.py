@@ -31,11 +31,15 @@ class FaceDetector:
         self._detector = cv2.FaceDetectorYN.create(
             _MODEL_PATH, "", (320, 320), score_threshold, nms_threshold
         )
+        self._input_size: tuple[int, int] | None = None
 
     def detect(self, frame_bgr: NDArray[np.uint8]) -> list[Face]:
         """Return every face detected in a BGR frame."""
         height, width = frame_bgr.shape[:2]
-        self._detector.setInputSize((width, height))
+        # setInputSize regenerates the priors, so only call it when the size changes.
+        if self._input_size != (width, height):
+            self._detector.setInputSize((width, height))
+            self._input_size = (width, height)
         _, faces = self._detector.detect(frame_bgr)
         if faces is None:
             return []
