@@ -77,7 +77,7 @@ class Tracker:
         min_area_frac: float = 0.003,
         max_jump: float = 0.5,
         max_misses: int = 20,
-        crop: int = 256,
+        crop: int = 192,
     ) -> None:
         """Create a tracker with the given gates and ROI crop size (pixels)."""
         self._min_area_frac = min_area_frac

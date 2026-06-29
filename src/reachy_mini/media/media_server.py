@@ -88,7 +88,7 @@ SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 # daemon's per-frame convert cheap (vs. serving the full-res IPC) so it never starves the
 # control loop. The tracker reports normalized coords, so the exact size only sets accuracy.
 TRACKING_WIDTH = 640
-TRACKING_FPS = 15
+TRACKING_FPS = 10
 
 
 @dataclass
