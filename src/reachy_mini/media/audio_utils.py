@@ -24,7 +24,6 @@ Example usage:
 """
 
 import logging
-import re
 import subprocess
 from pathlib import Path
 
@@ -125,71 +124,50 @@ def get_respeaker_card_number(device_names: list[str] = DEFAULT_DEVICE_NAMES) ->
         return -1
 
 
-def _parse_gst_node_name(
-    output: str, device_names: list[str] = DEFAULT_DEVICE_NAMES
-) -> str | None:
-    """Parse gst-device-monitor-1.0 output to find the node.name for a given device name.
-
-    Args:
-        output: The output string from gst-device-monitor-1.0 Audio command.
-        device_names: List of device name patterns to search for (case-insensitive).
-
-    Returns:
-        The node.name if found, or None if no match.
-
-    """
-    device_blocks = output.split("Device found:")
-
-    for device_name in device_names:
-        for block in device_blocks:
-            # Check if this block contains the device name
-            name_match = re.search(r"^\s*name\s*:\s*(.+)$", block, re.MULTILINE)
-            if name_match:
-                found_name = name_match.group(1).strip()
-                if device_name.lower() in found_name.lower():
-                    # Found the device, now extract node.name
-                    node_match = re.search(r"node\.name\s*=\s*\"?([^\"\n]+)\"?", block)
-                    if node_match:
-                        node_name = node_match.group(1).strip()
-                        logging.debug(
-                            f"Found node.name for '{device_name}': {node_name}"
-                        )
-                        return node_name
-
-    logging.warning(f"No node.name found for devices {device_names}")
-    return None
-
-
 def get_audio_device_node_name(
     device_names: list[str] = DEFAULT_DEVICE_NAMES, device_class: str = "Audio/Source"
 ) -> str | None:
-    """Return the node.name of a device matching any of the given device names, or None if not found.
+    """Return the device identifier for the first device whose name matches.
+
+    Thin wrapper around the shared GStreamer device discovery in
+    :mod:`reachy_mini.media.device_detection` so that all device enumeration
+    and matching goes through a single implementation.
 
     Args:
-        device_names: List of device name patterns to search for (case-insensitive).
-                     Defaults to DEFAULT_DEVICE_NAMES (["reachy mini audio", "respeaker"]).
-        device_class: The class of the device to search for (default: "Audio/Source").
+        device_names: Device name substrings to search for, in priority order.
+                     Defaults to DEFAULT_DEVICE_NAMES (["Reachy Mini Audio", "ReSpeaker"]).
+        device_class: GStreamer device class ("Audio/Source" or "Audio/Sink").
 
     Returns:
-        The node.name if found, or None if not found or error.
+        The platform-specific device identifier (PipeWire ``node.name`` on
+        Linux/PipeWire), or ``None`` if no matching device is found.
 
     Example:
-        >>> node = get_respeaker_node_name()
+        >>> node = get_audio_device_node_name(["Reachy Mini Audio"], "Audio/Source")
         >>> if node:
-        ...     print(f"Node name: {node}")
+        ...     print(f"Device id: {node}")
 
     """
+    # Imported lazily: device_detection pulls in GStreamer (gi), while this
+    # module is also imported in GStreamer-free contexts (e.g. daemon startup).
+    from reachy_mini.media.device_detection import (
+        find_audio_device,
+        gst_monitor_devices,
+    )
+
+    device_type = "Sink" if device_class.endswith("Sink") else "Source"
     try:
-        result = subprocess.run(
-            ["gst-device-monitor-1.0", device_class],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            return _parse_gst_node_name(result.stdout, device_names)
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        logging.error(f"gst-device-monitor-1.0 failed: {e}")
+        devices = gst_monitor_devices(device_class)
+    except Exception as e:
+        logging.error(f"Could not enumerate {device_class} devices: {e}")
+        return None
+
+    for name in device_names:
+        identifier = find_audio_device(devices, device_type, target_name=name)
+        if identifier is not None:
+            return identifier
+
+    logging.warning(f"No audio device found matching {device_names}")
     return None
 
 

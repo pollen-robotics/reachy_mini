@@ -8,8 +8,6 @@ This exposes:
 """
 
 import logging
-import re
-import subprocess
 from typing import Optional
 
 import requests
@@ -20,7 +18,6 @@ router = APIRouter(prefix="/audio-devices")
 logger = logging.getLogger(__name__)
 
 # Constants
-AUDIO_COMMAND_TIMEOUT = 2  # Timeout in seconds for audio commands
 DAEMON_BASE_URL = "http://127.0.0.1:8000"
 DAEMON_API_TIMEOUT = 0.5  # Timeout in seconds for API calls
 
@@ -47,64 +44,31 @@ class SetDeviceRequest(BaseModel):
     device_name: str
 
 
-def parse_gst_device_monitor_output(output: str, device_class: str) -> list[str]:
-    """Parse the output of gst-device-monitor-1.0 to extract device names.
-
-    Args:
-        output: The output string from gst-device-monitor-1.0
-        device_class: The device class to filter for ("Audio/Sink" or "Audio/Source")
-
-    Example output format:
-        Device found:
-
-            name  : Built-in Audio Analog Stereo
-            class : Audio/Sink
-            ...
-
-        Device found:
-
-            name  : My Bluetooth Speaker
-            class : Audio/Sink
-            ...
-
-    """
-    names = []
-    # Split by "Device found:" to get individual device blocks
-    device_blocks = output.split("Device found:")
-
-    for block in device_blocks:
-        # Check if this block contains the desired class
-        class_match = re.search(r"class\s*:\s*(\S+)", block)
-        if class_match and class_match.group(1) == device_class:
-            # Extract the device name
-            name_match = re.search(r"name\s*:\s*(.+)", block)
-            if name_match:
-                name = name_match.group(1).strip()
-                if name and name not in names:
-                    names.append(name)
-
-    return names
-
-
 def get_device_names(device_class: str) -> list[str]:
-    """List available audio device names using GStreamer device monitor.
+    """List available audio device names via the shared GStreamer device monitor.
+
+    Delegates enumeration and parsing to
+    :func:`reachy_mini.media.device_detection.gst_monitor_devices` so device
+    discovery lives in one place.
 
     Args:
         device_class: "Audio/Source" for microphones or "Audio/Sink" for speakers.
 
     """
+    # Imported lazily so importing this router does not require GStreamer (gi).
+    from reachy_mini.media.device_detection import gst_monitor_devices
+
     try:
-        result = subprocess.run(
-            ["gst-device-monitor-1.0", device_class],
-            capture_output=True,
-            text=True,
-            timeout=AUDIO_COMMAND_TIMEOUT,
-        )
-        if result.returncode == 0:
-            return parse_gst_device_monitor_output(result.stdout, device_class)
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        devices = gst_monitor_devices(device_class)
+    except Exception as e:
         logger.error(f"Failed to list {device_class} devices: {e}")
-    return []
+        return []
+
+    names: list[str] = []
+    for device in devices:
+        if device.display_name and device.display_name not in names:
+            names.append(device.display_name)
+    return names
 
 
 # API Endpoints - List Devices

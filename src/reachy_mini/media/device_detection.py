@@ -267,6 +267,12 @@ def gst_monitor_devices(filter_class: str) -> list[DeviceInfo]:
         Exception: Propagates any GStreamer error.
 
     """
+    # Ensure GStreamer is initialized: callers outside the media pipeline
+    # (e.g. the audio-devices REST router) may reach this before any pipeline
+    # has run Gst.init(). It is idempotent, so this is a no-op afterwards.
+    if not Gst.is_initialized():
+        Gst.init(None)
+
     monitor = Gst.DeviceMonitor()
     monitor.add_filter(filter_class)
     monitor.start()
