@@ -174,8 +174,9 @@ class Daemon:
         media_server = self._media_server
         if media_server is None or self._media_released:
             self.logger.info(
-                "Media pipeline restart skipped "
-                "(no media server, or media released for direct access)."
+                "Media pipeline restart skipped: no media server, or an app holds "
+                "the audio (media released). The device change is saved and applies "
+                "on the next app launch / when the daemon re-acquires media."
             )
             return
 

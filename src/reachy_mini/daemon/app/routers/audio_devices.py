@@ -71,21 +71,47 @@ def get_device_names(device_class: str) -> list[str]:
     return names
 
 
-def _apply_device_change(http_request: Request) -> None:
-    """Rebuild the daemon's media pipeline so the new selection takes effect.
+def _apply_device_change(http_request: Request, *, restart: bool) -> None:
+    """Apply a device-selection change to the daemon's live audio and log how.
 
-    The mic capture source is built into the running sender pipeline, so a
-    change only applies once that pipeline is rebuilt — this makes a device
-    change effective with just the daemon running (no app/session needed).
+    ``restart=True`` (input device): the mic capture source is baked into the
+    running media pipeline, so the pipeline is rebuilt to apply the change now
+    (briefly interrupting any active audio/video stream). ``restart=False``
+    (output device): the speaker sink is rebuilt on every ``play_sound``, so the
+    change is used on the next sound — no restart needed.
+
+    When an app currently holds the audio device (media released for direct
+    access), the daemon's pipeline isn't running, so the change is only saved:
+    it takes effect on the next app launch, or when the daemon re-acquires the
+    audio hardware. An already-running app does NOT pick it up live.
+
     Best-effort: logged and ignored if the daemon is unavailable.
     """
     daemon = getattr(http_request.app.state, "daemon", None)
     if daemon is None:
         return
-    try:
-        daemon.restart_media_pipeline()
-    except Exception as e:  # pragma: no cover - defensive
-        logger.error(f"Could not restart media pipeline after device change: {e}")
+
+    if getattr(daemon, "media_released", False):
+        logger.warning(
+            "An app currently holds the audio device — the device change is saved "
+            "but only takes effect on the next app launch (or when the daemon "
+            "re-acquires the audio hardware). A running app will not pick it up live."
+        )
+        return
+
+    if restart:
+        logger.warning(
+            "Restarting the media pipeline to apply the input device change now "
+            "(this briefly interrupts any active audio/video stream)."
+        )
+        try:
+            daemon.restart_media_pipeline()
+        except Exception as e:  # pragma: no cover - defensive
+            logger.error(f"Could not restart media pipeline after device change: {e}")
+    else:
+        logger.info(
+            "Output device change will be used the next time a sound is played."
+        )
 
 
 # API Endpoints - List Devices
@@ -114,7 +140,7 @@ async def get_selected_output_device() -> SelectedDeviceResponse:
 
 @router.post("/output/selected")
 async def set_selected_output_device(
-    request: SetDeviceRequest,
+    request: SetDeviceRequest, http_request: Request
 ) -> SelectedDeviceResponse:
     """Set the output device to use."""
     global _selected_output_device
@@ -127,21 +153,24 @@ async def set_selected_output_device(
             detail=f"Device '{request.device_name}' not found. Available: {device_names}",
         )
 
+    changed = request.device_name != _selected_output_device
     _selected_output_device = request.device_name
     logger.info(f"Output device set to: {_selected_output_device}")
-    # The speaker sink is rebuilt on every play_sound, so no pipeline restart
-    # is needed — the new device is used the next time a sound is played.
+    if changed:
+        _apply_device_change(http_request, restart=False)
 
     return SelectedDeviceResponse(device_name=_selected_output_device)
 
 
 @router.delete("/output/selected")
-async def clear_selected_output_device() -> SelectedDeviceResponse:
+async def clear_selected_output_device(http_request: Request) -> SelectedDeviceResponse:
     """Clear the selected output device (use default)."""
     global _selected_output_device
+    changed = _selected_output_device is not None
     _selected_output_device = None
     logger.info("Output device cleared, using default")
-    # Applied the next time a sound is played (see set_selected_output_device).
+    if changed:
+        _apply_device_change(http_request, restart=False)
 
     return SelectedDeviceResponse(device_name=None)
 
@@ -171,11 +200,7 @@ async def set_selected_input_device(
     _selected_input_device = request.device_name
     logger.info(f"Input device set to: {_selected_input_device}")
     if changed:
-        logger.warning(
-            "Audio input device changed; restarting the media pipeline to apply it "
-            "now (this briefly interrupts any active audio/video stream)."
-        )
-        _apply_device_change(http_request)
+        _apply_device_change(http_request, restart=True)
 
     return SelectedDeviceResponse(device_name=_selected_input_device)
 
@@ -188,11 +213,7 @@ async def clear_selected_input_device(http_request: Request) -> SelectedDeviceRe
     _selected_input_device = None
     logger.info("Input device cleared, using default")
     if changed:
-        logger.warning(
-            "Audio input device cleared; restarting the media pipeline to apply it "
-            "now (this briefly interrupts any active audio/video stream)."
-        )
-        _apply_device_change(http_request)
+        _apply_device_change(http_request, restart=True)
 
     return SelectedDeviceResponse(device_name=None)
 
