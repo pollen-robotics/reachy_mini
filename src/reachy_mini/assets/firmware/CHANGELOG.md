@@ -3,6 +3,7 @@
 ## 2.1.4
 
 Adds +6dB gain on the audio input.
+Fixes the microphone not outputting sound after a usb reset.
 
 ## 2.1.3
 
