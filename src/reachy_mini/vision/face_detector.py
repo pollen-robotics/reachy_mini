@@ -25,7 +25,7 @@ class FaceDetector:
     """Detect faces in BGR frames with OpenCV's YuNet model."""
 
     def __init__(
-        self, score_threshold: float = 0.8, nms_threshold: float = 0.3
+        self, score_threshold: float = 0.6, nms_threshold: float = 0.3
     ) -> None:
         """Create the YuNet detector."""
         self._detector = cv2.FaceDetectorYN.create(
