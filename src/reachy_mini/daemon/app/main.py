@@ -11,6 +11,7 @@ import argparse
 import asyncio
 import logging
 import types
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from reachy_mini.apps import SourceKind
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.middleware import MaxBodySizeMiddleware
 from reachy_mini.daemon.app.routers import (
@@ -91,6 +93,7 @@ class Args:
 
     wake_up_on_start: bool = True
     goto_sleep_on_stop: bool = True
+    startup_app: str | None = None  # app name to auto-start after wake-up
     preload_datasets: bool = False
     dataset_update_interval_hours: float = 24.0  # 0 to disable periodic updates
 
@@ -113,6 +116,63 @@ def _resolve_bind_host(args: Args) -> str:
     if args.fastapi_host:
         return args.fastapi_host
     return "0.0.0.0" if args.wireless_version else "127.0.0.1"
+
+
+async def _ensure_startup_app_installed(app_manager: AppManager, name: str) -> bool:
+    """Install ``name`` from the catalog if it isn't already installed.
+
+    Runs *before* wake-up so a long download/install doesn't leave the robot
+    awake and idle. Installing needs no robot, only the apps venv. Best-effort:
+    returns True if the app is ready to start, False (logged) on any failure.
+    """
+    try:
+        installed = await app_manager.list_available_apps(SourceKind.INSTALLED)
+        if any(a.name == name for a in installed):
+            return True
+
+        catalog = await app_manager.list_available_apps(SourceKind.HF_SPACE)
+        match = next((a for a in catalog if a.name == name), None)
+        if match is None:
+            logger.error(f"Startup app '{name}' not installed and not in catalog")
+            return False
+
+        logger.info(f"Installing startup app: {name}")
+        await app_manager.install_new_app(match, logger)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to install startup app '{name}': {e}")
+        return False
+
+
+async def _start_startup_app(app_manager: AppManager, name: str) -> None:
+    """Start ``name`` after wake-up. Best-effort: failures are logged, not raised."""
+    try:
+        logger.info(f"Auto-starting app: {name}")
+        await app_manager.start_app(name)
+    except Exception as e:
+        logger.error(f"Failed to auto-start app '{name}': {e}")
+
+
+def _make_startup_app_launcher(
+    app_manager: AppManager, name: str
+) -> Callable[[], None]:
+    """Build a one-shot, synchronous callback that launches the startup app.
+
+    Wired into the backend's wake-up hook so the app starts after the robot
+    first wakes (however that wake is triggered). Fires once — later wakes are
+    ignored — and schedules the async start as a task so the wake sequence is
+    not blocked.
+    """
+    launched = False
+
+    def launch() -> None:
+        nonlocal launched
+        if launched:
+            return
+        launched = True
+        asyncio.create_task(_start_startup_app(app_manager, name))
+
+    return launch
 
 
 def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> FastAPI:
@@ -169,6 +229,19 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             )
 
         try:
+            # Install the startup app (if missing) before waking the robot, so a
+            # long download/install doesn't leave it awake and idle. The wireless
+            # unit boots asleep (--no-wake-up-on-start), so the app is started by
+            # a one-shot hook on the first wake-up rather than here.
+            on_wake_up_callback = None
+            if args.autostart and args.startup_app:
+                if await _ensure_startup_app_installed(
+                    app.state.app_manager, args.startup_app
+                ):
+                    on_wake_up_callback = _make_startup_app_launcher(
+                        app.state.app_manager, args.startup_app
+                    )
+
             if args.autostart:
                 await app.state.daemon.start(
                     serialport=args.serialport,
@@ -181,6 +254,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     check_collision=args.check_collision,
                     wake_up_on_start=args.wake_up_on_start,
                     hardware_config_filepath=args.hardware_config_filepath,
+                    on_wake_up_callback=on_wake_up_callback,
                 )
 
             # Register mDNS service only after the daemon is ready
@@ -558,6 +632,14 @@ def main() -> None:
         action="store_false",
         dest="wake_up_on_start",
         help="Do not wake up the robot on daemon start (default: False).",
+    )
+    parser.add_argument(
+        "--startup-app",
+        type=str,
+        default=default_args.startup_app,
+        dest="startup_app",
+        help="Name of an app to start automatically after the robot wakes up "
+        "(installed from the catalog first if it isn't already installed).",
     )
     parser.add_argument(
         "--goto-sleep-on-stop",

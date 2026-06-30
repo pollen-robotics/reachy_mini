@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from datetime import date, datetime
 
 import aiohttp
 from huggingface_hub import HfApi
@@ -19,6 +20,23 @@ HF_SPACES_LIMIT = 500
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 logger = logging.getLogger("reachy_mini.apps.sources.hf_space")
 SpaceData = dict[str, object]
+
+
+def _to_plain_json(value: object) -> object:
+    """Deep-convert HfApi objects to the plain-JSON types the HTTP API returns.
+
+    The HTTP spaces API hands back plain JSON, but the HfApi path yields
+    SpaceInfo objects whose nested fields (RepoSibling, datetimes, card data)
+    are not JSON-serializable. Round-tripping through json normalizes the
+    HfApi path to the same shape, so AppInfo.extra is always plain data.
+    """
+
+    def default(o: object) -> object:
+        if isinstance(o, (datetime, date)):
+            return o.isoformat()
+        return getattr(o, "__dict__", str(o))
+
+    return json.loads(json.dumps(value, default=default))
 
 
 def _coerce_space_data(value: object) -> SpaceData | None:
@@ -105,7 +123,7 @@ def _list_all_spaces_with_hf_api(token: str | None) -> list[SpaceData]:
     )
     payloads: list[SpaceData] = []
     for space in spaces:
-        space_data = _coerce_space_data(space.__dict__)
+        space_data = _coerce_space_data(_to_plain_json(space.__dict__))
         if space_data is None or _get_string(space_data, "id") is None:
             continue
         payloads.append(_normalize_space_data(space_data))
