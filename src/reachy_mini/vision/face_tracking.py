@@ -77,7 +77,7 @@ class Tracker:
         min_area_frac: float = 0.003,
         max_jump: float = 0.5,
         max_misses: int = 20,
-        crop: int = 192,
+        crop: int = 128,  # 128-px detect input: same locked recall as 192 at ~half the CPU (on-robot bench)
     ) -> None:
         """Create a tracker with the given gates and ROI crop size (pixels)."""
         self._min_area_frac = min_area_frac
