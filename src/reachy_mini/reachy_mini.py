@@ -70,12 +70,16 @@ SLEEP_HEAD_POSE = np.array(
 
 ConnectionMode = Literal["auto", "localhost_only", "network"]
 
+DEFAULT_ROBOT_NAME = "reachy_mini"
+
 
 class ReachyMini:
     """Reachy Mini class for controlling a simulated or real Reachy Mini robot.
 
     Args:
-        robot_name: Name of the robot, defaults to "reachy_mini".
+        robot_name: Name of the robot, defaults to "reachy_mini". A non-default
+            name is resolved to its daemon via mDNS, to target one robot
+            among several on the same subnet.
         host: Hostname or IP of the daemon. Defaults to "reachy-mini.local".
             In ``"auto"`` mode this is only used as a fallback when localhost
             is unreachable, so the default works out of the box for local
@@ -93,7 +97,7 @@ class ReachyMini:
 
     def __init__(
         self,
-        robot_name: str = "reachy_mini",
+        robot_name: str = DEFAULT_ROBOT_NAME,
         host: str = "reachy-mini.local",
         port: int = 8000,
         connection_mode: ConnectionMode = "auto",
@@ -108,7 +112,9 @@ class ReachyMini:
         """Initialize the Reachy Mini robot.
 
         Args:
-            robot_name (str): Name of the robot, defaults to "reachy_mini".
+            robot_name (str): Name of the robot, defaults to "reachy_mini". A
+                non-default name is resolved to its daemon via mDNS discovery,
+                used to target one robot among several on the same subnet.
             host (str): Hostname or IP of the daemon. Defaults to
                 "reachy-mini.local".  In ``"auto"`` mode (the default) the
                 client first tries ``localhost``; *host* is only used as a
@@ -436,6 +442,25 @@ class ReachyMini:
     ) -> tuple[WSClient, ConnectionMode]:
         """Create a client according to the requested mode, adding auto fallback."""
         requested_mode = cast(ConnectionMode, requested_mode.lower())
+
+        # Only mDNS discovery can pick one named daemon out of several on a subnet.
+        if self.robot_name != DEFAULT_ROBOT_NAME and requested_mode != "localhost_only":
+            from reachy_mini.utils.discovery import find_robots
+
+            matches = [
+                robot
+                for robot in find_robots(timeout=timeout)
+                if robot.name == self.robot_name
+            ]
+            if not matches:
+                raise ConnectionError(
+                    f"No Reachy Mini daemon named {self.robot_name!r} found on the "
+                    f"network. Start its daemon with --robot-name {self.robot_name!r}."
+                )
+            host = matches[0].addresses[0] if matches[0].addresses else matches[0].host
+            client = self._connect_single(host, matches[0].port or self.port, timeout)
+            return client, "network"
+
         if requested_mode == "auto":
             try:
                 client = self._connect_single(
