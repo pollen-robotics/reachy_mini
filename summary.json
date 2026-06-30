@@ -1,26 +1,76 @@
 {
   "stats": {
-    "total": 250,
-    "passed": 247,
+    "total": 258,
+    "passed": 255,
+    "new": 8,
     "skipped": 3
   },
   "status": "passed",
-  "newTests": [],
+  "newTests": [
+    {
+      "id": "b9afbe6dfd0757b0fef74e760be8c4bc",
+      "name": "test_unknown_app_not_ready_and_not_installed",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "cc1b6fe4257f38046f33eabbf633dd78",
+      "name": "test_start_calls_start_app",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "a11b2164bfd2fef112e94102ae48368d",
+      "name": "test_missing_app_installed_from_catalog",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "aa18f0801fd930021e7de1b645207713",
+      "name": "test_launcher_starts_app_once_across_multiple_wakes",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "e3efd1eff23b549e799f05feea463534",
+      "name": "test_to_plain_json_normalizes_hf_objects",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "d6d6a769fc64b13e0c7f7f325a122cc7",
+      "name": "test_install_failure_returns_false",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "383a6ae4c01786cc383c537c513539a0",
+      "name": "test_already_installed_is_ready_without_install",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "4d068c58f4cd1b27a953b45a914cae7d",
+      "name": "test_start_failure_is_swallowed",
+      "status": "passed",
+      "duration": 0
+    }
+  ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 36084,
-  "createdAt": 1782819808919,
+  "duration": 36108,
+  "createdAt": 1782827083387,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "29913b14-2eb4-469a-87ee-aa14d18bf0c0",
+    "reportId": "65ab9fbf-7f01-4709-8af3-8058841b8d8e",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/28441658231",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/28448965046",
   "href": "awesome/",
   "coverage": 32
 }

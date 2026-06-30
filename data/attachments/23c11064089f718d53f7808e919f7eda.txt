@@ -1,0 +1,1 @@
+ERROR    test_watchdog:media_server.py:1623 [watchdog] peer=peer-1 stuck mid-negotiation after 12s, snapshot={'peer_id': 'peer-1', 'ice_state': 'checking', 'conn_state': 'new', 'signaling_state': 'new', 'elapsed_s': 0.0}
