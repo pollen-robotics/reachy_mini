@@ -21,6 +21,11 @@ If you have any of the following symptoms, please follow the diagnosis steps bel
 - Open the Reachy Mini Testbench app.
 - Do a motor scan by clicking on the "Scan Motors" button.
 
+> Note: the testbench app has two different interfaces depending on the daemon is running or not.  
+> To scan and debug the motors, you need to stop the daemon first.
+> To turn off the daemon, go in the settings of the desktop app and turn off "motor backend" before running the testbench app.
+> ![daemon_off](/docs/assets/daemon_off.png)  
+
 ### Possible outcomes
 
 **1. All motors are detected:**  
