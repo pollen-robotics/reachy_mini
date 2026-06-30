@@ -202,9 +202,6 @@ def run(conn: Connection, stop: EventType, camera_specs: "CameraSpecs") -> None:
     crop_scale = camera_specs.default_resolution.value[3]
     camera_matrix: NDArray[np.float64] | None = None
     since_full_scan = 0
-    # TEMP diagnostic — log real fps / hit% / locked% every 2 s (remove after tuning).
-    stat_t = time.monotonic()
-    stat_n = stat_hit = stat_lock = stat_full = 0
     try:
         while not stop.is_set():
             sample = appsink.emit("try-pull-sample", 200_000_000)
@@ -222,33 +219,15 @@ def run(conn: Connection, stop: EventType, camera_specs: "CameraSpecs") -> None:
                     camera_specs.K, crop_scale, (width, height)
                 )
             roi = tracker.roi(width, height)
-            locked = roi is not None
             if roi is None or since_full_scan >= _FULL_SCAN_INTERVAL:
                 faces = detector.detect(frame)
                 since_full_scan = 0
-                full = True
             else:
                 x0, y0, x1, y1 = roi
                 window = np.ascontiguousarray(frame[y0:y1, x0:x1])
                 faces = _offset_faces(detector.detect(window), x0, y0)
                 since_full_scan += 1
-                full = False
             face = tracker.select(faces, width, height)
-            # TEMP diagnostic — see the init note above.
-            stat_n += 1
-            stat_hit += int(face is not None)
-            stat_lock += int(locked)
-            stat_full += int(full)
-            now = time.monotonic()
-            if now - stat_t >= 2.0:
-                _logger.warning(
-                    "tracker: %.1f fps, hit %d%%, locked %d%%, fullscan %d%%",
-                    stat_n / (now - stat_t),
-                    100 * stat_hit // max(stat_n, 1),
-                    100 * stat_lock // max(stat_n, 1),
-                    100 * stat_full // max(stat_n, 1),
-                )
-                stat_t, stat_n, stat_hit, stat_lock, stat_full = now, 0, 0, 0, 0
             obs = to_observation(
                 face,
                 width,
