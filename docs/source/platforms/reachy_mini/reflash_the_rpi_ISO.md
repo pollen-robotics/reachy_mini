@@ -91,7 +91,8 @@ https://www.raspberrypi.com/software/
      sudo ./rpiboot -d mass-storage-gadget64
      ```
 
-   - **Windows**: run the **RPiBoot** executable that you installed in the previous step. Make sure to use `rpiboot-CM4-CM5 - Mass storage Gadget` and not `rpiboot-CM-CM2-CM3`.
+   - **Windows**: run the **RPiBoot** executable that you installed in the previous step.
+   Make sure to use `rpiboot-CM4-CM5 - Mass storage Gadget` and not `rpiboot-CM-CM2-CM3`.
   
    ⚠️ In both cases, make sure you do not close the terminal window opened by rpiboot.
    
@@ -102,7 +103,7 @@ https://www.raspberrypi.com/software/
 4. Plug the USB cable (the one shown in the image above, named **USB2**).
 
 5. **Power on the robot**.  
-   The internal eMMC should now appear as a mass-storage device.
+   `rpiboot` will run first and detect the robot, loading the mass-storage gadget (you can follow its progress in the terminal). When it completes, the internal eMMC appears as a mass-storage device.
 
 ---
 
