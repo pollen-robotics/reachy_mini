@@ -1,1 +1,1 @@
-{"id":"8ebcdcd8690b5a184cb61ab360749913","fullName":"tests.unit_tests.test_device_detection.TestFindAudioDevice#test_macos_sink","name":"test_macos_sink","status":"passed","testResultsByEnv":{"default":"81710947110336f98b90de7abee63ef6"}}
+{"id":"8ebcdcd8690b5a184cb61ab360749913","fullName":"tests.unit_tests.test_device_detection.TestFindAudioDevice#test_macos_sink","name":"test_macos_sink","status":"passed","testResultsByEnv":{"default":"4844b5c0b6716fbdd24f878527743b43"}}

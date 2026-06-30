@@ -1,1 +1,1 @@
-{"id":"d6e3bef69517aee8165dc802feec2ccf","fullName":"tests.unit_tests.test_robot_app_lock#test_handler_not_invoked_when_acquiring_from_free","name":"test_handler_not_invoked_when_acquiring_from_free","status":"passed","testResultsByEnv":{"default":"1962cd27aeaa2a0b626ae70a12da97a3"}}
+{"id":"d6e3bef69517aee8165dc802feec2ccf","fullName":"tests.unit_tests.test_robot_app_lock#test_handler_not_invoked_when_acquiring_from_free","name":"test_handler_not_invoked_when_acquiring_from_free","status":"passed","testResultsByEnv":{"default":"878856f55f4c40ec241cdc43896624fc"}}
