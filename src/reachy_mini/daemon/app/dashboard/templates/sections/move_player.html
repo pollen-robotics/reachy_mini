@@ -33,6 +33,17 @@
     </div>
 
     <div class="flex flex-col gap-2 px-4">
+        <!-- Output device selector -->
+        <div class="flex flex-row gap-4 items-center">
+            <label for="output-device-select" class="text-sm font-medium text-gray-700 w-24">Output:</label>
+            <select id="output-device-select" class="flex-grow px-2 py-1 rounded border border-gray-300 bg-white text-sm">
+                <option value="">Default</option>
+            </select>
+        </div>
+        <div id="output-device-notice" class="hidden text-xs text-amber-600 pl-28">
+            ⚠ Used on the next sound played — or on the next app launch if an app is running.
+        </div>
+
         <div class="flex flex-row gap-4 items-center">
 
             <!-- volume down icon -->
@@ -78,6 +89,16 @@
                     <div class="flex flex-row gap-2 items-center">
                         <div class="text-base font-medium">Microphone</div>
                         <div class="text-sm text-gray-600" id="microphone-device-info">Loading...</div>
+                    </div>
+                    <!-- Input device selector -->
+                    <div class="flex flex-row gap-4 items-center">
+                        <label for="input-device-select" class="text-sm font-medium text-gray-700 w-24">Input:</label>
+                        <select id="input-device-select" class="flex-grow px-2 py-1 rounded border border-gray-300 bg-white text-sm">
+                            <option value="">Default</option>
+                        </select>
+                    </div>
+                    <div id="input-device-notice" class="hidden text-xs text-amber-600 pl-28">
+                        ⚠ Restarts audio to apply (briefly interrupts any active stream) — or on the next app launch if an app is running.
                     </div>
                     <div class="flex flex-row gap-4 items-center">
                         <!-- microphone icon (muted/off) -->

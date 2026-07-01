@@ -5,7 +5,7 @@ import platform
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 SOUND_CARD_NAMES = ["reachy mini audio", "respeaker"]
 
@@ -27,7 +27,11 @@ class AudioDevice(NamedTuple):
 
 @dataclass
 class VolumeControl(ABC):
-    """Base class for volume control."""
+    """Base class for volume control.
+
+    ``input_device`` / ``output_device`` are resolved lazily from the current
+    audio-device selection and re-resolved when it changes.
+    """
 
     logger: logging.Logger = field(
         init=False,
@@ -36,8 +40,67 @@ class VolumeControl(ABC):
         ),
     )
     platform_name: str = field(init=False, default_factory=platform.system)
-    input_device: AudioDevice = field(init=False)
-    output_device: AudioDevice = field(init=False)
+    _cached_devices: tuple[AudioDevice, AudioDevice] | None = field(
+        init=False, default=None
+    )
+    _cached_targets: tuple[str | None, str | None] | None = field(
+        init=False, default=None
+    )
+
+    @abstractmethod
+    def _get_input_output_devices(
+        self, input_target: str | None, output_target: str | None
+    ) -> tuple[AudioDevice, AudioDevice]:
+        """Resolve the (input, output) devices for the selected targets."""
+
+    def _selected_targets(self) -> tuple[str | None, str | None]:
+        """Return the selected (input, output) device names (in-process, no HTTP)."""
+        from reachy_mini.daemon.app.routers.audio_devices import (
+            get_local_selected_input,
+            get_local_selected_output,
+        )
+
+        return get_local_selected_input(), get_local_selected_output()
+
+    @staticmethod
+    def _find_device(
+        devices: dict[Any, str], selected: str | None
+    ) -> tuple[int | str | None, str] | None:
+        """Pick a device from a ``{id: name}`` mapping.
+
+        Prefers the selection (case-insensitive substring, either direction),
+        then the Reachy Mini card, else ``None`` for the platform default.
+        """
+        if selected:
+            sel = selected.lower()
+            for device_id, name in devices.items():
+                lowered = name.lower()
+                if sel in lowered or lowered in sel:
+                    return device_id, name
+        for device_id, name in devices.items():
+            if any(card in name.lower() for card in SOUND_CARD_NAMES):
+                return device_id, name
+        return None
+
+    def _resolve(self) -> tuple[AudioDevice, AudioDevice]:
+        """Return the cached devices, re-resolving when the selection changes."""
+        targets = self._selected_targets()
+        cached = self._cached_devices
+        if cached is None or self._cached_targets != targets:
+            cached = self._get_input_output_devices(*targets)
+            self._cached_devices = cached
+            self._cached_targets = targets
+        return cached
+
+    @property
+    def input_device(self) -> AudioDevice:
+        """The input (microphone) device currently being controlled."""
+        return self._resolve()[0]
+
+    @property
+    def output_device(self) -> AudioDevice:
+        """The output (speaker) device currently being controlled."""
+        return self._resolve()[1]
 
     @abstractmethod
     def set_output_volume(self, volume: int) -> bool:

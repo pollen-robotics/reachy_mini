@@ -166,7 +166,9 @@ class MediaManager:
                 try:
                     self._init_camera(log_level, camera_specs)
                 except Exception as e:
-                    self.logger.warning(f"Camera init failed, continuing without camera: {e}")
+                    self.logger.warning(
+                        f"Camera init failed, continuing without camera: {e}"
+                    )
                 self._init_audio(log_level)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC streaming backend.")
@@ -204,11 +206,24 @@ class MediaManager:
         self.camera.open()
 
     def _init_audio(self, log_level: str) -> None:
-        """Initialize the audio system via GStreamer."""
+        """Initialize the audio system via GStreamer using the selected devices."""
+        from reachy_mini.daemon.app.routers.audio_devices import (
+            get_selected_input,
+            get_selected_output,
+        )
         from reachy_mini.media.audio_gstreamer import GStreamerAudio
 
-        self.logger.debug("Initializing audio (GStreamer)...")
-        self.audio = GStreamerAudio(log_level=log_level)
+        input_device = get_selected_input()
+        output_device = get_selected_output()
+        self.logger.debug(
+            f"Initializing audio (GStreamer, input: {input_device}, "
+            f"output: {output_device})..."
+        )
+        self.audio = GStreamerAudio(
+            input_device=input_device,
+            output_device=output_device,
+            log_level=log_level,
+        )
 
     def _init_webrtc(
         self,
@@ -394,7 +409,9 @@ class MediaManager:
         from reachy_mini.media.audio_gstreamer import GStreamerAudio
 
         if not isinstance(self.audio, GStreamerAudio):
-            self.logger.warning("Head wobbling is only supported with the LOCAL audio backend.")
+            self.logger.warning(
+                "Head wobbling is only supported with the LOCAL audio backend."
+            )
             return
         self.audio.enable_wobbling(callback)
 

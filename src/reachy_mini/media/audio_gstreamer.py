@@ -62,7 +62,7 @@ import numpy as np
 
 from reachy_mini.media.audio_base import AEC_PROBE_NAME, AEC_RATE, AudioBase
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
-from reachy_mini.media.device_detection import get_audio_device
+from reachy_mini.media.device_detection import DEFAULT_AUDIO_TARGET, get_audio_device
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
@@ -96,16 +96,30 @@ class GStreamerAudio(AudioBase):
     PLAYBACK_SINK_BUFFER_TIME_US = 50_000
     PLAYBACK_SINK_LATENCY_TIME_US = 5_000
 
-    def __init__(self, log_level: str = "INFO") -> None:
+    def __init__(
+        self,
+        input_device: Optional[str] = None,
+        output_device: Optional[str] = None,
+        log_level: str = "INFO",
+    ) -> None:
         """Initialize recording and playback pipelines.
 
         Args:
+            input_device: Input device (mic) name, or ``None`` to keep the
+                auto-detected source.
+            output_device: Output device (speaker) name, or ``None`` to keep
+                the auto-detected sink.
             log_level: Logging level for audio operations.
                 Options: ``'DEBUG'``, ``'INFO'``, ``'WARNING'``, ``'ERROR'``,
                 ``'CRITICAL'``.
 
         """
         super().__init__(log_level=log_level)
+
+        # User-selected device overrides. Read by _init_pipeline_record and
+        # _build_audiosink_element, so they must be set before those run.
+        self._input_device = input_device
+        self._output_device = output_device
 
         self._head_wobbler: Optional[HeadWobbler] = None
 
@@ -140,14 +154,20 @@ class GStreamerAudio(AudioBase):
         audiosrc: Optional[Gst.Element] = None
         webrtcdsp: Optional[Gst.Element] = None
 
-        if has_reachymini_asoundrc():
+        # An explicit user selection overrides the .asoundrc / auto-detected
+        # source. It is resolved platform-appropriately by get_audio_device (via
+        # its target_name), so the right element is used on every OS. AEC is
+        # only wired on the default-fallback path (no specific card found).
+        if self._input_device is None and has_reachymini_asoundrc():
             # Wireless CM4: use the preconfigured .asoundrc ALSA devices
             # which route through the XMOS AEC loopback properly.
             audiosrc = Gst.ElementFactory.make("alsasrc")
             audiosrc.set_property("device", "reachymini_audio_src")
             self.logger.info("Using .asoundrc audio source: reachymini_audio_src")
         else:
-            id_audio_card = get_audio_device("Source")
+            id_audio_card = get_audio_device(
+                "Source", target_name=self._input_device or DEFAULT_AUDIO_TARGET
+            )
 
             if id_audio_card is None:
                 self.logger.warning(
@@ -224,12 +244,17 @@ class GStreamerAudio(AudioBase):
         """Create a platform-appropriate audio sink element."""
         audiosink: Optional[Gst.Element] = None
 
-        if has_reachymini_asoundrc():
+        # An explicit user selection overrides the .asoundrc / auto-detected
+        # sink. It is resolved platform-appropriately by get_audio_device (via
+        # its target_name), so the right element is used on every OS.
+        if self._output_device is None and has_reachymini_asoundrc():
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", "reachymini_audio_sink")
             self.logger.info("Using .asoundrc audio sink: reachymini_audio_sink")
         else:
-            id_audio_card = get_audio_device("Sink")
+            id_audio_card = get_audio_device(
+                "Sink", target_name=self._output_device or DEFAULT_AUDIO_TARGET
+            )
 
             if id_audio_card is None:
                 self.logger.warning(

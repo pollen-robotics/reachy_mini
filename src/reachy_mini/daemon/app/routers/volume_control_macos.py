@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from struct import pack, unpack
 
 from .volume_control import (
-    SOUND_CARD_NAMES,
     AudioDevice,
     AudioDeviceType,
     VolumeControl,
@@ -115,10 +114,6 @@ class VolumeControlMacOS(VolumeControl):
         ]
         self.coreaudio.AudioObjectHasProperty.restype = c_int
 
-        # Initialize audio devices
-        # TODO: use a property instead to account for dynamic audio devices
-        self.input_device, self.output_device = self._get_input_output_devices()
-
     def _get_device_name(self, device_id: int) -> str:
         """Get the name of an audio device given its ID.
 
@@ -158,8 +153,13 @@ class VolumeControlMacOS(VolumeControl):
 
         return device_name.value.decode("utf-8")
 
-    def _get_input_output_devices(self) -> tuple[AudioDevice, AudioDevice]:
-        """Get the input and output audio devices corresponding to the Reachy Mini Audio sound card. If not found, get the default input and output audio devices.
+    def _get_input_output_devices(
+        self, input_target: str | None, output_target: str | None
+    ) -> tuple[AudioDevice, AudioDevice]:
+        """Get the input and output audio devices to control.
+
+        Uses the user-selected device when set, else the Reachy Mini Audio
+        sound card, else the default input/output devices.
 
         Returns:
             A tuple of two AudioDevice: (input_device, output_device).
@@ -167,22 +167,29 @@ class VolumeControlMacOS(VolumeControl):
         """
         devices = self._get_all_devices()
 
-        for device_id, device_name in devices.items():
-            if any(
-                [sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]
-            ):
-                # Input and output devices will appear with the same ID
-                return AudioDevice(
-                    device_id, device_name, AudioDeviceType.INPUT
-                ), AudioDevice(device_id, device_name, AudioDeviceType.OUTPUT)
+        input_match = self._find_device(devices, input_target)
+        if input_match is not None:
+            input_device = AudioDevice(
+                input_match[0], input_match[1], AudioDeviceType.INPUT
+            )
+        else:
+            input_id = self._get_default_device_id(AudioDeviceType.INPUT)
+            input_device = AudioDevice(
+                input_id, self._get_device_name(input_id), AudioDeviceType.INPUT
+            )
 
-        input_id = self._get_default_device_id(AudioDeviceType.INPUT)
-        output_id = self._get_default_device_id(AudioDeviceType.OUTPUT)
-        return AudioDevice(
-            input_id, self._get_device_name(input_id), AudioDeviceType.INPUT
-        ), AudioDevice(
-            output_id, self._get_device_name(output_id), AudioDeviceType.OUTPUT
-        )
+        output_match = self._find_device(devices, output_target)
+        if output_match is not None:
+            output_device = AudioDevice(
+                output_match[0], output_match[1], AudioDeviceType.OUTPUT
+            )
+        else:
+            output_id = self._get_default_device_id(AudioDeviceType.OUTPUT)
+            output_device = AudioDevice(
+                output_id, self._get_device_name(output_id), AudioDeviceType.OUTPUT
+            )
+
+        return input_device, output_device
 
     def _get_all_devices(self) -> dict[int, str]:
         """Get all available audio devices IDs and names.

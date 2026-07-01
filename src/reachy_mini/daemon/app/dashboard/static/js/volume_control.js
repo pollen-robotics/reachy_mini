@@ -240,7 +240,188 @@ const microphoneControl = {
   },
 };
 
+const audioDeviceControl = {
+  outputDevices: [],
+  inputDevices: [],
+  selectedOutput: null,
+  selectedInput: null,
+
+  // Reveal the "applies on next restart" notice next to a device selector.
+  showRestartNotice: (noticeId) => {
+    const notice = document.getElementById(noticeId);
+    if (notice) notice.classList.remove('hidden');
+  },
+
+  init: async () => {
+    const outputSelect = document.getElementById('output-device-select');
+    const inputSelect = document.getElementById('input-device-select');
+
+    if (outputSelect) {
+      await audioDeviceControl.loadOutputDevices();
+      outputSelect.addEventListener('change', async (e) => {
+        await audioDeviceControl.setOutputDevice(e.target.value);
+      });
+    }
+
+    if (inputSelect) {
+      await audioDeviceControl.loadInputDevices();
+      inputSelect.addEventListener('change', async (e) => {
+        await audioDeviceControl.setInputDevice(e.target.value);
+      });
+    }
+  },
+
+  loadOutputDevices: async () => {
+    const select = document.getElementById('output-device-select');
+    if (!select) return;
+
+    try {
+      const devicesResponse = await fetch('/api/audio-devices/output');
+      if (devicesResponse.ok) {
+        const data = await devicesResponse.json();
+        audioDeviceControl.outputDevices = data.devices || [];
+      }
+
+      const selectedResponse = await fetch('/api/audio-devices/output/selected');
+      if (selectedResponse.ok) {
+        const data = await selectedResponse.json();
+        audioDeviceControl.selectedOutput = data.device_name;
+      }
+
+      select.innerHTML = '<option value="">Default</option>';
+      audioDeviceControl.outputDevices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device;
+        option.textContent = device;
+        if (device === audioDeviceControl.selectedOutput) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+
+      console.log('Loaded output devices:', audioDeviceControl.outputDevices);
+    } catch (error) {
+      console.error('Error loading output devices:', error);
+    }
+  },
+
+  loadInputDevices: async () => {
+    const select = document.getElementById('input-device-select');
+    if (!select) return;
+
+    try {
+      const devicesResponse = await fetch('/api/audio-devices/input');
+      if (devicesResponse.ok) {
+        const data = await devicesResponse.json();
+        audioDeviceControl.inputDevices = data.devices || [];
+      }
+
+      const selectedResponse = await fetch('/api/audio-devices/input/selected');
+      if (selectedResponse.ok) {
+        const data = await selectedResponse.json();
+        audioDeviceControl.selectedInput = data.device_name;
+      }
+
+      select.innerHTML = '<option value="">Default</option>';
+      audioDeviceControl.inputDevices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device;
+        option.textContent = device;
+        if (device === audioDeviceControl.selectedInput) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+
+      console.log('Loaded input devices:', audioDeviceControl.inputDevices);
+    } catch (error) {
+      console.error('Error loading input devices:', error);
+    }
+  },
+
+  setOutputDevice: async (deviceName) => {
+    const select = document.getElementById('output-device-select');
+    if (select) select.disabled = true;
+
+    try {
+      if (deviceName === '') {
+        const response = await fetch('/api/audio-devices/output/selected', {
+          method: 'DELETE',
+        });
+        if (response.ok) {
+          audioDeviceControl.selectedOutput = null;
+          console.log('Output device cleared (using default)');
+          audioDeviceControl.showRestartNotice('output-device-notice');
+        } else {
+          console.error('Failed to clear output device');
+          await audioDeviceControl.loadOutputDevices();
+        }
+      } else {
+        const response = await fetch('/api/audio-devices/output/selected', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_name: deviceName }),
+        });
+        if (response.ok) {
+          audioDeviceControl.selectedOutput = deviceName;
+          console.log('Output device set to:', deviceName);
+          audioDeviceControl.showRestartNotice('output-device-notice');
+        } else {
+          console.error('Failed to set output device');
+          await audioDeviceControl.loadOutputDevices();
+        }
+      }
+    } catch (error) {
+      console.error('Error setting output device:', error);
+      await audioDeviceControl.loadOutputDevices();
+    } finally {
+      if (select) select.disabled = false;
+    }
+  },
+
+  setInputDevice: async (deviceName) => {
+    const select = document.getElementById('input-device-select');
+    if (select) select.disabled = true;
+
+    try {
+      if (deviceName === '') {
+        const response = await fetch('/api/audio-devices/input/selected', {
+          method: 'DELETE',
+        });
+        if (response.ok) {
+          audioDeviceControl.selectedInput = null;
+          console.log('Input device cleared (using default)');
+          audioDeviceControl.showRestartNotice('input-device-notice');
+        } else {
+          console.error('Failed to clear input device');
+          await audioDeviceControl.loadInputDevices();
+        }
+      } else {
+        const response = await fetch('/api/audio-devices/input/selected', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_name: deviceName }),
+        });
+        if (response.ok) {
+          audioDeviceControl.selectedInput = deviceName;
+          console.log('Input device set to:', deviceName);
+          audioDeviceControl.showRestartNotice('input-device-notice');
+        } else {
+          console.error('Failed to set input device');
+          await audioDeviceControl.loadInputDevices();
+        }
+      }
+    } catch (error) {
+      console.error('Error setting input device:', error);
+      await audioDeviceControl.loadInputDevices();
+    } finally {
+      if (select) select.disabled = false;
+    }
+  },
+};
+
 window.addEventListener('DOMContentLoaded', () => {
   volumeControl.init();
   microphoneControl.init();
+  audioDeviceControl.init();
 });

@@ -48,7 +48,11 @@ from reachy_mini.media.camera_constants import (
     MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
-from reachy_mini.media.device_detection import get_audio_device, get_video_device
+from reachy_mini.media.device_detection import (
+    DEFAULT_AUDIO_TARGET,
+    get_audio_device,
+    get_video_device,
+)
 from reachy_mini.media.gstreamer_utils import handle_default_bus_message
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
@@ -1106,6 +1110,21 @@ class GstMediaServer:
         )
         return [audioconvert, audioresample, capsfilter]
 
+    def _selected_device_name(self, direction: str) -> Optional[str]:
+        """Return the selected device name for direction (input/output), or None."""
+        from reachy_mini.daemon.app.routers.audio_devices import (
+            get_local_selected_input,
+            get_local_selected_output,
+        )
+
+        # Read the in-process selection directly (no self-HTTP call): the media
+        # server runs inside the daemon.
+        return (
+            get_local_selected_input()
+            if direction == "input"
+            else get_local_selected_output()
+        )
+
     def _build_audio_source(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio source element.
 
@@ -1127,8 +1146,14 @@ class GstMediaServer:
             A GStreamer audio source element, or None if no audio is available.
 
         """
-        # Wireless CM4: .asoundrc defines reachymini_audio_src alias
-        if has_reachymini_asoundrc():
+        # An explicit user selection (via the audio-devices API) overrides the
+        # .asoundrc / auto-detected source. It is resolved platform-correctly
+        # below via get_audio_device's target_name.
+        selected = self._selected_device_name("input")
+
+        # Wireless CM4 (no explicit selection): .asoundrc defines the
+        # reachymini_audio_src alias routing through the XMOS AEC loopback.
+        if selected is None and has_reachymini_asoundrc():
             respeaker = init_respeaker_usb()
             if respeaker is None:
                 self._logger.warning(
@@ -1143,7 +1168,9 @@ class GstMediaServer:
             self._logger.info("Using ALSA device reachymini_audio_src for capture.")
             return audiosrc
 
-        id_audio_card = get_audio_device("Source")
+        id_audio_card = get_audio_device(
+            "Source", target_name=selected or DEFAULT_AUDIO_TARGET
+        )
 
         if id_audio_card is not None:
             if platform.system() == "Windows":
@@ -1258,14 +1285,22 @@ class GstMediaServer:
             A GStreamer audio sink element, or None to use the default.
 
         """
-        # Wireless CM4: .asoundrc defines reachymini_audio_sink alias
-        if has_reachymini_asoundrc():
+        # An explicit user selection (via the audio-devices API) overrides the
+        # .asoundrc / auto-detected sink. It is resolved platform-correctly
+        # below via get_audio_device's target_name.
+        selected = self._selected_device_name("output")
+
+        # Wireless CM4 (no explicit selection): .asoundrc defines the
+        # reachymini_audio_sink alias.
+        if selected is None and has_reachymini_asoundrc():
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", "reachymini_audio_sink")
             self._logger.info("Using ALSA device reachymini_audio_sink for playback.")
             return audiosink
 
-        id_audio_card = get_audio_device("Sink")
+        id_audio_card = get_audio_device(
+            "Sink", target_name=selected or DEFAULT_AUDIO_TARGET
+        )
 
         if id_audio_card is not None:
             if platform.system() == "Windows":

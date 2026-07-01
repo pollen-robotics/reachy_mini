@@ -158,6 +158,36 @@ class Daemon:
         self._status.media_released = False
         self.logger.info("Media hardware re-acquired.")
 
+    def restart_media_pipeline(self) -> None:
+        """Rebuild the media-server pipeline so an input-device change applies.
+
+        The mic source is baked in at ``start()``, so the pipeline must be
+        rebuilt for a new selection to take effect. Runs on a background thread
+        (blocking GStreamer work) and briefly interrupts any WebRTC stream.
+        No-op when there is no media server or media has been released to an app.
+        """
+        media_server = self._media_server
+        if media_server is None or self._media_released:
+            self.logger.info(
+                "Media pipeline restart skipped: no media server, or an app holds "
+                "the audio (media released). The device change is saved and applies "
+                "on the next app launch / when the daemon re-acquires media."
+            )
+            return
+
+        def _run() -> None:
+            try:
+                self.logger.info(
+                    "Restarting media pipeline to apply audio device change..."
+                )
+                media_server.stop()
+                media_server.start()
+                self.logger.info("Media pipeline restarted.")
+            except Exception as e:
+                self.logger.error(f"Media pipeline restart failed: {e}")
+
+        Thread(target=_run, daemon=True, name="media-device-restart").start()
+
     async def _start_central_signaling_relay(self) -> None:
         """Start the central signaling relay for remote WebRTC access."""
         global _central_relay_task
@@ -630,7 +660,9 @@ class Daemon:
 
         backend = self.backend
 
-        def _broadcast(status: str, *, line: str | None = None, error: str | None = None) -> None:
+        def _broadcast(
+            status: str, *, line: str | None = None, error: str | None = None
+        ) -> None:
             if backend is None:
                 return
             payload: dict[str, Any] = {"type": "update_progress", "status": status}

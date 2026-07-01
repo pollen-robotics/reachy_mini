@@ -148,6 +148,13 @@ class AppManager:
             app_env.pop(key, None)
 
         self.logger.getChild("runner").info(f"Starting app {app_name}")
+
+        # Grant the app subprocess access to the PipeWire/PulseAudio user session
+        # so it can reach the selected audio devices (feat/audio-devices).
+        app_env["XDG_RUNTIME_DIR"] = "/run/user/1000"
+        app_env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/run/user/1000/bus"
+        app_env["PULSE_SERVER"] = "unix:/run/user/1000/pulse/native"
+
         try:
             process = await asyncio.create_subprocess_exec(
                 str(python_path),
@@ -165,7 +172,6 @@ class AppManager:
             if self.daemon is not None:
                 self.daemon.robot_app_lock.release_local(app_name)
             raise
-
 
         # Create status and monitor task
         status = AppStatus(
@@ -219,9 +225,7 @@ class AppManager:
                 if self.current_app is not None:
                     if returncode == 0:
                         self.current_app.status.state = AppState.DONE
-                        self.logger.getChild("runner").info(
-                            f"App {app_name} finished"
-                        )
+                        self.logger.getChild("runner").info(f"App {app_name} finished")
                     else:
                         self.current_app.status.state = AppState.ERROR
                         error_msg = "\n".join(stderr_lines[-10:])  # Last 10 lines

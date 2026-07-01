@@ -8,7 +8,6 @@ from typing import Any
 from pycaw.pycaw import DEVICE_STATE, AudioUtilities, EDataFlow, ERole
 
 from .volume_control import (
-    SOUND_CARD_NAMES,
     AudioDevice,
     AudioDeviceType,
     VolumeControl,
@@ -23,11 +22,6 @@ class VolumeControlWindows(VolumeControl):
 
     Relies on the pycaw library.
     """
-
-    def __post_init__(self) -> None:
-        """Initialize device IDs based on detected audio devices."""
-        # TODO: use a property instead to account for dynamic audio devices
-        self.input_device, self.output_device = self._get_input_output_devices()
 
     def _get_device_name(self, device_id: str | None) -> str:
         """Get the name of an audio device given its ID.
@@ -88,10 +82,13 @@ class VolumeControlWindows(VolumeControl):
             )
         return devices
 
-    def _get_input_output_devices(self) -> tuple[AudioDevice, AudioDevice]:
-        """Get the input and output audio devices corresponding to the Reachy Mini Audio sound card.
+    def _get_input_output_devices(
+        self, input_target: str | None, output_target: str | None
+    ) -> tuple[AudioDevice, AudioDevice]:
+        """Get the input and output audio devices to control.
 
-        If not found, falls back to the default input and output audio devices.
+        Uses the user-selected device when set, else the Reachy Mini Audio
+        sound card, else the default input/output audio devices.
 
         Returns:
             A tuple of two AudioDevice: (input_device, output_device).
@@ -100,31 +97,23 @@ class VolumeControlWindows(VolumeControl):
         input_devices = self._get_all_devices(AudioDeviceType.INPUT)
         output_devices = self._get_all_devices(AudioDeviceType.OUTPUT)
 
-        input_device: AudioDevice | None = None
-        output_device: AudioDevice | None = None
-        for device_id, device_name in input_devices.items():
-            if any(
-                [sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]
-            ):
-                input_device = AudioDevice(
-                    device_id, device_name, AudioDeviceType.INPUT
-                )
-                break
-        for device_id, device_name in output_devices.items():
-            if any(
-                [sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]
-            ):
-                output_device = AudioDevice(
-                    device_id, device_name, AudioDeviceType.OUTPUT
-                )
-                break
-
-        if input_device is None:
+        input_match = self._find_device(input_devices, input_target)
+        if input_match is not None:
+            input_device = AudioDevice(
+                input_match[0], input_match[1], AudioDeviceType.INPUT
+            )
+        else:
             default_id = self._get_default_device_id(AudioDeviceType.INPUT)
             input_device = AudioDevice(
                 default_id, self._get_device_name(default_id), AudioDeviceType.INPUT
             )
-        if output_device is None:
+
+        output_match = self._find_device(output_devices, output_target)
+        if output_match is not None:
+            output_device = AudioDevice(
+                output_match[0], output_match[1], AudioDeviceType.OUTPUT
+            )
+        else:
             default_id = self._get_default_device_id(AudioDeviceType.OUTPUT)
             output_device = AudioDevice(
                 default_id, self._get_device_name(default_id), AudioDeviceType.OUTPUT
