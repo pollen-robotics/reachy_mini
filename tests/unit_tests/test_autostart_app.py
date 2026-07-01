@@ -11,9 +11,11 @@ from reachy_mini.daemon.app.startup_app import (
     make_startup_app_launcher,
     start_startup_app,
     start_startup_app_if_idle,
+    wake_or_start_startup_app_if_idle,
     watch_antennas_for_startup_app,
 )
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
+from reachy_mini.io.protocol import MotorControlMode
 
 
 class StubAppManager:
@@ -53,10 +55,21 @@ class StubBackend:
         self.ready = Event()
         self.ready.set()
         self.present = [0.0, 0.0]
-        self.target_antenna_joint_positions = [0.0, 0.0]
+        self.target_antenna_joint_positions: list[float] | None = [0.0, 0.0]
+        self.motor_control_mode = MotorControlMode.Enabled
+        self.wake_up_calls = 0
 
     def get_present_antenna_joint_positions(self) -> list[float]:
         return self.present
+
+    def get_motor_control_mode(self) -> MotorControlMode:
+        return self.motor_control_mode
+
+    def set_motor_control_mode(self, mode: MotorControlMode) -> None:
+        self.motor_control_mode = mode
+
+    async def wake_up(self) -> None:
+        self.wake_up_calls += 1
 
 
 class StubDaemon:
@@ -104,6 +117,7 @@ async def test_start_calls_start_app() -> None:
     mgr = StubAppManager(installed=["foo"], catalog=[])
     await start_startup_app(mgr, "foo")  # type: ignore[arg-type]
     assert mgr.started == ["foo"]
+    assert mgr.evict_remote_values == [False]
 
 
 def test_antenna_touch_detector_triggers_once_until_release() -> None:
@@ -115,6 +129,17 @@ def test_antenna_touch_detector_triggers_once_until_release() -> None:
     assert detector.update((0.30, 0.0), (0.0, 0.0)) is False
     assert detector.update((0.05, 0.0), (0.0, 0.0)) is False
     assert detector.update((0.0, -0.26), (0.0, 0.0)) is True
+
+
+def test_antenna_touch_detector_uses_present_baseline_without_target() -> None:
+    detector = AntennaTouchDetector(press_delta_rad=0.25, release_delta_rad=0.1)
+
+    assert detector.update((1.0, -1.0), None) is False
+    assert detector.update((1.2, -1.0), None) is False
+    assert detector.update((1.3, -1.0), None) is True
+    assert detector.update((1.3, -1.0), None) is False
+    assert detector.update((1.05, -1.0), None) is False
+    assert detector.update((1.0, -1.3), None) is True
 
 
 @pytest.mark.asyncio
@@ -140,6 +165,20 @@ async def test_antenna_touch_start_skips_when_remote_session_is_active() -> None
 
 
 @pytest.mark.asyncio
+async def test_antenna_touch_wakes_sleeping_robot_before_starting_app() -> None:
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    daemon = StubDaemon()
+    daemon.backend.motor_control_mode = MotorControlMode.Disabled
+
+    assert await wake_or_start_startup_app_if_idle(mgr, daemon, "foo") is True  # type: ignore[arg-type]
+
+    assert daemon.backend.motor_control_mode == MotorControlMode.Enabled
+    assert daemon.backend.wake_up_calls == 1
+    assert mgr.started == ["foo"]
+    assert mgr.evict_remote_values == [False]
+
+
+@pytest.mark.asyncio
 async def test_antenna_watcher_starts_app_on_touch() -> None:
     mgr = StubAppManager(installed=["foo"], catalog=[])
     daemon = StubDaemon()
@@ -158,6 +197,36 @@ async def test_antenna_watcher_starts_app_on_touch() -> None:
         daemon.backend.present = [0.30, 0.0]
         await asyncio.sleep(0.03)
 
+        assert mgr.started == ["foo"]
+        assert mgr.evict_remote_values == [False]
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+
+@pytest.mark.asyncio
+async def test_antenna_watcher_wakes_from_baseline_when_target_is_missing() -> None:
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    daemon = StubDaemon()
+    daemon.backend.motor_control_mode = MotorControlMode.Disabled
+    daemon.backend.target_antenna_joint_positions = None
+    task = asyncio.create_task(
+        watch_antennas_for_startup_app(
+            mgr,  # type: ignore[arg-type]
+            daemon,  # type: ignore[arg-type]
+            "foo",
+            idle_poll_interval_s=0.01,
+            blocked_poll_interval_s=0.01,
+        )
+    )
+
+    try:
+        await asyncio.sleep(0.03)
+        daemon.backend.present = [0.30, 0.0]
+        await asyncio.sleep(0.03)
+
+        assert daemon.backend.wake_up_calls == 1
         assert mgr.started == ["foo"]
         assert mgr.evict_remote_values == [False]
     finally:
@@ -195,7 +264,7 @@ async def test_antenna_watcher_does_not_start_while_app_is_running() -> None:
 async def test_start_failure_is_swallowed() -> None:
     mgr = StubAppManager(installed=["foo"], catalog=[])
 
-    async def boom(name: str) -> None:
+    async def boom(name: str, *, evict_remote: bool = True) -> None:
         raise RuntimeError("an app is already running")
 
     mgr.start_app = boom  # type: ignore[assignment]

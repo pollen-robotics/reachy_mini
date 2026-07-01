@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from reachy_mini.apps import SourceKind
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.robot_app_lock import RobotAppLockState
+from reachy_mini.io.protocol import MotorControlMode
 
 if TYPE_CHECKING:
     from reachy_mini.daemon.daemon import Daemon
@@ -49,7 +50,7 @@ async def start_startup_app(app_manager: AppManager, name: str) -> None:
     """Start ``name`` after wake-up. Best-effort: failures are logged, not raised."""
     try:
         logger.info(f"Auto-starting app: {name}")
-        await app_manager.start_app(name)
+        await app_manager.start_app(name, evict_remote=False)
     except Exception as e:
         logger.error(f"Failed to auto-start app '{name}': {e}")
 
@@ -81,19 +82,29 @@ class AntennaTouchDetector:
 
     press_delta_rad: float = 0.25
     release_delta_rad: float = 0.10
+    _reference: tuple[float, float] | None = None
     _armed: bool = False
 
     def reset(self) -> None:
         """Disarm until both antennas are back near their target positions."""
+        self._reference = None
         self._armed = False
 
     def update(
         self,
         present: tuple[float, float],
-        target: tuple[float, float],
+        target: tuple[float, float] | None = None,
     ) -> bool:
-        """Return True once when either antenna is pushed away from target."""
-        delta = max(abs(p - t) for p, t in zip(present, target))
+        """Return True once when either antenna is pushed away from reference."""
+        if target is not None:
+            self._reference = target
+        elif self._reference is None:
+            self._reference = present
+            self._armed = True
+            return False
+
+        assert self._reference is not None
+        delta = max(abs(p - r) for p, r in zip(present, self._reference))
 
         if not self._armed:
             if delta <= self.release_delta_rad:
@@ -155,6 +166,31 @@ async def start_startup_app_if_idle(
         return False
 
 
+async def wake_or_start_startup_app_if_idle(
+    app_manager: AppManager,
+    daemon: "Daemon",
+    name: str,
+) -> bool:
+    """Wake a sleeping idle robot, then start the startup app if still idle."""
+    if not _startup_app_slot_is_free(app_manager, daemon):
+        return False
+
+    backend = daemon.backend
+    if backend is None:
+        return False
+
+    try:
+        if backend.get_motor_control_mode() == MotorControlMode.Disabled:
+            logger.info(f"Waking up from antenna touch before starting app: {name}")
+            backend.set_motor_control_mode(MotorControlMode.Enabled)
+            await backend.wake_up()
+
+        return await start_startup_app_if_idle(app_manager, daemon, name)
+    except Exception as e:
+        logger.error(f"Failed to wake/start app '{name}' from antenna touch: {e}")
+        return False
+
+
 async def watch_antennas_for_startup_app(
     app_manager: AppManager,
     daemon: "Daemon",
@@ -183,13 +219,13 @@ async def watch_antennas_for_startup_app(
 
             present = _read_current_antenna_pair(backend)
             target = _as_antenna_pair(backend.target_antenna_joint_positions)
-            if present is None or target is None:
+            if present is None:
                 detector.reset()
                 await asyncio.sleep(idle_poll_interval_s)
                 continue
 
             if detector.update(present, target):
-                await start_startup_app_if_idle(app_manager, daemon, name)
+                await wake_or_start_startup_app_if_idle(app_manager, daemon, name)
                 await asyncio.sleep(blocked_poll_interval_s)
                 continue
 
