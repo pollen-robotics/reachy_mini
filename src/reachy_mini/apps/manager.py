@@ -13,12 +13,16 @@ import psutil
 from pydantic import BaseModel
 
 from reachy_mini.daemon.backend.robot import RobotBackend
+from reachy_mini.utils.interpolation import distance_between_poses
 
 from . import AppInfo, SourceKind
 from .sources import hf_space, local_common_venv
 
 if TYPE_CHECKING:
     from reachy_mini.daemon.daemon import Daemon
+
+# Sleep-pose proximity in magic-mm (mm + deg), matching Backend.goto_sleep.
+SLEEP_POSE_MAGIC_DISTANCE = 10.0
 
 
 class AppState(str, Enum):
@@ -297,27 +301,38 @@ class AppManager:
             except asyncio.CancelledError:
                 pass
 
-        # Return robot to zero position after app stops
+        # Return to zero after an app stops, unless the app left it asleep.
         if self.daemon is not None and self.daemon.backend is not None:
-            if isinstance(self.daemon.backend, RobotBackend):
-                self.daemon.backend.enable_motors()
+            backend = self.daemon.backend
+            _, _, dist_to_sleep = distance_between_poses(
+                backend.get_current_head_pose(), backend.SLEEP_HEAD_POSE
+            )
+            if dist_to_sleep <= SLEEP_POSE_MAGIC_DISTANCE:
+                self.logger.getChild("runner").info(
+                    "Robot is asleep; leaving it in the sleep pose."
+                )
+            else:
+                if isinstance(backend, RobotBackend):
+                    backend.enable_motors()
 
-            try:
-                from reachy_mini.reachy_mini import (
-                    INIT_ANTENNAS_JOINT_POSITIONS,
-                    INIT_HEAD_POSE,
-                )
+                try:
+                    from reachy_mini.reachy_mini import (
+                        INIT_ANTENNAS_JOINT_POSITIONS,
+                        INIT_HEAD_POSE,
+                    )
 
-                self.logger.getChild("runner").info("Returning robot to zero position")
-                await self.daemon.backend.goto_target(
-                    head=INIT_HEAD_POSE,
-                    antennas=np.array(INIT_ANTENNAS_JOINT_POSITIONS),
-                    duration=1.0,
-                )
-            except Exception as e:
-                self.logger.getChild("runner").warning(
-                    f"Could not return to zero position: {e}"
-                )
+                    self.logger.getChild("runner").info(
+                        "Returning robot to zero position"
+                    )
+                    await backend.goto_target(
+                        head=INIT_HEAD_POSE,
+                        antennas=np.array(INIT_ANTENNAS_JOINT_POSITIONS),
+                        duration=1.0,
+                    )
+                except Exception as e:
+                    self.logger.getChild("runner").warning(
+                        f"Could not return to zero position: {e}"
+                    )
 
         self.current_app = None
 
