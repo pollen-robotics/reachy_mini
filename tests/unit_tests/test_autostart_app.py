@@ -2,7 +2,6 @@ import asyncio
 from contextlib import suppress
 from threading import Event
 
-import numpy as np
 import pytest
 
 from reachy_mini.apps import AppInfo, SourceKind
@@ -61,14 +60,10 @@ class StubBackend:
         self.motor_control_mode = MotorControlMode.Enabled
         self.wake_up_calls = 0
         self.played_sounds: list[str] = []
-        self.goto_targets: list[tuple[list[list[float]], float]] = []
-        self.current_head_pose = np.eye(4)
+        self.goto_target_calls = 0
 
     def get_present_antenna_joint_positions(self) -> list[float]:
         return self.present
-
-    def get_current_head_pose(self) -> np.ndarray:
-        return self.current_head_pose.copy()
 
     def get_motor_control_mode(self) -> MotorControlMode:
         return self.motor_control_mode
@@ -82,14 +77,8 @@ class StubBackend:
     def play_sound(self, sound_file: str) -> None:
         self.played_sounds.append(sound_file)
 
-    async def goto_target(
-        self,
-        head: np.ndarray,
-        *,
-        duration: float,
-    ) -> None:
-        self.goto_targets.append((head.tolist(), duration))
-        self.current_head_pose = head.copy()
+    async def goto_target(self, *args: object, **kwargs: object) -> None:
+        self.goto_target_calls += 1
 
 
 class StubDaemon:
@@ -203,13 +192,13 @@ async def test_antenna_touch_wakes_sleeping_robot_before_starting_app() -> None:
     assert daemon.backend.motor_control_mode == MotorControlMode.Enabled
     assert daemon.backend.wake_up_calls == 1
     assert daemon.backend.played_sounds == []
-    assert daemon.backend.goto_targets == []
+    assert daemon.backend.goto_target_calls == 0
     assert mgr.started == ["foo"]
     assert mgr.evict_remote_values == [False]
 
 
 @pytest.mark.asyncio
-async def test_antenna_touch_plays_awake_cue_before_starting_app() -> None:
+async def test_antenna_touch_plays_awake_sound_before_starting_app() -> None:
     mgr = StubAppManager(installed=["foo"], catalog=[])
     daemon = StubDaemon()
 
@@ -217,21 +206,19 @@ async def test_antenna_touch_plays_awake_cue_before_starting_app() -> None:
 
     assert daemon.backend.wake_up_calls == 0
     assert daemon.backend.played_sounds == ["wake_up.wav"]
-    assert len(daemon.backend.goto_targets) == 2
-    assert [duration for _, duration in daemon.backend.goto_targets] == [0.2, 0.2]
+    assert daemon.backend.goto_target_calls == 0
     assert mgr.started == ["foo"]
     assert mgr.evict_remote_values == [False]
 
 
 @pytest.mark.asyncio
-async def test_awake_startup_cue_returns_to_start_pose() -> None:
+async def test_awake_startup_cue_only_plays_sound() -> None:
     backend = StubBackend()
 
     await play_awake_startup_cue(backend)
 
     assert backend.played_sounds == ["wake_up.wav"]
-    assert len(backend.goto_targets) == 2
-    assert np.allclose(np.array(backend.goto_targets[-1][0]), np.eye(4))
+    assert backend.goto_target_calls == 0
 
 
 @pytest.mark.asyncio
@@ -256,7 +243,7 @@ async def test_antenna_watcher_starts_app_on_touch() -> None:
         assert mgr.started == ["foo"]
         assert mgr.evict_remote_values == [False]
         assert daemon.backend.played_sounds == ["wake_up.wav"]
-        assert len(daemon.backend.goto_targets) == 2
+        assert daemon.backend.goto_target_calls == 0
     finally:
         task.cancel()
         with suppress(asyncio.CancelledError):

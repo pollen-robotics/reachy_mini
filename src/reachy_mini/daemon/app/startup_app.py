@@ -6,9 +6,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
-from scipy.spatial.transform import Rotation as R
-
 from reachy_mini.apps import SourceKind
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.robot_app_lock import RobotAppLockState
@@ -167,19 +164,8 @@ async def start_startup_app_if_idle(
 
 
 async def play_awake_startup_cue(backend: Any) -> None:
-    """Play the wake sound and head tilt without running the full wake-up pose."""
-    try:
-        start_pose = np.array(backend.get_current_head_pose(), dtype=float).copy()
-    except Exception:
-        start_pose = np.array(backend.INIT_HEAD_POSE, dtype=float).copy()
-
-    tilt_pose = start_pose.copy()
-    roll = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
-    tilt_pose[:3, :3] = roll @ start_pose[:3, :3]
-
+    """Play the wake sound without running the full wake-up pose."""
     backend.play_sound("wake_up.wav")
-    await backend.goto_target(tilt_pose, duration=0.2)
-    await backend.goto_target(start_pose, duration=0.2)
 
 
 async def wake_or_start_startup_app_if_idle(
