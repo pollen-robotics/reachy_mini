@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
@@ -231,6 +232,7 @@ class Daemon:
         headless: bool = False,
         use_audio: bool = True,  # kept for backward compat, overridden by no_media
         hardware_config_filepath: str | None = None,
+        on_wake_up_callback: Callable[[], None] | None = None,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
 
@@ -245,6 +247,7 @@ class Daemon:
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
             use_audio (bool): If True, enable audio. Defaults to True.
             hardware_config_filepath (str | None): Path to the hardware configuration YAML file. Defaults to None.
+            on_wake_up_callback (Callable[[], None] | None): Fired once each time the robot finishes waking up. Defaults to None.
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -339,6 +342,11 @@ class Daemon:
 
                 # Start central signaling relay for remote WebRTC access
                 await self._start_central_signaling_relay()
+
+            # Wire the wake-up hook before any wake can fire (on-start below, or
+            # later via button/REST on the wireless unit, which boots asleep).
+            if on_wake_up_callback is not None:
+                self.backend.set_on_wake_up_callback(on_wake_up_callback)
 
             if wake_up_on_start:
                 try:

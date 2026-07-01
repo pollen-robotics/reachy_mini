@@ -247,7 +247,11 @@ class ReachyMini:
 
         """
         def _send_offsets(offsets: tuple[float, float, float, float, float, float]) -> None:
-            self.client.send_command(SetSpeechOffsetsCmd(offsets=list(offsets)))
+            try:
+                self.client.send_command(SetSpeechOffsetsCmd(offsets=list(offsets)))
+            except ConnectionError:
+                # best-effort cosmetic motion; ws may already be closing at teardown
+                pass
 
         # Enable SDK-side wobbling (LOCAL backend only, no-op for WEBRTC)
         self.media_manager.enable_wobbling(_send_offsets)
