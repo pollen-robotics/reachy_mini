@@ -78,7 +78,7 @@ def make_startup_app_launcher(
 
 @dataclass
 class AntennaTouchDetector:
-    """Hysteresis detector for antenna touches relative to commanded target."""
+    """Hysteresis detector for antenna touches relative to the idle pose."""
 
     press_delta_rad: float = 0.25
     release_delta_rad: float = 0.10
@@ -93,12 +93,9 @@ class AntennaTouchDetector:
     def update(
         self,
         present: tuple[float, float],
-        target: tuple[float, float] | None = None,
     ) -> bool:
         """Return True once when either antenna is pushed away from reference."""
-        if target is not None:
-            self._reference = target
-        elif self._reference is None:
+        if self._reference is None:
             self._reference = present
             self._armed = True
             return False
@@ -218,13 +215,12 @@ async def watch_antennas_for_startup_app(
                 continue
 
             present = _read_current_antenna_pair(backend)
-            target = _as_antenna_pair(backend.target_antenna_joint_positions)
             if present is None:
                 detector.reset()
                 await asyncio.sleep(idle_poll_interval_s)
                 continue
 
-            if detector.update(present, target):
+            if detector.update(present):
                 await wake_or_start_startup_app_if_idle(app_manager, daemon, name)
                 await asyncio.sleep(blocked_poll_interval_s)
                 continue

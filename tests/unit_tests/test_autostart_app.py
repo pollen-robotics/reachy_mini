@@ -123,23 +123,31 @@ async def test_start_calls_start_app() -> None:
 def test_antenna_touch_detector_triggers_once_until_release() -> None:
     detector = AntennaTouchDetector(press_delta_rad=0.25, release_delta_rad=0.1)
 
-    assert detector.update((0.0, 0.0), (0.0, 0.0)) is False
-    assert detector.update((0.20, 0.0), (0.0, 0.0)) is False
-    assert detector.update((0.26, 0.0), (0.0, 0.0)) is True
-    assert detector.update((0.30, 0.0), (0.0, 0.0)) is False
-    assert detector.update((0.05, 0.0), (0.0, 0.0)) is False
-    assert detector.update((0.0, -0.26), (0.0, 0.0)) is True
+    assert detector.update((0.0, 0.0)) is False
+    assert detector.update((0.20, 0.0)) is False
+    assert detector.update((0.26, 0.0)) is True
+    assert detector.update((0.30, 0.0)) is False
+    assert detector.update((0.05, 0.0)) is False
+    assert detector.update((0.0, -0.26)) is True
 
 
-def test_antenna_touch_detector_uses_present_baseline_without_target() -> None:
+def test_antenna_touch_detector_uses_present_baseline() -> None:
     detector = AntennaTouchDetector(press_delta_rad=0.25, release_delta_rad=0.1)
 
-    assert detector.update((1.0, -1.0), None) is False
-    assert detector.update((1.2, -1.0), None) is False
-    assert detector.update((1.3, -1.0), None) is True
-    assert detector.update((1.3, -1.0), None) is False
-    assert detector.update((1.05, -1.0), None) is False
-    assert detector.update((1.0, -1.3), None) is True
+    assert detector.update((1.0, -1.0)) is False
+    assert detector.update((1.2, -1.0)) is False
+    assert detector.update((1.3, -1.0)) is True
+    assert detector.update((1.3, -1.0)) is False
+    assert detector.update((1.05, -1.0)) is False
+    assert detector.update((1.0, -1.3)) is True
+
+
+def test_antenna_touch_detector_arms_when_idle_pose_is_offset() -> None:
+    detector = AntennaTouchDetector(press_delta_rad=0.25, release_delta_rad=0.1)
+
+    assert detector.update((0.18, 0.0)) is False
+    assert detector.update((0.40, 0.0)) is False
+    assert detector.update((0.44, 0.0)) is True
 
 
 @pytest.mark.asyncio
