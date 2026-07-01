@@ -5,13 +5,13 @@ from threading import Event
 import pytest
 
 from reachy_mini.apps import AppInfo, SourceKind
-from reachy_mini.daemon.app.main import (
-    _AntennaTouchDetector,
-    _ensure_startup_app_installed,
-    _make_startup_app_launcher,
-    _start_startup_app,
-    _start_startup_app_if_idle,
-    _watch_antennas_for_startup_app,
+from reachy_mini.daemon.app.startup_app import (
+    AntennaTouchDetector,
+    ensure_startup_app_installed,
+    make_startup_app_launcher,
+    start_startup_app,
+    start_startup_app_if_idle,
+    watch_antennas_for_startup_app,
 )
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
 
@@ -70,21 +70,21 @@ class StubDaemon:
 @pytest.mark.asyncio
 async def test_already_installed_is_ready_without_install() -> None:
     mgr = StubAppManager(installed=["foo"], catalog=["foo", "bar"])
-    assert await _ensure_startup_app_installed(mgr, "foo") is True  # type: ignore[arg-type]
+    assert await ensure_startup_app_installed(mgr, "foo") is True  # type: ignore[arg-type]
     assert mgr.installed_calls == []
 
 
 @pytest.mark.asyncio
 async def test_missing_app_installed_from_catalog() -> None:
     mgr = StubAppManager(installed=[], catalog=["bar"])
-    assert await _ensure_startup_app_installed(mgr, "bar") is True  # type: ignore[arg-type]
+    assert await ensure_startup_app_installed(mgr, "bar") is True  # type: ignore[arg-type]
     assert mgr.installed_calls == ["bar"]
 
 
 @pytest.mark.asyncio
 async def test_unknown_app_not_ready_and_not_installed() -> None:
     mgr = StubAppManager(installed=[], catalog=["bar"])
-    assert await _ensure_startup_app_installed(mgr, "nope") is False  # type: ignore[arg-type]
+    assert await ensure_startup_app_installed(mgr, "nope") is False  # type: ignore[arg-type]
     assert mgr.installed_calls == []
 
 
@@ -96,18 +96,18 @@ async def test_install_failure_returns_false() -> None:
         raise RuntimeError("network down")
 
     mgr.install_new_app = boom  # type: ignore[assignment]
-    assert await _ensure_startup_app_installed(mgr, "bar") is False  # type: ignore[arg-type]
+    assert await ensure_startup_app_installed(mgr, "bar") is False  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
 async def test_start_calls_start_app() -> None:
     mgr = StubAppManager(installed=["foo"], catalog=[])
-    await _start_startup_app(mgr, "foo")  # type: ignore[arg-type]
+    await start_startup_app(mgr, "foo")  # type: ignore[arg-type]
     assert mgr.started == ["foo"]
 
 
 def test_antenna_touch_detector_triggers_once_until_release() -> None:
-    detector = _AntennaTouchDetector(press_delta_rad=0.25, release_delta_rad=0.1)
+    detector = AntennaTouchDetector(press_delta_rad=0.25, release_delta_rad=0.1)
 
     assert detector.update((0.0, 0.0), (0.0, 0.0)) is False
     assert detector.update((0.20, 0.0), (0.0, 0.0)) is False
@@ -122,7 +122,7 @@ async def test_antenna_touch_start_uses_non_evicting_app_start() -> None:
     mgr = StubAppManager(installed=["foo"], catalog=[])
     daemon = StubDaemon()
 
-    assert await _start_startup_app_if_idle(mgr, daemon, "foo") is True  # type: ignore[arg-type]
+    assert await start_startup_app_if_idle(mgr, daemon, "foo") is True  # type: ignore[arg-type]
 
     assert mgr.started == ["foo"]
     assert mgr.evict_remote_values == [False]
@@ -134,7 +134,7 @@ async def test_antenna_touch_start_skips_when_remote_session_is_active() -> None
     daemon = StubDaemon()
     assert daemon.robot_app_lock.try_acquire_remote("remote") is True
 
-    assert await _start_startup_app_if_idle(mgr, daemon, "foo") is False  # type: ignore[arg-type]
+    assert await start_startup_app_if_idle(mgr, daemon, "foo") is False  # type: ignore[arg-type]
 
     assert mgr.started == []
 
@@ -144,7 +144,7 @@ async def test_antenna_watcher_starts_app_on_touch() -> None:
     mgr = StubAppManager(installed=["foo"], catalog=[])
     daemon = StubDaemon()
     task = asyncio.create_task(
-        _watch_antennas_for_startup_app(
+        watch_antennas_for_startup_app(
             mgr,  # type: ignore[arg-type]
             daemon,  # type: ignore[arg-type]
             "foo",
@@ -173,7 +173,7 @@ async def test_antenna_watcher_does_not_start_while_app_is_running() -> None:
     daemon = StubDaemon()
     daemon.backend.present = [0.30, 0.0]
     task = asyncio.create_task(
-        _watch_antennas_for_startup_app(
+        watch_antennas_for_startup_app(
             mgr,  # type: ignore[arg-type]
             daemon,  # type: ignore[arg-type]
             "foo",
@@ -199,13 +199,13 @@ async def test_start_failure_is_swallowed() -> None:
         raise RuntimeError("an app is already running")
 
     mgr.start_app = boom  # type: ignore[assignment]
-    await _start_startup_app(mgr, "foo")  # must not raise  # type: ignore[arg-type]
+    await start_startup_app(mgr, "foo")  # must not raise  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
 async def test_launcher_starts_app_once_across_multiple_wakes() -> None:
     mgr = StubAppManager(installed=["foo"], catalog=[])
-    launch = _make_startup_app_launcher(mgr, "foo")  # type: ignore[arg-type]
+    launch = make_startup_app_launcher(mgr, "foo")  # type: ignore[arg-type]
 
     # Simulate several wake-ups; only the first should launch the app.
     launch()
