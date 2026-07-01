@@ -30,10 +30,7 @@ class VolumeControl(ABC):
     """Base class for volume control.
 
     ``input_device`` / ``output_device`` are resolved lazily from the current
-    audio-device selection (see the audio-devices API). They are re-resolved
-    automatically when the selection changes, so a user picking a different
-    device in the dashboard is reflected on the next volume read/write — on
-    both the REST and the WebRTC paths that share this singleton.
+    audio-device selection and re-resolved when it changes.
     """
 
     logger: logging.Logger = field(
@@ -43,10 +40,10 @@ class VolumeControl(ABC):
         ),
     )
     platform_name: str = field(init=False, default_factory=platform.system)
-    _cached_devices: "tuple[AudioDevice, AudioDevice] | None" = field(
+    _cached_devices: tuple[AudioDevice, AudioDevice] | None = field(
         init=False, default=None
     )
-    _cached_targets: "tuple[str | None, str | None] | None" = field(
+    _cached_targets: tuple[str | None, str | None] | None = field(
         init=False, default=None
     )
 
@@ -54,23 +51,10 @@ class VolumeControl(ABC):
     def _get_input_output_devices(
         self, input_target: str | None, output_target: str | None
     ) -> tuple[AudioDevice, AudioDevice]:
-        """Resolve the (input, output) devices to control.
-
-        Args:
-            input_target: User-selected input device name, or ``None`` to use
-                the Reachy Mini card / platform default.
-            output_target: User-selected output device name, or ``None``.
-
-        """
-        pass
+        """Resolve the (input, output) devices for the selected targets."""
 
     def _selected_targets(self) -> tuple[str | None, str | None]:
-        """Return the (input, output) device names currently selected via API.
-
-        Reads the in-process selection directly (no HTTP): this runs inside the
-        daemon, often on the event loop while serving a volume request, so a
-        self-HTTP call would stall until it times out.
-        """
+        """Return the selected (input, output) device names (in-process, no HTTP)."""
         from reachy_mini.daemon.app.routers.audio_devices import (
             get_local_selected_input,
             get_local_selected_output,
@@ -82,12 +66,10 @@ class VolumeControl(ABC):
     def _find_device(
         devices: dict[Any, str], selected: str | None
     ) -> tuple[int | str | None, str] | None:
-        """Pick the device to control from a ``{id: name}`` mapping.
+        """Pick a device from a ``{id: name}`` mapping.
 
-        Priority: the user-selected device (matched by case-insensitive
-        substring, either direction, since GStreamer and OS device names can
-        differ slightly), then the Reachy Mini sound card. Returns ``None`` to
-        let the caller fall back to the platform default.
+        Prefers the selection (case-insensitive substring, either direction),
+        then the Reachy Mini card, else ``None`` for the platform default.
         """
         if selected:
             sel = selected.lower()

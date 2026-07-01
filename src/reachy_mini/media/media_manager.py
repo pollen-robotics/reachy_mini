@@ -155,7 +155,6 @@ class MediaManager:
         self.camera: Optional[CameraLike] = None
         self.audio: Optional[AudioLike] = None
         self._daemon_url = daemon_url
-        self._log_level = log_level
 
         match self.backend:
             case MediaBackend.NO_MEDIA:
@@ -206,32 +205,16 @@ class MediaManager:
         self.camera = GStreamerCamera(log_level=log_level, camera_specs=camera_specs)
         self.camera.open()
 
-    def _init_audio(
-        self,
-        log_level: str,
-        input_device: Optional[str] = None,
-        output_device: Optional[str] = None,
-    ) -> None:
-        """Initialize the audio system via GStreamer.
-
-        When ``input_device`` / ``output_device`` are not supplied, the
-        current selection is fetched from the daemon's audio-devices API
-        (falling back to the auto-detected device when nothing is selected).
-        """
+    def _init_audio(self, log_level: str) -> None:
+        """Initialize the audio system via GStreamer using the selected devices."""
+        from reachy_mini.daemon.app.routers.audio_devices import (
+            get_selected_input,
+            get_selected_output,
+        )
         from reachy_mini.media.audio_gstreamer import GStreamerAudio
 
-        # Resolve the selected devices from the daemon when not explicitly given.
-        if input_device is None or output_device is None:
-            from reachy_mini.daemon.app.routers.audio_devices import (
-                get_selected_input,
-                get_selected_output,
-            )
-
-            if input_device is None:
-                input_device = get_selected_input()
-            if output_device is None:
-                output_device = get_selected_output()
-
+        input_device = get_selected_input()
+        output_device = get_selected_output()
         self.logger.debug(
             f"Initializing audio (GStreamer, input: {input_device}, "
             f"output: {output_device})..."
@@ -241,44 +224,6 @@ class MediaManager:
             output_device=output_device,
             log_level=log_level,
         )
-
-    def reset_audio(
-        self,
-        input_device: Optional[str] = None,
-        output_device: Optional[str] = None,
-    ) -> None:
-        """Reinitialize the audio system, e.g. after a device-selection change.
-
-        Tears down the current audio instance and creates a new one bound to
-        the given (or daemon-selected) devices, then resumes playback/recording.
-
-        Args:
-            input_device: The new input device name, or ``None`` to use the
-                daemon-selected / auto-detected source.
-            output_device: The new output device name, or ``None`` to use the
-                daemon-selected / auto-detected sink.
-
-        """
-        self.logger.info(
-            f"Resetting audio system (input: {input_device}, output: {output_device})"
-        )
-
-        if self.audio is not None:
-            self.audio.stop_recording()
-            self.audio.stop_playing()
-            self.audio.cleanup()
-            del self.audio
-            self.audio = None
-
-        self._init_audio(self._log_level, input_device, output_device)
-
-        if self.audio is not None:
-            self.audio.start_playing()
-            self.audio.start_recording()
-        else:
-            self.logger.warning(
-                "Could not reset audio system: audio system is not initialized."
-            )
 
     def _init_webrtc(
         self,

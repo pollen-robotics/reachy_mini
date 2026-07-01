@@ -1111,15 +1111,7 @@ class GstMediaServer:
         return [audioconvert, audioresample, capsfilter]
 
     def _selected_device_name(self, direction: str) -> Optional[str]:
-        """Return the user-selected audio device name, or ``None``.
-
-        Reads the selection set via the audio-devices API. ``None`` means
-        nothing is selected, so auto-detection (the Reachy Mini card) is used.
-
-        Args:
-            direction: ``"input"`` (source) or ``"output"`` (sink).
-
-        """
+        """Return the selected device name for direction (input/output), or None."""
         from reachy_mini.daemon.app.routers.audio_devices import (
             get_local_selected_input,
             get_local_selected_output,

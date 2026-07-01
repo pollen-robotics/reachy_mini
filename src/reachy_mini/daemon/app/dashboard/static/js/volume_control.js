@@ -276,21 +276,18 @@ const audioDeviceControl = {
     if (!select) return;
 
     try {
-      // Load available devices
       const devicesResponse = await fetch('/api/audio-devices/output');
       if (devicesResponse.ok) {
         const data = await devicesResponse.json();
         audioDeviceControl.outputDevices = data.devices || [];
       }
 
-      // Load currently selected device
       const selectedResponse = await fetch('/api/audio-devices/output/selected');
       if (selectedResponse.ok) {
         const data = await selectedResponse.json();
         audioDeviceControl.selectedOutput = data.device_name;
       }
 
-      // Populate dropdown
       select.innerHTML = '<option value="">Default</option>';
       audioDeviceControl.outputDevices.forEach(device => {
         const option = document.createElement('option');
@@ -313,21 +310,18 @@ const audioDeviceControl = {
     if (!select) return;
 
     try {
-      // Load available devices
       const devicesResponse = await fetch('/api/audio-devices/input');
       if (devicesResponse.ok) {
         const data = await devicesResponse.json();
         audioDeviceControl.inputDevices = data.devices || [];
       }
 
-      // Load currently selected device
       const selectedResponse = await fetch('/api/audio-devices/input/selected');
       if (selectedResponse.ok) {
         const data = await selectedResponse.json();
         audioDeviceControl.selectedInput = data.device_name;
       }
 
-      // Populate dropdown
       select.innerHTML = '<option value="">Default</option>';
       audioDeviceControl.inputDevices.forEach(device => {
         const option = document.createElement('option');
@@ -351,7 +345,6 @@ const audioDeviceControl = {
 
     try {
       if (deviceName === '') {
-        // Clear selection (use default)
         const response = await fetch('/api/audio-devices/output/selected', {
           method: 'DELETE',
         });
@@ -359,9 +352,11 @@ const audioDeviceControl = {
           audioDeviceControl.selectedOutput = null;
           console.log('Output device cleared (using default)');
           audioDeviceControl.showRestartNotice('output-device-notice');
+        } else {
+          console.error('Failed to clear output device');
+          await audioDeviceControl.loadOutputDevices();
         }
       } else {
-        // Set specific device
         const response = await fetch('/api/audio-devices/output/selected', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -390,7 +385,6 @@ const audioDeviceControl = {
 
     try {
       if (deviceName === '') {
-        // Clear selection (use default)
         const response = await fetch('/api/audio-devices/input/selected', {
           method: 'DELETE',
         });
@@ -398,9 +392,11 @@ const audioDeviceControl = {
           audioDeviceControl.selectedInput = null;
           console.log('Input device cleared (using default)');
           audioDeviceControl.showRestartNotice('input-device-notice');
+        } else {
+          console.error('Failed to clear input device');
+          await audioDeviceControl.loadInputDevices();
         }
       } else {
-        // Set specific device
         const response = await fetch('/api/audio-devices/input/selected', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

@@ -159,18 +159,12 @@ class Daemon:
         self.logger.info("Media hardware re-acquired.")
 
     def restart_media_pipeline(self) -> None:
-        """Rebuild the media-server pipeline so an audio-device change applies.
+        """Rebuild the media-server pipeline so an input-device change applies.
 
-        The mic capture source is built into the sender pipeline at
-        ``start()`` time, so a new input-device selection only takes effect
-        once that pipeline is rebuilt. This lets the device change apply with
-        just the daemon running (no app/session needed).
-
-        Runs on a background thread because the rebuild is blocking GStreamer
-        work. No-op when there is no media server, or when media has been
-        released for direct client access (the app then owns the device, and
-        the selection is applied the next time the daemon re-acquires it).
-        Briefly interrupts any active WebRTC stream.
+        The mic source is baked in at ``start()``, so the pipeline must be
+        rebuilt for a new selection to take effect. Runs on a background thread
+        (blocking GStreamer work) and briefly interrupts any WebRTC stream.
+        No-op when there is no media server or media has been released to an app.
         """
         media_server = self._media_server
         if media_server is None or self._media_released:

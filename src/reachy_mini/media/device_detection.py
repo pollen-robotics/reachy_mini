@@ -487,11 +487,8 @@ def get_audio_device(
 
     Args:
         device_type: ``"Source"`` for microphone or ``"Sink"`` for speaker.
-        target_name: Substring matched against device display names. Defaults
-            to the Reachy Mini Audio card; pass a user-selected device name to
-            resolve that device instead. The returned identifier is always
-            platform-specific so the right element (pulsesink / osxaudiosink /
-            wasapi2sink) can be used.
+        target_name: Substring matched against device display names; defaults
+            to the Reachy Mini Audio card.
 
     Returns:
         The platform-specific device identifier, or ``None``.

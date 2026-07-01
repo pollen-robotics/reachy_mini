@@ -1,14 +1,6 @@
-"""Audio device selection API routes.
-
-This exposes:
-- list available input devices (microphones)
-- list available output devices (speakers)
-- get/set current input device
-- get/set current output device
-"""
+"""Audio device selection API routes: list, get, and set input/output devices."""
 
 import logging
-from typing import Optional
 
 import requests
 from fastapi import APIRouter, HTTPException, Request
@@ -17,13 +9,12 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/audio-devices")
 logger = logging.getLogger(__name__)
 
-# Constants
 DAEMON_BASE_URL = "http://127.0.0.1:8000"
-DAEMON_API_TIMEOUT = 0.5  # Timeout in seconds for API calls
+DAEMON_API_TIMEOUT = 0.5
 
-# In-memory storage for selected devices (persists until daemon restart)
-_selected_input_device: Optional[str] = None
-_selected_output_device: Optional[str] = None
+# Selected devices live in memory only; they reset when the daemon restarts.
+_selected_input_device: str | None = None
+_selected_output_device: str | None = None
 
 
 class AudioDeviceListResponse(BaseModel):
@@ -35,7 +26,7 @@ class AudioDeviceListResponse(BaseModel):
 class SelectedDeviceResponse(BaseModel):
     """Response model for the currently selected device."""
 
-    device_name: Optional[str]
+    device_name: str | None
 
 
 class SetDeviceRequest(BaseModel):
@@ -45,16 +36,7 @@ class SetDeviceRequest(BaseModel):
 
 
 def get_device_names(device_class: str) -> list[str]:
-    """List available audio device names via the shared GStreamer device monitor.
-
-    Delegates enumeration and parsing to
-    :func:`reachy_mini.media.device_detection.gst_monitor_devices` so device
-    discovery lives in one place.
-
-    Args:
-        device_class: "Audio/Source" for microphones or "Audio/Sink" for speakers.
-
-    """
+    """List device names for a GStreamer class (Audio/Source or Audio/Sink)."""
     # Imported lazily so importing this router does not require GStreamer (gi).
     from reachy_mini.media.device_detection import gst_monitor_devices
 
@@ -72,20 +54,11 @@ def get_device_names(device_class: str) -> list[str]:
 
 
 def _apply_device_change(http_request: Request, *, restart: bool) -> None:
-    """Apply a device-selection change to the daemon's live audio and log how.
+    """Apply a device-selection change to the daemon's live audio (best-effort).
 
-    ``restart=True`` (input device): the mic capture source is baked into the
-    running media pipeline, so the pipeline is rebuilt to apply the change now
-    (briefly interrupting any active audio/video stream). ``restart=False``
-    (output device): the speaker sink is rebuilt on every ``play_sound``, so the
-    change is used on the next sound — no restart needed.
-
-    When an app currently holds the audio device (media released for direct
-    access), the daemon's pipeline isn't running, so the change is only saved:
-    it takes effect on the next app launch, or when the daemon re-acquires the
-    audio hardware. An already-running app does NOT pick it up live.
-
-    Best-effort: logged and ignored if the daemon is unavailable.
+    ``restart=True`` (input) rebuilds the media pipeline now, briefly
+    interrupting any stream; ``restart=False`` (output) is picked up on the
+    next sound. No-op (change only saved) when an app holds the audio device.
     """
     daemon = getattr(http_request.app.state, "daemon", None)
     if daemon is None:
@@ -114,9 +87,6 @@ def _apply_device_change(http_request: Request, *, restart: bool) -> None:
         )
 
 
-# API Endpoints - List Devices
-
-
 @router.get("/output")
 async def get_output_devices() -> AudioDeviceListResponse:
     """List available audio output devices."""
@@ -127,9 +97,6 @@ async def get_output_devices() -> AudioDeviceListResponse:
 async def get_input_devices() -> AudioDeviceListResponse:
     """List available audio input devices."""
     return AudioDeviceListResponse(devices=get_device_names("Audio/Source"))
-
-
-# API Endpoints - Get/Set Selected Device
 
 
 @router.get("/output/selected")
@@ -145,7 +112,6 @@ async def set_selected_output_device(
     """Set the output device to use."""
     global _selected_output_device
 
-    # Verify the device exists
     device_names = get_device_names("Audio/Sink")
     if request.device_name not in device_names:
         raise HTTPException(
@@ -188,7 +154,6 @@ async def set_selected_input_device(
     """Set the input device to use."""
     global _selected_input_device
 
-    # Verify the device exists
     device_names = get_device_names("Audio/Source")
     if request.device_name not in device_names:
         raise HTTPException(
@@ -218,35 +183,27 @@ async def clear_selected_input_device(http_request: Request) -> SelectedDeviceRe
     return SelectedDeviceResponse(device_name=None)
 
 
-# Helper functions for other modules
+def get_local_selected_input() -> str | None:
+    """Return the selected input device name from in-process state (no HTTP).
 
-
-def get_local_selected_input() -> Optional[str]:
-    """Return the in-process selected input device name (no HTTP).
-
-    For daemon-internal consumers (volume control, media server) that run in
-    the same process as this router. Reading the module state directly avoids a
-    blocking self-HTTP call — calling the daemon's own API from within a request
-    can't be served by the busy event loop and would stall until it times out.
+    For daemon-internal callers: a self-HTTP call would stall the busy event loop.
     """
     return _selected_input_device
 
 
-def get_local_selected_output() -> Optional[str]:
-    """Return the in-process selected output device name (no HTTP).
+def get_local_selected_output() -> str | None:
+    """Return the selected output device name from in-process state (no HTTP).
 
-    See :func:`get_local_selected_input` for why daemon-internal callers must
-    not go through the HTTP helper.
+    See :func:`get_local_selected_input` for why daemon-internal callers avoid HTTP.
     """
     return _selected_output_device
 
 
-def get_selected_input() -> Optional[str]:
-    """Get the currently selected input device name.
+def get_selected_input() -> str | None:
+    """Get the selected input device name (for out-of-process SDK clients).
 
-    For out-of-process clients (e.g. the SDK ``MediaManager``): tries the
-    daemon API first, then falls back to local module state. Daemon-internal
-    callers should use :func:`get_local_selected_input` instead.
+    Tries the daemon API, then falls back to module state; daemon-internal
+    callers should use :func:`get_local_selected_input`.
     """
     try:
         response = requests.get(
@@ -260,14 +217,14 @@ def get_selected_input() -> Optional[str]:
     except (requests.RequestException, ValueError) as e:
         logger.debug(f"Could not fetch input device from daemon API: {e}")
 
-    # Fallback to local module variable (loaded from config file at import)
     return _selected_input_device
 
 
-def get_selected_output() -> Optional[str]:
-    """Get the currently selected output device name.
+def get_selected_output() -> str | None:
+    """Get the selected output device name (for out-of-process SDK clients).
 
-    Tries to fetch from the daemon API first, falls back to local config file.
+    Tries the daemon API, then falls back to module state; daemon-internal
+    callers should use :func:`get_local_selected_output`.
     """
     try:
         response = requests.get(
@@ -281,5 +238,4 @@ def get_selected_output() -> Optional[str]:
     except (requests.RequestException, ValueError) as e:
         logger.debug(f"Could not fetch output device from daemon API: {e}")
 
-    # Fallback to local module variable (loaded from config file at import)
     return _selected_output_device

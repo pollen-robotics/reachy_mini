@@ -509,6 +509,190 @@
         }
       }
     },
+    "/api/audio-devices/output": {
+      "get": {
+        "summary": "Get Output Devices",
+        "description": "List available audio output devices.",
+        "operationId": "get_output_devices_api_audio_devices_output_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioDeviceListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audio-devices/input": {
+      "get": {
+        "summary": "Get Input Devices",
+        "description": "List available audio input devices.",
+        "operationId": "get_input_devices_api_audio_devices_input_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioDeviceListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audio-devices/output/selected": {
+      "get": {
+        "summary": "Get Selected Output Device",
+        "description": "Get the currently selected output device.",
+        "operationId": "get_selected_output_device_api_audio_devices_output_selected_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectedDeviceResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Set Selected Output Device",
+        "description": "Set the output device to use.",
+        "operationId": "set_selected_output_device_api_audio_devices_output_selected_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDeviceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectedDeviceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Clear Selected Output Device",
+        "description": "Clear the selected output device (use default).",
+        "operationId": "clear_selected_output_device_api_audio_devices_output_selected_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectedDeviceResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audio-devices/input/selected": {
+      "get": {
+        "summary": "Get Selected Input Device",
+        "description": "Get the currently selected input device.",
+        "operationId": "get_selected_input_device_api_audio_devices_input_selected_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectedDeviceResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Set Selected Input Device",
+        "description": "Set the input device to use.",
+        "operationId": "set_selected_input_device_api_audio_devices_input_selected_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDeviceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectedDeviceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Clear Selected Input Device",
+        "description": "Clear the selected input device (use default).",
+        "operationId": "clear_selected_input_device_api_audio_devices_input_selected_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectedDeviceResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/camera/specs": {
       "get": {
         "summary": "Get Camera Specs",
@@ -2472,6 +2656,23 @@
         "title": "ApplyAudioConfigResponse",
         "description": "Response body for ``POST /audio/config/apply``."
       },
+      "AudioDeviceListResponse": {
+        "properties": {
+          "devices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Devices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "devices"
+        ],
+        "title": "AudioDeviceListResponse",
+        "description": "Response model for listing audio devices."
+      },
       "AudioParamPair": {
         "properties": {
           "name": {
@@ -3383,6 +3584,41 @@
         ],
         "title": "RobotBackendStatus",
         "description": "Status of the Robot Backend."
+      },
+      "SelectedDeviceResponse": {
+        "properties": {
+          "device_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_name"
+        ],
+        "title": "SelectedDeviceResponse",
+        "description": "Response model for the currently selected device."
+      },
+      "SetDeviceRequest": {
+        "properties": {
+          "device_name": {
+            "type": "string",
+            "title": "Device Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_name"
+        ],
+        "title": "SetDeviceRequest",
+        "description": "Request model for setting the audio device."
       },
       "SourceKind": {
         "type": "string",

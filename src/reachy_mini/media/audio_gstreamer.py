@@ -105,12 +105,10 @@ class GStreamerAudio(AudioBase):
         """Initialize recording and playback pipelines.
 
         Args:
-            input_device: Name of the input device (microphone) to use. When
-                given, it is resolved to a PipeWire node and overrides the
-                auto-detected source. ``None`` keeps the auto-detected source.
-            output_device: Name of the output device (speaker) to use. When
-                given, it is resolved to a PipeWire node and overrides the
-                auto-detected sink. ``None`` keeps the auto-detected sink.
+            input_device: Input device (mic) name, or ``None`` to keep the
+                auto-detected source.
+            output_device: Output device (speaker) name, or ``None`` to keep
+                the auto-detected sink.
             log_level: Logging level for audio operations.
                 Options: ``'DEBUG'``, ``'INFO'``, ``'WARNING'``, ``'ERROR'``,
                 ``'CRITICAL'``.
