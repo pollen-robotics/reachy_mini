@@ -97,6 +97,8 @@ If your cable is plugged properly and you still have issues, it is likely that t
 For more details, see the documentation:  
 [Getting Started](./platforms/reachy_mini/get_started.md)
 
+- Update the firmware to version 2.1.4 or later. Run the [update script](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/firmware/update.sh).
+
 </details>
 
 <details>
