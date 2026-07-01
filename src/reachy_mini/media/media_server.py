@@ -36,6 +36,8 @@ import numpy as np
 from reachy_mini.daemon.utils import (
     CAMERA_PIPE_NAME,
     CAMERA_SOCKET_PATH,
+    CAMERA_TRACKING_PIPE_NAME,
+    CAMERA_TRACKING_SOCKET_PATH,
     SimulationMode,
     is_local_camera_available,
 )
@@ -81,6 +83,12 @@ ICE_NEGOTIATION_DEADLINE_S = 12
 # wire-level emission.
 SESSION_FAILED_REASON_ICE_TIMEOUT = "ice_negotiation_timeout"
 SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
+
+# Downscaled, rate-limited camera stream for the out-of-process face tracker — keeps the
+# daemon's per-frame convert cheap (vs. serving the full-res IPC) so it never starves the
+# control loop. The tracker reports normalized coords, so the exact size only sets accuracy.
+TRACKING_WIDTH = 640
+TRACKING_FPS = 10
 
 
 @dataclass
@@ -237,6 +245,7 @@ class GstMediaServer:
         self._playbin: Optional[Gst.Element] = None
         self._head_wobbler: Optional[HeadWobbler] = None
         self._pipeline_playback: Optional[Gst.Pipeline] = None
+        self._tracking_valve: Optional[Gst.Element] = None
         # Software AEC: set in _configure_audio; the probe is created there and
         # reused across per-peer playback pipelines (see _on_consumer_pad_added).
         self._aec_enabled = False
@@ -246,6 +255,7 @@ class GstMediaServer:
 
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
+        self._tracking_valve = None
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
         self._bus_sender = self._pipeline_sender.get_bus()
         self._bus_sender.add_watch(
@@ -730,6 +740,9 @@ class GstMediaServer:
         # IPC branch: share camera with local applications
         self._build_ipc_branch(tee, pipeline, is_rpi=is_rpi)
 
+        # Tracking branch: cheap downscaled BGR stream for the out-of-process face tracker
+        self._build_tracking_branch(tee, pipeline)
+
         # WebRTC branch
         queue_webrtc = Gst.ElementFactory.make("queue", "queue_webrtc")
         pipeline.add(queue_webrtc)
@@ -980,6 +993,86 @@ class GstMediaServer:
             identity.link(videoconvert_ipc)
             videoconvert_ipc.link(capsfilter_ipc)
             capsfilter_ipc.link(ipc_sink)
+
+    def _build_tracking_branch(self, tee: Gst.Element, pipeline: Gst.Pipeline) -> None:
+        """Build a downscaled, rate-limited BGR IPC branch for the face tracker.
+
+        Mirrors the IPC branch's FD-buffer handling but adds videorate + videoscale so the
+        daemon converts only ~TRACKING_FPS x TRACKING_WIDTH frames. A valve keeps it closed
+        until the backend enables tracking, so it costs nothing when idle.
+        """
+        src_w, src_h = self.resolution
+        width = min(TRACKING_WIDTH, src_w)
+        height = max(2, round(width * src_h / src_w / 2) * 2)
+
+        queue = Gst.ElementFactory.make("queue", "tracking_queue")
+        valve = Gst.ElementFactory.make("valve", "tracking_valve")
+        videorate = Gst.ElementFactory.make("videorate", "tracking_videorate")
+        videoscale = Gst.ElementFactory.make("videoscale", "tracking_videoscale")
+        videoconvert = Gst.ElementFactory.make("videoconvert", "tracking_videoconvert")
+        capsfilter = Gst.ElementFactory.make("capsfilter", "tracking_capsfilter")
+        pre_convert: list[Gst.Element] = []
+
+        if platform.system() == "Windows":
+            sink = Gst.ElementFactory.make("win32ipcvideosink")
+            if sink is not None:
+                sink.set_property("pipe-name", CAMERA_TRACKING_PIPE_NAME)
+        else:
+            sink = Gst.ElementFactory.make("unixfdsink")
+            identity = Gst.ElementFactory.make("identity", "tracking_identity")
+            if identity is not None:
+                identity.set_property("drop-allocation", True)
+                pre_convert = [identity]
+            if sink is not None:
+                if os.path.exists(CAMERA_TRACKING_SOCKET_PATH):
+                    os.remove(CAMERA_TRACKING_SOCKET_PATH)
+                sink.set_property("socket-path", CAMERA_TRACKING_SOCKET_PATH)
+
+        chain = [
+            queue,
+            valve,
+            videorate,
+            videoscale,
+            *pre_convert,
+            videoconvert,
+            capsfilter,
+            sink,
+        ]
+        if not all(chain):
+            self._logger.warning("Head tracking unavailable: video branch not ready.")
+            return
+
+        queue.set_property("leaky", 2)
+        queue.set_property("max-size-buffers", 1)
+        valve.set_property("drop", True)
+        # Forward sticky events while closed so unixfdsink stays negotiated (CAPS reach it
+        # with no buffers); the default "drop-all" drops CAPS and the sink never flows.
+        valve.set_property("drop-mode", "forward-sticky-events")
+        # The sink starts behind a closed valve: an async sink parks the branch waiting for
+        # a preroll buffer that never arrives while shut, and never recovers when it opens.
+        # Disable preroll and clock sync — this is a detector feed, not a display.
+        for prop in ("async", "sync"):
+            if sink.find_property(prop) is not None:
+                sink.set_property(prop, False)
+        capsfilter.set_property(
+            "caps",
+            Gst.Caps.from_string(
+                f"video/x-raw,format=BGR,width={width},height={height},"
+                f"framerate={TRACKING_FPS}/1"
+            ),
+        )
+
+        for elem in chain:
+            pipeline.add(elem)
+        tee.link(queue)
+        for upstream, downstream in zip(chain, chain[1:]):
+            upstream.link(downstream)
+        self._tracking_valve = valve
+
+    def set_tracking_active(self, active: bool) -> None:
+        """Open/close the face-tracker video branch; the daemon converts only while open."""
+        if self._tracking_valve is not None:
+            self._tracking_valve.set_property("drop", not active)
 
     def _build_rpi_encoder_branch(
         self,
