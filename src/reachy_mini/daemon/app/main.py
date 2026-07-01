@@ -43,6 +43,7 @@ from reachy_mini.daemon.app.routers import (
     volume,
 )
 from reachy_mini.daemon.daemon import Daemon
+from reachy_mini.daemon.robot_app_lock import RobotAppLockState
 from reachy_mini.daemon.utils import SimulationMode
 from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
@@ -64,6 +65,9 @@ logger = logging.getLogger(__name__)
 # plus the native app webview schemes (Tauri/Capacitor), which a browser cannot
 # forge, so the drive-by protection of GHSA-p4cp-8gwf-3fgv holds.
 CORS_ORIGIN_REGEX = r"(https?://(localhost|127\.0\.0\.1)(:\d+)?|tauri://localhost|https?://tauri\.localhost|capacitor://localhost)"
+
+STARTUP_APP_ANTENNA_IDLE_POLL_INTERVAL_S = 0.1
+STARTUP_APP_ANTENNA_BLOCKED_POLL_INTERVAL_S = 0.5
 
 
 @dataclass
@@ -175,6 +179,134 @@ def _make_startup_app_launcher(
     return launch
 
 
+@dataclass
+class _AntennaTouchDetector:
+    """Hysteresis detector for antenna touches relative to commanded target."""
+
+    press_delta_rad: float = 0.25
+    release_delta_rad: float = 0.10
+    _armed: bool = False
+
+    def reset(self) -> None:
+        """Disarm until both antennas are back near their target positions."""
+        self._armed = False
+
+    def update(
+        self,
+        present: tuple[float, float],
+        target: tuple[float, float],
+    ) -> bool:
+        """Return True once when either antenna is pushed away from target."""
+        delta = max(abs(p - t) for p, t in zip(present, target))
+
+        if not self._armed:
+            if delta <= self.release_delta_rad:
+                self._armed = True
+            return False
+
+        if delta >= self.press_delta_rad:
+            self._armed = False
+            return True
+
+        return False
+
+
+def _as_antenna_pair(values: Any) -> tuple[float, float] | None:
+    """Convert a backend antenna vector to a typed pair, or None if missing."""
+    if values is None:
+        return None
+
+    try:
+        return (float(values[0]), float(values[1]))
+    except (IndexError, TypeError, ValueError):
+        return None
+
+
+def _read_current_antenna_pair(backend: Any) -> tuple[float, float] | None:
+    """Read cached antenna positions when available, falling back to backend API."""
+    current = _as_antenna_pair(
+        getattr(backend, "current_antenna_joint_positions", None)
+    )
+    if current is not None:
+        return current
+
+    return _as_antenna_pair(backend.get_present_antenna_joint_positions())
+
+
+def _startup_app_slot_is_free(app_manager: AppManager, daemon: Daemon) -> bool:
+    """Return whether no managed local or remote app currently owns the robot."""
+    return (
+        not app_manager.is_app_running()
+        and daemon.robot_app_lock.status().state == RobotAppLockState.FREE
+    )
+
+
+async def _start_startup_app_if_idle(
+    app_manager: AppManager,
+    daemon: Daemon,
+    name: str,
+) -> bool:
+    """Start the startup app only if the managed app slot is still free."""
+    if not _startup_app_slot_is_free(app_manager, daemon):
+        return False
+
+    try:
+        logger.info(f"Auto-starting app from antenna touch: {name}")
+        await app_manager.start_app(name, evict_remote=False)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to auto-start app '{name}' from antenna touch: {e}")
+        return False
+
+
+async def _watch_antennas_for_startup_app(
+    app_manager: AppManager,
+    daemon: Daemon,
+    name: str,
+    *,
+    detector: _AntennaTouchDetector | None = None,
+    idle_poll_interval_s: float = STARTUP_APP_ANTENNA_IDLE_POLL_INTERVAL_S,
+    blocked_poll_interval_s: float = STARTUP_APP_ANTENNA_BLOCKED_POLL_INTERVAL_S,
+) -> None:
+    """Start the startup app when an idle robot receives an antenna touch."""
+    detector = detector or _AntennaTouchDetector()
+    detector.reset()
+
+    while True:
+        try:
+            backend = daemon.backend
+            if backend is None or not backend.ready.is_set():
+                detector.reset()
+                await asyncio.sleep(blocked_poll_interval_s)
+                continue
+
+            if not _startup_app_slot_is_free(app_manager, daemon):
+                detector.reset()
+                await asyncio.sleep(blocked_poll_interval_s)
+                continue
+
+            present = _read_current_antenna_pair(backend)
+            target = _as_antenna_pair(backend.target_antenna_joint_positions)
+            if present is None or target is None:
+                detector.reset()
+                await asyncio.sleep(idle_poll_interval_s)
+                continue
+
+            if detector.update(present, target):
+                await _start_startup_app_if_idle(app_manager, daemon, name)
+                await asyncio.sleep(blocked_poll_interval_s)
+                continue
+
+            await asyncio.sleep(idle_poll_interval_s)
+        except asyncio.CancelledError:
+            logger.info("Startup app antenna watcher cancelled")
+            raise
+        except Exception as e:
+            logger.warning(f"Startup app antenna watcher error: {e}")
+            detector.reset()
+            await asyncio.sleep(blocked_poll_interval_s)
+
+
 def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
 
@@ -183,6 +315,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
         dataset_updater_task: asyncio.Task[None] | None = None
+        startup_app_antenna_watcher_task: asyncio.Task[None] | None = None
 
         mdns = MdnsServiceRegistration(
             args.robot_name,
@@ -234,10 +367,12 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             # unit boots asleep (--no-wake-up-on-start), so the app is started by
             # a one-shot hook on the first wake-up rather than here.
             on_wake_up_callback = None
+            startup_app_ready = False
             if args.autostart and args.startup_app:
                 if await _ensure_startup_app_installed(
                     app.state.app_manager, args.startup_app
                 ):
+                    startup_app_ready = True
                     on_wake_up_callback = _make_startup_app_launcher(
                         app.state.app_manager, args.startup_app
                     )
@@ -257,6 +392,24 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     on_wake_up_callback=on_wake_up_callback,
                 )
 
+            if (
+                args.autostart
+                and args.startup_app
+                and startup_app_ready
+                and app.state.daemon.backend is not None
+            ):
+                startup_app_antenna_watcher_task = asyncio.create_task(
+                    _watch_antennas_for_startup_app(
+                        app.state.app_manager,
+                        app.state.daemon,
+                        args.startup_app,
+                    )
+                )
+                logger.info(
+                    "Startup app antenna watcher started for app: "
+                    f"{args.startup_app}"
+                )
+
             # Register mDNS service only after the daemon is ready
             mdns.register()
 
@@ -267,6 +420,17 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                 dataset_updater_task.cancel()
                 try:
                     await dataset_updater_task
+                except asyncio.CancelledError:
+                    pass
+
+            # Cancel startup app antenna watcher before closing the app manager.
+            if (
+                startup_app_antenna_watcher_task
+                and not startup_app_antenna_watcher_task.done()
+            ):
+                startup_app_antenna_watcher_task.cancel()
+                try:
+                    await startup_app_antenna_watcher_task
                 except asyncio.CancelledError:
                     pass
 
