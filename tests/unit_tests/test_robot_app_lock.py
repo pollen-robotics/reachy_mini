@@ -47,6 +47,25 @@ async def test_local_acquire_from_free() -> None:
     assert status.holder_name == "app_a"
 
 
+def test_try_local_acquire_from_free() -> None:
+    """A non-evicting local acquire succeeds only when the lock is free."""
+    lock = RobotAppLock()
+    assert lock.try_acquire_local("app_a") is True
+    status = lock.status()
+    assert status.state == RobotAppLockState.LOCAL_APP
+    assert status.holder_name == "app_a"
+
+
+def test_try_local_acquire_refused_while_remote_held() -> None:
+    """A non-evicting local acquire must not displace a remote session."""
+    lock = RobotAppLock()
+    assert lock.try_acquire_remote("remote") is True
+    assert lock.try_acquire_local("app_a") is False
+    status = lock.status()
+    assert status.state == RobotAppLockState.REMOTE_SESSION
+    assert status.holder_name == "remote"
+
+
 @pytest.mark.asyncio
 async def test_local_release_returns_to_free() -> None:
     """Releasing local returns to free and clears the holder name."""
