@@ -55,9 +55,7 @@ async def start_startup_app(app_manager: AppManager, name: str) -> None:
         logger.error(f"Failed to auto-start app '{name}': {e}")
 
 
-def make_startup_app_launcher(
-    app_manager: AppManager, name: str
-) -> Callable[[], None]:
+def make_startup_app_launcher(app_manager: AppManager, name: str) -> Callable[[], None]:
     """Build a one-shot, synchronous callback that launches the startup app.
 
     Wired into the backend's wake-up hook so the app starts after the robot
@@ -186,6 +184,10 @@ async def wake_or_start_startup_app_if_idle(
             logger.info(f"Waking up from antenna touch before starting app: {name}")
             backend.set_motor_control_mode(MotorControlMode.Enabled)
             await backend.wake_up()
+            # wake_up() may fire the daemon-level startup-app callback, which
+            # schedules the same app start as a task. Yield once so that task
+            # can acquire the app slot before this antenna path checks it.
+            await asyncio.sleep(0)
             if not _startup_app_slot_is_free(app_manager, daemon):
                 return True
         else:
@@ -230,7 +232,11 @@ async def watch_antennas_for_startup_app(
                 continue
 
             if detector.update(present):
-                await wake_or_start_startup_app_if_idle(app_manager, daemon, name)
+                started = await wake_or_start_startup_app_if_idle(
+                    app_manager, daemon, name
+                )
+                if not started:
+                    detector.reset()
                 await asyncio.sleep(blocked_poll_interval_s)
                 continue
 

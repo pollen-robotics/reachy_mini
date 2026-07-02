@@ -220,8 +220,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     )
                 )
                 logger.info(
-                    "Startup app antenna watcher started for app: "
-                    f"{args.startup_app}"
+                    f"Startup app antenna watcher started for app: {args.startup_app}"
                 )
 
             # Register mDNS service only after the daemon is ready
@@ -617,7 +616,8 @@ def main() -> None:
         default=default_args.startup_app,
         dest="startup_app",
         help="Name of an app to start automatically after the robot wakes up "
-        "(installed from the catalog first if it isn't already installed).",
+        "and from an idle antenna touch (installed from the catalog first if "
+        "it isn't already installed).",
     )
     parser.add_argument(
         "--goto-sleep-on-stop",

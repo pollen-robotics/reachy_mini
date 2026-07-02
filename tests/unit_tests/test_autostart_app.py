@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from contextlib import suppress
 from threading import Event
 
@@ -26,6 +27,7 @@ class StubAppManager:
         self._installed = installed
         self._catalog = catalog
         self.installed_calls: list[str] = []
+        self.start_attempts: list[str] = []
         self.started: list[str] = []
         self.evict_remote_values: list[bool] = []
         self.running = False
@@ -42,6 +44,7 @@ class StubAppManager:
         return self.running
 
     async def start_app(self, name: str, *, evict_remote: bool = True) -> None:
+        self.start_attempts.append(name)
         if self.running:
             raise RuntimeError("An app is already running")
         self.started.append(name)
@@ -61,6 +64,7 @@ class StubBackend:
         self.wake_up_calls = 0
         self.played_sounds: list[str] = []
         self.goto_target_calls = 0
+        self.on_wake_up_callback: Callable[[], None] | None = None
 
     def get_present_antenna_joint_positions(self) -> list[float]:
         return self.present
@@ -73,6 +77,8 @@ class StubBackend:
 
     async def wake_up(self) -> None:
         self.wake_up_calls += 1
+        if self.on_wake_up_callback is not None:
+            self.on_wake_up_callback()
 
     def play_sound(self, sound_file: str) -> None:
         self.played_sounds.append(sound_file)
@@ -198,6 +204,24 @@ async def test_antenna_touch_wakes_sleeping_robot_before_starting_app() -> None:
 
 
 @pytest.mark.asyncio
+async def test_antenna_touch_wake_does_not_duplicate_startup_callback() -> None:
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    daemon = StubDaemon()
+    daemon.backend.motor_control_mode = MotorControlMode.Disabled
+    daemon.backend.on_wake_up_callback = make_startup_app_launcher(
+        mgr,
+        "foo",  # type: ignore[arg-type]
+    )
+
+    assert await wake_or_start_startup_app_if_idle(mgr, daemon, "foo") is True  # type: ignore[arg-type]
+
+    assert daemon.backend.wake_up_calls == 1
+    assert mgr.start_attempts == ["foo"]
+    assert mgr.started == ["foo"]
+    assert mgr.evict_remote_values == [False]
+
+
+@pytest.mark.asyncio
 async def test_antenna_touch_plays_awake_sound_before_starting_app() -> None:
     mgr = StubAppManager(installed=["foo"], catalog=[])
     daemon = StubDaemon()
@@ -244,6 +268,45 @@ async def test_antenna_watcher_starts_app_on_touch() -> None:
         assert mgr.evict_remote_values == [False]
         assert daemon.backend.played_sounds == ["wake_up.wav"]
         assert daemon.backend.goto_target_calls == 0
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+
+@pytest.mark.asyncio
+async def test_antenna_watcher_resets_detector_after_start_failure() -> None:
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    daemon = StubDaemon()
+    detector = AntennaTouchDetector()
+
+    async def boom(name: str, *, evict_remote: bool = True) -> None:
+        mgr.start_attempts.append(name)
+        raise RuntimeError("start failed")
+
+    mgr.start_app = boom  # type: ignore[assignment]
+    task = asyncio.create_task(
+        watch_antennas_for_startup_app(
+            mgr,  # type: ignore[arg-type]
+            daemon,  # type: ignore[arg-type]
+            "foo",
+            detector=detector,
+            idle_poll_interval_s=0.01,
+            blocked_poll_interval_s=1.0,
+        )
+    )
+
+    try:
+        await asyncio.sleep(0.03)
+        daemon.backend.present = [0.30, 0.0]
+        for _ in range(20):
+            if mgr.start_attempts:
+                break
+            await asyncio.sleep(0.01)
+
+        assert mgr.start_attempts == ["foo"]
+        assert detector._reference is None
+        assert detector._armed is False
     finally:
         task.cancel()
         with suppress(asyncio.CancelledError):
