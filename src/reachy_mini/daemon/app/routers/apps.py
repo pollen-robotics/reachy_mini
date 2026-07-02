@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.manager import AppManager, AppStatus
+from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.dependencies import get_app_manager
 
@@ -156,6 +157,39 @@ async def current_app_status(
 ) -> AppStatus | None:
     """Get the status of the currently running app, if any."""
     return await app_manager.current_app_status()
+
+
+class StartupApp(BaseModel):
+    """The app configured to auto-start on the robot's first wake-up."""
+
+    startup_app: Optional[str] = None
+
+
+@router.get("/startup-app")
+async def get_startup_app() -> StartupApp:
+    """Get the app configured to auto-start on wake-up (null if unset)."""
+    return StartupApp(startup_app=startup_app_config.get_startup_app())
+
+
+@router.put("/startup-app")
+async def set_startup_app(
+    body: StartupApp,
+    app_manager: "AppManager" = Depends(get_app_manager),
+) -> StartupApp:
+    """Set (or clear, with null) the app that auto-starts on wake-up.
+
+    The app must already be installed; install it via /apps/install first.
+    """
+    name = body.startup_app
+    if name:
+        installed = await app_manager.list_available_apps(SourceKind.INSTALLED)
+        if not any(a.name == name for a in installed):
+            raise HTTPException(
+                status_code=400, detail=f"App '{name}' is not installed"
+            )
+
+    startup_app_config.set_startup_app(name)
+    return StartupApp(startup_app=name)
 
 
 class PrivateSpaceInstallRequest(BaseModel):

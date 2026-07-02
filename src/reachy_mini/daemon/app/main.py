@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.app.middleware import MaxBodySizeMiddleware
 from reachy_mini.daemon.app.routers import (
     apps,
@@ -96,7 +97,6 @@ class Args:
 
     wake_up_on_start: bool = True
     goto_sleep_on_stop: bool = True
-    startup_app: str | None = None  # app name to auto-start after wake-up
     preload_datasets: bool = False
     dataset_update_interval_hours: float = 24.0  # 0 to disable periodic updates
 
@@ -181,14 +181,15 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             # unit boots asleep (--no-wake-up-on-start), so the app is started by
             # a one-shot hook on the first wake-up rather than here.
             on_wake_up_callback = None
+            startup_app = startup_app_config.get_startup_app()
             startup_app_ready = False
-            if args.autostart and args.startup_app:
+            if args.autostart and startup_app:
                 if await ensure_startup_app_installed(
-                    app.state.app_manager, args.startup_app
+                    app.state.app_manager, startup_app
                 ):
                     startup_app_ready = True
                     on_wake_up_callback = make_startup_app_launcher(
-                        app.state.app_manager, args.startup_app
+                        app.state.app_manager, startup_app
                     )
 
             if args.autostart:
@@ -208,7 +209,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
             if (
                 args.autostart
-                and args.startup_app
+                and startup_app
                 and startup_app_ready
                 and app.state.daemon.backend is not None
             ):
@@ -216,11 +217,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     watch_antennas_for_startup_app(
                         app.state.app_manager,
                         app.state.daemon,
-                        args.startup_app,
+                        startup_app,
                     )
                 )
                 logger.info(
-                    f"Startup app antenna watcher started for app: {args.startup_app}"
+                    f"Startup app antenna watcher started for app: {startup_app}"
                 )
 
             # Register mDNS service only after the daemon is ready
@@ -609,15 +610,6 @@ def main() -> None:
         action="store_false",
         dest="wake_up_on_start",
         help="Do not wake up the robot on daemon start (default: False).",
-    )
-    parser.add_argument(
-        "--startup-app",
-        type=str,
-        default=default_args.startup_app,
-        dest="startup_app",
-        help="Name of an app to start automatically after the robot wakes up "
-        "and from an idle antenna touch (installed from the catalog first if "
-        "it isn't already installed).",
     )
     parser.add_argument(
         "--goto-sleep-on-stop",

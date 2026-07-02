@@ -1,11 +1,15 @@
 import asyncio
 from collections.abc import Callable
 from contextlib import suppress
+from pathlib import Path
 from threading import Event
 
 import pytest
+from fastapi import HTTPException
 
 from reachy_mini.apps import AppInfo, SourceKind
+from reachy_mini.daemon import startup_app_config
+from reachy_mini.daemon.app.routers import apps as apps_router
 from reachy_mini.daemon.app.startup_app import (
     AntennaTouchDetector,
     ensure_startup_app_installed,
@@ -391,3 +395,63 @@ async def test_launcher_starts_app_once_across_multiple_wakes() -> None:
     await asyncio.sleep(0)  # let the scheduled task(s) run
 
     assert mgr.started == ["foo"]
+
+
+@pytest.fixture
+def config_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Point the startup-app config at a temp file."""
+    path = tmp_path / "daemon_config.json"
+    monkeypatch.setattr(startup_app_config, "_config_path", lambda: path)
+    return path
+
+
+def test_config_round_trip(config_file: Path) -> None:
+    assert startup_app_config.get_startup_app() is None  # missing file
+    startup_app_config.set_startup_app("foo")
+    assert startup_app_config.get_startup_app() == "foo"
+    startup_app_config.set_startup_app("bar")
+    assert startup_app_config.get_startup_app() == "bar"
+
+
+def test_config_clear(config_file: Path) -> None:
+    startup_app_config.set_startup_app("foo")
+    startup_app_config.set_startup_app(None)
+    assert startup_app_config.get_startup_app() is None
+
+
+def test_config_corrupt_file_reads_as_none(config_file: Path) -> None:
+    config_file.write_text("{ not json")
+    assert startup_app_config.get_startup_app() is None
+
+
+@pytest.mark.asyncio
+async def test_set_startup_app_endpoint_rejects_uninstalled(config_file: Path) -> None:
+    mgr = StubAppManager(installed=["foo"], catalog=["bar"])
+    with pytest.raises(HTTPException) as exc:
+        await apps_router.set_startup_app(
+            apps_router.StartupApp(startup_app="bar"), mgr  # type: ignore[arg-type]
+        )
+    assert exc.value.status_code == 400
+    assert startup_app_config.get_startup_app() is None  # nothing persisted
+
+
+@pytest.mark.asyncio
+async def test_set_startup_app_endpoint_persists_installed(config_file: Path) -> None:
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    result = await apps_router.set_startup_app(
+        apps_router.StartupApp(startup_app="foo"), mgr  # type: ignore[arg-type]
+    )
+    assert result.startup_app == "foo"
+    assert startup_app_config.get_startup_app() == "foo"
+    assert (await apps_router.get_startup_app()).startup_app == "foo"
+
+
+@pytest.mark.asyncio
+async def test_set_startup_app_endpoint_clears_with_null(config_file: Path) -> None:
+    startup_app_config.set_startup_app("foo")
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    result = await apps_router.set_startup_app(
+        apps_router.StartupApp(startup_app=None), mgr  # type: ignore[arg-type]
+    )
+    assert result.startup_app is None
+    assert startup_app_config.get_startup_app() is None
