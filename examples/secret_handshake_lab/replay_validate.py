@@ -1,13 +1,16 @@
-"""Replay the recorded secret-handshake moves through CollisionDetector.
+"""Replay the recorded secret-handshake moves through the detector + machine.
 
-This is the offline calibration / regression harness. It downloads the
-recordings the human made with Marionette, runs the pure detector over them,
-and prints per-file results so thresholds can be tuned on real data instead of
-guesses.
+Offline regression for the coupled-motion collision law. It downloads the
+recordings the human made with Marionette and asserts:
+
+  - the collision detector finds the knocks on every default*.json (the
+    intended gesture: bring-together clack + 3 taps => 3 to 7 collisions)
+  - it finds ZERO collisions in the 30 s of collision-definition*.json
+    (antennas touching and sliding the whole time: coupling, but no knocks)
+  - the FULL state machine (pose gate included) reaches PRIMED on the
+    default recordings whose head pose arms, and never fires an action
 
 Dataset: https://huggingface.co/datasets/RemiFabre/secret-handshake
-  - default*.json           : human's "valid first step" recordings
-  - collision-definition*.json : antennas swept through the full contact range
 
 Run:
     python examples/secret_handshake_lab/replay_validate.py
@@ -24,6 +27,9 @@ from pose_gate import head_in_sleep_pose
 
 REPO_ID = "RemiFabre/secret-handshake"
 
+DEFAULTS = ["default.json", "default2.json", "default3.json", "default4.json"]
+SLIDES = ["collision-definition.json", "collision-definition2.json"]
+
 
 def load_moves() -> dict[str, dict]:
     from huggingface_hub import snapshot_download
@@ -38,25 +44,19 @@ def load_moves() -> dict[str, dict]:
     return moves
 
 
-def replay(move: dict, cfg: CollisionConfig) -> dict:
-    det = CollisionDetector(cfg)
-    t = [row for row in move["time"]]
-    t0 = t[0]
-    onsets = []
-    contact_ticks = 0
-    for i, frame in enumerate(move["set_target_data"]):
+def count_collisions(move: dict) -> list[float]:
+    det = CollisionDetector(CollisionConfig())
+    t0 = move["time"][0]
+    knocks = []
+    for t, frame in zip(move["time"], move["set_target_data"]):
         ant0, ant1 = frame["antennas"]
-        if det.update(ant0, ant1):
-            onsets.append(round(t[i] - t0, 2))
-        if det.in_contact:
-            contact_ticks += 1
-    dt = (t[-1] - t[0]) / max(1, len(t) - 1)
-    return {"onsets": onsets, "contact_s": round(contact_ticks * dt, 2)}
+        if det.update(t - t0, ant0, ant1):
+            knocks.append(round(t - t0, 2))
+    return knocks
 
 
-def replay_machine(move: dict, counter: str = "edge") -> list[tuple[float, str]]:
-    """Run the FULL handshake state machine over a recording."""
-    machine = HandshakeStateMachine(HandshakeConfig(counter=counter))
+def replay_machine(move: dict) -> list[tuple[float, str]]:
+    machine = HandshakeStateMachine(HandshakeConfig())
     t0 = move["time"][0]
     events = []
     for t, frame in zip(move["time"], move["set_target_data"]):
@@ -74,47 +74,44 @@ def replay_machine(move: dict, counter: str = "edge") -> list[tuple[float, str]]
 
 
 def main() -> None:
-    cfg = CollisionConfig()
-    print(f"CollisionConfig(t_on={cfg.t_on}, t_off={cfg.t_off})  diff = ant0 - ant1\n")
     moves = load_moves()
+    failures = []
+
+    print("Collision detector (coupled-motion law) on the recordings:\n")
     for name, move in moves.items():
-        r = replay(move, cfg)
-        print(f"  {name:28s} onsets={len(r['onsets'])} at {r['onsets']}  contact={r['contact_s']}s")
+        knocks = count_collisions(move)
+        if name in SLIDES and knocks:
+            failures.append(f"{name}: {len(knocks)} collisions on slide data (want 0)")
+        if name in DEFAULTS and not 3 <= len(knocks) <= 7:
+            failures.append(f"{name}: {len(knocks)} collisions (want 3-7)")
+        print(f"  {name:28s} collisions={len(knocks)} at {knocks}")
 
     print(
-        "\nFull state machine, counter='edge' (regression: at most 1 onset per\n"
-        "file, so it must never prime, let alone act):\n"
-    )
-    bad = False
-    for name, move in moves.items():
-        events = replay_machine(move, counter="edge")
-        kinds = {e for _, e in events}
-        fired = kinds - {"armed"}
-        if fired:
-            bad = True
-        verdict = "FALSE POSITIVE!" if fired else "ok"
-        print(f"  {name:28s} events={events}  {verdict}")
-
-    print(
-        "\nFull state machine, counter='knock' (informative: default*.json ARE\n"
-        "the intended round-1 gesture, so PRIMED there means the knock counter\n"
-        "hears the 3 knocks that edge counting misses):\n"
+        "\nFull state machine replay (pose gate from recorded head pose).\n"
+        "default*.json ARE the round-1 gesture: PRIMED must fire when the\n"
+        "head pose arms. No recording contains a full two-round handshake,\n"
+        "so no ACTION event may ever fire:\n"
     )
     for name, move in moves.items():
-        events = replay_machine(move, counter="knock")
-        print(f"  {name:28s} events={events}")
+        events = replay_machine(move)
+        kinds = [e for _, e in events]
+        if any(k.startswith("action") for k in kinds):
+            failures.append(f"{name}: fired {kinds} (no action may fire)")
+        if name in SLIDES and "primed" in kinds:
+            failures.append(f"{name}: primed on slide data")
+        if name in DEFAULTS and "armed" in kinds and "primed" not in kinds:
+            failures.append(f"{name}: armed but never primed on the gesture")
+        note = ""
+        if name in DEFAULTS and "armed" not in kinds:
+            note = "  (head pose never armed: known outlier, see README)"
+        print(f"  {name:28s} events={events}{note}")
 
-    if bad:
-        raise SystemExit("false positive on recorded data, tune thresholds")
-    print(
-        "\nNote: in the recorded joint-angle data the antennas stay together\n"
-        "once brought into contact, so edge-counting sees 1 onset per file even\n"
-        "though 3 knocks are audible. These recordings validate the CONTACT\n"
-        "scalar and the rest/sleep pose. The 3-tap RHYTHM must be confirmed\n"
-        "live with live_contact_probe.py during a real hit-release-hit-release-\n"
-        "hit gesture (tune t_on/t_off, or switch to the knock-peak counter if\n"
-        "the natural gesture keeps light contact between knocks). See the spec."
-    )
+    if failures:
+        print("\nREGRESSION FAILURES:")
+        for f in failures:
+            print(" -", f)
+        raise SystemExit(1)
+    print("\nAll regressions pass.")
 
 
 if __name__ == "__main__":
