@@ -1,12 +1,17 @@
-"""Live antenna-collision probe. Prints contact state in real time.
+"""Live low-level collision probe. Prints the coupled-motion signals raw.
 
-This is the "first step before touching the daemon": run it, disable torque,
-wiggle the antennas around, and watch for false positives / missed collisions.
-It uses the exact same pure CollisionDetector that will later go in the daemon,
-so whatever you tune here transfers directly.
+Lower-level than live_handshake_probe.py: no state machine, no beeps, just
+the exact per-tick numbers the detector sees. Use it to stare at the signal
+while playing with the antennas and to tune CollisionConfig:
 
-It does NOT enable torque and does NOT move the robot. It only reads present
-antenna positions and prints. Antennas stay floppy so you can play with them.
+    ant0/ant1  present antenna positions (rad); absolute values are
+               meaningless (floppy friction-fit parts), only motion matters
+    m          coupled speed = min(|v0|, |v1|): ~0 at rest and for
+               single-antenna motion, 0.3-1.2 while rubbing, spikes 4-9
+               on a knock
+
+It does NOT enable torque and does NOT move the robot. Antennas stay floppy
+so you can play with them.
 
 Run on the robot (or against a robot on the LAN):
     python examples/secret_handshake_lab/live_contact_probe.py
@@ -24,23 +29,26 @@ from reachy_mini import ReachyMini
 def main() -> None:
     cfg = CollisionConfig()
     det = CollisionDetector(cfg)
-    print(f"CollisionConfig(t_on={cfg.t_on}, t_off={cfg.t_off})  diff = ant0 - ant1")
+    print(
+        f"CollisionConfig(knock_on={cfg.knock_on}, couple_on={cfg.couple_on}, "
+        f"refractory={cfg.knock_refractory_s}s)"
+    )
     print("Reading present antenna positions at 50 Hz. Ctrl-C to stop.")
     print("Torque is left untouched; disable it so the antennas are floppy.\n")
 
-    onset_count = 0
+    knock_count = 0
     with ReachyMini(media_backend="no_media") as mini:
         while True:
+            t = time.monotonic()
             ant0, ant1 = mini.get_present_antenna_joint_positions()
-            new = det.update(ant0, ant1)
-            if new:
-                onset_count += 1
-            diff = ant0 - ant1
-            state = "CONTACT" if det.in_contact else "  ...  "
-            flag = f"  <-- collision #{onset_count}" if new else ""
+            knock = det.update(t, ant0, ant1)
+            if knock:
+                knock_count += 1
+            state = "COUPLED" if det.coupled else "  ...  "
+            flag = f"  <-- collision #{knock_count}" if knock else ""
             print(
-                f"ant0={ant0:+.3f} ant1={ant1:+.3f} diff={diff:+.3f}  {state}{flag}",
-                end="\r" if not new else "\n",
+                f"ant0={ant0:+.3f} ant1={ant1:+.3f} m={det.coupled_speed:5.2f}  {state}{flag}",
+                end="\r" if not knock else "\n",
                 flush=True,
             )
             time.sleep(0.02)
