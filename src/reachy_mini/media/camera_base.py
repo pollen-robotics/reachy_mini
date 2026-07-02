@@ -24,6 +24,7 @@ from reachy_mini.media.camera_constants import (
     MujocoCameraSpecs,
 )
 from reachy_mini.media.camera_utils import scale_intrinsics
+from reachy_mini.media.gstreamer_utils import encode_bgr_to_jpeg
 
 
 class CameraBase(ABC):
@@ -157,6 +158,13 @@ class CameraBase(ABC):
 
         """
         ...
+
+    def read_jpeg(self) -> Optional[bytes]:
+        """Pull the latest frame encoded as JPEG bytes, or ``None`` if unavailable."""
+        frame = self.read()
+        if frame is None:
+            return None
+        return encode_bgr_to_jpeg(frame, self.logger)
 
     @abstractmethod
     def close(self) -> None:

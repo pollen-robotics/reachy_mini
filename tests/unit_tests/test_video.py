@@ -1,4 +1,5 @@
 import time
+import logging
 from typing import cast
 
 import numpy as np
@@ -12,6 +13,7 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
+from reachy_mini.media.gstreamer_utils import encode_bgr_to_jpeg
 
 SIGNALING_HOST = "reachy-mini.local"
 
@@ -135,3 +137,19 @@ def test_change_resolution_errors(backend: MediaBackend) -> None:
         media.camera.set_resolution(CameraResolution.R1280x720at30fps)
 
     media.close()
+
+
+@pytest.mark.video
+def test_encode_bgr_to_jpeg_preserves_color() -> None:
+    """A red BGR frame encodes to a JPEG that decodes back to red."""
+    cv2 = pytest.importorskip("cv2")
+
+    frame = np.zeros((32, 32, 3), dtype=np.uint8)
+    frame[:, :, 2] = 255  # BGR red
+    jpeg = encode_bgr_to_jpeg(frame, logging.getLogger(__name__))
+    assert jpeg is not None
+    assert jpeg[:2] == b"\xff\xd8"
+
+    decoded = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
+    blue, green, red = (int(c) for c in decoded[16, 16])
+    assert red > 200 and green < 40 and blue < 40
