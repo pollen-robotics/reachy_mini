@@ -1,0 +1,1 @@
+WARNING  reachy_mini.daemon.robot_app_lock:robot_app_lock.py:204 RobotAppLock.release_local: holder mismatch (expected='not_app_a' holder='app_a'); releasing anyway

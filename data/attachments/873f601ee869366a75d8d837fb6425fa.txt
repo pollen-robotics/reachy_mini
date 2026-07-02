@@ -1,1 +1,0 @@
-ERROR    reachy_mini.daemon.app.main:main.py:143 Failed to install startup app 'bar': network down

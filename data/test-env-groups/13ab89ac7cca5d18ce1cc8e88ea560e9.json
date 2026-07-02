@@ -1,1 +1,1 @@
-{"id":"13ab89ac7cca5d18ce1cc8e88ea560e9","fullName":"tests.unit_tests.test_undistort.TestUndistortPointsVsOpenCV#test_reachy_mini_lite_12_coeffs","name":"test_reachy_mini_lite_12_coeffs[1919.0-1079.0]","status":"passed","testResultsByEnv":{"default":"a8550ffa4912e3f6128219364ffe9c6e"}}
+{"id":"13ab89ac7cca5d18ce1cc8e88ea560e9","fullName":"tests.unit_tests.test_undistort.TestUndistortPointsVsOpenCV#test_reachy_mini_lite_12_coeffs","name":"test_reachy_mini_lite_12_coeffs[640.0-360.0]","status":"passed","testResultsByEnv":{"default":"3ed7bb95b6d55cea31f1407a49e2cbf8"}}

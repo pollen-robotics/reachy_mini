@@ -1,1 +1,0 @@
-ERROR    reachy_mini.daemon.app.main:main.py:153 Failed to auto-start app 'foo': an app is already running

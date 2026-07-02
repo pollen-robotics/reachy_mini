@@ -1,7 +1,0 @@
-WARNING  reachy_mini.daemon.robot_app_lock:robot_app_lock.py:154 RobotAppLock: remote eviction handler raised
-Traceback (most recent call last):
-  File "/home/runner/work/reachy_mini/reachy_mini/src/reachy_mini/daemon/robot_app_lock.py", line 149, in acquire_local_evicting_remote
-    await self._on_remote_evicted()
-  File "/home/runner/work/reachy_mini/reachy_mini/tests/unit_tests/test_robot_app_lock.py", line 224, in handler
-    raise RuntimeError("simulated tear-down failure")
-RuntimeError: simulated tear-down failure

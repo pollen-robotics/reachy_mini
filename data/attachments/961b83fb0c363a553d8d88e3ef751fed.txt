@@ -1,1 +1,0 @@
-WARNING  root:gstreamer_utils.py:102 Could not validate audio file /tmp/pytest-of-runner/pytest-0/test_non_audio_content_with_au0/sounds/tmpnpnchrxu.upload: gst-stream-error-quark: Could not determine type of stream. (4)
