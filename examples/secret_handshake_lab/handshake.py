@@ -2,25 +2,27 @@
 
 This is the exact logic destined for the 50 Hz control loop, so the rules
 from the spec apply hard here:
-  - update() is a handful of float compares. No I/O, no allocation beyond a
-    tiny tap-time list (max length = taps_required), no numpy.
+  - update() is a handful of float ops. No I/O, no meaningful allocation,
+    no numpy.
   - It never plays sounds or moves the robot. It RETURNS an event; the caller
     (lab script now, daemon later) decides what a PRIMED beep or an action
     sounds like.
-  - Anything partial decays on its own: taps expire out of a rolling window,
-    a primed round times out, torque coming on resets everything.
+  - Anything partial decays on its own: collisions expire out of a rolling
+    window, a primed round times out, torque coming on resets everything.
 
 Two handshakes share the same first round ("the shared prefix"):
 
     sleep pose + torque off
-      -> 3 collisions           => Event.PRIMED       (caller: confirmation beep)
+      -> 3 collisions          => Event.PRIMED      (caller: confirmation beep)
     then, within the timeout:
-      -> 3 more collisions      => Event.ACTION_TAPS  (v1: the emotion)
-      -> one long press-and-hold => Event.ACTION_HOLD (future: WiFi provisioning)
+      -> 3 more collisions     => Event.ACTION_TAPS (v1: the emotion)
+      -> rub the antennas together ~1 s
+                               => Event.ACTION_RUB  (future: WiFi provisioning)
 
-A "collision" is a rising edge of antenna contact (collision.py), debounced by
-a minimum spacing, and all collisions of a round must land inside a rolling
-rhythm window.
+A "collision" is a coupled-motion spike (collision.py): both antennas moving
+fast at once, which only happens when one knocks into the other. The rub is
+sustained gentle coupled motion. Both are immune to where the floppy antennas
+happen to hang, which is why the old absolute-angle law failed live.
 """
 
 from __future__ import annotations
@@ -28,27 +30,20 @@ from __future__ import annotations
 import enum
 from dataclasses import dataclass, field
 
-from collision import CollisionConfig, CollisionDetector, KnockDetector
+from collision import CollisionConfig, CollisionDetector
 
 
 class Event(enum.Enum):
     ARMED = "armed"  # gate passed, now listening for round 1
     PRIMED = "primed"  # round 1 done -> play the confirmation beep
     ACTION_TAPS = "action_taps"  # handshake A complete (3 taps + 3 taps)
-    ACTION_HOLD = "action_hold"  # handshake B complete (3 taps + long hold)
+    ACTION_RUB = "action_rub"  # handshake B complete (3 taps + rub)
     ABORTED = "aborted"  # primed round timed out, back to the start
 
 
 @dataclass(frozen=True)
 class HandshakeConfig:
     collision: CollisionConfig = field(default_factory=CollisionConfig)
-    # How taps are counted (design spec section 5, decide live):
-    #   "edge"  - Counter A: each new contact is a tap; requires releasing
-    #             the antennas between taps. Preferred, strictest.
-    #   "knock" - Counter B superset: contact onsets AND pressure peaks
-    #             during a held contact both count, for users who knock
-    #             without fully separating the antennas.
-    counter: str = "edge"
     # Round structure.
     taps_required: int = 3
     rhythm_window_s: float = 3.0  # all taps of a round inside this window
@@ -58,7 +53,8 @@ class HandshakeConfig:
     # Round 2.
     primed_refractory_s: float = 0.25  # ignore contact right after the beep
     primed_timeout_s: float = 8.0  # no valid round 2 -> abort
-    hold_min_s: float = 1.2  # press-and-hold duration for handshake B
+    rub_min_s: float = 1.0  # sustained coupled motion for handshake B
+    rub_grace_s: float = 0.3  # coupling may dip out briefly during a rub
     # After an action fires, stay inert this long before re-arming.
     cooldown_s: float = 2.0
 
@@ -77,29 +73,26 @@ class HandshakeStateMachine:
     def __init__(self, config: HandshakeConfig | None = None) -> None:
         self.cfg = config or HandshakeConfig()
         self.detector = CollisionDetector(self.cfg.collision)
-        self._knocks = (
-            KnockDetector(self.cfg.collision) if self.cfg.counter == "knock" else None
-        )
         self.state: str = "idle"
+        self.last_sample: tuple[float, float] | None = None
         self._pose_ok_since: float | None = None
         self._taps: list[float] = []
         self._primed_at: float = 0.0
-        self._contact_start: float | None = None  # contact begun while primed
+        self._rub_since: float | None = None  # coupling began (while primed)
+        self._last_coupled_t: float = 0.0
         self._cooldown_until: float = 0.0
 
     @property
     def tap_count(self) -> int:
-        """Taps currently inside the rhythm window (for live display)."""
+        """Collisions currently inside the rhythm window (for live display)."""
         return len(self._taps)
 
     def reset(self) -> None:
         self.state = "idle"
         self.detector.reset()
-        if self._knocks is not None:
-            self._knocks.reset()
         self._pose_ok_since = None
         self._taps.clear()
-        self._contact_start = None
+        self._rub_since = None
 
     def update(
         self,
@@ -109,6 +102,8 @@ class HandshakeStateMachine:
         torque_off: bool,
         head_in_sleep_pose: bool,
     ) -> Event | None:
+        self.last_sample = (ant0, ant1)
+
         if not torque_off:
             if self.state != "idle" or self._pose_ok_since is not None:
                 self.reset()
@@ -119,12 +114,7 @@ class HandshakeStateMachine:
         if self._taps and t - self._taps[0] > self.cfg.rhythm_window_s:
             self._taps.pop(0)
 
-        onset = self.detector.update(ant0, ant1)
-        tap = onset
-        if self._knocks is not None and self._knocks.update(
-            t, ant0 - ant1, self.detector.in_contact, onset
-        ):
-            tap = True
+        knock = self.detector.update(t, ant0, ant1)
 
         if self.state == "idle":
             if head_in_sleep_pose and t >= self._cooldown_until:
@@ -139,12 +129,12 @@ class HandshakeStateMachine:
             return None
 
         if self.state == "armed":
-            if tap and self._count_tap(t):
+            if knock and self._count_tap(t):
                 if len(self._taps) >= self.cfg.taps_required:
                     self.state = "primed"
                     self._primed_at = t
                     self._taps.clear()
-                    self._contact_start = None
+                    self._rub_since = None
                     return Event.PRIMED
             return None
 
@@ -152,24 +142,30 @@ class HandshakeStateMachine:
         if t - self._primed_at > self.cfg.primed_timeout_s:
             self._back_to_idle(t, cooldown_s=0.0)
             return Event.ABORTED
-        if tap:
-            if t - self._primed_at < self.cfg.primed_refractory_s:
-                return None
-            if onset:
-                self._contact_start = t  # only real onsets can start a hold
+        if t - self._primed_at < self.cfg.primed_refractory_s:
+            return None
+        if knock:
+            # A knock is not a rub: tapping must never add up to ACTION_RUB.
+            self._rub_since = None
             if self._count_tap(t) and len(self._taps) >= self.cfg.taps_required:
                 self._back_to_idle(t, cooldown_s=self.cfg.cooldown_s)
                 return Event.ACTION_TAPS
-        elif self._contact_start is not None:
-            if not self.detector.in_contact:
-                self._contact_start = None
-            elif t - self._contact_start >= self.cfg.hold_min_s:
+        elif self.detector.coupled:
+            self._last_coupled_t = t
+            if self._rub_since is None:
+                self._rub_since = t
+            elif t - self._rub_since >= self.cfg.rub_min_s:
                 self._back_to_idle(t, cooldown_s=self.cfg.cooldown_s)
-                return Event.ACTION_HOLD
+                return Event.ACTION_RUB
+        elif (
+            self._rub_since is not None
+            and t - self._last_coupled_t > self.cfg.rub_grace_s
+        ):
+            self._rub_since = None
         return None
 
     def _count_tap(self, t: float) -> bool:
-        """Register a contact onset as a tap. False if it is a bounce."""
+        """Register a collision as a tap. False if it is a bounce."""
         if self._taps and t - self._taps[-1] < self.cfg.min_tap_spacing_s:
             return False
         self._taps.append(t)
@@ -181,5 +177,5 @@ class HandshakeStateMachine:
         self.state = "idle"
         self._pose_ok_since = None
         self._taps.clear()
-        self._contact_start = None
+        self._rub_since = None
         self._cooldown_until = t + cooldown_s

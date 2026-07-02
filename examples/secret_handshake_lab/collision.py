@@ -2,31 +2,34 @@
 
 Pure, dependency-free, fast. This is the ONE thing that will eventually be
 called every tick from the 50 Hz control loop, so it must stay trivial:
-a couple of float compares and a tiny state machine, no allocation, no I/O.
+a handful of float ops, no allocation, no I/O.
 
-Definition of "collision / contact" (derived from real recorded data, see
-replay_validate.py and the design spec):
+THE LAW (validated on RemiFabre/secret-handshake, see analyze_recordings.py):
 
-    Antennas present positions come as [ant0, ant1] (index 0 = left,
-    index 1 = right), in radians.
+The antennas are floppy friction-fit parts. Their angles mean nothing in
+absolute terms: they rest wherever they were last left (one robot rested at
+diff=+0.97 where another rested at -0.35), and the same angle pair can occur
+both touching and not touching (paused mid-slide vs parked crossed). So no
+instantaneous function of the angles can define contact.
 
-    At natural torque-OFF rest the antennas are slightly splayed outward:
-        ant0 ~ -0.18   ant1 ~ +0.17   ->  diff = ant0 - ant1 ~ -0.35
-    When the user brings them together at the center they converge and press:
-        contact begins as diff crosses ~0, firm contact/flex reaches diff 2..5
+What IS distinctive is COUPLED MOTION: when the antennas touch, moving one
+moves the other. With v0, v1 the angular velocities, define
 
-    So a single scalar separates the two states cleanly:
-        diff = ant0 - ant1
-        rest    : diff ~ -0.35
-        contact : diff  >  ~2 (and always > 1.0 once clearly pressing)
+    m = min(|v0|, |v1|)        # coupled speed, rad/s
 
-    We use hysteresis so a held contact is one event, not a flicker:
-        not-in-contact -> in-contact  when diff > T_ON
-        in-contact -> not-in-contact  when diff < T_OFF
+    rest / parked / one antenna moved alone :  m ~ 0
+    touching and sliding (gentle rub)       :  m ~ 0.3 .. 1.2, sustained
+    collision (audible knock)               :  m spikes to 4 .. 9
 
-This module deliberately does NOT know about the head pose, torque state, the
-rhythm, or the state machine above it. It only answers: "are the antennas
-touching right now, and did a new touch just start?"
+Measured on the recordings: every audible knock is an m-spike > 4; thirty
+seconds of slide data never exceed 1.2. Threshold at 2.0 with a refractory
+and each knock counts exactly once, regardless of where the antennas hang,
+which antenna is swung, or which robot it is.
+
+This module deliberately does NOT know about the head pose, torque state,
+rhythm, or the state machine above it. It answers: "did a collision just
+happen?" (update() returns True) and "are the antennas being moved together
+right now?" (.coupled / .coupled_speed).
 """
 
 from __future__ import annotations
@@ -36,93 +39,69 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class CollisionConfig:
-    # Hysteresis thresholds on diff = ant0 - ant1 (radians).
-    # Geometry (from RemiFabre/secret-handshake): antennas splayed at rest give
-    # diff ~ -0.35; they meet at the center ("angles equal") at diff ~ 0; firm
-    # pressing/flex drives diff to +2..+5.
-    #   T_ON  = 0.5 -> just past the touch point, so a deliberate come-together
-    #                  registers but rest noise never does.
-    #   T_OFF = 0.0 -> antennas must return toward center-or-apart before the
-    #                  next touch can count (edge counting for discrete taps).
-    # TUNE THESE LIVE with live_contact_probe.py during a real 3-tap gesture.
-    t_on: float = 0.5
-    t_off: float = 0.0
-    # Knock counting (Counter B, see design spec section 5): while contact is
-    # held, a "knock" is a local pressure peak whose rise above the running
-    # minimum exceeds this prominence (rad), rate-limited by the refractory.
-    # ~0.25 rad prominence observed in the recordings; 0.25 default is snug,
-    # raise if live testing shows double counts.
-    knock_prominence: float = 0.25
-    knock_refractory_s: float = 0.15
+    # Velocity is measured across the last `vel_span` sample steps
+    # (2 steps = 40 ms at 50 Hz): long enough to bridge a stale read,
+    # short enough to catch a knock spike.
+    vel_span: int = 2
+    # Coupled speed above this is a knock (recordings: knocks 4..9, slides
+    # never exceed 1.2, so 2.0 sits in the middle of a wide margin).
+    knock_on: float = 2.0
+    # One collision = one count even if it bounces (recordings show knock
+    # spacing ~0.4 s when tapping naturally).
+    knock_refractory_s: float = 0.25
+    # Coupled speed above this means the antennas are touching and being
+    # moved together (the rub/slide gesture).
+    couple_on: float = 0.25
 
 
 class CollisionDetector:
-    """Stateful edge detector for antenna contact.
+    """Stateful coupled-motion detector for antenna collisions.
 
-    Feed it present antenna positions every tick; it returns whether a NEW
-    contact just started (a rising edge). `in_contact` exposes the current
-    level for debugging / duration logic.
+    Feed it present antenna positions (with the sample time) every tick:
+    update() returns True exactly once per knock. `coupled` / `coupled_speed`
+    expose the sustained-contact signal for the rub gesture and debugging.
     """
 
     def __init__(self, config: CollisionConfig | None = None) -> None:
         self.cfg = config or CollisionConfig()
-        self.in_contact: bool = False
-
-    def reset(self) -> None:
-        self.in_contact = False
-
-    def update(self, ant0: float, ant1: float) -> bool:
-        """Return True exactly on the tick a new contact begins."""
-        diff = ant0 - ant1
-        if self.in_contact:
-            if diff < self.cfg.t_off:
-                self.in_contact = False
-            return False
-        else:
-            if diff > self.cfg.t_on:
-                self.in_contact = True
-                return True
-            return False
-
-
-class KnockDetector:
-    """Counts pressure peaks ("knocks") during SUSTAINED contact.
-
-    Counter B from the design spec: the recordings show the natural gesture
-    can keep the antennas together and knock without a full release, which
-    the edge detector above cannot see. Streaming peak detection: a knock is
-    counted when diff rises `knock_prominence` above the running minimum
-    since the last counted knock, at most once per refractory period.
-
-    The contact ONSET itself is not reported here (the edge path counts it);
-    this only reports the extra knocks inside a held contact.
-    """
-
-    def __init__(self, config: CollisionConfig | None = None) -> None:
-        self.cfg = config or CollisionConfig()
-        self._min_since: float = 0.0
+        self.coupled: bool = False
+        self.coupled_speed: float = 0.0
+        self._hist: list[tuple[float, float, float]] = []  # (t, ant0, ant1)
+        self._prev_m: float = 0.0
         self._last_knock_t: float = -1e9
 
     def reset(self) -> None:
-        self._min_since = 0.0
+        self.coupled = False
+        self.coupled_speed = 0.0
+        self._hist.clear()
+        self._prev_m = 0.0
         self._last_knock_t = -1e9
 
-    def update(self, t: float, diff: float, in_contact: bool, onset: bool) -> bool:
-        """Return True exactly on ticks where a new knock peak is counted."""
-        if onset:
-            self._min_since = diff
+    def update(self, t: float, ant0: float, ant1: float) -> bool:
+        """Return True exactly on the tick a new collision (knock) is seen."""
+        self._hist.append((t, ant0, ant1))
+        if len(self._hist) <= self.cfg.vel_span:
+            return False
+        if len(self._hist) > self.cfg.vel_span + 1:
+            self._hist.pop(0)
+
+        t0, x0, y0 = self._hist[0]
+        dt = t - t0
+        if dt <= 0.0:
+            return False
+        v0 = (ant0 - x0) / dt
+        v1 = (ant1 - y0) / dt
+        m = min(abs(v0), abs(v1))
+
+        self.coupled_speed = m
+        self.coupled = m > self.cfg.couple_on
+
+        knock = (
+            m > self.cfg.knock_on
+            and self._prev_m <= self.cfg.knock_on
+            and t - self._last_knock_t > self.cfg.knock_refractory_s
+        )
+        if knock:
             self._last_knock_t = t
-            return False
-        if not in_contact:
-            return False
-        if diff < self._min_since:
-            self._min_since = diff
-            return False
-        if (
-            diff - self._min_since >= self.cfg.knock_prominence
-            and t - self._last_knock_t >= self.cfg.knock_refractory_s
-        ):
-            self._min_since = diff
-            self._last_knock_t = t
-            return True
-        return False
+        self._prev_m = m
+        return knock
