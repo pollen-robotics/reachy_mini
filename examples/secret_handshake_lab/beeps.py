@@ -24,8 +24,8 @@ SOUNDS: dict[str, list[tuple[float, float]]] = {
     "primed": [(880.0, 0.18)],
     # ascending fanfare: handshake A (3 taps + 3 taps) complete
     "action_taps": [(523.3, 0.09), (659.3, 0.09), (784.0, 0.09), (1046.5, 0.30)],
-    # "ta-ta-daa": handshake B (3 taps + long hold) complete, clearly different
-    "action_hold": [(784.0, 0.12), (0.0, 0.06), (784.0, 0.12), (0.0, 0.06), (1318.5, 0.45)],
+    # "ta-ta-daa": handshake B (3 taps + rub) complete, clearly different
+    "action_rub": [(784.0, 0.12), (0.0, 0.06), (784.0, 0.12), (0.0, 0.06), (1318.5, 0.45)],
     # low buzz: primed round timed out
     "aborted": [(220.0, 0.25)],
 }
