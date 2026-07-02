@@ -11,35 +11,71 @@ See the design spec: `docs/superpowers/specs/2026-07-01-secret-handshake-design.
 
 Torque off, head in the sleep pose, then:
 
-1. 3 antenna collisions -> confirmation beep (PRIMED, the shared prefix)
+1. 3 antenna collisions (knock them together) -> confirmation beep (PRIMED)
 2. within 8 s, either:
    - 3 more collisions -> handshake A fanfare (v1 action: the emotion)
-   - press-and-hold ~1.2 s -> handshake B fanfare (future: WiFi provisioning)
+   - rub the antennas together ~1 s -> handshake B fanfare (future: WiFi)
 
 Do nothing after the beep and it buzzes low and resets. Torque on kills it
 instantly. Everything partial decays on its own.
 
+## The collision law (v2, 2026-07-02)
+
+`m = min(|v0|, |v1|)` where v0, v1 are the antenna angular velocities
+(measured over ~40 ms). A collision is a spike `m > 2.0` rad/s; a rub is
+sustained `m > 0.25`.
+
+Why not angles? The first version used `diff = ant0 - ant1` with absolute
+thresholds and FAILED LIVE: the antennas are floppy friction-fit parts that
+rest wherever they were last left. The live robot rested at diff=+0.97 where
+the dataset robot rested at -0.35, which latched the old detector
+permanently "in contact" so no collision could ever fire. Worse, the same
+angle pair can occur touching (paused mid-slide) and not touching (parked
+crossed after sliding one antenna over the other), so NO function of the
+instantaneous angles can define contact. Coupled motion can: when the
+antennas touch, moving one moves the other; when they do not, the
+non-driven antenna stays still.
+
+Validation on the dataset (`RemiFabre/secret-handshake`, see
+`analyze_recordings.py` and `replay_validate.py`):
+
+- Every audible knock in the 4 `default*.json` gestures appears as an
+  m-spike of 4-9 rad/s (bring-together clack + 3 taps = 4-6 collisions).
+- The 30 s of `collision-definition*.json` (antennas touching and sliding
+  nearly the whole time) contain ZERO spikes above 1.2, and show sustained
+  coupling of 0.3-1.2, which is what the rub gesture uses.
+- The full machine PRIMES on the recorded gestures (the old law never did)
+  and never fires an action on any recording.
+- Single-antenna motion of any speed gives m ~ 0: playing with one antenna
+  cannot trigger anything (the old law false-positived on this).
+- `default4.json` never arms: the head sat ~20 deg shallower than the sleep
+  pose (the spec's pitch outlier). The gate is doing its job; the live ARMED
+  tick sound tells you when the pose is accepted.
+
 ## Files
 
-- `collision.py` - pure contact primitives: `CollisionDetector` (edge with
-  hysteresis) and `KnockDetector` (pressure peaks during a held contact).
-- `handshake.py` - pure `HandshakeStateMachine` + `HandshakeConfig`. The exact
-  logic destined for the 50 Hz control loop (~0.1 us per update). Returns
-  events; never does I/O itself.
+- `collision.py` - pure coupled-motion detector (knock spikes + sustained
+  coupling). The exact primitive for the 50 Hz control loop.
+- `handshake.py` - pure `HandshakeStateMachine` + `HandshakeConfig`
+  (~0.4 us per update). Returns events; never does I/O itself.
 - `pose_gate.py` - pure "is the head in the sleep pose?" check (generous
   tolerances, sampled only while idle).
 - `beeps.py` - stdlib beep rendering/playback for the lab scripts.
   `python beeps.py` auditions all 5 sounds.
-- `test_handshake.py` - 20 synthetic 50 Hz unit tests (both handshakes, both
-  counters, timeouts, debounce, torque resets, repeatability, pose gate).
-- `replay_validate.py` - replays the recorded HF dataset through the detector
-  AND the full machine. Regression: edge mode must never prime on it.
+- `test_handshake.py` - 23 synthetic 50 Hz unit tests (detector, both
+  handshakes, timeouts, single-antenna immunity, base-position immunity,
+  torque resets, repeatability, pose gate).
+- `analyze_recordings.py` - the investigation tool: prints/plots the signals
+  behind the law (`--plot` saves PNGs).
+- `replay_validate.py` - hard regression over the HF recordings: knocks
+  found on gestures, zero on slides, machine primes on gestures, no action
+  ever fires.
 - `live_handshake_probe.py` - ON THE ROBOT: full state machine with beeps.
   This is the thing to test.
-- `sim_keyboard.py` - NO ROBOT: same loop and beeps, Enter = tap,
-  h+Enter = hold. Rehearse the flow at a desk.
-- `live_contact_probe.py` - on-robot raw contact printer (the older,
-  lower-level tester; still useful to stare at `diff` while tuning).
+- `sim_keyboard.py` - NO ROBOT: same loop and beeps, Enter = collision,
+  r+Enter = rub. Rehearse the flow at a desk.
+- `live_contact_probe.py` - on-robot raw signal printer (no state machine,
+  no beeps): watch ant0/ant1/m live while tuning CollisionConfig.
 
 ## Run
 
@@ -51,33 +87,9 @@ python examples/secret_handshake_lab/sim_keyboard.py
 
 # on the robot (torque off so the antennas are floppy)
 python examples/secret_handshake_lab/live_handshake_probe.py
-python examples/secret_handshake_lab/live_handshake_probe.py --counter knock
 python examples/secret_handshake_lab/live_handshake_probe.py --no-pose-gate   # desk mode
 python examples/secret_handshake_lab/live_handshake_probe.py --disable-motors # torque off from here
 ```
 
-## Tap counters (pick live, spec section 5)
-
-- `edge` (default, strict): a tap = a NEW contact; you must release between
-  taps. On the recorded data this can NEVER false-positive (the machine never
-  primes on any recording).
-- `knock` (fallback, lenient): pressure peaks while the antennas stay together
-  also count. On the recordings it primes exactly where the human did the
-  3-knock gesture (default 1-3 at ~2.0-2.5 s), BUT free antenna play
-  (collision-definition files) can fully trigger it. Prefer `edge` if the
-  beep feedback teaches people to separate between taps.
-
-## Findings from the recorded data
-
-- Edge machine on all 6 recordings: arms, never primes. Zero false positives.
-- Knock machine hears the real 3-knock gesture (primes on default 1-3) and is
-  too permissive on deliberate antenna sweeping.
-- `default4.json` never arms: the head sat ~17-23 deg shallower than the sleep
-  pose (the spec's pitch outlier). The gate is doing its job; the live ARMED
-  tick sound tells you when the pose is accepted.
-
-## Contact definition (validated)
-
-`diff = ant0 - ant1` (ant0 = left, ant1 = right, radians).
-Rest ~ -0.35, contact > ~2. Hysteresis: on at `diff > 0.5`, off at `diff < 0`.
-Knocks: prominence 0.25 rad, refractory 150 ms.
+The live status line shows `m` (coupled speed): ~0 at rest and when moving a
+single antenna, spikes above 2 on each knock, 0.3-1.2 while rubbing.

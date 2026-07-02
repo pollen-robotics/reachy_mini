@@ -36,8 +36,9 @@ default in the next ISO, so correctness matters a lot.
 - Enabled by default in the first ISO that ships it, with a config kill switch.
 - WiFi provisioning is a SEPARATE later action (a different second-round
   gesture), not built now. Feasibility notes in section 11.
-- The collision definition is a single scalar on the antenna angles. Validated
-  against real recordings. See section 4.
+- The collision definition is a single scalar on the antenna VELOCITIES
+  (coupled motion), NOT on the angles. Validated against real recordings and
+  live failure analysis. See section 4.
 
 ## 3. Codebase integration points (verified, with locations)
 
@@ -70,65 +71,61 @@ default in the next ISO, so correctness matters a lot.
   repo is the daemon/SDK that gets installed into it. Shipping = the updated
   package lands in the next image; systemd already autostarts the daemon.
 
-## 4. The collision primitive (validated)
+## 4. The collision primitive (v2, coupled motion; validated offline + live evidence)
 
-Antenna present positions arrive as `[ant0, ant1]` = `[left, right]` radians.
-Define one scalar:
+HISTORY, do not repeat this mistake: v1 defined contact on the angle scalar
+`diff = ant0 - ant1` with absolute thresholds (rest ~ -0.35, contact > 0.5).
+It fit the recordings but FAILED LIVE, because the antennas are floppy
+friction-fit parts: they rest wherever they were last left. A live robot
+rested at diff=+0.97 (dataset robot: -0.35), which latched the detector
+permanently "in contact" and no collision could ever fire. Worse, the
+collision-definition recordings END with the antennas slid past each other
+and parked (diff ~ +5.5, NOT touching): the same angle pair can occur both
+touching (paused mid-slide) and not touching (parked crossed), so no
+instantaneous function of the angles can define contact at all.
 
-    diff = ant0 - ant1
+What is distinctive is COUPLED MOTION: the antennas only move together when
+they are touching (one drives the other). With v0, v1 the angular velocities
+(measured over ~40 ms, i.e. 2 control ticks):
 
-Geometry, measured from the recordings (`RemiFabre/secret-handshake`):
+    m = min(|v0|, |v1|)        # "coupled speed", rad/s
 
-    rest (splayed outward, torque off) : diff ~ -0.35
-    antennas meet at center            : diff ~ 0     (the "angles equal" touch)
-    firm press / flex                  : diff  =  +2 .. +5
+    rest / parked / one antenna moved alone :  m ~ 0
+    touching and sliding (gentle rub)       :  m ~ 0.3 .. 1.2, sustained
+    collision (audible knock)               :  m spikes to 4 .. 9
 
-So the two states separate cleanly on one number. Detect contact with
-hysteresis so a held touch is one event, not a flicker:
+Detection (defaults in `CollisionConfig`):
 
-    not-contact -> contact   when diff > T_ON      (default 0.5)
-    contact -> not-contact   when diff < T_OFF     (default 0.0)
+    collision (a countable tap) : rising edge of m > 2.0, refractory 250 ms
+    rub (touching + moving)     : m > 0.25
 
-Rest (-0.35) is far below T_OFF, firm press (+2..5) far above T_ON, so this is
-robust to noise. These exact defaults are validated in
-`examples/secret_handshake_lab/` (1 clean onset on every recording).
+Measured on `RemiFabre/secret-handshake`: every audible knock in the 4
+gesture recordings is an m-spike (4-6 collisions found per file:
+bring-together clack + 3 taps); 30 s of slide data contain ZERO spikes above
+1.2. By construction the law is immune to antenna zero offsets, mounting
+differences, which antenna is swung, and gesture direction. Single-antenna
+motion of any speed gives m ~ 0 (the v1 law false-positived on this).
 
-Optional robustness (add only if live testing shows accidental single-antenna
-triggers): also require centeredness `abs(ant0 + ant1) < S_MAX`. Note the
-recordings show `ant0 + ant1` wanders up to ~1.0 during real contact, so
-S_MAX must be generous (>= 1.2) or it will chop real collisions. Prefer to
-leave it out unless needed.
+Known blind spot: a motionless press is invisible (no motion = no signal).
+Gestures must therefore be about motion: knocks and rubs, not static holds.
 
-Per-robot calibration option: instead of a fixed T_OFF, sample the resting
-`diff` for the first N ticks after arming and set thresholds relative to it.
-This absorbs antenna zero-offset differences between robots. Recommended.
+## 5. Counting "3 collisions" (implemented, confirm live)
 
-## 5. Counting "3 collisions" (implement + confirm live)
+A collision = one coupled-speed spike (section 4). The detector refractory
+(250 ms) merges bounces; the recordings show natural knock spacing ~0.4 s.
 
-The user performs 3 collisions in a short rhythm. IMPORTANT nuance for the
-implementer: in the 4 recorded "default" examples the antennas are brought
-together once and then held (with audible knocks) rather than fully separated
-between knocks, so pure edge-counting sees 1 onset in that data. The 3 knocks
-are real (audible, visible on replay) but do not always fully separate in the
-joint angles. Therefore implement BOTH counters and pick the one that matches
-the user's natural gesture using `live_contact_probe.py`:
+Rhythm gate: 3 collisions within a rolling window (~3 s), minimum spacing
+120 ms. Keep the window lenient for v1; the future "advanced password" can
+tighten timing per user. Note the bring-together clack usually counts as
+collision #1 (it is a real, audible collision), so "knock knock knock" after
+touching may prime one knock early; if live testing shows this feels wrong,
+raise taps_required or start counting only after a quiet gap.
 
-- Counter A, release edges (preferred if the user separates between taps):
-  count rising edges of contact (section 4). Require a release (diff < T_OFF)
-  between counted taps. This is the "discrete tap password" primitive and
-  extends to arbitrary future tap patterns.
-- Counter B, knock peaks (fallback if the user keeps light contact between
-  knocks): while in sustained contact, count local maxima of diff whose
-  prominence (dip on at least one side) exceeds a margin (~0.25 rad seen in
-  data), with a refractory (~150 ms) between counted knocks.
-
-Rhythm gate (both counters): exactly 3 collisions within a rolling window
-(~2.5-3.5 s), with a minimum spacing (~120 ms) so a single bounce is not
-double counted. Keep the window lenient for v1; the future "advanced password"
-can tighten timing per user.
-
-First deliverable is the standalone tester (already scaffolded, section 9) so
-the user can watch for false positives before any daemon change.
+Second-round alternative gesture (handshake B): a RUB, i.e. sustained
+coupling (m > 0.25, dips bridged by a 0.3 s grace) for >= 1.0 s. A knock
+resets the rub timer so vigorous tapping can never add up to a rub. The v1
+"press-and-hold" gesture was dropped: a static hold is invisible to any
+angle-derived signal (section 4 blind spot).
 
 ## 6. Base / sleep pose gate (data-derived, generous)
 
@@ -166,6 +163,7 @@ callbacks to beep and to run the action.
                            prefix of every future handshake)
     PRIMED
       -> run ACTION #1    on 3 more collisions within the window (v1: emotion)
+      -> run ACTION #2    on a rub (sustained coupling >= 1 s, section 5)
       -> (future)         other second-round gestures select other actions
       -> IDLE             on timeout (~8 s) with no valid second round
     after action -> return to sleep + torque OFF -> ARMED again (repeatable)
@@ -201,29 +199,33 @@ Notes:
 ## 9. Offline + on-robot lab (already built, start here)
 
 `examples/secret_handshake_lab/` (kept off the daemon critical path):
-- `collision.py` - the pure `CollisionDetector` (Counter A primitive) and
-  `KnockDetector` (Counter B: pressure peaks during held contact).
+- `collision.py` - the pure coupled-motion `CollisionDetector` (section 4 v2:
+  knock spikes + sustained coupling).
 - `handshake.py` - the pure `HandshakeStateMachine` + `HandshakeConfig`
-  (section 7, built 2026-07-02). Both handshakes: 3 taps + 3 taps ->
-  ACTION_TAPS, 3 taps + long hold -> ACTION_HOLD. ~0.1 us per update. 20
-  synthetic unit tests in `test_handshake.py`.
+  (section 7, rebuilt 2026-07-02 on the v2 law). Both handshakes: 3 taps +
+  3 taps -> ACTION_TAPS, 3 taps + rub -> ACTION_RUB. ~0.4 us per update.
+  23 synthetic unit tests in `test_handshake.py`.
 - `pose_gate.py` - the section 6 sleep-pose gate, pure floats.
-- `replay_validate.py` - runs the detector AND the full machine over the HF
-  recordings. Results: edge machine never primes on any recording (zero false
-  positives); knock machine primes exactly where the human did the 3-knock
-  gesture (default 1-3) but also fully triggers on free antenna play
-  (collision-definition files), so edge stays the default.
+- `analyze_recordings.py` - the investigation tool behind the v2 law
+  (prints stats, `--plot` saves position/velocity PNGs).
+- `replay_validate.py` - hard regression over the HF recordings: 4-6
+  collisions found on every default gesture, ZERO on 30 s of slide data, the
+  full machine PRIMES on the gestures whose head pose arms, and no action
+  ever fires.
 - `live_handshake_probe.py` - ON-ROBOT full-machine tester with beeps
   (primed beep, distinct success fanfares per handshake, abort buzz). Flags:
-  `--counter knock`, `--no-pose-gate`, `--disable-motors`. This is the
-  section 12 step-2 empirical tool now.
-- `sim_keyboard.py` - no-robot rehearsal (Enter = tap, h+Enter = hold), same
-  loop and beeps.
-- `live_contact_probe.py` - on-robot raw contact printer (lower level).
+  `--no-pose-gate`, `--disable-motors`. This is the section 12 step-2
+  empirical tool.
+- `sim_keyboard.py` - no-robot rehearsal (Enter = collision, r+Enter = rub),
+  same loop and beeps.
+- `live_contact_probe.py` - on-robot raw signal printer (ant0/ant1/m, lower
+  level, no state machine).
 - Dataset: https://huggingface.co/datasets/RemiFabre/secret-handshake
   (`default*.json` = intended 3-collision gesture; `collision-definition*.json`
-  = antennas swept through the full contact range). Note: `default4.json` sits
-  ~17-23 deg shallower in pitch than the sleep pose and correctly never arms.
+  = one antenna slid over the other, touching ~90% of the time). Notes:
+  `default4.json` sits ~17-23 deg shallower in pitch than the sleep pose and
+  correctly never arms; the collision-definition files END crossed and parked
+  (diff ~ +5.5, not touching), the key evidence that killed the angle law.
 
 ## 10. Safety and shipping (ISO critical, enabled by default)
 
@@ -260,14 +262,16 @@ separately when ready.
 1. Read section 3, then run `examples/secret_handshake_lab/replay_validate.py`
    to see the primitive pass on real data. Read `collision.py`.
 2. Get `live_handshake_probe.py` onto a real robot, torque off, and have the
-   user perform the full two-round gesture with beep feedback. Decide Counter
-   A vs B (section 5) and lock `t_on`, `t_off`, rhythm window, min spacing.
-   This is the single most important empirical step; do it before writing
-   daemon code. [IN PROGRESS 2026-07-02: tooling ready, awaiting human]
+   user perform the full two-round gesture with beep feedback. Lock
+   `knock_on`, `couple_on`, refractory, rhythm window, rub duration. This is
+   the single most important empirical step; do it before writing daemon
+   code. [IN PROGRESS 2026-07-02: v1 angle law failed this step (see section
+   4 history); v2 coupled-motion law built from that failure, awaiting a new
+   live pass]
 3. Build the pure `HandshakeStateMachine` (section 7) + config dataclass, with
    unit tests driven by the recorded traces and synthetic tap sequences. No
-   hardware imports. [DONE 2026-07-02: both counters, both handshakes, 20
-   tests + HF replay regression all passing]
+   hardware imports. [DONE 2026-07-02: v2 law, both handshakes, 23 tests +
+   HF replay regression all passing; machine primes on the recorded gestures]
 4. Build the action layer (section 8): bundle the emotion subset under
    `assets/handshake_moves/`, write `pick_emotion(hardware_id)` + distribution
    unit test, wire safe playback.
