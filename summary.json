@@ -1,118 +1,40 @@
 {
   "stats": {
-    "total": 273,
-    "passed": 270,
+    "total": 275,
+    "passed": 272,
     "skipped": 3,
-    "new": 15
+    "new": 2
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "625e664dcfeb27b039276735a2408a58",
-      "name": "test_try_local_acquire_from_free",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "530b071905fe8eab9aa29676ec25a8d9",
-      "name": "test_try_local_acquire_refused_while_remote_held",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "c7acdbcb65af764eb8abae34fd4534c6",
-      "name": "test_antenna_watcher_does_not_start_while_app_is_running",
-      "status": "passed",
-      "duration": 51
-    },
-    {
-      "id": "b973c4bcb403b56ec739ff3367aaa274",
-      "name": "test_antenna_touch_plays_awake_sound_before_starting_app",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "71065b6d2730be554026a94d1ad20ba2",
-      "name": "test_antenna_touch_detector_arms_when_idle_pose_is_offset",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "83612689eb59fd6365fde3f2c8b2c841",
-      "name": "test_antenna_touch_wakes_sleeping_robot_before_starting_app",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "d57b31eb6e35e9371f76d3d9bfe9ae82",
-      "name": "test_antenna_touch_detector_triggers_once_until_release",
+      "id": "3fea33500fcd6ae678adc5826afe60a7",
+      "name": "test_stop_leaves_robot_asleep_when_in_sleep_pose",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "9f61d9b0a47e383bf667e0c89f1cda70",
-      "name": "test_antenna_watcher_wakes_from_baseline_when_target_is_missing",
-      "status": "passed",
-      "duration": 62
-    },
-    {
-      "id": "449ddf0bac4166ed32b0d220c875a0a0",
-      "name": "test_antenna_touch_wake_does_not_duplicate_startup_callback",
+      "id": "4a7078a4b610457979b1764c978ba2ea",
+      "name": "test_stop_returns_to_zero_when_awake",
       "status": "passed",
       "duration": 1
-    },
-    {
-      "id": "83ca36f6760b9b1684ba9ba45c7a04f1",
-      "name": "test_awake_startup_cue_only_plays_sound",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "d239fb8d9b8551802fc1beadffc68560",
-      "name": "test_antenna_touch_detector_uses_present_baseline",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "c41e86c84c2dc4c39b6722851a810de8",
-      "name": "test_antenna_watcher_resets_detector_after_start_failure",
-      "status": "passed",
-      "duration": 42
-    },
-    {
-      "id": "98fc8fbeb703962bb1bfce2233d4490d",
-      "name": "test_antenna_watcher_starts_app_on_touch",
-      "status": "passed",
-      "duration": 62
-    },
-    {
-      "id": "3c6394030cb1c5fb32a9765b767df373",
-      "name": "test_antenna_touch_start_uses_non_evicting_app_start",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "ff96d00b85f36dd77a996e958d068a32",
-      "name": "test_antenna_touch_start_skips_when_remote_session_is_active",
-      "status": "passed",
-      "duration": 0
     }
   ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 37149,
-  "createdAt": 1783009151989,
+  "duration": 37162,
+  "createdAt": 1783010081181,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "5ef00182-5d48-4dd9-b4a6-850dad7436e2",
+    "reportId": "83888868-e565-49fd-852d-65c7fa2c4b39",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/28604955166",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/28605919261",
   "href": "awesome/",
   "coverage": 32
 }
