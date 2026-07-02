@@ -13,6 +13,7 @@ import psutil
 from pydantic import BaseModel
 
 from reachy_mini.daemon.backend.robot import RobotBackend
+from reachy_mini.io.protocol import MotorControlMode
 from reachy_mini.utils.interpolation import distance_between_poses
 
 from . import AppInfo, SourceKind
@@ -308,8 +309,10 @@ class AppManager:
                 backend.get_current_head_pose(), backend.SLEEP_HEAD_POSE
             )
             if dist_to_sleep <= SLEEP_POSE_MAGIC_DISTANCE:
+                # pose check only; ensure limp (idempotent)
+                backend.set_motor_control_mode(MotorControlMode.Disabled)
                 self.logger.getChild("runner").info(
-                    "Robot is asleep; leaving it in the sleep pose."
+                    "Robot is asleep; leaving it limp in the sleep pose."
                 )
             else:
                 if isinstance(backend, RobotBackend):
