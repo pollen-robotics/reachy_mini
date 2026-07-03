@@ -47,6 +47,13 @@ SOUNDS: dict[str, list[Tone]] = {
     "handshake_aborted": [
         (140.0, 0.00, 0.30, "sawtooth", 0.15, 90.0),
     ],
+    # gentle "camera is looking" cue for QR WiFi provisioning
+    "wifi_scanning": [
+        (990.0, 0.00, 0.10, "sine", 0.18, None),
+        (1320.0, 0.16, 0.10, "sine", 0.18, None),
+        (990.0, 0.60, 0.10, "sine", 0.12, None),
+        (1320.0, 0.76, 0.10, "sine", 0.12, None),
+    ],
 }
 
 
