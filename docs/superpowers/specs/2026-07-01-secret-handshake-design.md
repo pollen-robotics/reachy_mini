@@ -122,9 +122,11 @@ measured the geometric law above by hand (see
 A collision = one entry into the geometric region (section 4), refractory
 0.25 s; natural knock spacing in the recordings is ~0.4 s.
 
-Rhythm gate: 3 collisions within a rolling window (~3 s), minimum spacing
-120 ms. Keep the window lenient for v1; the future "advanced password" can
-tighten timing per user.
+Rhythm gate (tightened 2026-07-03 per Remi): collisions must come in QUICK
+SUCCESSION: 1 s without a collision resets the count to zero. Minimum
+spacing 120 ms. After the prime beep, round 2 must happen within 3 s.
+A pleasant side effect: the recorded slide play no longer primes (its band
+crossings are more than 1 s apart).
 
 Second-round alternative gesture (handshake B): a gentle HOLD, i.e. staying
 in the collision region for >= 1.0 s (membership dips bridged by a 0.3 s
@@ -169,7 +171,7 @@ callbacks to beep and to run the action.
       -> run ACTION #1    on 3 more collisions within the window (v1: emotion)
       -> run ACTION #2    on a gentle hold in the region (>= 1 s, section 5)
       -> (future)         other second-round gestures select other actions
-      -> IDLE             on timeout (~8 s) with no valid second round
+      -> IDLE             on timeout (3 s) with no valid second round
     after action -> return to sleep + torque OFF -> ARMED again (repeatable)
     torque turns ON at any point -> IDLE (and stays inert while torque on)
 
@@ -291,4 +293,10 @@ separately when ready.
 
 Keep everything pure and small (sections isolated as in this doc). The
 control-loop footprint must stay: read cached antenna positions + head pose
-(already read) -> one function call -> optional callback. Nothing heavier.
+(already read) -> ONE function call -> optional callback. Nothing heavier.
+That one call already exists: `SecretHandshake.update(t, ant0, ant1,
+head_pose, torque_off)` in the lab's handshake.py; the daemon step is
+moving it + wiring the callbacks. Measured cost per call (bench.py,
+M-series Mac): 115 ns with torque ON (all normal use), 874 ns worst case
+under continuous tapping, i.e. <0.005% of the 20 ms tick; expect 5-15x
+slower on the CM4, still negligible.

@@ -11,13 +11,54 @@ See the design spec: `docs/superpowers/specs/2026-07-01-secret-handshake-design.
 
 Torque off, head in the sleep pose, then:
 
-1. 3 antenna collisions (knock them together) -> confirmation beep (PRIMED)
-2. within 8 s, either:
+1. 3 antenna collisions in quick succession -> confirmation beep (PRIMED).
+   A 1 s pause between collisions resets the count.
+2. within 3 s, either:
    - 3 more collisions -> handshake A fanfare (v1 action: the emotion)
    - hold them gently together ~1 s -> handshake B fanfare (future: WiFi)
 
 Do nothing after the beep and it buzzes low and resets. Torque on kills it
 instantly. Everything partial decays on its own.
+
+## Tunables at a glance
+
+One source of truth: `CollisionConfig` (collision.py) and `HandshakeConfig`
+(handshake.py). Current values:
+
+| what | value |
+|---|---|
+| collision region | `l + r` in [-9, 0] deg AND `l` in [20, 150] deg |
+| collision debounce (refractory) | 0.25 s, one count per knock |
+| collisions per round | 3 |
+| sequence reset | 1.0 s without a collision |
+| arming settle | head in sleep pose for 0.5 s |
+| round 2 window | 3.0 s after the prime beep |
+| hold gesture | 1.0 s in the region (0.3 s flicker grace) |
+| cooldown after an action | 2.0 s |
+
+## Control-loop cost (bench.py)
+
+The daemon integration is ONE call per 50 Hz tick:
+`SecretHandshake.update(t, ant0, ant1, head_pose, torque_off)`. Measured
+per-call cost (M-series Mac, numpy 4x4 pose, median of 5x50k calls):
+
+| scenario | ns/call | share of the 20 ms tick |
+|---|---|---|
+| torque ON (all normal robot use) | 115 | 0.0006% |
+| idle, head up (pose gate fails) | 460 | 0.0023% |
+| armed, antennas at rest | 278 | 0.0014% |
+| armed, continuous tap traffic (worst) | 874 | 0.0044% |
+| primed, holding in the band | 295 | 0.0015% |
+
+Worst case is ~23,000x smaller than the tick budget. On the CM4 (Wireless
+robots) expect roughly 5-15x slower, still under 0.07% of the budget.
+
+## Latency note
+
+The state machine reacts on the exact tick. What feels slow in the lab is
+the TEMPORARY sound path: each beep spawns an afplay/aplay process
+(~150-400 ms to open the audio device). The daemon will play through the
+robot speaker instead.
 
 ## The collision law (v3, geometric, 2026-07-03)
 
@@ -82,15 +123,17 @@ geometric definition above instead.
 
 - `collision.py` - the pure geometric collision detector (the definition
   above). The exact primitive for the 50 Hz control loop.
-- `handshake.py` - pure `HandshakeStateMachine` + `HandshakeConfig`
-  (~0.2 us per update). Returns events; never does I/O itself.
+- `handshake.py` - pure `HandshakeStateMachine` + `HandshakeConfig`, and
+  `SecretHandshake`: the single-call facade the daemon loop will use.
+  Returns events; never does I/O itself. Tunables banner at the top.
 - `pose_gate.py` - pure "is the head in the sleep pose?" check (generous
   tolerances, sampled only while idle).
 - `beeps.py` - stdlib beep rendering/playback for the lab scripts.
   `python beeps.py` auditions all 5 sounds.
-- `test_handshake.py` - 25 synthetic 50 Hz unit tests (detector, both
-  handshakes, timeouts, single-antenna immunity, base-position immunity,
-  torque resets, repeatability, pose gate).
+- `test_handshake.py` - 28 synthetic 50 Hz unit tests (detector, both
+  handshakes, quick-succession timing, single-antenna immunity, torque
+  resets, repeatability, pose gate, the SecretHandshake facade).
+- `bench.py` - control-loop cost benchmark (table above).
 - `analyze_recordings.py` - the investigation tool: prints/plots the signals
   behind the law (`--plot` saves PNGs).
 - `replay_validate.py` - hard regression over the HF recordings: knocks
