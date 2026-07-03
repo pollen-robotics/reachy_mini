@@ -5,6 +5,14 @@ playground: the collision definition AND the full two-round handshake state
 machine are validated here, then the same pure logic gets promoted into the
 daemon control loop.
 
+STATUS: promoted. The daemon now ships the default handshake (3 taps ->
+beep -> 3 taps -> success sound) in
+`src/reachy_mini/daemon/backend/secret_handshake.py` (kill switch:
+`REACHY_HANDSHAKE_ENABLED=0`), with sounds rendered from the tap-lab tones
+by `render_daemon_sounds.py`. The lab remains the place to tune and
+re-validate before changing the daemon module. The hold gesture (handshake
+B) exists only in the lab for now.
+
 See the design spec: `docs/superpowers/specs/2026-07-01-secret-handshake-design.md`
 
 ## The gesture
