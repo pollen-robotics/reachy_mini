@@ -91,11 +91,21 @@ async def install_app(
 @router.post("/remove/{app_name}")
 async def remove_app(
     app_name: str,
+    request: Request,
     app_manager: "AppManager" = Depends(get_app_manager),
 ) -> dict[str, str]:
     """Remove an installed app by its name (background, returns job_id)."""
     global _update_cache
     _update_cache = None  # Invalidate cache
+
+    # Clear the startup app if it's the one being removed, so the watcher stops
+    # trying to launch (and reinstall) it.
+    if startup_app_config.get_startup_app() == app_name:
+        startup_app_config.set_startup_app(None)
+        state = request.app.state
+        state.startup_app_antenna_watcher_task = await rearm_startup_app_watcher(
+            app_manager, state.daemon, None, state.startup_app_antenna_watcher_task
+        )
 
     job_id = bg_job_register.run_command("remove", app_manager.remove_app, app_name)
     return {"job_id": job_id}

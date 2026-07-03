@@ -47,6 +47,10 @@ class StubAppManager:
         self.installed_calls.append(app.name)
         self._installed.append(app.name)
 
+    async def remove_app(self, name: str, logger: object) -> None:
+        if name in self._installed:
+            self._installed.remove(name)
+
     def is_app_running(self) -> bool:
         return self.running
 
@@ -560,3 +564,30 @@ def test_commanded_motion_false_for_stable_target() -> None:
 def test_commanded_motion_false_when_sample_missing() -> None:
     assert _antennas_in_commanded_motion(None, (0.0, 0.0)) is False
     assert _antennas_in_commanded_motion((0.0, 0.0), None) is False
+
+
+@pytest.mark.asyncio
+async def test_remove_app_clears_startup_app(
+    config_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    startup_app_config.set_startup_app("foo")
+    monkeypatch.setattr(apps_router.bg_job_register, "run_command", lambda *a, **k: "j1")
+    request = _stub_request(StubDaemon())
+    await apps_router.remove_app(
+        "foo", request, StubAppManager(installed=["foo"], catalog=[])  # type: ignore[arg-type]
+    )
+    assert startup_app_config.get_startup_app() is None
+    assert request.app.state.startup_app_antenna_watcher_task is None  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_remove_other_app_keeps_startup_app(
+    config_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    startup_app_config.set_startup_app("foo")
+    monkeypatch.setattr(apps_router.bg_job_register, "run_command", lambda *a, **k: "j1")
+    request = _stub_request(StubDaemon())
+    await apps_router.remove_app(
+        "bar", request, StubAppManager(installed=["foo", "bar"], catalog=[])  # type: ignore[arg-type]
+    )
+    assert startup_app_config.get_startup_app() == "foo"
