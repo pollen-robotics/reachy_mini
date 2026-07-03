@@ -1,1 +1,1 @@
-{"id":"1584cc75208315f95f15aad74a4491fb","fullName":"tests.unit_tests.test_autostart_app#test_launcher_starts_app_once_across_multiple_wakes","name":"test_launcher_starts_app_once_across_multiple_wakes","status":"passed","testResultsByEnv":{"default":"6d8d4af85546586080e1d2aa89a5d9b6"}}
+{"id":"1584cc75208315f95f15aad74a4491fb","fullName":"tests.unit_tests.test_autostart_app#test_launcher_starts_app_once_across_multiple_wakes","name":"test_launcher_starts_app_once_across_multiple_wakes","status":"passed","testResultsByEnv":{"default":"c40f83cbc1488805615efcd771899dde"}}
