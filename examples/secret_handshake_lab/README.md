@@ -19,7 +19,13 @@ Torque off, head in the sleep pose, then:
 Do nothing after the beep and it buzzes low and resets. Torque on kills it
 instantly. Everything partial decays on its own.
 
-## The collision law (v2, 2026-07-02)
+## The collision law (v2, 2026-07-02) [UNDER REVISION]
+
+STATUS: Remi rejected the velocity-based definition below as not robust
+enough for the final feature and is deriving a purely GEOMETRIC definition
+(angle regions where the antennas collide) by hand, using `position_gui.py`
+(torque toggles + live present positions + snapshot logging). The sections
+below describe the v2 law as implemented in this lab today.
 
 `m = min(|v0|, |v1|)` where v0, v1 are the antenna angular velocities
 (measured over ~40 ms). A collision is a spike `m > 2.0` rad/s; a rub is
@@ -76,6 +82,12 @@ Validation on the dataset (`RemiFabre/secret-handshake`, see
   r+Enter = rub. Rehearse the flow at a desk.
 - `live_contact_probe.py` - on-robot raw signal printer (no state machine,
   no beeps): watch ant0/ant1/m live while tuning CollisionConfig.
+- `position_gui.py` - mini_head_position_gui.py extended for the manual
+  collision investigation: torque toggle buttons (head / antennas
+  separately) with a live present-position readout that keeps streaming
+  while torque is off, and a Snapshot button (Spacebar) that appends the
+  current angles to `antenna_snapshots.csv`. Move the antennas by hand,
+  snapshot the interesting configurations, derive the geometry.
 
 ## Run
 
