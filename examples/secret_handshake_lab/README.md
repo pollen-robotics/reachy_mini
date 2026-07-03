@@ -14,61 +14,60 @@ Torque off, head in the sleep pose, then:
 1. 3 antenna collisions (knock them together) -> confirmation beep (PRIMED)
 2. within 8 s, either:
    - 3 more collisions -> handshake A fanfare (v1 action: the emotion)
-   - rub the antennas together ~1 s -> handshake B fanfare (future: WiFi)
+   - hold them gently together ~1 s -> handshake B fanfare (future: WiFi)
 
 Do nothing after the beep and it buzzes low and resets. Torque on kills it
 instantly. Everything partial decays on its own.
 
-## The collision law (v2, 2026-07-02) [UNDER REVISION]
+## The collision law (v3, geometric, 2026-07-03)
 
-STATUS: Remi rejected the velocity-based definition below as not robust
-enough for the final feature and is deriving a purely GEOMETRIC definition
-(angle regions where the antennas collide) by hand, using `position_gui.py`
-(torque toggles + live present positions + snapshot logging). The sections
-below describe the v2 law as implemented in this lab today.
+Measured by Remi by hand on 2 robots (using `position_gui.py`), in degrees.
+The antennas are in collision "at the center" (y = 0 plane) when BOTH:
 
-`m = min(|v0|, |v1|)` where v0, v1 are the antenna angular velocities
-(measured over ~40 ms). A collision is a spike `m > 2.0` rad/s; a rub is
-sustained `m > 0.25`.
+    1) l_ant + r_ant in [-7, -3]   (~= 0 with a slight consistent asymmetry)
+    2) l_ant        in [20, 150]
 
-Why not angles? The first version used `diff = ant0 - ant1` with absolute
-thresholds and FAILED LIVE: the antennas are floppy friction-fit parts that
-rest wherever they were last left. The live robot rested at diff=+0.97 where
-the dataset robot rested at -0.35, which latched the old detector
-permanently "in contact" so no collision could ever fire. Worse, the same
-angle pair can occur touching (paused mid-slide) and not touching (parked
-crossed after sliding one antenna over the other), so NO function of the
-instantaneous angles can define contact. Coupled motion can: when the
-antennas touch, moving one moves the other; when they do not, the
-non-driven antenna stays still.
+widened by a margin: the default 4 deg margin turns the sum band into
+[-9, -1]. `l_ant` = antenna index 0, `r_ant` = index 1, as returned by
+`get_present_antenna_joint_positions()`. A collision EVENT = entering that
+region; a 0.25 s refractory merges the double band-crossing of a firm press
+(pressing flexes the antennas: sum shoots up to +35..+73 deg, then passes
+back through the band on release).
 
 Validation on the dataset (`RemiFabre/secret-handshake`, see
-`analyze_recordings.py` and `replay_validate.py`):
+`replay_validate.py`, hard regression):
 
-- Every audible knock in the 4 `default*.json` gestures appears as an
-  m-spike of 4-9 rad/s (bring-together clack + 3 taps = 4-6 collisions).
-- The 30 s of `collision-definition*.json` (antennas touching and sliding
-  nearly the whole time) contain ZERO spikes above 1.2, and show sustained
-  coupling of 0.3-1.2, which is what the rub gesture uses.
-- The full machine PRIMES on the recorded gestures (the old law never did)
-  and never fires an action on any recording.
-- Single-antenna motion of any speed gives m ~ 0: playing with one antenna
-  cannot trigger anything (the old law false-positived on this).
-- `default4.json` never arms: the head sat ~20 deg shallower than the sleep
-  pose (the spec's pitch outlier). The gate is doing its job; the live ARMED
-  tick sound tells you when the pose is accepted.
+- EXACTLY 3 collisions on each of the 4 `default*.json` gestures, at the
+  audible knock times. The bring-together does not count: condition 2
+  filters the approach (l still below 20 deg when the band is crossed).
+- Rest is inert: sum (~-2) is in the band but l (~-12) fails condition 2.
+  Same for single-antenna play and the crossed-parked state (sum ~ -11).
+- The full machine primes on the recorded gestures and fires no action on
+  them. `default4.json` never arms (head ~20 deg shallower than the sleep
+  pose, the known outlier; the gate is doing its job).
+- CAVEAT to judge live: slow slide play (`collision-definition*.json`)
+  passes through and lingers in the band, so it can prime and even complete
+  the hold handshake. The real protection is the two-round structure + the
+  sleep-pose gate + torque-off arming.
+
+History, kept so it is not retried: v1 was `diff = ant0 - ant1` with
+absolute thresholds; it failed live because the floppy antennas rest
+wherever they were left (one robot rested at diff +56 deg, another at -20).
+v2 was velocity-based coupled motion; it validated offline but Remi rejected
+dynamics as not robust enough for the final feature and measured the
+geometric definition above instead.
 
 ## Files
 
-- `collision.py` - pure coupled-motion detector (knock spikes + sustained
-  coupling). The exact primitive for the 50 Hz control loop.
+- `collision.py` - the pure geometric collision detector (the definition
+  above). The exact primitive for the 50 Hz control loop.
 - `handshake.py` - pure `HandshakeStateMachine` + `HandshakeConfig`
-  (~0.4 us per update). Returns events; never does I/O itself.
+  (~0.2 us per update). Returns events; never does I/O itself.
 - `pose_gate.py` - pure "is the head in the sleep pose?" check (generous
   tolerances, sampled only while idle).
 - `beeps.py` - stdlib beep rendering/playback for the lab scripts.
   `python beeps.py` auditions all 5 sounds.
-- `test_handshake.py` - 23 synthetic 50 Hz unit tests (detector, both
+- `test_handshake.py` - 25 synthetic 50 Hz unit tests (detector, both
   handshakes, timeouts, single-antenna immunity, base-position immunity,
   torque resets, repeatability, pose gate).
 - `analyze_recordings.py` - the investigation tool: prints/plots the signals
@@ -79,7 +78,7 @@ Validation on the dataset (`RemiFabre/secret-handshake`, see
 - `live_handshake_probe.py` - ON THE ROBOT: full state machine with beeps.
   This is the thing to test.
 - `sim_keyboard.py` - NO ROBOT: same loop and beeps, Enter = collision,
-  r+Enter = rub. Rehearse the flow at a desk.
+  h+Enter = hold. Rehearse the flow at a desk.
 - `live_contact_probe.py` - on-robot raw signal printer (no state machine,
   no beeps): watch ant0/ant1/m live while tuning CollisionConfig.
 - `position_gui.py` - mini_head_position_gui.py extended for the manual
@@ -103,5 +102,5 @@ python examples/secret_handshake_lab/live_handshake_probe.py --no-pose-gate   # 
 python examples/secret_handshake_lab/live_handshake_probe.py --disable-motors # torque off from here
 ```
 
-The live status line shows `m` (coupled speed): ~0 at rest and when moving a
-single antenna, spikes above 2 on each knock, 0.3-1.2 while rubbing.
+The live status lines show `sum` and `l` in degrees plus an IN-BAND flag, so
+you can see exactly why a collision does or does not register.

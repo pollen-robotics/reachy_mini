@@ -1,8 +1,10 @@
 """Investigation tool: what does an antenna collision look like in the data?
 
-Loads the HF recordings and prints/plots the signals that led to the
-coupled-motion collision law. Kept in the repo so the analysis can be rerun
-when new recordings are added to the dataset.
+HISTORY NOTE: this tool's stats explore the (v2) coupled-motion idea, which
+Remi later rejected in favor of the geometric definition measured by hand
+(see collision.py). Kept for the plots and as a record of the analysis.
+
+Loads the HF recordings and prints/plots position and velocity signals.
 
 Findings (2026-07-02, see README):
 - diff = ant0 - ant1 is NOT a usable contact definition. The antennas are
