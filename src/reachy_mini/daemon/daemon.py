@@ -99,6 +99,8 @@ class Daemon:
             None  # GstMediaServer when media is enabled
         )
         self._media_released = False
+        # Wake-word detector, created in start() when --wake-word is set.
+        self._wake_word: Any = None
         if not no_media:
             from reachy_mini.media.media_server import GstMediaServer
 
@@ -233,6 +235,8 @@ class Daemon:
         use_audio: bool = True,  # kept for backward compat, overridden by no_media
         hardware_config_filepath: str | None = None,
         on_wake_up_callback: Callable[[], None] | None = None,
+        wake_word: bool = False,
+        wake_word_threshold: float = 0.85,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
 
@@ -248,6 +252,8 @@ class Daemon:
             use_audio (bool): If True, enable audio. Defaults to True.
             hardware_config_filepath (str | None): Path to the hardware configuration YAML file. Defaults to None.
             on_wake_up_callback (Callable[[], None] | None): Fired once each time the robot finishes waking up. Defaults to None.
+            wake_word (bool): If True, listen for the "wake up" phrase and wake the robot on detection. Requires media (mic). Defaults to False.
+            wake_word_threshold (float): Detection score threshold (0-1). Defaults to 0.85.
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -343,9 +349,58 @@ class Daemon:
                 # Start central signaling relay for remote WebRTC access
                 await self._start_central_signaling_relay()
 
+            # Build the wake-word detector (listens for "wake up" while asleep).
+            if wake_word:
+                if self._media_server is None or not effective_use_audio:
+                    self.logger.warning(
+                        "--wake-word requires media/audio (mic); wake-word disabled."
+                    )
+                else:
+                    loop = asyncio.get_running_loop()
+
+                    async def _wake_from_wake_word() -> None:
+                        assert self.backend is not None
+                        try:
+                            self.logger.info("Wake word heard — waking up.")
+                            self.backend.set_motor_control_mode(
+                                MotorControlMode.Enabled
+                            )
+                            await self.backend.wake_up()
+                        except Exception as e:
+                            self.logger.error(f"Error waking from wake word: {e}")
+
+                    def _on_wake_word() -> None:
+                        # Fired on the detector's pull thread; hop to the loop.
+                        loop.call_soon_threadsafe(
+                            lambda: asyncio.ensure_future(_wake_from_wake_word())
+                        )
+
+                    from reachy_mini.media.wake_word import WakeWordDetector
+
+                    self._wake_word = WakeWordDetector(
+                        on_detection=_on_wake_word,
+                        threshold=wake_word_threshold,
+                        log_level=self.log_level,
+                    )
+                    # Download/load the model now so later resume() is instant
+                    # and never blocks the event loop.
+                    await loop.run_in_executor(None, self._wake_word.preload)
+
             # Wire the wake-up hook before any wake can fire (on-start below, or
             # later via button/REST on the wireless unit, which boots asleep).
-            if on_wake_up_callback is not None:
+            # The wake-word detector stops on wake and (re)starts on sleep, so
+            # its toggles compose with the startup-app launcher on the same hook.
+            if self._wake_word is not None:
+                wake_word_detector = self._wake_word
+
+                def _on_wake_up() -> None:
+                    wake_word_detector.stop()
+                    if on_wake_up_callback is not None:
+                        on_wake_up_callback()
+
+                self.backend.set_on_wake_up_callback(_on_wake_up)
+                self.backend.set_on_goto_sleep_callback(wake_word_detector.start)
+            elif on_wake_up_callback is not None:
                 self.backend.set_on_wake_up_callback(on_wake_up_callback)
 
             if wake_up_on_start:
@@ -362,6 +417,10 @@ class Daemon:
                     self.logger.warning("Wake up interrupted by user.")
                     self._status.state = DaemonState.STOPPING
                     return self._status.state
+
+            # Boots asleep: start listening for the wake word right away.
+            if self._wake_word is not None and not wake_up_on_start:
+                self._wake_word.start()
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon started successfully.")
@@ -412,6 +471,10 @@ class Daemon:
             self._status.state = DaemonState.STOPPING
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
+
+            if self._wake_word is not None:
+                self._wake_word.close()
+                self._wake_word = None
 
             if self._media_server and not self._media_released:
                 # Stop pipeline (NULL) to release camera/audio hardware so

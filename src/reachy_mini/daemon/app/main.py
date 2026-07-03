@@ -97,6 +97,8 @@ class Args:
     wake_up_on_start: bool = True
     goto_sleep_on_stop: bool = True
     startup_app: str | None = None  # app name to auto-start after wake-up
+    wake_word: bool = False  # listen for the "wake up" phrase while asleep
+    wake_word_threshold: float = 0.85
     preload_datasets: bool = False
     dataset_update_interval_hours: float = 24.0  # 0 to disable periodic updates
 
@@ -204,6 +206,8 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     wake_up_on_start=args.wake_up_on_start,
                     hardware_config_filepath=args.hardware_config_filepath,
                     on_wake_up_callback=on_wake_up_callback,
+                    wake_word=args.wake_word,
+                    wake_word_threshold=args.wake_word_threshold,
                 )
 
             if (
@@ -618,6 +622,20 @@ def main() -> None:
         help="Name of an app to start automatically after the robot wakes up "
         "and from an idle antenna touch (installed from the catalog first if "
         "it isn't already installed).",
+    )
+    parser.add_argument(
+        "--wake-word",
+        action="store_true",
+        default=default_args.wake_word,
+        help="Listen for the 'wake up' phrase while asleep and wake the robot "
+        "on detection (requires media/mic and the 'wake-word' extra).",
+    )
+    parser.add_argument(
+        "--wake-word-threshold",
+        type=float,
+        default=default_args.wake_word_threshold,
+        help=f"Wake-word detection threshold, 0-1 "
+        f"(default: {default_args.wake_word_threshold}).",
     )
     parser.add_argument(
         "--goto-sleep-on-stop",

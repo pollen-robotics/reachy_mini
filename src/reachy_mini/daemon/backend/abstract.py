@@ -344,6 +344,9 @@ class Backend:
         # in by `Daemon` to auto-start a configured startup app after the robot
         # wakes (however the wake was triggered: on-start, button, or REST).
         self._on_wake_up_callback: Optional[Callable[[], None]] = None
+        # Synchronous callback fired once every time goto_sleep() completes.
+        # Wired in by `Daemon` to resume the wake-word detector once asleep.
+        self._on_goto_sleep_callback: Optional[Callable[[], None]] = None
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -1034,6 +1037,9 @@ class Backend:
 
         # Rest limp at the sleep pose, like a fresh boot.
         self.set_motor_control_mode(MotorControlMode.Disabled)
+
+        if self._on_goto_sleep_callback is not None:
+            self._on_goto_sleep_callback()
 
     # Motor control modes
     @abstractmethod
@@ -2139,6 +2145,15 @@ class Backend:
         any async work as a task).
         """
         self._on_wake_up_callback = callback
+
+    def set_on_goto_sleep_callback(self, callback: Callable[[], None]) -> None:
+        """Wire a callback fired once each time ``goto_sleep()`` completes.
+
+        ``Daemon`` injects this to resume the wake-word detector once the robot
+        is asleep, regardless of how the sleep was triggered. Runs inside the
+        event loop, so it must return promptly.
+        """
+        self._on_goto_sleep_callback = callback
 
     def setup_media_server(self, media_server: Any) -> None:
         """Connect the backend to the media server.

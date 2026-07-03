@@ -329,6 +329,12 @@ class AppManager:
                 self.logger.getChild("runner").info(
                     "Robot is asleep; leaving it limp in the sleep pose."
                 )
+                # Re-arm the wake-word detector in case the app's goto_sleep
+                # (and its end-of-sleep hook) was cancelled by the app exiting.
+                # start() is idempotent, so this is a no-op if already armed.
+                wake_word = getattr(self.daemon, "_wake_word", None)
+                if wake_word is not None:
+                    wake_word.start()
             else:
                 if isinstance(backend, RobotBackend):
                     backend.enable_motors()

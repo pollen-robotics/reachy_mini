@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-06-18T11:23:44.841359908Z"
+exclude-newer = "2026-06-26T09:06:53.792831702Z"
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
@@ -2102,6 +2102,19 @@ wheels = [
 ]
 
 [[package]]
+name = "nanowakeword"
+version = "2.1.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "onnxruntime" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d4/db/f051437fc07aad0486e54ceab70816dc94951b9fe0efb40fb2636eac09cd/nanowakeword-2.1.3.tar.gz", hash = "sha256:0a1b34101058139ec25dfe5a2069cc241c64601b3874a33c484fd1c64f4951de", size = 153404, upload-time = "2026-05-18T09:15:19.171Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/06/9f/0ea7306396e0b39e67ffa4f751ebb300e991038547f590c4721848cd0019/nanowakeword-2.1.3-py3-none-any.whl", hash = "sha256:30a1a9c8586b1a09c02078964cbcf1decd611a163b0abf921995c717e39ebbd3", size = 151470, upload-time = "2026-05-18T09:15:17.855Z" },
+]
+
+[[package]]
 name = "nmcli"
 version = "1.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3418,6 +3431,7 @@ all = [
     { name = "gradio-client" },
     { name = "lgpio", marker = "sys_platform == 'linux'" },
     { name = "mujoco" },
+    { name = "nanowakeword" },
     { name = "nmcli", marker = "sys_platform == 'linux'" },
     { name = "onnxruntime" },
     { name = "opencv-python" },
@@ -3452,6 +3466,9 @@ placo-kinematics = [
 ]
 rerun = [
     { name = "rerun-sdk" },
+]
+wake-word = [
+    { name = "nanowakeword" },
 ]
 wireless-version = [
     { name = "cryptography" },
@@ -3492,6 +3509,7 @@ requires-dist = [
     { name = "libusb-package", specifier = ">=1.0.26.3" },
     { name = "log-throttling", specifier = "==0.0.3" },
     { name = "mujoco", marker = "extra == 'mujoco'", specifier = "==3.3.0" },
+    { name = "nanowakeword", marker = "extra == 'wake-word'" },
     { name = "nmcli", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.5" },
     { name = "numpy", specifier = ">=2.2.5" },
     { name = "onnxruntime", marker = "extra == 'nn-kinematics'", specifier = "==1.22.1" },
@@ -3517,6 +3535,7 @@ requires-dist = [
     { name = "reachy-mini", extras = ["opencv"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["placo-kinematics"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["rerun"], marker = "extra == 'all'" },
+    { name = "reachy-mini", extras = ["wake-word"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["wireless-version"], marker = "extra == 'all'" },
     { name = "reachy-mini-motor-controller", specifier = ">=1.5.5" },
     { name = "reachy-mini-rust-kinematics", specifier = ">=1.0.3" },
@@ -3534,7 +3553,7 @@ requires-dist = [
     { name = "websockets", specifier = ">=12,<16" },
     { name = "zeroconf", specifier = ">=0.149.7,<1" },
 ]
-provides-extras = ["examples", "mujoco", "nn-kinematics", "placo-kinematics", "rerun", "wireless-version", "opencv", "all"]
+provides-extras = ["examples", "mujoco", "nn-kinematics", "placo-kinematics", "rerun", "wireless-version", "opencv", "wake-word", "all"]
 
 [package.metadata.requires-dev]
 dev = [
