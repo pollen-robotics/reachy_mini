@@ -42,6 +42,8 @@ SOUND_FAILED = "handshake_aborted.wav"
 
 @dataclass(frozen=True)
 class WifiQrCredentials:
+    """Credentials decoded from a WiFi QR code."""
+
     ssid: str
     password: Optional[str]  # None for open networks
     security: str  # "WPA", "WEP", "nopass", ...
@@ -49,7 +51,7 @@ class WifiQrCredentials:
 
 
 def parse_wifi_qr(payload: str) -> Optional[WifiQrCredentials]:
-    """Parse the de-facto standard WiFi QR payload, None if not one.
+    r"""Parse the de-facto standard WiFi QR payload, None if not one.
 
     Format: `WIFI:T:WPA;S:my ssid;P:my pass;H:true;;` with `\\`-escaping of
     the special characters `\\ ; , : "` inside values. Field order is free.
@@ -90,10 +92,14 @@ def parse_wifi_qr(payload: str) -> Optional[WifiQrCredentials]:
     if security.lower() == "nopass":
         password = None
     hidden = fields.get("H", "").lower() == "true"
-    return WifiQrCredentials(ssid=ssid, password=password, security=security, hidden=hidden)
+    return WifiQrCredentials(
+        ssid=ssid, password=password, security=security, hidden=hidden
+    )
 
 
 class ProvisioningState(str, Enum):
+    """Lifecycle of a provisioning run."""
+
     IDLE = "idle"
     SCANNING = "scanning"
     CONNECTING = "connecting"
@@ -104,6 +110,8 @@ class ProvisioningState(str, Enum):
 
 @dataclass
 class ProvisioningStatus:
+    """What the provisioner is doing right now (safe to expose over REST)."""
+
     state: ProvisioningState = ProvisioningState.IDLE
     detail: str = ""
     ssid: Optional[str] = None
@@ -134,6 +142,7 @@ class QrWifiProvisioner:
         connect_timeout_s: float = 45.0,
         scan_period_s: float = 0.25,
     ) -> None:
+        """Store the injected dependencies (see class docstring)."""
         self._camera_factory = camera_factory
         self._qr_decode = qr_decode
         self._connect = connect
@@ -147,6 +156,7 @@ class QrWifiProvisioner:
         self._thread: Optional[threading.Thread] = None
 
     def status(self) -> ProvisioningStatus:
+        """Return the current / last run status."""
         return self._status
 
     def start(self) -> bool:
@@ -194,9 +204,7 @@ class QrWifiProvisioner:
             return
 
         logger.info(f"QR provisioning: connecting to '{creds.ssid}'")
-        self._status = ProvisioningStatus(
-            ProvisioningState.CONNECTING, ssid=creds.ssid
-        )
+        self._status = ProvisioningStatus(ProvisioningState.CONNECTING, ssid=creds.ssid)
         try:
             self._connect(creds.ssid, creds.password)
         except Exception as e:
@@ -264,7 +272,7 @@ _shared_lock = threading.Lock()
 def get_shared_provisioner(
     play_sound: Callable[[str], None], camera_specs: object = None
 ) -> QrWifiProvisioner:
-    """The daemon-wide provisioner (lazy singleton, thread-safe)."""
+    """Return the daemon-wide provisioner (lazy singleton, thread-safe)."""
     global _shared
     with _shared_lock:
         if _shared is None:

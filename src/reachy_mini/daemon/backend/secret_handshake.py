@@ -91,7 +91,7 @@ _REF_PITCH, _REF_ROLL = _pitch_roll(_SLEEP_HEAD_POSE)
 
 
 def head_in_sleep_pose(pose) -> bool:
-    """True when the 4x4 head pose is roughly the sleep pose (yaw ignored)."""
+    """Return True when the 4x4 pose is roughly the sleep pose (yaw ignored)."""
     if abs(pose[0][3] - _SLEEP_HEAD_POSE[0][3]) > _TOL_X_M:
         return False
     if abs(pose[1][3] - _SLEEP_HEAD_POSE[1][3]) > _TOL_Y_M:
@@ -122,6 +122,7 @@ class CollisionDetector:
     """Edge detector for the collision region. update() -> True per collision."""
 
     def __init__(self, config: CollisionConfig | None = None) -> None:
+        """Precompute the margined band bounds from the config."""
         self.cfg = config or CollisionConfig()
         half = self.cfg.margin_deg / 2.0
         self.sum_lo_deg = self.cfg.sum_min_deg - half
@@ -130,10 +131,12 @@ class CollisionDetector:
         self._last_onset_t: float = -1e9
 
     def reset(self) -> None:
+        """Forget any ongoing collision and refractory state."""
         self.in_collision = False
         self._last_onset_t = -1e9
 
     def update(self, t: float, ant0: float, ant1: float) -> bool:
+        """Return True exactly on the tick a new collision is seen."""
         l_deg = ant0 * _RAD2DEG
         sum_deg = l_deg + ant1 * _RAD2DEG
         inside = (
@@ -152,6 +155,8 @@ class CollisionDetector:
 
 
 class Event(enum.Enum):
+    """What just happened; the caller decides what each event does."""
+
     ARMED = "armed"  # gate passed, listening (no sound recommended)
     PRIMED = "primed"  # first 3 collisions -> play the confirmation sound
     SUCCESS = "success"  # 3 more collisions -> play the success sound
@@ -160,6 +165,8 @@ class Event(enum.Enum):
 
 @dataclass(frozen=True)
 class HandshakeConfig:
+    """All handshake tunables (see the banner in the module docstring)."""
+
     collision: CollisionConfig = field(default_factory=CollisionConfig)
     taps_required: int = 3
     max_gap_s: float = 1.0  # 1 s without a collision -> sequence resets
@@ -261,11 +268,13 @@ class SecretHandshake:
     """
 
     def __init__(self, config: HandshakeConfig | None = None) -> None:
+        """Build the detector; pass a HandshakeConfig to tune it."""
         self.machine = _StateMachine(config or HandshakeConfig())
 
     def update(
         self, t: float, ant0: float, ant1: float, head_pose, torque_off: bool
     ) -> Event | None:
+        """Feed one control tick; return an Event to react to, or None."""
         # The machine only consults the pose gate while idle: skip the 4x4
         # checks everywhere else, including the torque-ON path that runs
         # during all normal robot use.
