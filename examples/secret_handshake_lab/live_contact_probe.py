@@ -10,8 +10,9 @@ while playing with the antennas and to tune CollisionConfig:
          (default [-9, 0], see CollisionConfig)
     the collision needs BOTH sum in the band AND l in [20, 150] deg
 
-It does NOT enable torque and does NOT move the robot. Antennas stay floppy
-so you can play with them.
+It disables torque at startup (hold the head if it is up: it will slump) so
+the antennas are floppy and ready to play with; pass --keep-torque to leave
+the motors as they are. It never moves the robot.
 
 Run on the robot (or against a robot on the LAN):
     python examples/secret_handshake_lab/live_contact_probe.py
@@ -19,6 +20,7 @@ Run on the robot (or against a robot on the LAN):
 
 from __future__ import annotations
 
+import argparse
 import math
 import time
 
@@ -28,6 +30,14 @@ from reachy_mini import ReachyMini
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--keep-torque",
+        action="store_true",
+        help="do not touch the motors at startup (default: disable them)",
+    )
+    args = parser.parse_args()
+
     cfg = CollisionConfig()
     det = CollisionDetector(cfg)
     print(
@@ -37,10 +47,13 @@ def main() -> None:
         f"[{cfg.l_min_deg:.0f}, {cfg.l_max_deg:.0f}] deg"
     )
     print("Reading present antenna positions at 50 Hz. Ctrl-C to stop.")
-    print("Torque is left untouched; disable it so the antennas are floppy.\n")
 
     count = 0
     with ReachyMini(media_backend="no_media") as mini:
+        if not args.keep_torque:
+            print("disabling motors (torque off), hold the head if it is up...\n")
+            mini.disable_motors()
+            time.sleep(1.0)
         while True:
             t = time.monotonic()
             ant0, ant1 = mini.get_present_antenna_joint_positions()

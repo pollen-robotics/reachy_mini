@@ -17,9 +17,10 @@ around -5 deg AND l in [20, 150] deg. The status line shows sum and l in
 degrees plus an IN-BAND flag, so you can see exactly why a collision does or
 does not register.
 
-It does NOT move the robot and leaves torque alone (use --disable-motors to
-turn torque off from here; the head will slump, which is the point: the
-handshake only exists in the floppy torque-off world).
+It disables torque at startup (hold the head if it is up: it will slump,
+which is the point: the handshake only exists in the floppy torque-off
+world). Pass --keep-torque to leave the motors as they are. It never moves
+the robot.
 
 Run (robot on, antennas floppy):
     python examples/secret_handshake_lab/live_handshake_probe.py
@@ -67,9 +68,9 @@ def parse_args() -> argparse.Namespace:
         help="skip the sleep-pose check (arm anywhere; handy on a desk)",
     )
     p.add_argument(
-        "--disable-motors",
+        "--keep-torque",
         action="store_true",
-        help="turn torque off at startup (the head will gently slump)",
+        help="do not touch the motors at startup (default: disable them)",
     )
     return p.parse_args()
 
@@ -98,7 +99,7 @@ def main() -> None:
     primed_at: float | None = None
 
     with ReachyMini(media_backend="no_media") as mini:
-        if args.disable_motors:
+        if not args.keep_torque:
             print("disabling motors (torque off), hold the head if it is up...")
             mini.disable_motors()
             time.sleep(1.0)

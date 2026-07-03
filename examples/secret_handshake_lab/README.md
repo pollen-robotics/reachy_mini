@@ -100,10 +100,10 @@ python -m pytest examples/secret_handshake_lab/test_handshake.py -v
 python examples/secret_handshake_lab/replay_validate.py
 python examples/secret_handshake_lab/sim_keyboard.py
 
-# on the robot (torque off so the antennas are floppy)
+# on the robot (both probes turn torque OFF at startup so the antennas are
+# floppy; pass --keep-torque to leave the motors alone)
 python examples/secret_handshake_lab/live_handshake_probe.py
 python examples/secret_handshake_lab/live_handshake_probe.py --no-pose-gate   # desk mode
-python examples/secret_handshake_lab/live_handshake_probe.py --disable-motors # torque off from here
 ```
 
 The live status lines show `sum` and `l` in degrees plus an IN-BAND flag, so
