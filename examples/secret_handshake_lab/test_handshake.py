@@ -26,7 +26,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from collision import CollisionConfig, CollisionDetector  # noqa: E402
-from handshake import Event, HandshakeConfig, HandshakeStateMachine  # noqa: E402
+from handshake import (  # noqa: E402
+    Event,
+    HandshakeConfig,
+    HandshakeStateMachine,
+    SecretHandshake,
+)
 from pose_gate import SLEEP_HEAD_POSE, head_in_sleep_pose  # noqa: E402
 
 DT = 0.02  # 50 Hz, same as the daemon control loop
@@ -229,15 +234,25 @@ def test_two_taps_do_not_prime() -> None:
     r = make_runner()
     r.feed(seg(REST, 1.0) + taps(2))
     assert r.machine.tap_count == 2  # live UI reads this
-    r.feed(seg(REST, 4.0))  # let the rhythm window expire
+    r.feed(seg(REST, 1.5))  # 1 s without a collision resets the sequence
     assert Event.PRIMED not in r.event_kinds()
     assert r.machine.tap_count == 0
 
 
 def test_slow_taps_never_prime() -> None:
     r = make_runner()
-    r.feed(seg(REST, 1.0) + taps(4, release_s=1.7))  # 3 s window holds only 2
+    r.feed(seg(REST, 1.0) + taps(4, release_s=1.2))  # gaps > 1 s: sequence dies
     assert Event.PRIMED not in r.event_kinds()
+
+
+def test_one_second_gap_restarts_the_count() -> None:
+    r = make_runner()
+    r.feed(seg(REST, 1.0) + taps(2))
+    r.feed(seg(REST, 1.2))  # sequence reset
+    r.feed(tap())
+    assert r.machine.tap_count == 1  # this tap starts a NEW sequence
+    r.feed(taps(2))
+    assert r.event_kinds()[-1] == Event.PRIMED  # 3 quick ones prime
 
 
 def test_single_antenna_play_is_inert() -> None:
@@ -282,10 +297,12 @@ def test_taps_do_not_add_up_to_a_hold() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_primed_times_out_then_recovers() -> None:
+def test_primed_times_out_after_3s_then_recovers() -> None:
     r = make_runner()
     r.feed(seg(REST, 1.0) + taps(3))
-    r.feed(seg(REST, 9.0))  # do nothing during round 2
+    r.feed(seg(REST, 2.5))  # not timed out yet (3 s round-2 window)
+    assert r.event_kinds()[-1] == Event.PRIMED
+    r.feed(seg(REST, 1.0))  # now it is
     kinds = r.event_kinds()
     assert kinds[:3] == [Event.ARMED, Event.PRIMED, Event.ABORTED]
     r.feed(taps(3))
@@ -309,6 +326,37 @@ def test_handshake_is_repeatable() -> None:
         r.feed(taps(3))
         r.feed(seg(REST, 0.5) + taps(3))
     assert r.event_kinds().count(Event.ACTION_TAPS) == 2
+
+
+# ---------------------------------------------------------------------------
+# SecretHandshake: the single function the daemon control loop will call
+# ---------------------------------------------------------------------------
+
+
+def test_facade_runs_the_full_handshake_from_raw_inputs() -> None:
+    hs = SecretHandshake()
+    t = 0.0
+    events = []
+    for ant0, ant1 in seg(REST, 1.0) + taps(3) + seg(REST, 0.5) + taps(3):
+        e = hs.update(t, ant0, ant1, head_pose=SLEEP_HEAD_POSE, torque_off=True)
+        if e is not None:
+            events.append(e)
+        t += DT
+    assert events == [Event.ARMED, Event.PRIMED, Event.ACTION_TAPS]
+
+
+def test_facade_pose_gate_blocks_arming() -> None:
+    identity = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+    hs = SecretHandshake()
+    t = 0.0
+    for ant0, ant1 in seg(REST, 2.0):
+        assert hs.update(t, ant0, ant1, head_pose=identity, torque_off=True) is None
+        t += DT
 
 
 # ---------------------------------------------------------------------------
