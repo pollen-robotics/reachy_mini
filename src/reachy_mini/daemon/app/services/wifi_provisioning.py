@@ -251,3 +251,90 @@ class QrWifiProvisioner:
             self._play_sound(name)
         except Exception:
             logger.exception("QR provisioning: sound failed")
+
+
+# ---------------------------------------------------------------------------
+# Production wiring
+# ---------------------------------------------------------------------------
+
+_shared: Optional[QrWifiProvisioner] = None
+_shared_lock = threading.Lock()
+
+
+def get_shared_provisioner(
+    play_sound: Callable[[str], None], camera_specs: object = None
+) -> QrWifiProvisioner:
+    """The daemon-wide provisioner (lazy singleton, thread-safe)."""
+    global _shared
+    with _shared_lock:
+        if _shared is None:
+            _shared = build_default_provisioner(play_sound, camera_specs)
+        return _shared
+
+
+def build_default_provisioner(
+    play_sound: Callable[[str], None], camera_specs: object = None
+) -> QrWifiProvisioner:
+    """Wire the provisioner to the real robot.
+
+    Camera: the media server's IPC branch via GStreamerCamera (the same
+    mechanism local apps use, nothing in the media pipeline changes).
+    QR decoding: cv2.QRCodeDetector, imported lazily; when opencv is not
+    installed the provisioner reports UNAVAILABLE instead of crashing.
+    Connect: the exact nmcli path of the /wifi/connect endpoint, including
+    its revert-to-hotspot fallback, under the same busy lock.
+    """
+
+    def camera_factory() -> object:
+        from reachy_mini.media.camera_gstreamer import GStreamerCamera
+
+        camera = GStreamerCamera(camera_specs=camera_specs)  # type: ignore[arg-type]
+        camera.open()
+        return camera
+
+    qr_decode: Optional[Callable[[object], Optional[str]]] = None
+    try:
+        import cv2
+
+        detector = cv2.QRCodeDetector()
+
+        def qr_decode(frame: object) -> Optional[str]:
+            text, _points, _raw = detector.detectAndDecode(frame)
+            return text or None
+
+    except ImportError:
+        logger.warning("QR provisioning unavailable: opencv is not installed")
+
+    def connect(ssid: str, password: Optional[str]) -> None:
+        from ..routers import wifi_config
+
+        with wifi_config.busy_lock:
+            try:
+                wifi_config.setup_wifi_connection(
+                    name=ssid, ssid=ssid, password=password or ""
+                )
+            except Exception:
+                logger.exception(
+                    f"QR provisioning: connect to '{ssid}' failed, reverting to hotspot"
+                )
+                wifi_config.remove_connection(name=ssid)
+                wifi_config.setup_wifi_connection(
+                    name="Hotspot",
+                    ssid=wifi_config.HOTSPOT_SSID,
+                    password=wifi_config.HOTSPOT_PASSWORD,
+                    is_hotspot=True,
+                )
+                raise
+
+    def wifi_connected() -> bool:
+        from ..routers import wifi_config
+
+        return wifi_config.get_current_wifi_mode() == wifi_config.WifiMode.WLAN
+
+    return QrWifiProvisioner(
+        camera_factory=camera_factory,
+        qr_decode=qr_decode,
+        connect=connect,
+        wifi_connected=wifi_connected,
+        play_sound=play_sound,
+    )
