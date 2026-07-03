@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-06-25T15:29:50.217114583Z"
+exclude-newer = "2026-06-26T14:59:48.662779927Z"
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
@@ -3373,7 +3373,7 @@ wheels = [
 
 [[package]]
 name = "reachy-mini"
-version = "1.8.4"
+version = "1.9.0rc1"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
