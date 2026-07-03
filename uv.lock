@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-06-26T14:56:34.677878034Z"
+exclude-newer = "2026-06-26T14:59:48.662779927Z"
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
@@ -3386,6 +3386,7 @@ dependencies = [
     { name = "log-throttling" },
     { name = "numpy" },
     { name = "pip" },
+    { name = "platformdirs" },
     { name = "psutil" },
     { name = "pulsectl", marker = "sys_platform == 'linux'" },
     { name = "pycaw", marker = "sys_platform == 'win32'" },
@@ -3499,6 +3500,7 @@ requires-dist = [
     { name = "opencv-python", marker = "extra == 'opencv'", specifier = "<=5.0" },
     { name = "pip", specifier = ">=26.1" },
     { name = "placo", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = "==0.9.14" },
+    { name = "platformdirs" },
     { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux' and extra == 'wireless-version'" },
     { name = "psutil" },
     { name = "pulsectl", marker = "sys_platform == 'linux'", specifier = ">=24.1.0" },

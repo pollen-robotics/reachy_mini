@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 STARTUP_APP_ANTENNA_IDLE_POLL_INTERVAL_S = 0.1
 STARTUP_APP_ANTENNA_BLOCKED_POLL_INTERVAL_S = 0.5
+# Per-poll target shift above this means a commanded move (not a physical touch).
+STARTUP_APP_ANTENNA_MOTION_EPS_RAD = 0.02
 
 
 async def ensure_startup_app_installed(app_manager: AppManager, name: str) -> bool:
@@ -135,6 +138,20 @@ def _read_current_antenna_pair(backend: Any) -> tuple[float, float] | None:
     return _as_antenna_pair(backend.get_present_antenna_joint_positions())
 
 
+def _antennas_in_commanded_motion(
+    prev: tuple[float, float] | None,
+    cur: tuple[float, float] | None,
+    eps: float = STARTUP_APP_ANTENNA_MOTION_EPS_RAD,
+) -> bool:
+    """Whether the commanded antenna target moved between two polls.
+
+    A commanded move shifts the target; a physical push moves only present.
+    """
+    if prev is None or cur is None:
+        return False
+    return max(abs(c - p) for c, p in zip(cur, prev)) > eps
+
+
 def _startup_app_slot_is_free(app_manager: AppManager, daemon: "Daemon") -> bool:
     """Return whether no managed local or remote app currently owns the robot."""
     return (
@@ -211,12 +228,14 @@ async def watch_antennas_for_startup_app(
     """Start the startup app when an idle robot receives an antenna touch."""
     detector = detector or AntennaTouchDetector()
     detector.reset()
+    prev_target: tuple[float, float] | None = None
 
     while True:
         try:
             backend = daemon.backend
             if backend is None or not backend.ready.is_set():
                 detector.reset()
+                prev_target = None
                 await asyncio.sleep(blocked_poll_interval_s)
                 continue
 
@@ -224,6 +243,18 @@ async def watch_antennas_for_startup_app(
                 detector.reset()
                 await asyncio.sleep(blocked_poll_interval_s)
                 continue
+
+            # Ignore commanded motion (e.g. the go-to-sleep swing) so it isn't
+            # read as a touch.
+            target = _as_antenna_pair(
+                getattr(backend, "target_antenna_joint_positions", None)
+            )
+            if _antennas_in_commanded_motion(prev_target, target):
+                prev_target = target
+                detector.reset()
+                await asyncio.sleep(idle_poll_interval_s)
+                continue
+            prev_target = target
 
             present = _read_current_antenna_pair(backend)
             if present is None:
@@ -248,3 +279,39 @@ async def watch_antennas_for_startup_app(
             logger.warning(f"Startup app antenna watcher error: {e}")
             detector.reset()
             await asyncio.sleep(blocked_poll_interval_s)
+
+
+async def rearm_startup_app_watcher(
+    app_manager: AppManager,
+    daemon: "Daemon",
+    name: str | None,
+    previous_task: asyncio.Task[None] | None,
+) -> asyncio.Task[None] | None:
+    """Apply a startup-app change to a running daemon, no restart needed.
+
+    Cancels the previous watcher, re-sets the one-shot wake launcher, and starts
+    a fresh watcher for ``name``. Returns the new watcher task (or ``None``).
+    """
+    if previous_task is not None and not previous_task.done():
+        previous_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await previous_task
+
+    backend = daemon.backend
+
+    if not name:
+        if backend is not None:
+            backend.set_on_wake_up_callback(lambda: None)  # kill the spent launcher
+        return None
+
+    if not await ensure_startup_app_installed(app_manager, name):
+        return None
+
+    if backend is None:
+        return None  # not started; lifespan arms from config on start
+
+    backend.set_on_wake_up_callback(make_startup_app_launcher(app_manager, name))
+    logger.info(f"Startup app re-armed for app: {name}")
+    return asyncio.create_task(
+        watch_antennas_for_startup_app(app_manager, daemon, name)
+    )

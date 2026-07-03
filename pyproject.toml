@@ -29,6 +29,7 @@ dependencies = [
     "pyusb>=1.2.1",
     "libusb_package>=1.0.26.3",
     "pip>=26.1",
+    "platformdirs",
     "rich",
     "questionary",
     "websockets>=12,<16",

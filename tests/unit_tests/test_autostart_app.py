@@ -1,16 +1,23 @@
 import asyncio
+import types
 from collections.abc import Callable
 from contextlib import suppress
+from pathlib import Path
 from threading import Event
 
 import pytest
+from fastapi import HTTPException
 
 from reachy_mini.apps import AppInfo, SourceKind
+from reachy_mini.daemon import startup_app_config
+from reachy_mini.daemon.app.routers import apps as apps_router
 from reachy_mini.daemon.app.startup_app import (
     AntennaTouchDetector,
+    _antennas_in_commanded_motion,
     ensure_startup_app_installed,
     make_startup_app_launcher,
     play_awake_startup_cue,
+    rearm_startup_app_watcher,
     start_startup_app,
     start_startup_app_if_idle,
     wake_or_start_startup_app_if_idle,
@@ -39,6 +46,10 @@ class StubAppManager:
     async def install_new_app(self, app: AppInfo, logger: object) -> None:
         self.installed_calls.append(app.name)
         self._installed.append(app.name)
+
+    async def remove_app(self, name: str, logger: object) -> None:
+        if name in self._installed:
+            self._installed.remove(name)
 
     def is_app_running(self) -> bool:
         return self.running
@@ -74,6 +85,9 @@ class StubBackend:
 
     def set_motor_control_mode(self, mode: MotorControlMode) -> None:
         self.motor_control_mode = mode
+
+    def set_on_wake_up_callback(self, callback: Callable[[], None]) -> None:
+        self.on_wake_up_callback = callback
 
     async def wake_up(self) -> None:
         self.wake_up_calls += 1
@@ -391,3 +405,189 @@ async def test_launcher_starts_app_once_across_multiple_wakes() -> None:
     await asyncio.sleep(0)  # let the scheduled task(s) run
 
     assert mgr.started == ["foo"]
+
+
+@pytest.fixture
+def config_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Point the startup-app config at a temp file."""
+    path = tmp_path / "daemon_config.json"
+    monkeypatch.setattr(startup_app_config, "_config_path", lambda: path)
+    return path
+
+
+def test_config_round_trip(config_file: Path) -> None:
+    assert startup_app_config.get_startup_app() is None  # missing file
+    startup_app_config.set_startup_app("foo")
+    assert startup_app_config.get_startup_app() == "foo"
+    startup_app_config.set_startup_app("bar")
+    assert startup_app_config.get_startup_app() == "bar"
+
+
+def test_config_clear(config_file: Path) -> None:
+    startup_app_config.set_startup_app("foo")
+    startup_app_config.set_startup_app(None)
+    assert startup_app_config.get_startup_app() is None
+
+
+def test_config_corrupt_file_reads_as_none(config_file: Path) -> None:
+    config_file.write_text("{ not json")
+    assert startup_app_config.get_startup_app() is None
+
+
+def _stub_request(daemon: object) -> object:
+    """Minimal Request stand-in exposing app.state.{daemon,watcher task}."""
+    state = types.SimpleNamespace(
+        daemon=daemon, startup_app_antenna_watcher_task=None
+    )
+    return types.SimpleNamespace(app=types.SimpleNamespace(state=state))
+
+
+@pytest.mark.asyncio
+async def test_set_startup_app_endpoint_rejects_uninstalled(config_file: Path) -> None:
+    mgr = StubAppManager(installed=["foo"], catalog=["bar"])
+    request = _stub_request(StubDaemon())
+    with pytest.raises(HTTPException) as exc:
+        await apps_router.set_startup_app(
+            apps_router.StartupApp(startup_app="bar"), request, mgr  # type: ignore[arg-type]
+        )
+    assert exc.value.status_code == 400
+    assert startup_app_config.get_startup_app() is None  # nothing persisted
+
+
+@pytest.mark.asyncio
+async def test_set_startup_app_endpoint_persists_and_rearms(config_file: Path) -> None:
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    request = _stub_request(StubDaemon())
+    result = await apps_router.set_startup_app(
+        apps_router.StartupApp(startup_app="foo"), request, mgr  # type: ignore[arg-type]
+    )
+    task = request.app.state.startup_app_antenna_watcher_task  # type: ignore[attr-defined]
+    try:
+        assert result.startup_app == "foo"
+        assert startup_app_config.get_startup_app() == "foo"
+        assert (await apps_router.get_startup_app()).startup_app == "foo"
+        # Applied live: a watcher was armed without a restart.
+        assert task is not None
+    finally:
+        if task is not None:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+
+@pytest.mark.asyncio
+async def test_set_startup_app_endpoint_clears_with_null(config_file: Path) -> None:
+    startup_app_config.set_startup_app("foo")
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    request = _stub_request(StubDaemon())
+    result = await apps_router.set_startup_app(
+        apps_router.StartupApp(startup_app=None), request, mgr  # type: ignore[arg-type]
+    )
+    assert result.startup_app is None
+    assert startup_app_config.get_startup_app() is None
+    assert request.app.state.startup_app_antenna_watcher_task is None  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_rearm_arms_watcher_and_wake_hook_for_installed_app() -> None:
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    daemon = StubDaemon()
+
+    task = await rearm_startup_app_watcher(mgr, daemon, "foo", None)  # type: ignore[arg-type]
+    try:
+        assert task is not None
+        # The one-shot wake launcher is re-set and starts the new app on wake.
+        assert daemon.backend.on_wake_up_callback is not None
+        await daemon.backend.wake_up()
+        await asyncio.sleep(0)
+        assert mgr.started == ["foo"]
+    finally:
+        if task is not None:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+
+@pytest.mark.asyncio
+async def test_rearm_cancels_previous_watcher() -> None:
+    mgr = StubAppManager(installed=["foo", "bar"], catalog=[])
+    daemon = StubDaemon()
+
+    first = await rearm_startup_app_watcher(mgr, daemon, "foo", None)  # type: ignore[arg-type]
+    second = await rearm_startup_app_watcher(mgr, daemon, "bar", first)  # type: ignore[arg-type]
+    try:
+        assert first is not None and first.cancelled()
+        assert second is not None and not second.done()
+    finally:
+        if second is not None:
+            second.cancel()
+            with suppress(asyncio.CancelledError):
+                await second
+
+
+@pytest.mark.asyncio
+async def test_rearm_with_none_cancels_and_neutralizes_wake_hook() -> None:
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    daemon = StubDaemon()
+
+    first = await rearm_startup_app_watcher(mgr, daemon, "foo", None)  # type: ignore[arg-type]
+    cleared = await rearm_startup_app_watcher(mgr, daemon, None, first)  # type: ignore[arg-type]
+
+    assert cleared is None
+    assert first is not None and first.cancelled()
+    # A later wake must not start anything after the startup app is cleared.
+    await daemon.backend.wake_up()
+    await asyncio.sleep(0)
+    assert mgr.started == []
+
+
+@pytest.mark.asyncio
+async def test_rearm_unknown_app_arms_nothing() -> None:
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    daemon = StubDaemon()
+
+    task = await rearm_startup_app_watcher(mgr, daemon, "nope", None)  # type: ignore[arg-type]
+    assert task is None
+
+
+def test_commanded_motion_detects_moving_target() -> None:
+    # Sleep swing: target jumps far between polls -> commanded motion.
+    assert _antennas_in_commanded_motion((-0.17, 0.17), (-0.5, 0.5)) is True
+
+
+def test_commanded_motion_false_for_stable_target() -> None:
+    # Idle target barely changes (below eps) -> not commanded motion, so a
+    # physical push (present-only) can still be detected.
+    assert _antennas_in_commanded_motion((-0.17, 0.17), (-0.17, 0.171)) is False
+
+
+def test_commanded_motion_false_when_sample_missing() -> None:
+    assert _antennas_in_commanded_motion(None, (0.0, 0.0)) is False
+    assert _antennas_in_commanded_motion((0.0, 0.0), None) is False
+
+
+@pytest.mark.asyncio
+async def test_remove_app_clears_startup_app(
+    config_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    startup_app_config.set_startup_app("foo")
+    monkeypatch.setattr(apps_router.bg_job_register, "run_command", lambda *a, **k: "j1")
+    request = _stub_request(StubDaemon())
+    await apps_router.remove_app(
+        "foo", request, StubAppManager(installed=["foo"], catalog=[])  # type: ignore[arg-type]
+    )
+    assert startup_app_config.get_startup_app() is None
+    assert request.app.state.startup_app_antenna_watcher_task is None  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_remove_other_app_keeps_startup_app(
+    config_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    startup_app_config.set_startup_app("foo")
+    monkeypatch.setattr(apps_router.bg_job_register, "run_command", lambda *a, **k: "j1")
+    request = _stub_request(StubDaemon())
+    await apps_router.remove_app(
+        "bar", request, StubAppManager(installed=["foo", "bar"], catalog=[])  # type: ignore[arg-type]
+    )
+    assert startup_app_config.get_startup_app() == "foo"
