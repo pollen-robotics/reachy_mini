@@ -272,8 +272,12 @@ Implemented as an additive, wireless-only feature:
   provisioner reports state `unavailable` instead of crashing. Shipping
   the feature on the ISO therefore requires opencv in the image; decide in
   `reachy-mini-os` (size/CPU tradeoff flagged in the original note).
-- Connecting reuses the exact nmcli path of `/wifi/connect`, including the
-  revert-to-hotspot fallback, under the same busy lock (wifi_config.py).
+- Connecting and confirming reuse LITERALLY the flow the desktop app's
+  onboarding drives (pollen-robotics/reachy-mini-desktop-app,
+  WiFiConfiguration.jsx): call the `/wifi/connect` route function, then
+  poll `/wifi/status` with the same semantics: `busy` = working, `wlan` on
+  the target ssid = success, `hotspot` after busy = the daemon reverted
+  (wrong password). No wheel reinvented after the QR decode.
 - Endpoints (wireless only): `POST /wifi/provision_qr/start`,
   `GET /wifi/provision_qr/status`. Usable from the dashboard/BLE flows
   independently of the handshake.

@@ -124,10 +124,14 @@ class QrWifiProvisioner:
                      called at scan start, closed when the run ends.
     qr_decode        (frame) -> decoded text or None; None-the-callable
                      means "no decoder available" (opencv not installed).
-    connect          (ssid, password|None) -> None; must block or spawn its
-                     own worker; errors surface through wifi_connected
-                     staying False.
-    wifi_connected   () -> bool; polled to confirm the connection came up.
+    connect          (ssid, password|None) -> None; the /wifi/connect
+                     entry point (returns immediately, work in its thread).
+    wifi_status      () -> (mode, connected_network) with mode one of
+                     "busy" / "wlan" / "hotspot" / "disconnected", i.e.
+                     what GET /wifi/status reports. Polled to confirm the
+                     outcome with the SAME semantics as the desktop app's
+                     onboarding: success = wlan on the target ssid,
+                     hotspot after busy = the daemon reverted (failed).
     play_sound       (asset_name) -> None.
     """
 
@@ -136,7 +140,7 @@ class QrWifiProvisioner:
         camera_factory: Callable[[], object],
         qr_decode: Optional[Callable[[object], Optional[str]]],
         connect: Callable[[str, Optional[str]], None],
-        wifi_connected: Callable[[], bool],
+        wifi_status: Callable[[], tuple[str, Optional[str]]],
         play_sound: Callable[[str], None],
         scan_timeout_s: float = 90.0,
         connect_timeout_s: float = 45.0,
@@ -146,7 +150,7 @@ class QrWifiProvisioner:
         self._camera_factory = camera_factory
         self._qr_decode = qr_decode
         self._connect = connect
-        self._wifi_connected = wifi_connected
+        self._wifi_status = wifi_status
         self._play_sound = play_sound
         self.scan_timeout_s = scan_timeout_s
         self.connect_timeout_s = connect_timeout_s
@@ -215,13 +219,33 @@ class QrWifiProvisioner:
             self._safe_sound(SOUND_FAILED)
             return
 
+        # Confirm the outcome exactly like the desktop app onboarding does:
+        # poll the wifi status; "busy" = still working; "wlan" on the target
+        # ssid = success; "hotspot" once the work started = the daemon gave
+        # up and reverted to its AP (e.g. wrong password).
         deadline = time.monotonic() + self.connect_timeout_s
+        saw_busy = False
         while time.monotonic() < deadline:
-            if self._wifi_connected():
+            try:
+                mode, network = self._wifi_status()
+            except Exception:
+                logger.exception("QR provisioning: wifi status poll failed")
+                mode, network = ("disconnected", None)
+            if mode == "busy":
+                saw_busy = True
+            elif mode == "wlan" and network == creds.ssid:
                 self._status = ProvisioningStatus(
                     ProvisioningState.SUCCESS, ssid=creds.ssid
                 )
                 self._safe_sound(SOUND_SUCCESS)
+                return
+            elif mode == "hotspot" and saw_busy:
+                self._status = ProvisioningStatus(
+                    ProvisioningState.FAILED,
+                    "daemon reverted to hotspot (wrong password?)",
+                    ssid=creds.ssid,
+                )
+                self._safe_sound(SOUND_FAILED)
                 return
             time.sleep(self.scan_period_s)
 
@@ -289,8 +313,10 @@ def build_default_provisioner(
     mechanism local apps use, nothing in the media pipeline changes).
     QR decoding: cv2.QRCodeDetector, imported lazily; when opencv is not
     installed the provisioner reports UNAVAILABLE instead of crashing.
-    Connect: the exact nmcli path of the /wifi/connect endpoint, including
-    its revert-to-hotspot fallback, under the same busy lock.
+    Connect + confirm: literally the endpoints the desktop app onboarding
+    drives (POST /wifi/connect then polling GET /wifi/status), so behavior
+    including the revert-to-hotspot fallback stays identical to the
+    existing, battle-tested flow.
     """
 
     def camera_factory() -> object:
@@ -314,35 +340,23 @@ def build_default_provisioner(
         logger.warning("QR provisioning unavailable: opencv is not installed")
 
     def connect(ssid: str, password: Optional[str]) -> None:
-        from ..routers import wifi_config
+        # The /wifi/connect route function itself: busy-lock handling,
+        # worker thread, error capture, revert-to-hotspot fallback.
+        from ..routers.wifi_config import connect_to_wifi_network
 
-        with wifi_config.busy_lock:
-            try:
-                wifi_config.setup_wifi_connection(
-                    name=ssid, ssid=ssid, password=password or ""
-                )
-            except Exception:
-                logger.exception(
-                    f"QR provisioning: connect to '{ssid}' failed, reverting to hotspot"
-                )
-                wifi_config.remove_connection(name=ssid)
-                wifi_config.setup_wifi_connection(
-                    name="Hotspot",
-                    ssid=wifi_config.HOTSPOT_SSID,
-                    password=wifi_config.HOTSPOT_PASSWORD,
-                    is_hotspot=True,
-                )
-                raise
+        connect_to_wifi_network(ssid=ssid, password=password or "")
 
-    def wifi_connected() -> bool:
-        from ..routers import wifi_config
+    def wifi_status() -> tuple[str, Optional[str]]:
+        # The /wifi/status route function, reduced to what the poll needs.
+        from ..routers.wifi_config import get_wifi_status
 
-        return wifi_config.get_current_wifi_mode() == wifi_config.WifiMode.WLAN
+        status = get_wifi_status()
+        return status.mode.value, status.connected_network
 
     return QrWifiProvisioner(
         camera_factory=camera_factory,
         qr_decode=qr_decode,
         connect=connect,
-        wifi_connected=wifi_connected,
+        wifi_status=wifi_status,
         play_sound=play_sound,
     )

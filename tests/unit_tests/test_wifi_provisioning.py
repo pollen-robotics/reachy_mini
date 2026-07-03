@@ -73,15 +73,24 @@ class FakeCamera:
 
 def make_provisioner(
     payloads=None,
-    connected_after=0.0,
+    status_after_connect=None,
     camera=None,
     decoder_available=True,
     scan_timeout_s=0.5,
     connect_timeout_s=0.5,
 ):
-    """Provisioner wired to fakes. `payloads` = QR text per frame (cycled)."""
+    """Provisioner wired to fakes.
+
+    `payloads` = QR text per frame (last one repeats).
+    `status_after_connect` = sequence of (mode, connected_network) returned
+    by the wifi status poll once connect() was called (last one repeats),
+    mirroring what the daemon's /wifi/status reports and what the desktop
+    app polls during onboarding. Before connect: ("disconnected", None).
+    """
     camera = camera if camera is not None else FakeCamera()
-    seen = {"n": 0, "connect": None, "sounds": [], "t_connect": None}
+    if status_after_connect is None:
+        status_after_connect = [("busy", None), ("wlan", "net")]
+    seen = {"n": 0, "n_status": 0, "connect": None, "sounds": []}
 
     def camera_factory():
         return camera
@@ -95,17 +104,19 @@ def make_provisioner(
 
     def connect(ssid, password):
         seen["connect"] = (ssid, password)
-        seen["t_connect"] = time.monotonic()
 
-    def wifi_connected():
-        t = seen["t_connect"]
-        return t is not None and time.monotonic() - t >= connected_after
+    def wifi_status():
+        if seen["connect"] is None:
+            return ("disconnected", None)
+        s = status_after_connect[min(seen["n_status"], len(status_after_connect) - 1)]
+        seen["n_status"] += 1
+        return s
 
     prov = QrWifiProvisioner(
         camera_factory=camera_factory,
         qr_decode=qr_decode if decoder_available else None,
         connect=connect,
-        wifi_connected=wifi_connected,
+        wifi_status=wifi_status,
         play_sound=lambda name: seen["sounds"].append(name),
         scan_timeout_s=scan_timeout_s,
         connect_timeout_s=connect_timeout_s,
@@ -155,7 +166,32 @@ def test_times_out_when_no_qr():
 def test_fails_when_connection_never_comes_up():
     prov, seen = make_provisioner(
         payloads=["WIFI:T:WPA;S:net;P:pw;;"],
-        connected_after=99.0,
+        status_after_connect=[("busy", None)],  # stuck busy forever
+        connect_timeout_s=0.1,
+    )
+    prov.start()
+    wait_done(prov)
+    assert prov.status().state == ProvisioningState.FAILED
+
+
+def test_fails_when_daemon_reverts_to_hotspot():
+    # Same semantics as the desktop app onboarding: after busy, landing on
+    # hotspot means the daemon gave up and reverted (e.g. wrong password).
+    prov, seen = make_provisioner(
+        payloads=["WIFI:T:WPA;S:net;P:badpw;;"],
+        status_after_connect=[("busy", None), ("busy", None), ("hotspot", None)],
+    )
+    prov.start()
+    wait_done(prov)
+    assert prov.status().state == ProvisioningState.FAILED
+    assert "hotspot" in prov.status().detail
+
+
+def test_success_requires_the_right_network():
+    # Connected to some OTHER wlan does not count as success for this ssid.
+    prov, seen = make_provisioner(
+        payloads=["WIFI:T:WPA;S:net;P:pw;;"],
+        status_after_connect=[("busy", None), ("wlan", "other-net")],
         connect_timeout_s=0.1,
     )
     prov.start()
