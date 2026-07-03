@@ -9,10 +9,10 @@ definition, see collision.py). It downloads the recordings and asserts:
     default recordings whose head pose arms, and never fires an action on them
 
 The slide recordings (collision-definition*.json) are printed for judgment,
-not asserted: a slow slide passes through the collision region repeatedly
-and lingers in it, so it can prime and even fire the hold action. That is
-inherent to a purely geometric law and must be judged live (the two-round
-structure plus the sleep-pose gate are the real protection).
+not asserted. With the quick-succession timing (collisions at most 1 s
+apart) the recorded slides no longer prime: their band crossings are spread
+out. If a future tuning loosens the timing, watch this output: lingering in
+the band can prime and even fire the hold action.
 
 Dataset: https://huggingface.co/datasets/RemiFabre/secret-handshake
 
@@ -26,8 +26,7 @@ import json
 import os
 
 from collision import CollisionConfig, CollisionDetector
-from handshake import HandshakeConfig, HandshakeStateMachine
-from pose_gate import head_in_sleep_pose
+from handshake import HandshakeConfig, SecretHandshake
 
 REPO_ID = "RemiFabre/secret-handshake"
 
@@ -59,18 +58,13 @@ def count_collisions(move: dict) -> list[float]:
 
 
 def replay_machine(move: dict) -> list[tuple[float, str]]:
-    machine = HandshakeStateMachine(HandshakeConfig())
+    # Exactly the daemon shape: one SecretHandshake.update() per tick.
+    handshake = SecretHandshake(HandshakeConfig())
     t0 = move["time"][0]
     events = []
     for t, frame in zip(move["time"], move["set_target_data"]):
         ant0, ant1 = frame["antennas"]
-        e = machine.update(
-            t - t0,
-            ant0,
-            ant1,
-            torque_off=True,
-            head_in_sleep_pose=head_in_sleep_pose(frame["head"]),
-        )
+        e = handshake.update(t - t0, ant0, ant1, frame["head"], torque_off=True)
         if e is not None:
             events.append((round(t - t0, 2), e.value))
     return events

@@ -25,8 +25,9 @@ import sys
 import time
 
 from beeps import Beeper
-from handshake import Event, HandshakeConfig, HandshakeStateMachine
+from handshake import Event, HandshakeConfig, SecretHandshake
 from live_handshake_probe import EVENT_MESSAGE, EVENT_SOUND
+from pose_gate import SLEEP_HEAD_POSE
 
 DT = 0.02
 
@@ -46,7 +47,7 @@ HOLD_TICKS = 70  # ~1.4 s inside the band
 
 
 def main() -> None:
-    machine = HandshakeStateMachine(HandshakeConfig())
+    handshake = SecretHandshake(HandshakeConfig())
     beeper = Beeper()
     print(__doc__)
 
@@ -72,13 +73,15 @@ def main() -> None:
                     pending = list(TAP_PROFILE)
 
             ant0, ant1 = pending.pop(0) if pending else REST
-            event = machine.update(t, ant0, ant1, torque_off=True, head_in_sleep_pose=True)
+            event = handshake.update(
+                t, ant0, ant1, head_pose=SLEEP_HEAD_POSE, torque_off=True
+            )
             if event is not None:
                 counts[event] += 1
                 print(f"\r\033[K[{t:10.2f}] {EVENT_MESSAGE[event]}")
                 beeper.play(EVENT_SOUND[event])
 
-            state = f"{machine.state.upper():6s} taps={machine.tap_count}"
+            state = f"{handshake.machine.state.upper():6s} taps={handshake.machine.tap_count}"
             print(
                 f"\r\033[K{state}  (Enter=collision, h+Enter=hold, q+Enter=quit)",
                 end="",

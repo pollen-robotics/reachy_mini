@@ -1,33 +1,39 @@
-"""Live secret-handshake tester: the full state machine, on the robot, with beeps.
+"""Live secret-handshake tester: a faithful simulation of the daemon loop.
 
-This is the pre-daemon validation script. It runs the exact pure
-HandshakeStateMachine that will later live in the control loop, feeding it
-the robot's present antenna positions and head pose at 50 Hz, and plays a
-sound on every milestone so you can rehearse the gesture by ear:
+The core of this script is shaped EXACTLY like the future daemon
+integration: a 50 Hz control loop that reads what the daemon already reads
+(present antenna positions, head pose, torque state) and makes ONE call:
+
+    event = handshake.update(t, ant0, ant1, head_pose, torque_off)
+
+Everything else here (beeps, status printing) is lab-only feedback driven by
+the returned event, exactly like the daemon will drive the robot speaker and
+the action. All tunables live in HandshakeConfig / CollisionConfig; see the
+banner at the top of handshake.py for the values at a glance.
+
+The gesture:
 
     put the head in the sleep pose, wait ~0.5 s   ->  tiny tick   (armed)
-    3 antenna collisions (knock them together)    ->  beep        (primed)
-    then, within 8 s, either:
+    3 antenna collisions in quick succession      ->  beep        (primed)
+    (a 1 s pause between collisions resets the count)
+    then, within 3 s, either:
       3 more collisions            -> handshake A fanfare  (v1: the emotion)
       hold them gently together    -> handshake B fanfare  (future: WiFi)
-    do nothing for 8 s                            ->  low buzz    (aborted)
-
-A collision is GEOMETRIC (Remi's measured definition): l+r in a narrow band
-around -5 deg AND l in [20, 150] deg. The status line shows sum and l in
-degrees plus an IN-BAND flag, so you can see exactly why a collision does or
-does not register.
+    or nothing                     -> low buzz, back to the start
 
 It disables torque at startup (hold the head if it is up: it will slump,
 which is the point: the handshake only exists in the floppy torque-off
 world). Pass --keep-torque to leave the motors as they are. It never moves
 the robot.
 
+NOTE on latency: the state machine reacts on the exact tick (sub-us, see
+bench.py). What feels slow here is the TEMPORARY sound path: each beep
+spawns an afplay/aplay process on this computer (~150-400 ms to open the
+audio device). The daemon will play through the robot speaker instead.
+
 Run (robot on, antennas floppy):
     python examples/secret_handshake_lab/live_handshake_probe.py
     python examples/secret_handshake_lab/live_handshake_probe.py --no-pose-gate
-
-Sounds play on THIS machine (afplay/aplay), not through the robot speaker;
-good enough to validate the logic, the daemon will use the robot speaker.
 """
 
 from __future__ import annotations
@@ -36,8 +42,8 @@ import argparse
 import time
 
 from beeps import Beeper
-from handshake import Event, HandshakeConfig, HandshakeStateMachine
-from pose_gate import head_in_sleep_pose, sleep_pose_deviation
+from handshake import Event, HandshakeConfig, SecretHandshake
+from pose_gate import SLEEP_HEAD_POSE, head_in_sleep_pose, sleep_pose_deviation
 
 from reachy_mini import ReachyMini
 
@@ -52,7 +58,7 @@ EVENT_SOUND = {
 }
 
 EVENT_MESSAGE = {
-    Event.ARMED: "ARMED    head in sleep pose, do 3 collisions",
+    Event.ARMED: "ARMED    head in sleep pose, do 3 quick collisions",
     Event.PRIMED: "PRIMED   halfway there! 3 more taps = handshake A, gentle hold = handshake B",
     Event.ACTION_TAPS: "SUCCESS  handshake A complete (3 taps + 3 taps)",
     Event.ACTION_HOLD: "SUCCESS  handshake B complete (3 taps + hold)",
@@ -78,22 +84,20 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     cfg = HandshakeConfig()
-    machine = HandshakeStateMachine(cfg)
-    det = machine.detector
+    handshake = SecretHandshake(cfg)
     beeper = Beeper()
+    det = handshake.machine.detector  # read-only, for the status line
 
     print(
-        f"pose_gate={'off' if args.no_pose_gate else 'on'}  "
-        f"band: sum in [{det.sum_lo_deg:.0f}, {det.sum_hi_deg:.0f}] deg, "
-        f"l in [{cfg.collision.l_min_deg:.0f}, {cfg.collision.l_max_deg:.0f}] deg"
+        f"pose_gate={'off' if args.no_pose_gate else 'on'}\n"
+        f"collision: sum in [{det.sum_lo_deg:.0f}, {det.sum_hi_deg:.0f}] deg "
+        f"AND l in [{cfg.collision.l_min_deg:.0f}, {cfg.collision.l_max_deg:.0f}] deg\n"
+        f"timing: {cfg.taps_required} collisions, max {cfg.max_gap_s:.0f} s apart; "
+        f"round 2 within {cfg.primed_timeout_s:.0f} s; hold = {cfg.hold_min_s:.0f} s\n"
     )
     if beeper.player is None:
         print("no audio player found (afplay/aplay/paplay/ffplay), using terminal bell")
-    print(
-        "The gesture: sleep pose -> 3 collisions -> beep -> 3 collisions (A)\n"
-        "                                               or gentle hold   (B)\n"
-        "Ctrl-C to stop.\n"
-    )
+    print("Ctrl-C to stop.\n")
 
     counts: dict[Event, int] = {e: 0 for e in Event}
     primed_at: float | None = None
@@ -107,14 +111,14 @@ def main() -> None:
         t_next = time.monotonic()
         try:
             while True:
+                # ---- the daemon-shaped part: read sensors, ONE call --------
                 t = time.monotonic()
                 ant0, ant1 = mini.get_present_antenna_joint_positions()
-                pose = mini.get_current_head_pose()
-                gate_ok = True if args.no_pose_gate else head_in_sleep_pose(pose)
-
-                event = machine.update(
-                    t, ant0, ant1, torque_off=True, head_in_sleep_pose=gate_ok
+                head_pose = (
+                    SLEEP_HEAD_POSE if args.no_pose_gate else mini.get_current_head_pose()
                 )
+                event = handshake.update(t, ant0, ant1, head_pose, torque_off=True)
+                # ------------------------------------------------------------
 
                 if event is not None:
                     counts[event] += 1
@@ -122,6 +126,7 @@ def main() -> None:
                     print(f"\r\033[K[{t:10.2f}] {EVENT_MESSAGE[event]}")
                     beeper.play(EVENT_SOUND[event])
 
+                machine = handshake.machine
                 band = "IN-BAND" if det.in_collision else "       "
                 status = (
                     f"{machine.state.upper():6s} sum={det.sum_deg:+6.1f}deg "
@@ -130,12 +135,13 @@ def main() -> None:
                 if machine.state == "primed" and primed_at is not None:
                     left = cfg.primed_timeout_s - (t - primed_at)
                     status += f" round2_timeout={max(0.0, left):.1f}s"
-                if machine.state == "idle" and not gate_ok:
-                    d = sleep_pose_deviation(pose)
-                    status += (
-                        f"  waiting for sleep pose"
-                        f" (dz={d['dz_mm']:+.0f}mm dpitch={d['dpitch_deg']:+.0f}deg)"
-                    )
+                if machine.state == "idle" and not args.no_pose_gate:
+                    if not head_in_sleep_pose(head_pose):
+                        d = sleep_pose_deviation(head_pose)
+                        status += (
+                            f"  waiting for sleep pose"
+                            f" (dz={d['dz_mm']:+.0f}mm dpitch={d['dpitch_deg']:+.0f}deg)"
+                        )
                 print(f"\r\033[K{status}", end="", flush=True)
 
                 t_next += DT
