@@ -7,7 +7,7 @@ while playing with the antennas and to tune CollisionConfig:
     l    left antenna (index 0), degrees
     r    right antenna (index 1), degrees
     sum  l + r, degrees: in collision it sits in the narrow band
-         (default [-9, -1] = measured [-7, -3] plus a 4 deg margin)
+         (default [-9, 0], see CollisionConfig)
     the collision needs BOTH sum in the band AND l in [20, 150] deg
 
 It does NOT enable torque and does NOT move the robot. Antennas stay floppy

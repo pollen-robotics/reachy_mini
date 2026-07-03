@@ -27,8 +27,12 @@ The antennas are in collision "at the center" (y = 0 plane) when BOTH:
     1) l_ant + r_ant in [-7, -3]   (~= 0 with a slight consistent asymmetry)
     2) l_ant        in [20, 150]
 
-widened by a margin: the default 4 deg margin turns the sum band into
-[-9, -1]. `l_ant` = antenna index 0, `r_ant` = index 1, as returned by
+widened by a margin into the working band, default [-9, 0]: live testing on
+a 3rd robot (different batch, 100% of intended collisions detected) showed
+many collisions at the old -1 top edge, so the top was relaxed to 0, the
+theoretical symmetric contact point. The bottom stays at -9: the
+crossed-parked state (antennas slid past each other) sits at sum ~ -11.
+`l_ant` = antenna index 0, `r_ant` = index 1, as returned by
 `get_present_antenna_joint_positions()`. A collision EVENT = entering that
 region; a 0.25 s refractory merges the double band-crossing of a firm press
 (pressing flexes the antennas: sum shoots up to +35..+73 deg, then passes

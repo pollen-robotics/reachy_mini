@@ -81,11 +81,19 @@ The antennas are in collision "at the center" (y = 0 plane) when BOTH:
                                     seen on both measured robots)
     2) l_ant        in [20, 150]
 
-widened by a margin: the default 4 deg margin turns the sum band into
-[-9, -1]. A collision EVENT = entering that region; a 0.25 s refractory
+widened by a margin into the working band, default [-9, 0]. The top edge
+was relaxed from the initial -1 to 0 after live testing on a 3rd robot
+(different batch) showed many real collisions at -1.5..-1.1; 0 is the
+theoretical symmetric contact point. Do not lower the bottom edge: the
+crossed-parked state (antennas slid past each other, resting) sits at sum
+~ -11 deg. A collision EVENT = entering that region; a 0.25 s refractory
 merges the double band-crossing of a firm press (pressing flexes the
 antennas, sum shoots to +35..+73 deg in the recordings, then passes back
 through the band on release).
+
+Live validation so far (2026-07-03): Remi tested the detector on 2 robots,
+including a wireless unit from a different batch never measured before:
+100% of intended collisions detected on both.
 
 Why the conditions work (validated on `RemiFabre/secret-handshake`, hard
 regression in `replay_validate.py`):

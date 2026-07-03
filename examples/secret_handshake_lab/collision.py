@@ -43,9 +43,14 @@ _RAD2DEG = 180.0 / math.pi
 
 @dataclass(frozen=True)
 class CollisionConfig:
-    # Center-collision geometry, in DEGREES (Remi's measurements, 2 robots).
+    # Center-collision geometry, in DEGREES. Remi measured sum in [-7, -3]
+    # on 2 robots; live testing on a 3rd (different batch) showed many real
+    # collisions right at the top edge, so the top was relaxed to -2: with
+    # the margin the band becomes [-9, 0], 0 being the theoretical
+    # symmetric contact point. Do NOT lower the bottom: the crossed-parked
+    # state (antennas slid past each other, resting) sits at sum ~ -11.
     sum_min_deg: float = -7.0
-    sum_max_deg: float = -3.0
+    sum_max_deg: float = -2.0
     l_min_deg: float = 20.0
     l_max_deg: float = 150.0
     # Widens the sum band by margin/2 on each side: 4 -> [-9, -1].
