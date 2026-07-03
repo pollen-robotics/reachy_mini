@@ -6,6 +6,7 @@ It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
 """
 
 import logging
+import os
 import struct
 import time
 from datetime import timedelta
@@ -27,6 +28,15 @@ from reachy_mini.io.protocol import (
 from reachy_mini.utils.hardware_config.parser import parse_yaml_config
 
 from ..abstract import Backend
+from ..secret_handshake import Event as HandshakeEvent
+from ..secret_handshake import SecretHandshake
+
+# Sound feedback for the secret handshake (assets/, see secret_handshake.py).
+_HANDSHAKE_SOUNDS = {
+    HandshakeEvent.PRIMED: "handshake_primed.wav",
+    HandshakeEvent.SUCCESS: "handshake_success.wav",
+    HandshakeEvent.ABORTED: "handshake_aborted.wav",
+}
 
 
 class RobotBackend(Backend):
@@ -94,6 +104,16 @@ class RobotBackend(Backend):
         self._torque_enabled = self.motor_control_mode != MotorControlMode.Disabled
         self.logger.info(f"Motor control mode: {self.motor_control_mode}")
         self.last_alive: float | None = None
+
+        # Secret handshake detector (torque-off antenna gesture, sound
+        # feedback only). Kill switch: REACHY_HANDSHAKE_ENABLED=0.
+        self._secret_handshake: SecretHandshake | None = None
+        if os.environ.get("REACHY_HANDSHAKE_ENABLED", "1").lower() not in (
+            "0",
+            "false",
+            "no",
+        ):
+            self._secret_handshake = SecretHandshake()
 
         self._status = RobotBackendStatus(
             motor_control_mode=self.motor_control_mode,
@@ -240,6 +260,29 @@ class RobotBackend(Backend):
                     except ValueError as e:
                         log_throttling.by_time(self.logger, interval=0.5).warning(
                             f"IK error: {e}"
+                        )
+
+                # Secret handshake: one sub-microsecond call per tick, armed
+                # only while ALL motors are torque off (inert during normal
+                # use). Fail-safe: any error is logged and swallowed.
+                if self._secret_handshake is not None:
+                    try:
+                        hs_event = self._secret_handshake.update(
+                            time.monotonic(),
+                            antenna_positions[0],
+                            antenna_positions[1],
+                            self.current_head_pose,
+                            torque_off=self.motor_control_mode
+                            == MotorControlMode.Disabled,
+                        )
+                        if hs_event is not None:
+                            self.logger.info(f"Secret handshake: {hs_event.value}")
+                            hs_sound = _HANDSHAKE_SOUNDS.get(hs_event)
+                            if hs_sound is not None:
+                                self.play_sound(hs_sound)
+                    except Exception as e:
+                        log_throttling.by_time(self.logger, interval=5).warning(
+                            f"Secret handshake error: {e}"
                         )
 
                 if not self.is_shutting_down:
