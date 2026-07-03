@@ -7,6 +7,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
     WebSocket,
 )
 from pydantic import BaseModel
@@ -16,6 +17,7 @@ from reachy_mini.apps.manager import AppManager, AppStatus
 from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.dependencies import get_app_manager
+from reachy_mini.daemon.app.startup_app import rearm_startup_app_watcher
 
 router = APIRouter(prefix="/apps")
 
@@ -174,11 +176,13 @@ async def get_startup_app() -> StartupApp:
 @router.put("/startup-app")
 async def set_startup_app(
     body: StartupApp,
+    request: Request,
     app_manager: "AppManager" = Depends(get_app_manager),
 ) -> StartupApp:
     """Set (or clear, with null) the app that auto-starts on wake-up.
 
-    The app must already be installed; install it via /apps/install first.
+    Must already be installed (install via /apps/install first). Applied live, so
+    no daemon restart is needed.
     """
     name = body.startup_app
     if name:
@@ -189,6 +193,11 @@ async def set_startup_app(
             )
 
     startup_app_config.set_startup_app(name)
+
+    state = request.app.state
+    state.startup_app_antenna_watcher_task = await rearm_startup_app_watcher(
+        app_manager, state.daemon, name, state.startup_app_antenna_watcher_task
+    )
     return StartupApp(startup_app=name)
 
 
