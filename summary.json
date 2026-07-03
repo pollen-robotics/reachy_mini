@@ -1,21 +1,99 @@
 {
   "stats": {
-    "total": 275,
-    "passed": 272,
-    "skipped": 3,
-    "new": 2
+    "total": 290,
+    "passed": 287,
+    "new": 15,
+    "skipped": 3
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "3fea33500fcd6ae678adc5826afe60a7",
-      "name": "test_stop_leaves_robot_asleep_when_in_sleep_pose",
+      "id": "ad9db35b52897a98645b7035856f493d",
+      "name": "test_config_round_trip",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "4a7078a4b610457979b1764c978ba2ea",
-      "name": "test_stop_returns_to_zero_when_awake",
+      "id": "de82bdc3c8a443c420544e1b20c4108c",
+      "name": "test_rearm_with_none_cancels_and_neutralizes_wake_hook",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "89b66545ae4bbe47a4f412c449849f6a",
+      "name": "test_rearm_cancels_previous_watcher",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "3beb59a4957aa88f1e3e2b98b9bef53d",
+      "name": "test_commanded_motion_detects_moving_target",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "6301d05e8d52a7efb481e59a65e9a150",
+      "name": "test_config_clear",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "c9c01ab8ee9932ab370c22ba340b50ef",
+      "name": "test_set_startup_app_endpoint_rejects_uninstalled",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "3feab690857e95d02c9ad53c9948a16b",
+      "name": "test_rearm_arms_watcher_and_wake_hook_for_installed_app",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "bdf742cf3fdd79a1cd303f74d5bee7d9",
+      "name": "test_config_corrupt_file_reads_as_none",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "3b0579dd4854291ece3e50c14a41fb40",
+      "name": "test_commanded_motion_false_when_sample_missing",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "fc81b340f69fe10a084ae69c8b3b877a",
+      "name": "test_set_startup_app_endpoint_persists_and_rearms",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "8da7e7bc70c473d61d80cd754228eeee",
+      "name": "test_remove_other_app_keeps_startup_app",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "82f5b1356bec723c2b4631bfc5cce3d9",
+      "name": "test_set_startup_app_endpoint_clears_with_null",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "d1a241e92e6f5025047f173a19c28100",
+      "name": "test_commanded_motion_false_for_stable_target",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "21bffefd123122ad28afd4bca9befc2f",
+      "name": "test_rearm_unknown_app_arms_nothing",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "fb6bf4bfc6f9765d2c440f95970ea8dd",
+      "name": "test_remove_app_clears_startup_app",
       "status": "passed",
       "duration": 1
     }
@@ -24,17 +102,17 @@
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 37162,
-  "createdAt": 1783010081181,
+  "duration": 35607,
+  "createdAt": 1783089903003,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "83888868-e565-49fd-852d-65c7fa2c4b39",
+    "reportId": "7e0b7698-c2c6-4168-a107-c374f852a638",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/28605919261",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/28667599274",
   "href": "awesome/",
-  "coverage": 32
+  "coverage": 33
 }

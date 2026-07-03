@@ -1,1 +1,0 @@
-ERROR    reachy_mini.daemon.app.startup_app:startup_app.py:160 Failed to auto-start app 'foo' from antenna touch: start failed

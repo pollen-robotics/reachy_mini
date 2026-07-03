@@ -1,1 +1,0 @@
-ERROR    reachy_mini.daemon.app.startup_app:startup_app.py:38 Startup app 'nope' not installed and not in catalog
