@@ -254,18 +254,36 @@ Notes:
   reliability across several people; (c) confirm the emotion plays offline on a
   freshly flashed, never-connected robot.
 
-## 11. WiFi QR provisioning (deferred, v2+)
+## 11. WiFi QR provisioning [BUILT 2026-07-03, off by default]
 
-Feasible but heavier and deliberately decoupled. Camera is up before WiFi but
-there is no snapshot path yet and no QR decoder in the constrained CM4 deps
-(needs pyzbar/zbar or opencv QR, which add image size/CPU). Parsing
-`WIFI:S:...;T:...;P:...;;` is trivial; feeding credentials into the existing
-NetworkManager path is the real work and the OS-level parts live in
-`reachy-mini-os`. Do NOT use a boot default-app (implicit, fragile, the
-"was this the first run?" problem). Instead trigger provisioning on purpose via
-a second-round gesture branch: handshake -> gesture B -> QR-scan mode ->
-decode -> connect -> success/fail sound. Reuses everything here. Scope
-separately when ready.
+Implemented as an additive, wireless-only feature:
+
+- `daemon/app/services/wifi_provisioning.py`: `parse_wifi_qr()` (the
+  standard `WIFI:T:WPA;S:ssid;P:pass;;` payload with escaping) and
+  `QrWifiProvisioner`, a fully dependency-injected scan -> decode ->
+  connect -> confirm flow with sound feedback (wifi_scanning.wav at scan
+  start, handshake_success/aborted.wav for the outcome). Unit-tested
+  offline with fakes (`tests/unit_tests/test_wifi_provisioning.py`).
+- Camera frames come from the media server's EXISTING IPC branch via
+  `GStreamerCamera` (the same mechanism local apps use): zero changes to
+  the media pipeline.
+- QR decoding uses `cv2.QRCodeDetector`, imported lazily: if opencv is not
+  installed (it is not part of the `wireless-version` extra today) the
+  provisioner reports state `unavailable` instead of crashing. Shipping
+  the feature on the ISO therefore requires opencv in the image; decide in
+  `reachy-mini-os` (size/CPU tradeoff flagged in the original note).
+- Connecting reuses the exact nmcli path of `/wifi/connect`, including the
+  revert-to-hotspot fallback, under the same busy lock (wifi_config.py).
+- Endpoints (wireless only): `POST /wifi/provision_qr/start`,
+  `GET /wifi/provision_qr/status`. Usable from the dashboard/BLE flows
+  independently of the handshake.
+- Handshake chaining: OPT-IN via `REACHY_HANDSHAKE_WIFI_PROVISION=1`
+  (default OFF: a completed handshake only plays its sounds). When on and
+  the robot is not connected to WiFi, handshake SUCCESS starts the QR
+  scan. Wiring: `RobotBackend.set_handshake_success_callback()` +
+  `Daemon._maybe_wire_handshake_wifi_provisioning()`. A future
+  second-round gesture (the lab's hold gesture) can replace SUCCESS as the
+  trigger without touching the provisioning flow.
 
 ## 12. For the next agent: build order
 
@@ -288,8 +306,20 @@ separately when ready.
 5. Promote the detector + state machine into a new
    `daemon/backend/secret_handshake.py`, and add the single guarded call in
    `RobotBackend._update()` behind the kill-switch flag. Fail-safe wrap.
-6. Hand back to the human for the section 10 on-robot validation before the ISO
-   default is trusted.
+   [DONE 2026-07-03: sounds-only action for v1 (no emotion playback yet),
+   default handshake only (3+3 taps, no hold gesture in the daemon).
+   Sounds = the tap-lab tones rendered to assets/handshake_*.wav
+   (render_daemon_sounds.py). Kill switch: REACHY_HANDSHAKE_ENABLED=0.
+   Unit tests: tests/unit_tests/test_secret_handshake.py. Note:
+   play_sound() builds a gst playbin synchronously (few ms) in the control
+   thread, same as wake_up(); only happens on gesture milestones while
+   torque is off, so the rare tick overrun is harmless.]
+6. Hand back to the human for the section 10 on-robot validation before the
+   ISO default is trusted. [NEXT: this is where we are. On-robot: perform
+   the handshake against the real daemon (sounds should come from the robot
+   speaker), then the accidental-trigger soak. For QR provisioning, test
+   with REACHY_HANDSHAKE_WIFI_PROVISION=1 or POST /wifi/provision_qr/start;
+   requires opencv installed on the robot.]
 
 Keep everything pure and small (sections isolated as in this doc). The
 control-loop footprint must stay: read cached antenna positions + head pose
