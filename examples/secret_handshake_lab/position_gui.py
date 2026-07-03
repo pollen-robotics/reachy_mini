@@ -42,6 +42,8 @@ import tkinter as tk
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+from collision import CollisionDetector
+
 from reachy_mini import ReachyMini
 
 HEAD_MOTORS = [
@@ -188,8 +190,11 @@ def main() -> None:
         snap_btn.config(command=take_snapshot)
         root.bind("<space>", take_snapshot)
 
+        collision_det = CollisionDetector()
+
         def tick() -> None:
             ant0, ant1 = mini.get_present_antenna_joint_positions()
+            collision_det.update(time.monotonic(), ant0, ant1)
             pose = np.array(mini.get_current_head_pose())
             head_joints, _ = mini.get_current_joint_positions()
             body_yaw = float(head_joints[0])
@@ -201,8 +206,11 @@ def main() -> None:
                     f"ANTENNAS (present)\n"
                     f"  left  (ant0): {ant0:+8.4f} rad  {np.rad2deg(ant0):+8.2f} deg\n"
                     f"  right (ant1): {ant1:+8.4f} rad  {np.rad2deg(ant1):+8.2f} deg\n"
-                    f"  diff (a0-a1): {ant0 - ant1:+8.4f} rad  "
-                    f"sum (a0+a1): {ant0 + ant1:+8.4f} rad\n"
+                    f"  diff (a0-a1): {np.rad2deg(ant0 - ant1):+8.2f} deg  "
+                    f"sum (a0+a1): {np.rad2deg(ant0 + ant1):+8.2f} deg\n"
+                    f"  collision band [{collision_det.sum_lo_deg:.0f},"
+                    f"{collision_det.sum_hi_deg:.0f}]: "
+                    f"{'>>> IN COLLISION <<<' if collision_det.in_collision else '(not colliding)'}\n"
                     f"HEAD (present)\n"
                     f"  xyz: {x * 1000:+7.1f} {y * 1000:+7.1f} {z * 1000:+7.1f} mm\n"
                     f"  rpy: {rpy[0]:+7.1f} {rpy[1]:+7.1f} {rpy[2]:+7.1f} deg\n"

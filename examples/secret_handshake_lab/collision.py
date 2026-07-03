@@ -68,8 +68,9 @@ class CollisionDetector:
     def __init__(self, config: CollisionConfig | None = None) -> None:
         self.cfg = config or CollisionConfig()
         half = self.cfg.margin_deg / 2.0
-        self._sum_lo = self.cfg.sum_min_deg - half
-        self._sum_hi = self.cfg.sum_max_deg + half
+        # Margined band bounds, public for display (e.g. [-9, -1] by default).
+        self.sum_lo_deg = self.cfg.sum_min_deg - half
+        self.sum_hi_deg = self.cfg.sum_max_deg + half
         self.in_collision: bool = False
         self.sum_deg: float = 0.0
         self.l_deg: float = 0.0
@@ -87,7 +88,7 @@ class CollisionDetector:
         self.sum_deg = sum_deg
 
         inside = (
-            self._sum_lo <= sum_deg <= self._sum_hi
+            self.sum_lo_deg <= sum_deg <= self.sum_hi_deg
             and self.cfg.l_min_deg <= l_deg <= self.cfg.l_max_deg
         )
         onset = (

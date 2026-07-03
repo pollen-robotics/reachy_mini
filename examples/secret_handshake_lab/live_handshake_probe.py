@@ -8,14 +8,14 @@ sound on every milestone so you can rehearse the gesture by ear:
     put the head in the sleep pose, wait ~0.5 s   ->  tiny tick   (armed)
     3 antenna collisions (knock them together)    ->  beep        (primed)
     then, within 8 s, either:
-      3 more collisions      -> handshake A fanfare  (v1: the emotion)
-      rub the antennas ~1 s  -> handshake B fanfare  (future: WiFi)
+      3 more collisions            -> handshake A fanfare  (v1: the emotion)
+      hold them gently together    -> handshake B fanfare  (future: WiFi)
     do nothing for 8 s                            ->  low buzz    (aborted)
 
-A collision is COUPLED MOTION (both antennas moving fast at once), so it does
-not matter where the floppy antennas hang or which one you swing. The status
-line shows m = coupled speed: it should sit at ~0 until the antennas actually
-knock (spike > 2) or rub (0.3 .. 1.2).
+A collision is GEOMETRIC (Remi's measured definition): l+r in a narrow band
+around -5 deg AND l in [20, 150] deg. The status line shows sum and l in
+degrees plus an IN-BAND flag, so you can see exactly why a collision does or
+does not register.
 
 It does NOT move the robot and leaves torque alone (use --disable-motors to
 turn torque off from here; the head will slump, which is the point: the
@@ -46,15 +46,15 @@ EVENT_SOUND = {
     Event.ARMED: "armed",
     Event.PRIMED: "primed",
     Event.ACTION_TAPS: "action_taps",
-    Event.ACTION_RUB: "action_rub",
+    Event.ACTION_HOLD: "action_hold",
     Event.ABORTED: "aborted",
 }
 
 EVENT_MESSAGE = {
     Event.ARMED: "ARMED    head in sleep pose, do 3 collisions",
-    Event.PRIMED: "PRIMED   halfway there! 3 more taps = handshake A, rub = handshake B",
+    Event.PRIMED: "PRIMED   halfway there! 3 more taps = handshake A, gentle hold = handshake B",
     Event.ACTION_TAPS: "SUCCESS  handshake A complete (3 taps + 3 taps)",
-    Event.ACTION_RUB: "SUCCESS  handshake B complete (3 taps + rub)",
+    Event.ACTION_HOLD: "SUCCESS  handshake B complete (3 taps + hold)",
     Event.ABORTED: "ABORTED  no round 2 in time, back to the start",
 }
 
@@ -78,14 +78,19 @@ def main() -> None:
     args = parse_args()
     cfg = HandshakeConfig()
     machine = HandshakeStateMachine(cfg)
+    det = machine.detector
     beeper = Beeper()
 
-    print(f"pose_gate={'off' if args.no_pose_gate else 'on'}")
+    print(
+        f"pose_gate={'off' if args.no_pose_gate else 'on'}  "
+        f"band: sum in [{det.sum_lo_deg:.0f}, {det.sum_hi_deg:.0f}] deg, "
+        f"l in [{cfg.collision.l_min_deg:.0f}, {cfg.collision.l_max_deg:.0f}] deg"
+    )
     if beeper.player is None:
         print("no audio player found (afplay/aplay/paplay/ffplay), using terminal bell")
     print(
         "The gesture: sleep pose -> 3 collisions -> beep -> 3 collisions (A)\n"
-        "                                               or rub ~1 s      (B)\n"
+        "                                               or gentle hold   (B)\n"
         "Ctrl-C to stop.\n"
     )
 
@@ -116,10 +121,10 @@ def main() -> None:
                     print(f"\r\033[K[{t:10.2f}] {EVENT_MESSAGE[event]}")
                     beeper.play(EVENT_SOUND[event])
 
-                m = machine.detector.coupled_speed
+                band = "IN-BAND" if det.in_collision else "       "
                 status = (
-                    f"{machine.state.upper():6s} m={m:4.1f} taps={machine.tap_count}"
-                    f" ant=({ant0:+.2f},{ant1:+.2f})"
+                    f"{machine.state.upper():6s} sum={det.sum_deg:+6.1f}deg "
+                    f"l={det.l_deg:+6.1f}deg {band} taps={machine.tap_count}"
                 )
                 if machine.state == "primed" and primed_at is not None:
                     left = cfg.primed_timeout_s - (t - primed_at)

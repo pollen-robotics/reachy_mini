@@ -2,14 +2,15 @@
 
 Runs the exact same 50 Hz loop and beeps as live_handshake_probe.py, but the
 "antennas" are simulated: pressing Enter on an empty line injects one
-collision (a coupled-motion spike, like a real knock), and `r` + Enter
-injects a ~1.4 s rub (slow coupled motion). So you can hear and feel the
-whole two-round flow at your desk before going to the robot:
+collision (a quick pass through the geometric collision band, like a real
+knock), and `h` + Enter injects a ~1.4 s gentle hold inside the band. So you
+can hear and feel the whole two-round flow at your desk before going to the
+robot:
 
     Enter Enter Enter        -> beep (primed)
     Enter Enter Enter        -> handshake A fanfare
 or after the primed beep:
-    r + Enter                -> handshake B fanfare
+    h + Enter                -> handshake B fanfare
     wait 8 s                 -> abort buzz
 
 Run:
@@ -18,6 +19,7 @@ Run:
 
 from __future__ import annotations
 
+import math
 import select
 import sys
 import time
@@ -28,9 +30,19 @@ from live_handshake_probe import EVENT_MESSAGE, EVENT_SOUND
 
 DT = 0.02
 
-KNOCK_STEP = 0.08  # rad per tick for 2 ticks -> ~4 rad/s coupled spike
-RUB_STEP = 0.012  # rad per tick -> ~0.6 rad/s sustained coupling
-RUB_TICKS = 70  # ~1.4 s
+
+def d2r(deg: float) -> float:
+    return math.radians(deg)
+
+
+# Characteristic configurations (degrees), matching the real geometry:
+REST = (d2r(-12.0), d2r(10.0))  # sum in band but l fails condition 2
+CONTACT = (d2r(60.0), d2r(-65.0))  # in the collision band
+PRESS = (d2r(65.0), d2r(-30.0))  # flexed through the band
+
+# One tap = in through the band, press, back through, release.
+TAP_PROFILE = [CONTACT] * 2 + [PRESS] * 3 + [CONTACT] * 2
+HOLD_TICKS = 70  # ~1.4 s inside the band
 
 
 def main() -> None:
@@ -38,11 +50,7 @@ def main() -> None:
     beeper = Beeper()
     print(__doc__)
 
-    # Simulated floppy antennas: they stay where they were left.
-    a0, a1 = -0.175, 0.175
-    knock_ticks_left = 0
-    rub_ticks_left = 0
-    rub_direction = 1.0
+    pending: list[tuple[float, float]] = []  # samples queued by keypresses
     counts: dict[Event, int] = {e: 0 for e in Event}
 
     t_next = time.monotonic()
@@ -58,22 +66,13 @@ def main() -> None:
                 line = raw.strip().lower()
                 if line in ("q", "quit"):
                     break
-                if line.startswith("r") or line.startswith("h"):
-                    rub_ticks_left = RUB_TICKS
-                    rub_direction = -rub_direction  # stay in range over time
+                if line.startswith("h"):
+                    pending = [CONTACT] * HOLD_TICKS
                 else:
-                    knock_ticks_left = 2
+                    pending = list(TAP_PROFILE)
 
-            if knock_ticks_left > 0:
-                knock_ticks_left -= 1
-                a0 += KNOCK_STEP
-                a1 -= KNOCK_STEP
-            elif rub_ticks_left > 0:
-                rub_ticks_left -= 1
-                a0 += RUB_STEP * rub_direction
-                a1 -= RUB_STEP * rub_direction
-
-            event = machine.update(t, a0, a1, torque_off=True, head_in_sleep_pose=True)
+            ant0, ant1 = pending.pop(0) if pending else REST
+            event = machine.update(t, ant0, ant1, torque_off=True, head_in_sleep_pose=True)
             if event is not None:
                 counts[event] += 1
                 print(f"\r\033[K[{t:10.2f}] {EVENT_MESSAGE[event]}")
@@ -81,7 +80,7 @@ def main() -> None:
 
             state = f"{machine.state.upper():6s} taps={machine.tap_count}"
             print(
-                f"\r\033[K{state}  (Enter=collision, r+Enter=rub, q+Enter=quit)",
+                f"\r\033[K{state}  (Enter=collision, h+Enter=hold, q+Enter=quit)",
                 end="",
                 flush=True,
             )
