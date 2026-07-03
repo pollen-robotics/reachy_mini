@@ -338,6 +338,7 @@ class Daemon:
                     self.backend.setup_media_server(self._media_server)
                     self.backend.set_restart_daemon_callback(self._spawn_webrtc_restart)
                     self.backend.set_start_update_callback(self._spawn_webrtc_update)
+                    self._maybe_wire_handshake_wifi_provisioning()
                 self._media_server.start()
 
                 # Start central signaling relay for remote WebRTC access
@@ -534,6 +535,60 @@ class Daemon:
         raise NotImplementedError(
             "Restarting is only supported when the daemon is in RUNNING or ERROR state."
         )
+
+    def _maybe_wire_handshake_wifi_provisioning(self) -> None:
+        """Optionally chain QR WiFi provisioning to the secret handshake.
+
+        Opt-in via REACHY_HANDSHAKE_WIFI_PROVISION=1 (default OFF: the
+        handshake then only plays its sounds). Wireless version only. When
+        enabled, a completed handshake on a robot that is NOT connected to
+        a WiFi network starts the camera QR scan
+        (app/services/wifi_provisioning.py).
+        """
+        import os
+
+        if not self.wireless_version:
+            return
+        if os.environ.get("REACHY_HANDSHAKE_WIFI_PROVISION", "0").lower() not in (
+            "1",
+            "true",
+            "yes",
+        ):
+            return
+        if self.backend is None or not hasattr(
+            self.backend, "set_handshake_success_callback"
+        ):
+            return
+        self.logger.info("Secret handshake wired to QR WiFi provisioning.")
+        self.backend.set_handshake_success_callback(self._spawn_qr_provisioning)
+
+    def _spawn_qr_provisioning(self) -> None:
+        """Start QR WiFi provisioning on a fresh thread (control-loop safe)."""
+
+        def run() -> None:
+            try:
+                from .app.routers.wifi_config import WifiMode, get_current_wifi_mode
+                from .app.services.wifi_provisioning import get_shared_provisioner
+
+                if get_current_wifi_mode() == WifiMode.WLAN:
+                    self.logger.info(
+                        "Handshake complete but WiFi already connected: "
+                        "not starting QR provisioning."
+                    )
+                    return
+                backend = self.backend
+                if backend is None:
+                    return
+                media_server = self._media_server
+                camera_specs = getattr(media_server, "camera_specs", None)
+                provisioner = get_shared_provisioner(
+                    backend.play_sound, camera_specs
+                )
+                provisioner.start()
+            except Exception:
+                self.logger.exception("QR provisioning trigger failed")
+
+        Thread(target=run, daemon=True).start()
 
     def _spawn_webrtc_restart(self) -> None:
         """Run ``self.restart()`` on a fresh thread.

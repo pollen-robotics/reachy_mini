@@ -11,7 +11,7 @@ import struct
 import time
 from datetime import timedelta
 from multiprocessing import Event  # It seems to be more accurate than threading.Event
-from typing import Annotated, Any
+from typing import Annotated, Any, Callable
 
 import log_throttling
 import numpy as np
@@ -108,6 +108,7 @@ class RobotBackend(Backend):
         # Secret handshake detector (torque-off antenna gesture, sound
         # feedback only). Kill switch: REACHY_HANDSHAKE_ENABLED=0.
         self._secret_handshake: SecretHandshake | None = None
+        self._handshake_success_callback: Callable[[], None] | None = None
         if os.environ.get("REACHY_HANDSHAKE_ENABLED", "1").lower() not in (
             "0",
             "false",
@@ -280,6 +281,11 @@ class RobotBackend(Backend):
                             hs_sound = _HANDSHAKE_SOUNDS.get(hs_event)
                             if hs_sound is not None:
                                 self.play_sound(hs_sound)
+                            if (
+                                hs_event is HandshakeEvent.SUCCESS
+                                and self._handshake_success_callback is not None
+                            ):
+                                self._handshake_success_callback()
                     except Exception as e:
                         log_throttling.by_time(self.logger, interval=5).warning(
                             f"Secret handshake error: {e}"
@@ -595,6 +601,14 @@ class RobotBackend(Backend):
         current = gravity_torque * from_Nm_to_mA / correction_factor
         # Set the head joint current
         self.set_target_head_joint_current(current)
+
+    def set_handshake_success_callback(self, callback: Callable[[], None]) -> None:
+        """Wire an action to a completed secret handshake (sound always plays).
+
+        Called from the control loop thread on the SUCCESS event; the
+        callback MUST return promptly (spawn a thread for real work).
+        """
+        self._handshake_success_callback = callback
 
     def get_motor_control_mode(self) -> MotorControlMode:
         """Get the motor control mode."""
