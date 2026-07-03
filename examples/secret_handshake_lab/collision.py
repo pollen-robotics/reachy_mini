@@ -2,106 +2,100 @@
 
 Pure, dependency-free, fast. This is the ONE thing that will eventually be
 called every tick from the 50 Hz control loop, so it must stay trivial:
-a handful of float ops, no allocation, no I/O.
+a handful of float compares, no allocation, no I/O.
 
-THE LAW (validated on RemiFabre/secret-handshake, see analyze_recordings.py):
+THE LAW (v3, geometric; measured by Remi by hand on 2 robots, in degrees):
 
-The antennas are floppy friction-fit parts. Their angles mean nothing in
-absolute terms: they rest wherever they were last left (one robot rested at
-diff=+0.97 where another rested at -0.35), and the same angle pair can occur
-both touching and not touching (paused mid-slide vs parked crossed). So no
-instantaneous function of the angles can define contact.
+The antennas collide "at the center" (along the y = 0 plane) when both:
 
-What IS distinctive is COUPLED MOTION: when the antennas touch, moving one
-moves the other. With v0, v1 the angular velocities, define
+    1) l_ant + r_ant in [-7, -3]    (~= 0, with a slight consistent
+                                     asymmetry seen on both robots)
+    2) l_ant        in [20, 150]
 
-    m = min(|v0|, |v1|)        # coupled speed, rad/s
+widened by a margin: a 4 deg margin turns the sum band into [-9, -1].
+l_ant is antenna index 0, r_ant is index 1, as returned by
+`get_present_antenna_joint_positions()` (radians; converted internally).
 
-    rest / parked / one antenna moved alone :  m ~ 0
-    touching and sliding (gentle rub)       :  m ~ 0.3 .. 1.2, sustained
-    collision (audible knock)               :  m spikes to 4 .. 9
+A collision EVENT is entering that region. A firm press flexes the antennas
+through the band (sum shoots past it, up to +35..+73 deg in the recordings)
+and back through it on release, so a short refractory merges the double
+crossing into one count. Validated on RemiFabre/secret-handshake: exactly 3
+collisions on each of the 4 recorded gestures, at the audible knock times;
+the approach ("bring together") does not count because condition 2 fails
+while the left antenna is still below 20 deg.
 
-Measured on the recordings: every audible knock is an m-spike > 4; thirty
-seconds of slide data never exceed 1.2. Threshold at 2.0 with a refractory
-and each knock counts exactly once, regardless of where the antennas hang,
-which antenna is swung, or which robot it is.
+Condition 2 also makes rest inert: at a typical floppy rest (l=-12, r=+10)
+the sum (-2) is inside the band but l is far below 20 deg.
 
 This module deliberately does NOT know about the head pose, torque state,
 rhythm, or the state machine above it. It answers: "did a collision just
-happen?" (update() returns True) and "are the antennas being moved together
-right now?" (.coupled / .coupled_speed).
+happen?" (update() returns True) and "are the antennas in the collision
+region right now?" (.in_collision, used for the gentle-hold gesture).
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
+
+_RAD2DEG = 180.0 / math.pi
 
 
 @dataclass(frozen=True)
 class CollisionConfig:
-    # Velocity is measured across the last `vel_span` sample steps
-    # (2 steps = 40 ms at 50 Hz): long enough to bridge a stale read,
-    # short enough to catch a knock spike.
-    vel_span: int = 2
-    # Coupled speed above this is a knock (recordings: knocks 4..9, slides
-    # never exceed 1.2, so 2.0 sits in the middle of a wide margin).
-    knock_on: float = 2.0
-    # One collision = one count even if it bounces (recordings show knock
-    # spacing ~0.4 s when tapping naturally).
-    knock_refractory_s: float = 0.25
-    # Coupled speed above this means the antennas are touching and being
-    # moved together (the rub/slide gesture).
-    couple_on: float = 0.25
+    # Center-collision geometry, in DEGREES (Remi's measurements, 2 robots).
+    sum_min_deg: float = -7.0
+    sum_max_deg: float = -3.0
+    l_min_deg: float = 20.0
+    l_max_deg: float = 150.0
+    # Widens the sum band by margin/2 on each side: 4 -> [-9, -1].
+    margin_deg: float = 4.0
+    # One knock crosses the band twice (in, then back out through it while
+    # releasing); the refractory merges that into one collision. Natural
+    # knock spacing in the recordings is ~0.4 s, so 0.25 s sits safely below.
+    refractory_s: float = 0.25
 
 
 class CollisionDetector:
-    """Stateful coupled-motion detector for antenna collisions.
+    """Stateful edge detector for the geometric collision region.
 
-    Feed it present antenna positions (with the sample time) every tick:
-    update() returns True exactly once per knock. `coupled` / `coupled_speed`
-    expose the sustained-contact signal for the rub gesture and debugging.
+    Feed it present antenna positions (radians) with the sample time every
+    tick: update() returns True exactly once per collision. `in_collision`
+    exposes the current region membership (for the hold gesture and debug);
+    `sum_deg` / `l_deg` expose the numbers behind the decision.
     """
 
     def __init__(self, config: CollisionConfig | None = None) -> None:
         self.cfg = config or CollisionConfig()
-        self.coupled: bool = False
-        self.coupled_speed: float = 0.0
-        self._hist: list[tuple[float, float, float]] = []  # (t, ant0, ant1)
-        self._prev_m: float = 0.0
-        self._last_knock_t: float = -1e9
+        half = self.cfg.margin_deg / 2.0
+        self._sum_lo = self.cfg.sum_min_deg - half
+        self._sum_hi = self.cfg.sum_max_deg + half
+        self.in_collision: bool = False
+        self.sum_deg: float = 0.0
+        self.l_deg: float = 0.0
+        self._last_onset_t: float = -1e9
 
     def reset(self) -> None:
-        self.coupled = False
-        self.coupled_speed = 0.0
-        self._hist.clear()
-        self._prev_m = 0.0
-        self._last_knock_t = -1e9
+        self.in_collision = False
+        self._last_onset_t = -1e9
 
     def update(self, t: float, ant0: float, ant1: float) -> bool:
-        """Return True exactly on the tick a new collision (knock) is seen."""
-        self._hist.append((t, ant0, ant1))
-        if len(self._hist) <= self.cfg.vel_span:
-            return False
-        if len(self._hist) > self.cfg.vel_span + 1:
-            self._hist.pop(0)
+        """Return True exactly on the tick a new collision is seen."""
+        l_deg = ant0 * _RAD2DEG
+        sum_deg = l_deg + ant1 * _RAD2DEG
+        self.l_deg = l_deg
+        self.sum_deg = sum_deg
 
-        t0, x0, y0 = self._hist[0]
-        dt = t - t0
-        if dt <= 0.0:
-            return False
-        v0 = (ant0 - x0) / dt
-        v1 = (ant1 - y0) / dt
-        m = min(abs(v0), abs(v1))
-
-        self.coupled_speed = m
-        self.coupled = m > self.cfg.couple_on
-
-        knock = (
-            m > self.cfg.knock_on
-            and self._prev_m <= self.cfg.knock_on
-            and t - self._last_knock_t > self.cfg.knock_refractory_s
+        inside = (
+            self._sum_lo <= sum_deg <= self._sum_hi
+            and self.cfg.l_min_deg <= l_deg <= self.cfg.l_max_deg
         )
-        if knock:
-            self._last_knock_t = t
-        self._prev_m = m
-        return knock
+        onset = (
+            inside
+            and not self.in_collision
+            and t - self._last_onset_t > self.cfg.refractory_s
+        )
+        self.in_collision = inside
+        if onset:
+            self._last_onset_t = t
+        return onset

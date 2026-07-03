@@ -2,8 +2,8 @@
 
 This is the exact logic destined for the 50 Hz control loop, so the rules
 from the spec apply hard here:
-  - update() is a handful of float ops. No I/O, no meaningful allocation,
-    no numpy.
+  - update() is a handful of float compares. No I/O, no meaningful
+    allocation, no numpy.
   - It never plays sounds or moves the robot. It RETURNS an event; the caller
     (lab script now, daemon later) decides what a PRIMED beep or an action
     sounds like.
@@ -16,13 +16,12 @@ Two handshakes share the same first round ("the shared prefix"):
       -> 3 collisions          => Event.PRIMED      (caller: confirmation beep)
     then, within the timeout:
       -> 3 more collisions     => Event.ACTION_TAPS (v1: the emotion)
-      -> rub the antennas together ~1 s
-                               => Event.ACTION_RUB  (future: WiFi provisioning)
+      -> hold the antennas gently together ~1 s
+                               => Event.ACTION_HOLD (future: WiFi provisioning)
 
-A "collision" is a coupled-motion spike (collision.py): both antennas moving
-fast at once, which only happens when one knocks into the other. The rub is
-sustained gentle coupled motion. Both are immune to where the floppy antennas
-happen to hang, which is why the old absolute-angle law failed live.
+A "collision" is entering the geometric collision region (collision.py,
+Remi's measured definition: l+r in a narrow band AND l in [20, 150] deg).
+The hold is staying in that region.
 """
 
 from __future__ import annotations
@@ -37,7 +36,7 @@ class Event(enum.Enum):
     ARMED = "armed"  # gate passed, now listening for round 1
     PRIMED = "primed"  # round 1 done -> play the confirmation beep
     ACTION_TAPS = "action_taps"  # handshake A complete (3 taps + 3 taps)
-    ACTION_RUB = "action_rub"  # handshake B complete (3 taps + rub)
+    ACTION_HOLD = "action_hold"  # handshake B complete (3 taps + hold)
     ABORTED = "aborted"  # primed round timed out, back to the start
 
 
@@ -53,8 +52,8 @@ class HandshakeConfig:
     # Round 2.
     primed_refractory_s: float = 0.25  # ignore contact right after the beep
     primed_timeout_s: float = 8.0  # no valid round 2 -> abort
-    rub_min_s: float = 1.0  # sustained coupled motion for handshake B
-    rub_grace_s: float = 0.3  # coupling may dip out briefly during a rub
+    hold_min_s: float = 1.0  # stay in the collision region for handshake B
+    hold_grace_s: float = 0.3  # membership may flicker briefly during a hold
     # After an action fires, stay inert this long before re-arming.
     cooldown_s: float = 2.0
 
@@ -74,12 +73,11 @@ class HandshakeStateMachine:
         self.cfg = config or HandshakeConfig()
         self.detector = CollisionDetector(self.cfg.collision)
         self.state: str = "idle"
-        self.last_sample: tuple[float, float] | None = None
         self._pose_ok_since: float | None = None
         self._taps: list[float] = []
         self._primed_at: float = 0.0
-        self._rub_since: float | None = None  # coupling began (while primed)
-        self._last_coupled_t: float = 0.0
+        self._hold_since: float | None = None  # in the region (while primed)
+        self._last_in_region_t: float = 0.0
         self._cooldown_until: float = 0.0
 
     @property
@@ -92,7 +90,7 @@ class HandshakeStateMachine:
         self.detector.reset()
         self._pose_ok_since = None
         self._taps.clear()
-        self._rub_since = None
+        self._hold_since = None
 
     def update(
         self,
@@ -102,8 +100,6 @@ class HandshakeStateMachine:
         torque_off: bool,
         head_in_sleep_pose: bool,
     ) -> Event | None:
-        self.last_sample = (ant0, ant1)
-
         if not torque_off:
             if self.state != "idle" or self._pose_ok_since is not None:
                 self.reset()
@@ -114,7 +110,7 @@ class HandshakeStateMachine:
         if self._taps and t - self._taps[0] > self.cfg.rhythm_window_s:
             self._taps.pop(0)
 
-        knock = self.detector.update(t, ant0, ant1)
+        onset = self.detector.update(t, ant0, ant1)
 
         if self.state == "idle":
             if head_in_sleep_pose and t >= self._cooldown_until:
@@ -129,12 +125,12 @@ class HandshakeStateMachine:
             return None
 
         if self.state == "armed":
-            if knock and self._count_tap(t):
+            if onset and self._count_tap(t):
                 if len(self._taps) >= self.cfg.taps_required:
                     self.state = "primed"
                     self._primed_at = t
                     self._taps.clear()
-                    self._rub_since = None
+                    self._hold_since = None
                     return Event.PRIMED
             return None
 
@@ -144,24 +140,22 @@ class HandshakeStateMachine:
             return Event.ABORTED
         if t - self._primed_at < self.cfg.primed_refractory_s:
             return None
-        if knock:
-            # A knock is not a rub: tapping must never add up to ACTION_RUB.
-            self._rub_since = None
+        if onset:
             if self._count_tap(t) and len(self._taps) >= self.cfg.taps_required:
                 self._back_to_idle(t, cooldown_s=self.cfg.cooldown_s)
                 return Event.ACTION_TAPS
-        elif self.detector.coupled:
-            self._last_coupled_t = t
-            if self._rub_since is None:
-                self._rub_since = t
-            elif t - self._rub_since >= self.cfg.rub_min_s:
+        if self.detector.in_collision:
+            self._last_in_region_t = t
+            if self._hold_since is None:
+                self._hold_since = t
+            elif t - self._hold_since >= self.cfg.hold_min_s:
                 self._back_to_idle(t, cooldown_s=self.cfg.cooldown_s)
-                return Event.ACTION_RUB
+                return Event.ACTION_HOLD
         elif (
-            self._rub_since is not None
-            and t - self._last_coupled_t > self.cfg.rub_grace_s
+            self._hold_since is not None
+            and t - self._last_in_region_t > self.cfg.hold_grace_s
         ):
-            self._rub_since = None
+            self._hold_since = None
         return None
 
     def _count_tap(self, t: float) -> bool:
@@ -177,5 +171,5 @@ class HandshakeStateMachine:
         self.state = "idle"
         self._pose_ok_since = None
         self._taps.clear()
-        self._rub_since = None
+        self._hold_since = None
         self._cooldown_until = t + cooldown_s

@@ -1,17 +1,17 @@
-"""Unit tests for the coupled-motion collision law and the handshake machine.
+"""Unit tests for the geometric collision law and the handshake machine.
 
 Everything here is synthetic and offline: we generate 50 Hz antenna samples
-that mimic the real signals (validated against the HF recordings, see
-analyze_recordings.py) and feed them tick by tick, exactly like the daemon
+that mimic the real gesture (checked against the HF recordings, see
+replay_validate.py) and feed them tick by tick, exactly like the daemon
 control loop will.
 
-The physical model behind the synthetic traces:
-- The antennas are floppy friction-fit parts: they stay where they are left.
-  Absolute angles mean nothing; only motion does.
-- A collision (knock) moves BOTH antennas fast for a couple of ticks
-  (coupled speed ~4 rad/s in the recordings).
-- A rub/slide moves both antennas slowly and continuously (~0.3-1.2 rad/s).
-- Moving a single antenna, however fast, is not a collision.
+The collision definition (measured by Remi on 2 robots, in degrees):
+    1) l_ant + r_ant in [-7, -3]   (slight asymmetry: not exactly 0)
+    2) l_ant in [20, 150]
+widened by a margin (default 4 deg -> sum band becomes [-9, -1]).
+A collision event = entering that region, with a refractory that merges the
+double band-crossing of a firm press (in through the band, out beyond it
+while flexing, back through on release).
 
 Run:
     python -m pytest examples/secret_handshake_lab/test_handshake.py -v
@@ -19,6 +19,7 @@ Run:
 
 from __future__ import annotations
 
+import math
 import os
 import sys
 
@@ -31,54 +32,122 @@ from pose_gate import SLEEP_HEAD_POSE, head_in_sleep_pose  # noqa: E402
 DT = 0.02  # 50 Hz, same as the daemon control loop
 
 
-class Trace:
-    """Builds a synthetic antenna trajectory, stateful like real antennas."""
+def d2r(deg: float) -> float:
+    return math.radians(deg)
 
-    def __init__(self, a0: float = -0.175, a1: float = 0.175) -> None:
-        self.a0 = a0
-        self.a1 = a1
-        self.samples: list[tuple[float, float]] = []
 
-    def _emit(self) -> None:
-        self.samples.append((self.a0, self.a1))
+# Characteristic antenna configurations, in degrees (l, r):
+REST = (-12.0, 10.0)  # floppy rest: sum=-2 is in band, but l fails cond 2
+CONTACT = (60.0, -65.0)  # touching at center: sum=-5, l in range
+PRESS = (65.0, -30.0)  # firm press, antennas flexed: sum=+35, out of band
+CROSSED = (149.0, -160.0)  # slid past each other and parked: sum=-11
 
-    def still(self, seconds: float) -> "Trace":
-        for _ in range(max(1, round(seconds / DT))):
-            self._emit()
-        return self
 
-    def knock(self, settle_s: float = 0.35) -> "Trace":
-        """One collision: both antennas jump fast (~4 rad/s) for 2 ticks."""
-        for _ in range(2):
-            self.a0 += 0.08
-            self.a1 -= 0.08
-            self._emit()
-        return self.still(settle_s)
+def seg(sample: tuple[float, float], seconds: float) -> list[tuple[float, float]]:
+    return [(d2r(sample[0]), d2r(sample[1]))] * max(1, round(seconds / DT))
 
-    def knocks(self, n: int, settle_s: float = 0.35) -> "Trace":
-        for _ in range(n):
-            self.knock(settle_s)
-        return self
 
-    def rub(self, seconds: float, step: float = 0.012) -> "Trace":
-        """Touching and sliding: both move slowly (~0.6 rad/s), no spikes."""
-        for i in range(max(1, round(seconds / DT))):
-            self.a0 += step
-            self.a1 -= step
-            self._emit()
-        return self
+def tap(release_s: float = 0.3) -> list[tuple[float, float]]:
+    """One collision: pass into the band, press through it, release."""
+    return (
+        seg(CONTACT, 0.04)
+        + seg(PRESS, 0.06)
+        + seg(CONTACT, 0.04)  # back through the band on the way out
+        + seg(REST, release_s)
+    )
 
-    def move_one(self, seconds: float, step: float = 0.08) -> "Trace":
-        """Only ant0 moves (fast). Not a collision, must be inert."""
-        for _ in range(max(1, round(seconds / DT))):
-            self.a0 += step
-            self._emit()
-        return self
+
+def taps(n: int, release_s: float = 0.3) -> list[tuple[float, float]]:
+    out: list[tuple[float, float]] = []
+    for _ in range(n):
+        out += tap(release_s)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Collision detector: the geometric law
+# ---------------------------------------------------------------------------
+
+
+def run_detector(
+    samples: list[tuple[float, float]], config: CollisionConfig | None = None
+) -> tuple[int, int]:
+    det = CollisionDetector(config or CollisionConfig())
+    onsets = 0
+    in_ticks = 0
+    t = 0.0
+    for a0, a1 in samples:
+        if det.update(t, a0, a1):
+            onsets += 1
+        if det.in_collision:
+            in_ticks += 1
+        t += DT
+    return onsets, in_ticks
+
+
+def test_detector_counts_one_collision_per_tap() -> None:
+    onsets, _ = run_detector(seg(REST, 0.5) + taps(3))
+    assert onsets == 3
+
+
+def test_detector_press_through_band_counts_once() -> None:
+    # One tap enters the band twice (in, then back out through it); the
+    # refractory must merge that into a single collision.
+    onsets, _ = run_detector(seg(REST, 0.5) + tap())
+    assert onsets == 1
+
+
+def test_detector_rest_is_not_a_collision() -> None:
+    # At rest sum=-2 sits in the band, but l=-12 fails condition 2.
+    onsets, in_ticks = run_detector(seg(REST, 2.0))
+    assert onsets == 0
+    assert in_ticks == 0
+
+
+def test_detector_press_alone_is_not_in_band() -> None:
+    onsets, in_ticks = run_detector(seg(PRESS, 1.0))
+    assert in_ticks == 0
+    assert onsets == 0
+
+
+def test_detector_crossed_park_is_not_a_collision() -> None:
+    # Antennas slid past each other and parked: sum=-11, below the band.
+    onsets, in_ticks = run_detector(seg(CROSSED, 2.0))
+    assert onsets == 0
+    assert in_ticks == 0
+
+
+def test_detector_single_antenna_swing_is_inert() -> None:
+    # Swing only the left antenna across its whole range, right stays at
+    # rest (+10): sum = l+10 is in [-9,-1] only while l is in [-19,-11],
+    # where condition 2 (l >= 20) fails. No collision.
+    samples = [(d2r(l), d2r(10.0)) for l in range(-170, 171, 2)]
+    onsets, in_ticks = run_detector(samples)
+    assert onsets == 0
+    assert in_ticks == 0
+
+
+def test_detector_margin_widens_the_band() -> None:
+    just_outside = (60.0, -68.5)  # sum=-8.5: outside [-7,-3], inside [-9,-1]
+    strict = CollisionConfig(margin_deg=0.0)
+    onsets, in_ticks = run_detector(seg(just_outside, 0.5), strict)
+    assert in_ticks == 0 and onsets == 0
+    onsets, in_ticks = run_detector(seg(just_outside, 0.5))  # default margin 4
+    assert in_ticks > 0 and onsets == 1
+
+
+def test_detector_hold_is_one_collision_and_stays_in_band() -> None:
+    onsets, in_ticks = run_detector(seg(REST, 0.5) + seg(CONTACT, 1.5))
+    assert onsets == 1
+    assert in_ticks >= 70  # ~1.5 s at 50 Hz
+
+
+# ---------------------------------------------------------------------------
+# State machine helpers
+# ---------------------------------------------------------------------------
 
 
 class Runner:
-    """Feeds samples to a machine with a monotonic clock, collects events."""
-
     def __init__(self, machine: HandshakeStateMachine) -> None:
         self.machine = machine
         self.t = 0.0
@@ -86,20 +155,17 @@ class Runner:
 
     def feed(
         self,
-        trace: Trace,
+        samples: list[tuple[float, float]],
         torque_off: bool = True,
         pose_ok: bool = True,
-    ) -> list[Event]:
-        new: list[Event] = []
-        for ant0, ant1 in trace.samples:
+    ) -> None:
+        for ant0, ant1 in samples:
             e = self.machine.update(
                 self.t, ant0, ant1, torque_off=torque_off, head_in_sleep_pose=pose_ok
             )
             if e is not None:
                 self.events.append((round(self.t, 2), e))
-                new.append(e)
             self.t += DT
-        return new
 
     def event_kinds(self) -> list[Event]:
         return [e for _, e in self.events]
@@ -109,66 +175,6 @@ def make_runner() -> Runner:
     return Runner(HandshakeStateMachine(HandshakeConfig()))
 
 
-def continued(trace_runner: Runner) -> Trace:
-    """A fresh Trace starting where the runner's last sample left off."""
-    # Tests build several traces in a row; antennas must not teleport between
-    # them or the jump itself would register as motion.
-    last = trace_runner.machine.last_sample
-    if last is None:
-        return Trace()
-    return Trace(last[0], last[1])
-
-
-# ---------------------------------------------------------------------------
-# Collision detector: the coupled-motion law
-# ---------------------------------------------------------------------------
-
-
-def run_detector(trace: Trace) -> tuple[int, int]:
-    det = CollisionDetector(CollisionConfig())
-    knocks = 0
-    coupled_ticks = 0
-    t = 0.0
-    for a0, a1 in trace.samples:
-        if det.update(t, a0, a1):
-            knocks += 1
-        if det.coupled:
-            coupled_ticks += 1
-        t += DT
-    return knocks, coupled_ticks
-
-
-def test_detector_counts_one_knock_per_impact() -> None:
-    knocks, _ = run_detector(Trace().still(0.5).knocks(3).still(0.5))
-    assert knocks == 3
-
-
-def test_detector_refractory_merges_bounces() -> None:
-    # Two impacts 100 ms apart are one collision (bounce), not two.
-    knocks, _ = run_detector(Trace().still(0.5).knock(settle_s=0.06).knock())
-    assert knocks == 1
-
-
-def test_detector_rub_is_coupled_but_not_a_knock() -> None:
-    knocks, coupled_ticks = run_detector(Trace().still(0.5).rub(1.0).still(0.3))
-    assert knocks == 0
-    assert coupled_ticks >= 40  # ~1 s of coupling at 50 Hz
-
-
-def test_detector_ignores_single_antenna_motion() -> None:
-    knocks, coupled_ticks = run_detector(Trace().still(0.5).move_one(1.0).still(0.3))
-    assert knocks == 0
-    assert coupled_ticks == 0
-
-
-def test_detector_ignores_statics_anywhere() -> None:
-    # Parked crossed (the end state of the collision-definition recordings)
-    # or any other static position is not contact.
-    knocks, coupled_ticks = run_detector(Trace(a0=2.6, a1=-2.8).still(2.0))
-    assert knocks == 0
-    assert coupled_ticks == 0
-
-
 # ---------------------------------------------------------------------------
 # Arming gate
 # ---------------------------------------------------------------------------
@@ -176,32 +182,32 @@ def test_detector_ignores_statics_anywhere() -> None:
 
 def test_arms_after_settling_in_sleep_pose() -> None:
     r = make_runner()
-    r.feed(Trace().still(1.0))
+    r.feed(seg(REST, 1.0))
     assert r.event_kinds() == [Event.ARMED]
     assert r.machine.state == "armed"
 
 
 def test_does_not_arm_without_sleep_pose() -> None:
     r = make_runner()
-    r.feed(Trace().still(2.0), pose_ok=False)
+    r.feed(seg(REST, 2.0), pose_ok=False)
     assert r.event_kinds() == []
     assert r.machine.state == "idle"
 
 
 def test_does_not_arm_with_torque_on() -> None:
     r = make_runner()
-    r.feed(Trace().still(2.0), torque_off=False)
+    r.feed(seg(REST, 2.0), torque_off=False)
     assert r.event_kinds() == []
     assert r.machine.state == "idle"
 
 
 def test_pose_flicker_restarts_settle_timer() -> None:
     r = make_runner()
-    r.feed(Trace().still(0.3))
-    r.feed(Trace().still(0.1), pose_ok=False)
-    r.feed(Trace().still(0.3))
+    r.feed(seg(REST, 0.3))
+    r.feed(seg(REST, 0.1), pose_ok=False)
+    r.feed(seg(REST, 0.3))
     assert r.event_kinds() == []  # 0.3 s < settle time, must not be armed yet
-    r.feed(Trace().still(0.4))
+    r.feed(seg(REST, 0.4))
     assert r.event_kinds() == [Event.ARMED]
 
 
@@ -210,72 +216,65 @@ def test_pose_flicker_restarts_settle_timer() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_full_knock_knock_handshake() -> None:
+def test_full_tap_tap_handshake() -> None:
     r = make_runner()
-    r.feed(Trace().still(1.0).knocks(3))
+    r.feed(seg(REST, 1.0) + taps(3))
     assert r.event_kinds() == [Event.ARMED, Event.PRIMED]
-    r.feed(continued(r).still(0.5).knocks(3))
+    r.feed(seg(REST, 0.5) + taps(3))
     assert r.event_kinds() == [Event.ARMED, Event.PRIMED, Event.ACTION_TAPS]
     assert r.machine.state == "idle"  # back to start after the action
 
 
-def test_two_knocks_do_not_prime() -> None:
+def test_two_taps_do_not_prime() -> None:
     r = make_runner()
-    r.feed(Trace().still(1.0).knocks(2))
+    r.feed(seg(REST, 1.0) + taps(2))
     assert r.machine.tap_count == 2  # live UI reads this
-    r.feed(continued(r).still(4.0))  # let the rhythm window expire
+    r.feed(seg(REST, 4.0))  # let the rhythm window expire
     assert Event.PRIMED not in r.event_kinds()
     assert r.machine.tap_count == 0
 
 
-def test_slow_knocks_never_prime() -> None:
+def test_slow_taps_never_prime() -> None:
     r = make_runner()
-    r.feed(Trace().still(1.0).knocks(4, settle_s=1.7))  # 3 s window holds only 2
+    r.feed(seg(REST, 1.0) + taps(4, release_s=1.7))  # 3 s window holds only 2
     assert Event.PRIMED not in r.event_kinds()
 
 
-def test_single_antenna_motion_is_inert() -> None:
-    # The old diff law false-positived on this; the coupled law must not.
+def test_single_antenna_play_is_inert() -> None:
     r = make_runner()
-    r.feed(Trace().still(1.0))
-    r.feed(continued(r).move_one(0.2).still(0.3).move_one(0.2).still(0.3).move_one(0.2))
+    r.feed(seg(REST, 1.0))
+    swing = [(d2r(l), d2r(10.0)) for l in range(-170, 171, 2)]
+    r.feed(swing + swing)
     assert r.event_kinds() == [Event.ARMED]
     assert r.machine.tap_count == 0
 
 
-def test_works_at_any_antenna_base_position() -> None:
-    # The live robot rested at diff=+0.97 (dataset robot: -0.35). The law
-    # must not care where the floppy antennas happen to hang.
-    r = Runner(HandshakeStateMachine(HandshakeConfig()))
-    r.feed(Trace(a0=0.606, a1=-0.367).still(1.0).knocks(3))
-    assert r.event_kinds() == [Event.ARMED, Event.PRIMED]
-
-
 # ---------------------------------------------------------------------------
-# Handshake B: 3 collisions -> beep -> rub/slide -> other action
+# Handshake B: 3 collisions -> beep -> gentle hold in the band -> action
 # ---------------------------------------------------------------------------
 
 
-def test_rub_handshake() -> None:
+def test_hold_handshake() -> None:
     r = make_runner()
-    r.feed(Trace().still(1.0).knocks(3))
-    r.feed(continued(r).still(0.5).rub(1.6))
-    assert r.event_kinds() == [Event.ARMED, Event.PRIMED, Event.ACTION_RUB]
+    r.feed(seg(REST, 1.0) + taps(3))
+    r.feed(seg(REST, 0.5) + seg(CONTACT, 1.6))
+    assert r.event_kinds() == [Event.ARMED, Event.PRIMED, Event.ACTION_HOLD]
     assert r.machine.state == "idle"
 
 
-def test_rub_in_round_one_does_not_prime() -> None:
+def test_hold_in_round_one_does_not_prime() -> None:
     r = make_runner()
-    r.feed(Trace().still(1.0).rub(2.0).still(0.5))
-    assert r.event_kinds() == [Event.ARMED]
+    r.feed(seg(REST, 1.0) + seg(CONTACT, 2.0) + seg(REST, 0.5))
+    assert Event.PRIMED not in r.event_kinds()  # a hold is 1 collision, not 3
 
 
-def test_knocks_reset_the_rub_timer() -> None:
-    # Knock-rub-knock-rub in round 2 must not add up to a rub action.
+def test_taps_do_not_add_up_to_a_hold() -> None:
+    # Two taps then waiting must not fire ACTION_HOLD: each tap leaves the
+    # band quickly, so the hold timer never accumulates.
     r = make_runner()
-    r.feed(Trace().still(1.0).knocks(3))
-    r.feed(continued(r).still(0.4).knock().rub(0.7).knock().rub(0.7))
-    assert Event.ACTION_RUB not in r.event_kinds()
+    r.feed(seg(REST, 1.0) + taps(3))
+    r.feed(seg(REST, 0.5) + taps(2) + seg(REST, 1.5))
+    assert Event.ACTION_HOLD not in r.event_kinds()
 
 
 # ---------------------------------------------------------------------------
@@ -285,31 +284,30 @@ def test_knocks_reset_the_rub_timer() -> None:
 
 def test_primed_times_out_then_recovers() -> None:
     r = make_runner()
-    r.feed(Trace().still(1.0).knocks(3))
-    r.feed(continued(r).still(9.0))  # do nothing during round 2
+    r.feed(seg(REST, 1.0) + taps(3))
+    r.feed(seg(REST, 9.0))  # do nothing during round 2
     kinds = r.event_kinds()
     assert kinds[:3] == [Event.ARMED, Event.PRIMED, Event.ABORTED]
-    # It re-arms on its own (pose still ok) and a fresh handshake works.
-    r.feed(continued(r).knocks(3))
+    r.feed(taps(3))
     assert r.event_kinds()[-1] == Event.PRIMED
 
 
 def test_torque_on_resets_everything() -> None:
     r = make_runner()
-    r.feed(Trace().still(1.0).knocks(2))
-    r.feed(continued(r).knock(), torque_off=False)  # torque during collision 3
+    r.feed(seg(REST, 1.0) + taps(2))
+    r.feed(tap(), torque_off=False)  # torque comes on during collision 3
     assert r.machine.state == "idle"
     n_before = len(r.events)
-    r.feed(continued(r).knocks(3), torque_off=False)  # knocks while torque on
+    r.feed(taps(3), torque_off=False)  # taps while torque on: inert
     assert len(r.events) == n_before
 
 
 def test_handshake_is_repeatable() -> None:
     r = make_runner()
     for _ in range(2):
-        r.feed(continued(r).still(3.5))  # cooldown + settle
-        r.feed(continued(r).knocks(3))
-        r.feed(continued(r).still(0.5).knocks(3))
+        r.feed(seg(REST, 3.5))  # cooldown + settle
+        r.feed(taps(3))
+        r.feed(seg(REST, 0.5) + taps(3))
     assert r.event_kinds().count(Event.ACTION_TAPS) == 2
 
 
