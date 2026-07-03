@@ -3,9 +3,6 @@
 import logging
 from typing import Optional
 
-import numpy as np
-import numpy.typing as npt
-
 try:
     import gi
 except ImportError as e:
@@ -18,7 +15,7 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 gi.require_version("GstPbutils", "1.0")
 
-from gi.repository import GLib, Gst, GstApp, GstPbutils  # noqa: E402
+from gi.repository import Gst, GstApp, GstPbutils  # noqa: E402
 
 
 def handle_default_bus_message(
@@ -77,38 +74,6 @@ def get_sample(appsink: GstApp.AppSink, logger: logging.Logger) -> Optional[byte
             logger.warning("Buffer is None")
         data = buf.extract_dup(0, buf.get_size())
     return data
-
-
-def encode_bgr_to_jpeg(
-    frame: npt.NDArray[np.uint8], logger: logging.Logger
-) -> Optional[bytes]:
-    """Encode a BGR frame as JPEG bytes, or ``None`` if encoding fails."""
-    Gst.init([])  # idempotent
-    height, width = frame.shape[:2]
-    try:
-        pipeline = Gst.parse_launch(
-            "appsrc name=src format=time is-live=false "
-            "! videoconvert ! jpegenc ! appsink name=sink sync=false"
-        )
-    except GLib.Error as e:
-        logger.warning(f"Failed to build JPEG encoder pipeline: {e}")
-        return None
-
-    appsrc = pipeline.get_by_name("src")
-    appsink = pipeline.get_by_name("sink")
-    appsrc.set_property(
-        "caps",
-        Gst.Caps.from_string(
-            f"video/x-raw,format=BGR,width={width},height={height},framerate=1/1"
-        ),
-    )
-    pipeline.set_state(Gst.State.PLAYING)
-    try:
-        appsrc.emit("push-buffer", Gst.Buffer.new_wrapped(frame.tobytes()))
-        appsrc.emit("end-of-stream")
-        return get_sample(appsink, logger)
-    finally:
-        pipeline.set_state(Gst.State.NULL)
 
 
 def is_valid_audio_file(path: str) -> bool:

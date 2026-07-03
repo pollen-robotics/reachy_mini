@@ -1,8 +1,8 @@
 import time
-import logging
 from typing import cast
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 from reachy_mini.daemon.utils import is_local_camera_available
@@ -13,7 +13,7 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
-from reachy_mini.media.gstreamer_utils import encode_bgr_to_jpeg
+from reachy_mini.media.camera_base import CameraBase
 
 SIGNALING_HOST = "reachy-mini.local"
 
@@ -140,13 +140,29 @@ def test_change_resolution_errors(backend: MediaBackend) -> None:
 
 
 @pytest.mark.video
-def test_encode_bgr_to_jpeg_preserves_color() -> None:
-    """A red BGR frame encodes to a JPEG that decodes back to red."""
+def test_read_jpeg_encodes_bgr_frame() -> None:
+    """CameraBase.read_jpeg encodes a BGR frame into a JPEG that decodes back to it."""
     cv2 = pytest.importorskip("cv2")
 
-    frame = np.zeros((32, 32, 3), dtype=np.uint8)
-    frame[:, :, 2] = 255  # BGR red
-    jpeg = encode_bgr_to_jpeg(frame, logging.getLogger(__name__))
+    class _StubCamera(CameraBase):
+        def open(self) -> None: ...
+
+        def read(self) -> npt.NDArray[np.uint8]:
+            frame = np.zeros((32, 32, 3), dtype=np.uint8)
+            frame[:, :, 2] = 255  # BGR red
+            return frame
+
+        def close(self) -> None:
+            self._release_jpeg_encoder()
+
+        def _apply_resolution(self, resolution: CameraResolution) -> None: ...
+
+    camera = _StubCamera()
+    try:
+        jpeg = camera.read_jpeg()
+    finally:
+        camera.close()
+
     assert jpeg is not None
     assert jpeg[:2] == b"\xff\xd8"
 

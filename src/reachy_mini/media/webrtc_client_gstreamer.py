@@ -98,7 +98,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
         CameraBase.__init__(self, log_level=log_level)
         AudioBase.__init__(self, log_level=log_level)
 
-        Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
@@ -349,6 +348,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def close(self) -> None:
         """Stop the WebRTC pipeline."""
+        self._release_jpeg_encoder()
         self._pipeline_record.set_state(Gst.State.NULL)
 
     def start_recording(self) -> None:

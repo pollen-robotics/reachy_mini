@@ -24,7 +24,19 @@ from reachy_mini.media.camera_constants import (
     MujocoCameraSpecs,
 )
 from reachy_mini.media.camera_utils import scale_intrinsics
-from reachy_mini.media.gstreamer_utils import encode_bgr_to_jpeg
+from reachy_mini.media.gstreamer_utils import get_sample
+
+try:
+    import gi
+except ImportError as e:
+    raise ImportError(
+        "The 'gi' module is required for CameraBase but could not be imported. "
+        "Please check the gstreamer installation."
+    ) from e
+
+gi.require_version("Gst", "1.0")
+
+from gi.repository import Gst  # noqa: E402
 
 
 class CameraBase(ABC):
@@ -38,11 +50,16 @@ class CameraBase(ABC):
 
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize shared camera attributes."""
+        Gst.init([])
         self.logger = logging.getLogger(type(self).__module__)
         self.logger.setLevel(log_level)
         self._resolution: Optional[CameraResolution] = None
         self.camera_specs: Optional[CameraSpecs] = None
         self.resized_K: Optional[npt.NDArray[np.float64]] = None
+        self._jpeg_pipeline: Gst.Pipeline = None
+        self._jpeg_appsrc: Gst.Element = None
+        self._jpeg_appsink: Gst.Element = None
+        self._jpeg_size: Optional[tuple[int, int]] = None
 
     @property
     def resolution(self) -> tuple[int, int]:
@@ -160,11 +177,58 @@ class CameraBase(ABC):
         ...
 
     def read_jpeg(self) -> Optional[bytes]:
-        """Pull the latest frame encoded as JPEG bytes, or ``None`` if unavailable."""
+        """Return the latest frame as JPEG bytes, or ``None`` if unavailable.
+
+        For occasional stills only, not optimised for video-rate capture.
+        """
         frame = self.read()
         if frame is None:
             return None
-        return encode_bgr_to_jpeg(frame, self.logger)
+        height, width = frame.shape[:2]
+        if self._jpeg_pipeline is None or self._jpeg_size != (width, height):
+            self._release_jpeg_encoder()
+            self._build_jpeg_encoder(width, height)
+        self._jpeg_pipeline.set_state(Gst.State.PLAYING)
+        self._jpeg_appsrc.emit("push-buffer", Gst.Buffer.new_wrapped(frame.tobytes()))
+        jpeg = get_sample(self._jpeg_appsink, self.logger)
+        self._jpeg_pipeline.set_state(Gst.State.PAUSED)
+        return jpeg
+
+    def _build_jpeg_encoder(self, width: int, height: int) -> None:
+        """Build the reusable JPEG encoder pipeline for the given frame size."""
+        pipeline = Gst.Pipeline.new("jpeg_encoder")
+        appsrc = Gst.ElementFactory.make("appsrc")
+        videoconvert = Gst.ElementFactory.make("videoconvert")
+        jpegenc = Gst.ElementFactory.make("jpegenc")
+        appsink = Gst.ElementFactory.make("appsink")
+        if not all([appsrc, videoconvert, jpegenc, appsink]):
+            raise RuntimeError("Failed to create JPEG encoder elements")
+        for element in (appsrc, videoconvert, jpegenc, appsink):
+            pipeline.add(element)
+        appsrc.link(videoconvert)
+        videoconvert.link(jpegenc)
+        jpegenc.link(appsink)
+        appsrc.set_property(
+            "caps",
+            Gst.Caps.from_string(
+                f"video/x-raw,format=BGR,width={width},height={height},framerate=1/1"
+            ),
+        )
+        appsink.set_property("sync", False)
+        pipeline.set_state(Gst.State.PAUSED)
+        self._jpeg_pipeline = pipeline
+        self._jpeg_appsrc = appsrc
+        self._jpeg_appsink = appsink
+        self._jpeg_size = (width, height)
+
+    def _release_jpeg_encoder(self) -> None:
+        """Tear down the JPEG encoder pipeline if one exists."""
+        if self._jpeg_pipeline is not None:
+            self._jpeg_pipeline.set_state(Gst.State.NULL)
+            self._jpeg_pipeline = None
+            self._jpeg_appsrc = None
+            self._jpeg_appsink = None
+            self._jpeg_size = None
 
     @abstractmethod
     def close(self) -> None:
