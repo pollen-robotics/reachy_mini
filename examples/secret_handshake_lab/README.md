@@ -54,6 +54,23 @@ Validation on the dataset (`RemiFabre/secret-handshake`, see
   the hold handshake. The real protection is the two-round structure + the
   sleep-pose gate + torque-off arming.
 
+### Measured touch-sum envelope (static sweeps, 2026-07-03)
+
+`data/touch_sweep_*.csv`: antennas held gently touching, swept l from ~26 to
+~145 deg, one pass per stacking order (which antenna rests on top), on a
+Wireless and a Lite robot. Sum of the two angles while touching, in degrees:
+
+    Wireless: [-5.4, -1.5]  (mean -3.1)
+    Lite    : [-6.8, -1.8]  (mean -4.5)
+
+Robot-to-robot centers differ by ~1.3 deg. The STACKING ORDER is the
+biggest term: at mid-travel (l 60-110 deg) the second stacking sits 2.5-3.4
+deg lower than the first, shrinking to ~0 (or slightly reversed) at both
+ends of travel; the same pattern on both robots. The union of everything
+measured, [-6.8, -1.5], sits inside the working band [-9, 0] with ~2 deg to
+spare on each side; the bottom edge -9 is also almost exactly the midpoint
+between the deepest real touch (-6.8) and the crossed-parked state (~-11).
+
 History, kept so it is not retried: v1 was `diff = ant0 - ant1` with
 absolute thresholds; it failed live because the floppy antennas rest
 wherever they were left (one robot rested at diff +56 deg, another at -20).
