@@ -6,6 +6,22 @@ Full design/history: `2026-07-01-secret-handshake-design.md` (same folder).
 Read that spec top to bottom before changing anything; this file is only
 "where we are and what is next".
 
+## UPDATE 2026-07-04 (later): deployed and LIVE-VALIDATED on the wireless robot
+
+Option B install done (`/venvs/mini_daemon` at 1.8.4 from this branch),
+daemon restarted, and the full flow observed in the journal with Remi at
+the robot: `armed -> primed -> success -> re-armed`, both sounds played
+through ALSA. One real bug was found and fixed live (commit d8715149):
+the antenna encoders are MULTI-TURN, and on Remi's robot they were parked
+a full turn away from zero (rest read l=-340 deg, physically +20). The
+raw `l in [20, 150]` gate could never pass. The collision law now wraps
+angles to [-180, 180) in both the lab detector and the daemon module
+(failing test written in the lab first, replay regression unchanged).
+
+Still open: spec section 10 soak/multi-person validation, QR provisioning
+live test (opencv is not installed on the robot), emotion action layer
+(spec section 8, not built).
+
 ## State: everything is implemented and pushed, awaiting on-robot validation
 
 1. Collision law v3 (GEOMETRIC, measured by Remi, degrees): collision at
