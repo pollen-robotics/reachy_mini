@@ -1,0 +1,67 @@
+# Secret handshake + WiFi QR provisioning: agent handoff
+
+Date: 2026-07-04. Branch: `1245-improve-the-first-interaction-after-building-the-robot`
+(push small commits directly to it, short messages, NEVER main).
+Full design/history: `2026-07-01-secret-handshake-design.md` (same folder).
+Read that spec top to bottom before changing anything; this file is only
+"where we are and what is next".
+
+## State: everything is implemented and pushed, awaiting on-robot validation
+
+1. Collision law v3 (GEOMETRIC, measured by Remi, degrees): collision at
+   center = `l+r in [-9, 0]` AND `l in [20, 150]` (l = antenna index 0).
+   v1 (angle diff) and v2 (velocities) were REJECTED; do not re-propose.
+2. Lab (`examples/secret_handshake_lab/`): validated detector + two-round
+   state machine, 28 tests, replay regression against the HF dataset
+   (exactly 3 collisions per recorded gesture), bench.py, live probes with
+   beeps. Remi live-validated the detector on 3 robots (100% detection).
+3. Daemon (sounds only, default handshake 3+3, no hold gesture):
+   - `src/reachy_mini/daemon/backend/secret_handshake.py` (pure module)
+   - one guarded call in `RobotBackend._update()`; armed ONLY when
+     `motor_control_mode == Disabled` (all torque off)
+   - kill switch `REACHY_HANDSHAKE_ENABLED=0`
+   - sounds `assets/handshake_*.wav` = tap-lab tones, regenerate with
+     `examples/secret_handshake_lab/render_daemon_sounds.py`
+   - tests `tests/unit_tests/test_secret_handshake.py`
+4. WiFi QR provisioning (wireless only, additive):
+   - `daemon/app/services/wifi_provisioning.py` (dependency-injected,
+     offline tests in `tests/unit_tests/test_wifi_provisioning.py`)
+   - endpoints `POST/GET /wifi/provision_qr/{start,status}`
+   - camera = media server's existing IPC branch (GStreamerCamera);
+     QR = lazy cv2 (state `unavailable` if opencv missing; opencv is NOT
+     in the wireless-version extra, ISO decision pending)
+   - connect/confirm mirrors the desktop-app onboarding
+     (reachy-mini-desktop-app WiFiConfiguration.jsx): /wifi/connect route
+     + /wifi/status polling (busy -> wlan+ssid ok, hotspot = reverted)
+   - handshake SUCCESS -> provisioning is OPT-IN:
+     `REACHY_HANDSHAKE_WIFI_PROVISION=1` (default OFF)
+
+## Next step (was in progress at handoff): deploy to the wireless robot
+
+Follow `docs/source/platforms/reachy_mini/install_daemon_from_branch.md`
+Option B: `ssh pollen@reachy-mini.local` (password `root`), pip install the
+branch into `/venvs/mini_daemon`, `sudo systemctl restart
+reachy-mini-daemon`, then `journalctl -u reachy-mini-daemon -f` and have
+Remi do the gesture: expect log lines `Secret handshake: primed/success`
+and the sounds from the robot speaker.
+
+BLOCKER at handoff: the robot did not answer on the LAN (mDNS cached
+192.168.1.14 but dead; no `_reachy-mini._tcp` zeroconf advert). Likely
+hotspot fallback or mid-boot; ask Remi about the robot's network state.
+
+Then: spec section 10 validation (accidental-trigger soak, multi-person
+reliability), QR provisioning live test (needs opencv on the robot),
+and the emotion action layer (spec section 8, NOT built yet).
+
+## Gotchas
+
+- Remi's Lite daemon often runs on his Mac holding port 8000:
+  `test_wireless.py`, `test_daemon.py` fail and
+  `test_app.py::test_faulty_app` HANGS. Environmental; deselect locally,
+  CI is the arbiter. `test_daemon_wireless_client_disconnection` needs a
+  live wireless robot on the LAN.
+- All tunables live in the two config dataclasses (secret_handshake.py in
+  the daemon, mirrored in the lab); the lab README has the values table
+  and the measured evidence (`data/touch_sweep_*.csv`).
+- The lab is the tuning ground: change law/timing there first, re-run its
+  tests + replay_validate.py, then mirror into the daemon module.
