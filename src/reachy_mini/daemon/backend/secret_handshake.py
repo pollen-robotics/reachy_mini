@@ -62,6 +62,17 @@ from dataclasses import dataclass, field
 
 _RAD2DEG = 180.0 / math.pi
 
+
+def _wrap_deg(deg: float) -> float:
+    """Wrap a multi-turn angle to [-180, 180).
+
+    The antenna encoders are multi-turn: handling the floppy antennas can
+    park them whole turns away from the calibrated zero (seen live at rest:
+    l=-340, r=+334, physically l=+20, r=-26). The law is about the physical
+    angle, so it must apply to the wrapped reading.
+    """
+    return (deg + 180.0) % 360.0 - 180.0
+
 # Copy of ReachyMiniBackend.SLEEP_HEAD_POSE (abstract.py), kept local so this
 # module stays import-free and trivially testable.
 _SLEEP_HEAD_POSE = (
@@ -137,8 +148,10 @@ class CollisionDetector:
 
     def update(self, t: float, ant0: float, ant1: float) -> bool:
         """Return True exactly on the tick a new collision is seen."""
-        l_deg = ant0 * _RAD2DEG
-        sum_deg = l_deg + ant1 * _RAD2DEG
+        l_deg = _wrap_deg(ant0 * _RAD2DEG)
+        # Wrap the sum too: l and r wrapped independently can land one full
+        # turn apart (e.g. l=+170, r=-190 -> wrapped r=+170, sum=+340).
+        sum_deg = _wrap_deg(l_deg + _wrap_deg(ant1 * _RAD2DEG))
         inside = (
             self.sum_lo_deg <= sum_deg <= self.sum_hi_deg
             and self.cfg.l_min_deg <= l_deg <= self.cfg.l_max_deg

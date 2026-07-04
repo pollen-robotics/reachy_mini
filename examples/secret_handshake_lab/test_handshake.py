@@ -147,6 +147,32 @@ def test_detector_hold_is_one_collision_and_stays_in_band() -> None:
     assert in_ticks >= 70  # ~1.5 s at 50 Hz
 
 
+def test_detector_full_turn_offsets_are_normalized() -> None:
+    """Taps must be detected even when the encoders carry whole turns."""
+    # The antenna encoders are multi-turn: handling the floppy antennas can
+    # park them a whole turn away from where they were calibrated (seen live
+    # on a wireless robot at rest: l=-340 deg, r=+334 deg, physically
+    # l=+20, r=-26). The law must apply to the wrapped angle, not the raw
+    # multi-turn reading.
+    turn = 2 * math.pi
+    for l_turns, r_turns in [(-1, 1), (1, -1), (2, 0), (0, -2)]:
+        samples = [
+            (a0 + l_turns * turn, a1 + r_turns * turn)
+            for a0, a1 in seg(REST, 0.5) + taps(3)
+        ]
+        onsets, _ = run_detector(samples)
+        assert onsets == 3, (l_turns, r_turns)
+
+
+def test_detector_crossed_park_with_turn_offset_is_inert() -> None:
+    """Wrapping must not turn the parked-crossed state into a collision."""
+    turn = 2 * math.pi
+    samples = [(a0 - turn, a1 + turn) for a0, a1 in seg(CROSSED, 2.0)]
+    onsets, in_ticks = run_detector(samples)
+    assert onsets == 0
+    assert in_ticks == 0
+
+
 # ---------------------------------------------------------------------------
 # State machine helpers
 # ---------------------------------------------------------------------------

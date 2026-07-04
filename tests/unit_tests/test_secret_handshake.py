@@ -102,6 +102,24 @@ def test_rest_single_antenna_and_crossed_are_inert():
     assert run_detector(swing) == 0
 
 
+def test_full_turn_offsets_are_normalized():
+    """Taps must be detected even when the encoders carry whole turns."""
+    # The antenna encoders are multi-turn: handling the floppy antennas can
+    # park them whole turns away from the calibrated zero (seen live at
+    # rest: l=-340 deg, r=+334 deg, physically l=+20, r=-26). The law must
+    # apply to the wrapped angle, not the raw multi-turn reading.
+    turn = 2 * math.pi
+    for l_turns, r_turns in [(-1, 1), (1, -1), (2, 0), (0, -2)]:
+        samples = [
+            (a0 + l_turns * turn, a1 + r_turns * turn)
+            for a0, a1 in seg(REST, 0.5) + taps(3)
+        ]
+        assert run_detector(samples) == 3, (l_turns, r_turns)
+    # and wrapping must not turn the parked-crossed state into a collision
+    crossed = [(a0 - turn, a1 + turn) for a0, a1 in seg(CROSSED, 2.0)]
+    assert run_detector(crossed) == 0
+
+
 # ---------------------------------------------------------------------------
 # Full handshake through the daemon-facing facade
 # ---------------------------------------------------------------------------

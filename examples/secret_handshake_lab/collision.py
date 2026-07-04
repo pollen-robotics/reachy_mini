@@ -41,6 +41,17 @@ from dataclasses import dataclass
 _RAD2DEG = 180.0 / math.pi
 
 
+def _wrap_deg(deg: float) -> float:
+    """Wrap a multi-turn angle to [-180, 180).
+
+    The antenna encoders are multi-turn: handling the floppy antennas can
+    park them whole turns away from the calibrated zero (seen live at rest:
+    l=-340, r=+334, physically l=+20, r=-26). The law is about the physical
+    angle, so it must apply to the wrapped reading.
+    """
+    return (deg + 180.0) % 360.0 - 180.0
+
+
 @dataclass(frozen=True)
 class CollisionConfig:
     # Center-collision geometry, in DEGREES. Remi measured sum in [-7, -3]
@@ -87,8 +98,10 @@ class CollisionDetector:
 
     def update(self, t: float, ant0: float, ant1: float) -> bool:
         """Return True exactly on the tick a new collision is seen."""
-        l_deg = ant0 * _RAD2DEG
-        sum_deg = l_deg + ant1 * _RAD2DEG
+        l_deg = _wrap_deg(ant0 * _RAD2DEG)
+        # Wrap the sum too: l and r wrapped independently can land one full
+        # turn apart (e.g. l=+170, r=-190 -> wrapped r=+170, sum=+340).
+        sum_deg = _wrap_deg(l_deg + _wrap_deg(ant1 * _RAD2DEG))
         self.l_deg = l_deg
         self.sum_deg = sum_deg
 
