@@ -42,14 +42,13 @@ from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-# Diagnostic frame snapshots from the last scan (wiped at each scan start).
-FRAME_DUMP_DIR = "/tmp/reachy_wifi_qr_frames"
-
 # Narrated voice lines, one per outcome (until the voices are recorded the
 # assets are copies of the handshake tones; replacing the wav replaces the
 # cue, no code change).
 SOUND_INTRO = "wifi_setup_intro.wav"  # explains the flow at start
-SOUND_QR_DETECTED = "wifi_qr_detected.wav"  # QR read, connecting now
+# On detection: instant SHORT beep, not a voice line (the ongoing narration
+# is stopped first; a 6 s voice here would delay the outcome cue).
+SOUND_QR_DETECTED = "handshake_success.wav"
 SOUND_SUCCESS = "wifi_connect_success.wav"
 SOUND_FAILED_NO_QR = "wifi_failed_no_qr.wav"  # scan window elapsed
 SOUND_FAILED_CONNECT = "wifi_failed_connect_timeout.wav"
@@ -168,6 +167,7 @@ class QrWifiProvisioner:
         connect: Callable[[str, Optional[str]], None],
         wifi_status: Callable[[], tuple[str, Optional[str]]],
         play_sound: Callable[[str], None],
+        stop_sound: Optional[Callable[[], None]] = None,
         prepare: Optional[Callable[[], None]] = None,
         finish: Optional[Callable[[], None]] = None,
         save_frame: Optional[Callable[[int, object], None]] = None,
@@ -182,6 +182,7 @@ class QrWifiProvisioner:
         self._connect = connect
         self._wifi_status = wifi_status
         self._play_sound = play_sound
+        self._stop_sound = stop_sound
         self._prepare = prepare
         self._finish = finish
         self._save_frame = save_frame
@@ -263,6 +264,8 @@ class QrWifiProvisioner:
 
         logger.info(f"QR provisioning: connecting to '{creds.ssid}'")
         self._status = ProvisioningStatus(ProvisioningState.CONNECTING, ssid=creds.ssid)
+        # Cut any narration still playing so the beep lands immediately.
+        self._safe_hook(self._stop_sound, "stop_sound")
         self._safe_sound(SOUND_QR_DETECTED)
         try:
             self._connect(creds.ssid, creds.password)
@@ -432,8 +435,9 @@ def build_default_provisioner(
         camera.open()
         return camera
 
+    # Diagnostic frame dumping is off in production; inject save_frame in
+    # tests / debugging sessions to capture what the scanner sees.
     qr_decode: Optional[Callable[[object], Optional[str]]] = None
-    save_frame: Optional[Callable[[int, object], None]] = None
     try:
         import cv2
 
@@ -485,18 +489,6 @@ def build_default_provisioner(
                 text, _points, _raw = plain_detector.detectAndDecode(frame)
                 return text or None
 
-        def save_frame(index: int, frame: object) -> None:
-            # Diagnostic snapshots of every scanned frame; the directory is
-            # wiped at each scan start so it never accumulates across runs
-            # (and /tmp is RAM-backed, gone on reboot anyway).
-            import os
-            import shutil
-
-            if index == 0:
-                shutil.rmtree(FRAME_DUMP_DIR, ignore_errors=True)
-                os.makedirs(FRAME_DUMP_DIR, exist_ok=True)
-            cv2.imwrite(f"{FRAME_DUMP_DIR}/frame_{index:04d}.jpg", frame)
-
     except ImportError:
         logger.warning("QR provisioning unavailable: opencv is not installed")
 
@@ -545,14 +537,18 @@ def build_default_provisioner(
             asyncio.run(backend.goto_sleep())
             backend.set_motor_control_mode(MotorControlMode.Disabled)
 
+    def stop_sound() -> None:
+        if backend is not None and hasattr(backend, "stop_sound"):
+            backend.stop_sound()
+
     return QrWifiProvisioner(
         camera_factory=camera_factory,
         qr_decode=qr_decode,
         connect=connect,
         wifi_status=wifi_status,
         play_sound=play_sound,
+        stop_sound=stop_sound,
         prepare=prepare,
         finish=finish,
-        save_frame=save_frame,
         intro_wait_s=_intro_duration_s(),
     )

@@ -134,6 +134,7 @@ def make_provisioner(
         connect=connect,
         wifi_status=wifi_status,
         play_sound=play_sound,
+        stop_sound=lambda: seen["events"].append("stop_sound"),
         prepare=lambda: seen["events"].append("prepare"),
         finish=lambda: seen["events"].append("finish"),
         save_frame=lambda i, frame: seen["frames_saved"].append(i),
@@ -163,8 +164,11 @@ def test_full_success_path():
     assert prov.status().ssid == "net"
     assert seen["connect"] == ("net", "pw")
     assert "wifi_setup_intro.wav" in seen["sounds"]
-    assert "wifi_qr_detected.wav" in seen["sounds"]
     assert "wifi_connect_success.wav" in seen["sounds"]
+    # on detection: any ongoing narration is cut, then the short beep
+    events = seen["events"]
+    beep_at = events.index("sound:handshake_success.wav")
+    assert events[beep_at - 1] == "stop_sound"
     # every scanned frame was handed to the frame sink (diag snapshots)
     assert seen["frames_saved"] == list(range(len(seen["frames_saved"])))
     assert len(seen["frames_saved"]) >= 1
