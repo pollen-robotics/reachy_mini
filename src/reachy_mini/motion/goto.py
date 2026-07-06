@@ -31,9 +31,18 @@ class GotoMove(Move):
         self.target_head_pose = (
             target_head_pose if target_head_pose is not None else start_head_pose
         )
-        self.start_antennas = start_antennas
+        # The antenna encoders are multi-turn: a start captured from a raw
+        # reading can sit whole turns away from the servo's single-turn
+        # command space, and an interpolation crossing a +-180 deg boundary
+        # teleports the physical target by a full turn (violent sweep seen
+        # live 2026-07-06). Wrap the start into one turn; targets are
+        # in-range by convention, so the straight path stays boundary-free.
+        self.start_antennas = (
+            np.mod(np.asarray(start_antennas, dtype=float) + np.pi, 2.0 * np.pi)
+            - np.pi
+        )
         self.target_antennas = (
-            target_antennas if target_antennas is not None else start_antennas
+            target_antennas if target_antennas is not None else self.start_antennas
         )
         self.start_body_yaw = start_body_yaw
         self.target_body_yaw = (
