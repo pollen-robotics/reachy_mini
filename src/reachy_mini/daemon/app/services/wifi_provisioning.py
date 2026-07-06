@@ -437,11 +437,53 @@ def build_default_provisioner(
     try:
         import cv2
 
-        detector = cv2.QRCodeDetector()
+        # Decoder preference, measured on real scan frames of a phone
+        # screen (examples: 2026-07-06 live session, 108 frames):
+        #   WeChatQRCode + CNN models  44/108 decoded, ~12 ms/frame
+        #   WeChatQRCode, no models    42/108
+        #   cv2.QRCodeDetector          0/108 (!) at ~270 ms/frame on Pi
+        # The CNN models (~1 MB, Apache-2.0, WeChatCV/opencv_3rdparty)
+        # ship in assets/wechat_qrcode/. WeChatQRCode is contrib-only, so
+        # fall back gracefully when this cv2 build lacks it.
+        detector = None
+        try:
+            from importlib import resources
 
-        def qr_decode(frame: object) -> Optional[str]:
-            text, _points, _raw = detector.detectAndDecode(frame)
-            return text or None
+            mdir = resources.files("reachy_mini") / "assets" / "wechat_qrcode"
+            with resources.as_file(mdir) as p:
+                detector = cv2.wechat_qrcode.WeChatQRCode(
+                    str(p / "detect.prototxt"),
+                    str(p / "detect.caffemodel"),
+                    str(p / "sr.prototxt"),
+                    str(p / "sr.caffemodel"),
+                )
+        except Exception:
+            logger.exception(
+                "WeChatQRCode with CNN models unavailable, trying without"
+            )
+            try:
+                detector = cv2.wechat_qrcode.WeChatQRCode()
+            except Exception:
+                logger.warning(
+                    "WeChatQRCode unavailable (plain opencv build?); "
+                    "falling back to cv2.QRCodeDetector"
+                )
+
+        if detector is not None:
+
+            def qr_decode(frame: object) -> Optional[str]:
+                texts, _points = detector.detectAndDecode(frame)
+                for text in texts:
+                    if text:
+                        return text
+                return None
+
+        else:
+            plain_detector = cv2.QRCodeDetector()
+
+            def qr_decode(frame: object) -> Optional[str]:
+                text, _points, _raw = plain_detector.detectAndDecode(frame)
+                return text or None
 
         def save_frame(index: int, frame: object) -> None:
             # Diagnostic snapshots of every scanned frame; the directory is
