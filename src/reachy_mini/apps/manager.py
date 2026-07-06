@@ -13,12 +13,17 @@ import psutil
 from pydantic import BaseModel
 
 from reachy_mini.daemon.backend.robot import RobotBackend
+from reachy_mini.io.protocol import MotorControlMode
+from reachy_mini.utils.interpolation import distance_between_poses
 
 from . import AppInfo, SourceKind
 from .sources import hf_space, local_common_venv
 
 if TYPE_CHECKING:
     from reachy_mini.daemon.daemon import Daemon
+
+# Sleep-pose proximity in magic-mm (mm + deg), matching Backend.goto_sleep.
+SLEEP_POSE_MAGIC_DISTANCE = 10.0
 
 
 class AppState(str, Enum):
@@ -100,8 +105,19 @@ class AppManager:
             AppState.STOPPING,
         )
 
-    async def start_app(self, app_name: str, *args: Any, **kwargs: Any) -> AppStatus:
-        """Start the app as a subprocess, raises RuntimeError if an app is already running."""
+    async def start_app(
+        self,
+        app_name: str,
+        *args: Any,
+        evict_remote: bool = True,
+        **kwargs: Any,
+    ) -> AppStatus:
+        """Start the app as a subprocess.
+
+        Raises RuntimeError if an app is already running. When
+        ``evict_remote`` is false, a remote WebRTC session holding the app slot
+        makes the start fail instead of being evicted.
+        """
         if self.is_app_running():
             raise RuntimeError("An app is already running")
 
@@ -112,43 +128,48 @@ class AppManager:
         # the normal case, but the lock is the single source of truth
         # shared with the relay thread).
         if self.daemon is not None:
-            await self.daemon.robot_app_lock.acquire_local_evicting_remote(app_name)
+            if evict_remote:
+                await self.daemon.robot_app_lock.acquire_local_evicting_remote(
+                    app_name
+                )
+            elif not self.daemon.robot_app_lock.try_acquire_local(app_name):
+                raise RuntimeError("The robot app slot is already in use")
 
-        # Get module name and Python path for subprocess execution
-        module_name = local_common_venv.get_app_module(
-            app_name, self.wireless_version, self.desktop_app_daemon
-        )
-        python_path = local_common_venv.get_app_python(
-            app_name, self.wireless_version, self.desktop_app_daemon
-        )
-
-        # Launch app as subprocess with unbuffered output.
-        #
-        # Scrub GStreamer env vars that the daemon's own `.venv/.../gstreamer_bundle.pth`
-        # set pointing at paths inside the daemon's .venv. The app runs in apps_venv and
-        # its own gstreamer_bundle.pth will set fresh values at Python startup. Leaving
-        # the parent's values in place is actively harmful:
-        #   * Single-value vars like GST_REGISTRY_1_0 and GST_PLUGIN_SCANNER_1_0 get
-        #     prepended to (via gstreamer_libs.setup_python_environment) producing a
-        #     malformed `apps_venv_path:.venv_path` string that GStreamer can't parse.
-        #   * The app ends up using .venv's plugin scanner binary and registry cache,
-        #     which can mask issues specific to apps_venv's own gstreamer install.
-        # See pollen-robotics/reachy-mini-desktop-app#185.
-        app_env = os.environ.copy()
-        for key in (
-            "GST_PLUGIN_PATH_1_0",
-            "GST_PLUGIN_SYSTEM_PATH_1_0",
-            "GST_REGISTRY_1_0",
-            "GST_PLUGIN_SCANNER_1_0",
-            "GI_TYPELIB_PATH",
-            "PYGI_DLL_DIRS",
-            "XDG_DATA_DIRS",
-            "XDG_CONFIG_DIRS",
-        ):
-            app_env.pop(key, None)
-
-        self.logger.getChild("runner").info(f"Starting app {app_name}")
         try:
+            # Get module name and Python path for subprocess execution.
+            module_name = local_common_venv.get_app_module(
+                app_name, self.wireless_version, self.desktop_app_daemon
+            )
+            python_path = local_common_venv.get_app_python(
+                app_name, self.wireless_version, self.desktop_app_daemon
+            )
+
+            # Launch app as subprocess with unbuffered output.
+            #
+            # Scrub GStreamer env vars that the daemon's own `.venv/.../gstreamer_bundle.pth`
+            # set pointing at paths inside the daemon's .venv. The app runs in apps_venv and
+            # its own gstreamer_bundle.pth will set fresh values at Python startup. Leaving
+            # the parent's values in place is actively harmful:
+            #   * Single-value vars like GST_REGISTRY_1_0 and GST_PLUGIN_SCANNER_1_0 get
+            #     prepended to (via gstreamer_libs.setup_python_environment) producing a
+            #     malformed `apps_venv_path:.venv_path` string that GStreamer can't parse.
+            #   * The app ends up using .venv's plugin scanner binary and registry cache,
+            #     which can mask issues specific to apps_venv's own gstreamer install.
+            # See pollen-robotics/reachy-mini-desktop-app#185.
+            app_env = os.environ.copy()
+            for key in (
+                "GST_PLUGIN_PATH_1_0",
+                "GST_PLUGIN_SYSTEM_PATH_1_0",
+                "GST_REGISTRY_1_0",
+                "GST_PLUGIN_SCANNER_1_0",
+                "GI_TYPELIB_PATH",
+                "PYGI_DLL_DIRS",
+                "XDG_DATA_DIRS",
+                "XDG_CONFIG_DIRS",
+            ):
+                app_env.pop(key, None)
+
+            self.logger.getChild("runner").info(f"Starting app {app_name}")
             process = await asyncio.create_subprocess_exec(
                 str(python_path),
                 "-u",  # Unbuffered stdout/stderr for real-time logging
@@ -165,7 +186,6 @@ class AppManager:
             if self.daemon is not None:
                 self.daemon.robot_app_lock.release_local(app_name)
             raise
-
 
         # Create status and monitor task
         status = AppStatus(
@@ -297,27 +317,40 @@ class AppManager:
             except asyncio.CancelledError:
                 pass
 
-        # Return robot to zero position after app stops
+        # Return to zero after an app stops, unless the app left it asleep.
         if self.daemon is not None and self.daemon.backend is not None:
-            if isinstance(self.daemon.backend, RobotBackend):
-                self.daemon.backend.enable_motors()
+            backend = self.daemon.backend
+            _, _, dist_to_sleep = distance_between_poses(
+                backend.get_current_head_pose(), backend.SLEEP_HEAD_POSE
+            )
+            if dist_to_sleep <= SLEEP_POSE_MAGIC_DISTANCE:
+                # pose check only; ensure limp (idempotent)
+                backend.set_motor_control_mode(MotorControlMode.Disabled)
+                self.logger.getChild("runner").info(
+                    "Robot is asleep; leaving it limp in the sleep pose."
+                )
+            else:
+                if isinstance(backend, RobotBackend):
+                    backend.enable_motors()
 
-            try:
-                from reachy_mini.reachy_mini import (
-                    INIT_ANTENNAS_JOINT_POSITIONS,
-                    INIT_HEAD_POSE,
-                )
+                try:
+                    from reachy_mini.reachy_mini import (
+                        INIT_ANTENNAS_JOINT_POSITIONS,
+                        INIT_HEAD_POSE,
+                    )
 
-                self.logger.getChild("runner").info("Returning robot to zero position")
-                await self.daemon.backend.goto_target(
-                    head=INIT_HEAD_POSE,
-                    antennas=np.array(INIT_ANTENNAS_JOINT_POSITIONS),
-                    duration=1.0,
-                )
-            except Exception as e:
-                self.logger.getChild("runner").warning(
-                    f"Could not return to zero position: {e}"
-                )
+                    self.logger.getChild("runner").info(
+                        "Returning robot to zero position"
+                    )
+                    await backend.goto_target(
+                        head=INIT_HEAD_POSE,
+                        antennas=np.array(INIT_ANTENNAS_JOINT_POSITIONS),
+                        duration=1.0,
+                    )
+                except Exception as e:
+                    self.logger.getChild("runner").warning(
+                        f"Could not return to zero position: {e}"
+                    )
 
         self.current_app = None
 

@@ -1218,6 +1218,9 @@ class Backend:
         self._last_head_pose = self.SLEEP_HEAD_POSE
         await asyncio.sleep(sleep_time)
 
+        # Rest limp at the sleep pose, like a fresh boot.
+        self.set_motor_control_mode(MotorControlMode.Disabled)
+
     # Motor control modes
     @abstractmethod
     def get_motor_control_mode(self) -> MotorControlMode:
