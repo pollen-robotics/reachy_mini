@@ -57,15 +57,22 @@ def main() -> None:
     with ReachyMini(media_backend="no_media") as mini:
         mini.disable_motors()
         print(
-            f"Torque OFF: spin the LEFT antenna ONE FULL TURN now "
-            f"({SPIN_WINDOW_S:.0f} s)..."
+            "Torque OFF: spin the LEFT antenna past +-180 (a full turn is "
+            "ideal); waiting until the reading shows it (60 s max)..."
         )
-        time.sleep(SPIN_WINDOW_S)
-
-        ant = mini.get_present_antenna_joint_positions()
-        l_deg = ant[0] * RAD2DEG
+        deadline = time.monotonic() + 60.0
+        l_deg = 0.0
+        while time.monotonic() < deadline:
+            l_deg = mini.get_present_antenna_joint_positions()[0] * RAD2DEG
+            if abs(l_deg) > 200.0:
+                break
+            time.sleep(0.2)
         print(f"left antenna reads {l_deg:+.1f} deg "
-              f"({'multi-turn offset present' if abs(l_deg) > 180 else 'NO turn offset: spin it further and rerun'})")
+              f"({'multi-turn offset present' if abs(l_deg) > 200 else 'NO turn offset captured, aborting'})")
+        if abs(l_deg) <= 200.0:
+            mini.disable_motors()
+            return
+        time.sleep(2.0)  # let it settle where the human leaves it
 
         mini.enable_motors()
         time.sleep(0.5)
