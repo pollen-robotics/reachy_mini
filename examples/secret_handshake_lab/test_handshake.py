@@ -135,9 +135,10 @@ def test_detector_single_antenna_swing_is_inert() -> None:
 def test_detector_margin_widens_the_band() -> None:
     just_outside = (60.0, -68.5)  # sum=-8.5: outside [-7,-3], inside [-9,-1]
     strict = CollisionConfig(margin_deg=0.0)
-    onsets, in_ticks = run_detector(seg(just_outside, 0.5), strict)
+    onsets, in_ticks = run_detector(seg(REST, 0.3) + seg(just_outside, 0.5), strict)
     assert in_ticks == 0 and onsets == 0
-    onsets, in_ticks = run_detector(seg(just_outside, 0.5))  # default margin 4
+    # default margin 4 (REST first: the release latch needs a separation)
+    onsets, in_ticks = run_detector(seg(REST, 0.3) + seg(just_outside, 0.5))
     assert in_ticks > 0 and onsets == 1
 
 
@@ -171,6 +172,29 @@ def test_detector_crossed_park_with_turn_offset_is_inert() -> None:
     onsets, in_ticks = run_detector(samples)
     assert onsets == 0
     assert in_ticks == 0
+
+
+def test_detector_slow_press_counts_once() -> None:
+    """One knock is one collision even when the press outlasts the refractory."""
+    # A firm knock passes through the band twice (contact, then again while
+    # releasing). When the press lasts longer than the 0.25 s refractory the
+    # release crossing used to count as a second collision (seen live:
+    # primed after 2 knocks). Counting must require a not-pressed dwell in
+    # between (the release latch), not just elapsed time.
+    slow_knock = seg(CONTACT, 0.04) + seg(PRESS, 0.4) + seg(CONTACT, 0.04)
+    onsets, _ = run_detector(seg(REST, 0.5) + slow_knock + seg(REST, 0.5))
+    assert onsets == 1
+
+
+def test_detector_starting_inside_region_is_inert_until_released() -> None:
+    """Antennas resting crossed at the touch point must not pre-count."""
+    # Seen live: the antennas can be parked touching at the center. Sitting
+    # there (or noise-jittering around the region edge) must count nothing;
+    # only after a real separation may collisions count again.
+    onsets, _ = run_detector(seg(CONTACT, 2.0))
+    assert onsets == 0
+    onsets, _ = run_detector(seg(CONTACT, 2.0) + seg(REST, 0.3) + tap())
+    assert onsets == 1
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +277,7 @@ def test_full_tap_tap_handshake() -> None:
     assert r.event_kinds() == [Event.ARMED, Event.PRIMED]
     r.feed(seg(REST, 0.5) + taps(3))
     assert r.event_kinds() == [Event.ARMED, Event.PRIMED, Event.ACTION_TAPS]
-    assert r.machine.state == "idle"  # back to start after the action
+    assert r.machine.state == "armed"  # actions re-arm directly
 
 
 def test_two_taps_do_not_prime() -> None:
@@ -300,7 +324,7 @@ def test_hold_handshake() -> None:
     r.feed(seg(REST, 1.0) + taps(3))
     r.feed(seg(REST, 0.5) + seg(CONTACT, 1.6))
     assert r.event_kinds() == [Event.ARMED, Event.PRIMED, Event.ACTION_HOLD]
-    assert r.machine.state == "idle"
+    assert r.machine.state == "armed"  # actions re-arm directly
 
 
 def test_hold_in_round_one_does_not_prime() -> None:
@@ -348,10 +372,48 @@ def test_torque_on_resets_everything() -> None:
 def test_handshake_is_repeatable() -> None:
     r = make_runner()
     for _ in range(2):
-        r.feed(seg(REST, 3.5))  # cooldown + settle
+        r.feed(seg(REST, 3.5))  # a calm pause between rounds still works
         r.feed(taps(3))
         r.feed(seg(REST, 0.5) + taps(3))
     assert r.event_kinds().count(Event.ACTION_TAPS) == 2
+
+
+def test_immediate_retry_after_action() -> None:
+    """After an action fires the machine is instantly ready for a new round."""
+    # Live report: retrying right after a success (or abort) silently failed
+    # because the machine dropped to idle and had to re-pass the pose gate
+    # (0.5 s settle) plus a 2 s cooldown, while the user's hands jostle the
+    # floppy head. Success/abort must return the machine straight to armed.
+    r = make_runner()
+    r.feed(seg(REST, 1.0) + taps(3))
+    r.feed(seg(REST, 0.5) + taps(3))
+    assert r.event_kinds()[-1] == Event.ACTION_TAPS
+    r.feed(taps(3))  # retry immediately, no pause
+    assert r.event_kinds()[-1] == Event.PRIMED
+    r.feed(seg(REST, 0.5) + taps(3))
+    assert r.event_kinds()[-1] == Event.ACTION_TAPS
+
+
+def test_immediate_retry_after_abort() -> None:
+    """A failed round 2 must be retryable immediately, no settle wait."""
+    r = make_runner()
+    r.feed(seg(REST, 1.0) + taps(3))
+    r.feed(seg(REST, 3.2))  # blow the round-2 window
+    assert r.event_kinds()[-1] == Event.ABORTED
+    r.feed(taps(3))  # retry immediately
+    assert r.event_kinds()[-1] == Event.PRIMED
+
+
+def test_holding_through_an_action_does_not_refire() -> None:
+    """Keeping the antennas together after a hold action stays inert."""
+    r = make_runner()
+    r.feed(seg(REST, 1.0) + taps(3))
+    r.feed(seg(REST, 0.5) + seg(CONTACT, 1.2))
+    assert r.event_kinds()[-1] == Event.ACTION_HOLD
+    r.feed(seg(CONTACT, 3.0))  # still holding: nothing may fire
+    assert r.event_kinds()[-1] == Event.ACTION_HOLD
+    r.feed(seg(REST, 0.5) + taps(3))  # release, then a fresh round works
+    assert r.event_kinds()[-1] == Event.PRIMED
 
 
 # ---------------------------------------------------------------------------

@@ -120,6 +120,22 @@ def test_full_turn_offsets_are_normalized():
     assert run_detector(crossed) == 0
 
 
+def test_slow_press_counts_once():
+    """One knock is one collision even when the press outlasts the refractory."""
+    # A firm knock re-crosses the band while releasing; with only the time
+    # refractory a press longer than 0.25 s counted twice (seen live:
+    # primed after 2 knocks). The release latch requires a not-pressed
+    # dwell between counts.
+    slow_knock = seg(CONTACT, 0.04) + seg(PRESS, 0.4) + seg(CONTACT, 0.04)
+    assert run_detector(seg(REST, 0.5) + slow_knock + seg(REST, 0.5)) == 1
+
+
+def test_starting_inside_region_is_inert_until_released():
+    """Antennas resting crossed at the touch point must not pre-count."""
+    assert run_detector(seg(CONTACT, 2.0)) == 0
+    assert run_detector(seg(CONTACT, 2.0) + seg(REST, 0.3) + tap()) == 1
+
+
 # ---------------------------------------------------------------------------
 # Full handshake through the daemon-facing facade
 # ---------------------------------------------------------------------------
@@ -170,14 +186,30 @@ def test_primed_times_out_with_abort():
     r.feed(seg(REST, 3.5))  # 3 s round-2 window
     assert Event.ABORTED in r.events
     assert Event.SUCCESS not in r.events
-    # after the abort it re-arms on its own (pose still ok, torque still off)
-    assert r.events[-1] == Event.ARMED
+    # an abort re-arms directly: an immediate retry must work
+    r.feed(taps(3))
+    assert r.events[-1] == Event.PRIMED
+
+
+def test_immediate_retry_after_success():
+    """After a success the machine is instantly ready for a new round."""
+    # Live report: retrying right after a success (or abort) silently
+    # failed because the machine dropped to idle and had to re-pass the
+    # pose gate + settle + cooldown while the user's hands jostle the
+    # floppy head. Success/abort must return straight to armed.
+    r = Runner()
+    r.feed(seg(REST, 1.0) + taps(3) + seg(REST, 0.5) + taps(3))
+    assert r.events[-1] == Event.SUCCESS
+    r.feed(taps(3))  # retry immediately, no pause
+    assert r.events[-1] == Event.PRIMED
+    r.feed(seg(REST, 0.5) + taps(3))
+    assert r.events[-1] == Event.SUCCESS
 
 
 def test_handshake_is_repeatable():
     r = Runner()
     for _ in range(2):
-        r.feed(seg(REST, 3.5))  # cooldown + settle
+        r.feed(seg(REST, 3.5))  # a calm pause between rounds still works
         r.feed(taps(3) + seg(REST, 0.5) + taps(3))
     assert r.events.count(Event.SUCCESS) == 2
 

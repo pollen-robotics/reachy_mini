@@ -36,12 +36,14 @@ single-antenna play inert (full evidence: examples/secret_handshake_lab/).
 TUNABLES AT A GLANCE (single source of truth: the two dataclasses below)
 
   collision region      l + r in [-9, 0] deg  AND  l in [20, 150] deg
-  collision debounce    0.25 s refractory (one count per knock)
+  collision debounce    release latch (80 ms not-pressed dwell between
+                        counts) + 0.25 s refractory
   collisions per round  3, in quick succession
   sequence reset        1.0 s without a collision -> count goes back to 0
-  arming settle         head in sleep pose for 0.5 s -> armed
+  arming settle         head in sleep pose for 0.5 s -> armed (idle only:
+                        boot and torque-off transitions)
   round 2 window        3.0 s after the prime beep -> aborted
-  cooldown              2.0 s inert after a success
+  after success/abort   straight back to armed (immediate retry works)
 =============================================================================
 
 COST: sub-microsecond per call (see examples/secret_handshake_lab/bench.py:
@@ -127,6 +129,14 @@ class CollisionConfig:
     l_max_deg: float = 150.0
     margin_deg: float = 4.0  # widens the sum band by margin/2 on each side
     refractory_s: float = 0.25  # one count per knock (press = double crossing)
+    # A new collision may only be counted after the antennas have spent this
+    # long continuously NOT pressed (in-band contact or apart) since the
+    # previous count. Releasing a press merely CROSSES the band (~2 ticks,
+    # 40 ms), so a press longer than the refractory cannot count twice
+    # (seen live: primed after 2 knocks); re-knocking without separating
+    # DWELLS in contact between presses (>=110 ms in the recordings), so
+    # that style still counts every knock.
+    release_dwell_s: float = 0.08
 
 
 class CollisionDetector:
@@ -140,11 +150,15 @@ class CollisionDetector:
         self.sum_hi_deg = self.cfg.sum_max_deg + half
         self.in_collision: bool = False
         self._last_onset_t: float = -1e9
+        self._released: bool = False
+        self._not_pressed_since: float | None = None
 
     def reset(self) -> None:
         """Forget any ongoing collision and refractory state."""
         self.in_collision = False
         self._last_onset_t = -1e9
+        self._released = False
+        self._not_pressed_since = None
 
     def update(self, t: float, ant0: float, ant1: float) -> bool:
         """Return True exactly on the tick a new collision is seen."""
@@ -152,18 +166,35 @@ class CollisionDetector:
         # Wrap the sum too: l and r wrapped independently can land one full
         # turn apart (e.g. l=+170, r=-190 -> wrapped r=+170, sum=+340).
         sum_deg = _wrap_deg(l_deg + _wrap_deg(ant1 * _RAD2DEG))
-        inside = (
-            self.sum_lo_deg <= sum_deg <= self.sum_hi_deg
-            and self.cfg.l_min_deg <= l_deg <= self.cfg.l_max_deg
-        )
+        l_in_range = self.cfg.l_min_deg <= l_deg <= self.cfg.l_max_deg
+        inside = l_in_range and self.sum_lo_deg <= sum_deg <= self.sum_hi_deg
+
+        # Release latch (see release_dwell_s in the config): a collision may
+        # only count after a continuous not-pressed dwell since the last
+        # count, so the release crossing of a long press is not a second
+        # collision, while re-knocking without separating still counts.
+        # It also keeps antennas parked inside the region (crossed at the
+        # center) inert until they actually move.
+        pressed = l_in_range and sum_deg > self.sum_hi_deg
+        if pressed:
+            self._not_pressed_since = None
+        else:
+            if self._not_pressed_since is None:
+                self._not_pressed_since = t
+            if t - self._not_pressed_since >= self.cfg.release_dwell_s:
+                self._released = True
+
         onset = (
             inside
             and not self.in_collision
+            and self._released
             and t - self._last_onset_t > self.cfg.refractory_s
         )
         self.in_collision = inside
         if onset:
             self._last_onset_t = t
+            self._released = False
+            self._not_pressed_since = t
         return onset
 
 
@@ -187,7 +218,6 @@ class HandshakeConfig:
     arm_settle_s: float = 0.5  # sleep pose held this long -> armed
     primed_refractory_s: float = 0.25  # ignore contact right after the beep
     primed_timeout_s: float = 3.0  # time allowed for round 2
-    cooldown_s: float = 2.0  # inert after a success
 
 
 class _StateMachine:
@@ -200,7 +230,6 @@ class _StateMachine:
         self._pose_ok_since: float | None = None
         self._taps: list[float] = []
         self._primed_at: float = 0.0
-        self._cooldown_until: float = 0.0
 
     def reset(self) -> None:
         self.state = "idle"
@@ -222,7 +251,7 @@ class _StateMachine:
         onset = self.detector.update(t, ant0, ant1)
 
         if self.state == "idle":
-            if pose_ok and t >= self._cooldown_until:
+            if pose_ok:
                 if self._pose_ok_since is None:
                     self._pose_ok_since = t
                 elif t - self._pose_ok_since >= self.cfg.arm_settle_s:
@@ -244,13 +273,13 @@ class _StateMachine:
 
         # state == "primed"
         if t - self._primed_at > self.cfg.primed_timeout_s:
-            self._back_to_idle(t, cooldown_s=0.0)
+            self._rearm()
             return Event.ABORTED
         if t - self._primed_at < self.cfg.primed_refractory_s:
             return None
         if onset and self._count_tap(t):
             if len(self._taps) >= self.cfg.taps_required:
-                self._back_to_idle(t, cooldown_s=self.cfg.cooldown_s)
+                self._rearm()
                 return Event.SUCCESS
         return None
 
@@ -260,11 +289,19 @@ class _StateMachine:
         self._taps.append(t)
         return True
 
-    def _back_to_idle(self, t: float, cooldown_s: float) -> None:
-        self.state = "idle"
+    def _rearm(self) -> None:
+        """Return straight to armed after a success or an abort.
+
+        Round-tripping through idle forced the pose gate + settle (plus a
+        cooldown) on every retry; live, the user's hands jostle the floppy
+        head, the gate flickers, and an immediate retry silently fails.
+        Armed is safe to re-enter directly: counting a new collision
+        requires a not-pressed dwell first (the detector's release latch),
+        so the tail of the previous gesture cannot phantom-count.
+        """
+        self.state = "armed"
         self._pose_ok_since = None
         self._taps.clear()
-        self._cooldown_until = t + cooldown_s
 
 
 class SecretHandshake:

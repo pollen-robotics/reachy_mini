@@ -70,6 +70,14 @@ class CollisionConfig:
     # releasing); the refractory merges that into one collision. Natural
     # knock spacing in the recordings is ~0.4 s, so 0.25 s sits safely below.
     refractory_s: float = 0.25
+    # A new collision may only be counted after the antennas have spent this
+    # long continuously NOT pressed (in-band contact or apart) since the
+    # previous count. Releasing a press merely CROSSES the band (~2 ticks,
+    # 40 ms), so a press longer than the refractory cannot count twice
+    # (seen live: primed after 2 knocks); re-knocking without separating
+    # DWELLS in contact between presses (>=110 ms in the recordings), so
+    # that style still counts every knock.
+    release_dwell_s: float = 0.08
 
 
 class CollisionDetector:
@@ -91,10 +99,14 @@ class CollisionDetector:
         self.sum_deg: float = 0.0
         self.l_deg: float = 0.0
         self._last_onset_t: float = -1e9
+        self._released: bool = False
+        self._not_pressed_since: float | None = None
 
     def reset(self) -> None:
         self.in_collision = False
         self._last_onset_t = -1e9
+        self._released = False
+        self._not_pressed_since = None
 
     def update(self, t: float, ant0: float, ant1: float) -> bool:
         """Return True exactly on the tick a new collision is seen."""
@@ -105,16 +117,33 @@ class CollisionDetector:
         self.l_deg = l_deg
         self.sum_deg = sum_deg
 
-        inside = (
-            self.sum_lo_deg <= sum_deg <= self.sum_hi_deg
-            and self.cfg.l_min_deg <= l_deg <= self.cfg.l_max_deg
-        )
+        l_in_range = self.cfg.l_min_deg <= l_deg <= self.cfg.l_max_deg
+        inside = l_in_range and self.sum_lo_deg <= sum_deg <= self.sum_hi_deg
+
+        # Release latch (see release_dwell_s in the config): a collision may
+        # only count after a continuous not-pressed dwell since the last
+        # count, so the release crossing of a long press is not a second
+        # collision, while re-knocking without separating still counts.
+        # It also keeps antennas parked inside the region (crossed at the
+        # center) inert until they actually move.
+        pressed = l_in_range and sum_deg > self.sum_hi_deg
+        if pressed:
+            self._not_pressed_since = None
+        else:
+            if self._not_pressed_since is None:
+                self._not_pressed_since = t
+            if t - self._not_pressed_since >= self.cfg.release_dwell_s:
+                self._released = True
+
         onset = (
             inside
             and not self.in_collision
+            and self._released
             and t - self._last_onset_t > self.cfg.refractory_s
         )
         self.in_collision = inside
         if onset:
             self._last_onset_t = t
+            self._released = False
+            self._not_pressed_since = t
         return onset

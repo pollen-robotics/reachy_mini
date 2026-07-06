@@ -28,13 +28,15 @@ TUNABLES AT A GLANCE (the single source of truth is the two config
 dataclasses: CollisionConfig in collision.py, HandshakeConfig below)
 
   collision region      l + r in [-9, 0] deg  AND  l in [20, 150] deg
-  collision debounce    0.25 s refractory (one count per knock)
+  collision debounce    release latch (antennas must separate between
+                        counts) + 0.25 s refractory
   sequence reset        1.0 s without a collision -> count goes back to 0
   taps per round        3
-  arming settle         head in sleep pose for 0.5 s -> ARMED
+  arming settle         head in sleep pose for 0.5 s -> ARMED (idle only:
+                        boot and torque-off transitions)
   round 2 window        3.0 s after the prime beep -> ABORTED
   hold gesture          stay in the region 1.0 s (0.3 s flicker grace)
-  cooldown              2.0 s inert after an action fires
+  after action/abort    straight back to armed (immediate retry works)
 =============================================================================
 """
 
@@ -69,8 +71,6 @@ class HandshakeConfig:
     primed_timeout_s: float = 3.0  # time allowed to do round 2 -> abort
     hold_min_s: float = 1.0  # stay in the collision region for handshake B
     hold_grace_s: float = 0.3  # membership may flicker briefly during a hold
-    # After an action fires, stay inert this long before re-arming.
-    cooldown_s: float = 2.0
 
 
 class HandshakeStateMachine:
@@ -93,7 +93,6 @@ class HandshakeStateMachine:
         self._primed_at: float = 0.0
         self._hold_since: float | None = None  # in the region (while primed)
         self._last_in_region_t: float = 0.0
-        self._cooldown_until: float = 0.0
 
     @property
     def tap_count(self) -> int:
@@ -127,7 +126,7 @@ class HandshakeStateMachine:
         onset = self.detector.update(t, ant0, ant1)
 
         if self.state == "idle":
-            if head_in_sleep_pose and t >= self._cooldown_until:
+            if head_in_sleep_pose:
                 if self._pose_ok_since is None:
                     self._pose_ok_since = t
                 elif t - self._pose_ok_since >= self.cfg.arm_settle_s:
@@ -150,20 +149,20 @@ class HandshakeStateMachine:
 
         # state == "primed"
         if t - self._primed_at > self.cfg.primed_timeout_s:
-            self._back_to_idle(t, cooldown_s=0.0)
+            self._rearm()
             return Event.ABORTED
         if t - self._primed_at < self.cfg.primed_refractory_s:
             return None
         if onset:
             if self._count_tap(t) and len(self._taps) >= self.cfg.taps_required:
-                self._back_to_idle(t, cooldown_s=self.cfg.cooldown_s)
+                self._rearm()
                 return Event.ACTION_TAPS
         if self.detector.in_collision:
             self._last_in_region_t = t
             if self._hold_since is None:
                 self._hold_since = t
             elif t - self._hold_since >= self.cfg.hold_min_s:
-                self._back_to_idle(t, cooldown_s=self.cfg.cooldown_s)
+                self._rearm()
                 return Event.ACTION_HOLD
         elif (
             self._hold_since is not None
@@ -179,12 +178,20 @@ class HandshakeStateMachine:
         self._taps.append(t)
         return True
 
-    def _back_to_idle(self, t: float, cooldown_s: float) -> None:
-        self.state = "idle"
+    def _rearm(self) -> None:
+        """Return straight to armed after an action or an abort.
+
+        Round-tripping through idle forced the pose gate + settle (plus a
+        cooldown) on every retry; live, the user's hands jostle the floppy
+        head, the gate flickers, and an immediate retry silently fails.
+        Armed is safe to re-enter directly: counting a new collision
+        requires a real release first (the detector's release latch), so
+        the tail of the previous gesture cannot phantom-count.
+        """
+        self.state = "armed"
         self._pose_ok_since = None
         self._taps.clear()
         self._hold_since = None
-        self._cooldown_until = t + cooldown_s
 
 
 class SecretHandshake:

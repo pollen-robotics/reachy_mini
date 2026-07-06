@@ -35,14 +35,14 @@ One source of truth: `CollisionConfig` (collision.py) and `HandshakeConfig`
 
 | what | value |
 |---|---|
-| collision region | `l + r` in [-9, 0] deg AND `l` in [20, 150] deg |
-| collision debounce (refractory) | 0.25 s, one count per knock |
+| collision region | `l + r` in [-9, 0] deg AND `l` in [20, 150] deg (angles wrapped to [-180, 180): the encoders are multi-turn) |
+| collision debounce | release latch (80 ms not-pressed dwell between counts) + 0.25 s refractory |
 | collisions per round | 3 |
 | sequence reset | 1.0 s without a collision |
-| arming settle | head in sleep pose for 0.5 s |
+| arming settle | head in sleep pose for 0.5 s (idle only: boot and torque-off transitions) |
 | round 2 window | 3.0 s after the prime beep |
 | hold gesture | 1.0 s in the region (0.3 s flicker grace) |
-| cooldown after an action | 2.0 s |
+| after an action or abort | straight back to armed: immediate retry works |
 
 ## Control-loop cost (bench.py)
 
