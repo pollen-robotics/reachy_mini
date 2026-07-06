@@ -86,7 +86,7 @@ SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 
 # Downscaled, rate-limited feed for the out-of-process tracker; width & fps trade quality vs CPU.
 TRACKING_WIDTH = 320
-TRACKING_FPS = 15
+TRACKING_FPS = 10
 
 # Cap the local IPC feed below the capture rate; vision readers don't need the full frame rate.
 IPC_FPS = 15
