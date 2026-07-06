@@ -6,6 +6,37 @@ Full design/history: `2026-07-01-secret-handshake-design.md` (same folder).
 Read that spec top to bottom before changing anything; this file is only
 "where we are and what is next".
 
+## UPDATE 2026-07-06 (evening): WiFi QR provisioning LIVE-VALIDATED end to end
+
+Full flow observed on the wireless robot: handshake -> narrated intro
+(ElevenLabs voices in assets/wifi_*.wav, one per outcome) -> torque on +
+5 s goto base pose -> camera scan -> QR decoded on the FIRST frame ->
+/wifi/connect path -> success voice -> goto sleep + torque off. Journey
+to get there, all committed:
+
+1. Stock cv2.QRCodeDetector decoded 0/108 real scan frames (phone screen,
+   blur + auto-exposure blowout) at ~270 ms/frame on the CM4. Replaced by
+   cv2.wechat_qrcode.WeChatQRCode + its CNN models (bundled in
+   assets/wechat_qrcode/, ~1 MB, Apache-2.0): 44/108 decoded at
+   ~110 ms/frame on the CM4. Frames of every scan are dumped to
+   /tmp/reachy_wifi_qr_frames (wiped per run) for diagnosis.
+2. The robot had BOTH opencv-python 4.13 and opencv-contrib-python 4.11
+   installed (mediapipe pulls contrib; something else pulled plain); they
+   share the cv2 dir, so contrib modules were clobbered. Fixed on-robot:
+   single opencv-contrib-python 4.13. PACKAGING DECISION: the wireless
+   extra should declare opencv-contrib-python explicitly.
+3. The handshake->provisioning trigger no longer skips when WiFi is
+   already connected (re-provisioning allowed; an app will gate this
+   later). Enabled on the robot via
+   /etc/systemd/system/reachy-mini-daemon.service.d/override.conf
+   (REACHY_HANDSHAKE_WIFI_PROVISION=1).
+4. prepare/finish hooks use set_motor_control_mode (NOT
+   enable/disable_motors directly), so motor_control_mode stays truthful
+   during the self-moves and the handshake disarms while the robot moves.
+
+Still open: erase-credentials + hotspot re-provision test (stage 2), the
+section 10 soak, and the emotion action layer (section 8, not built).
+
 ## UPDATE 2026-07-06: retry friction + double-count fixed (commit cbb9dc79)
 
 Remi's weekend testing surfaced two real usability bugs, both fixed
