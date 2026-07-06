@@ -6,6 +6,30 @@ Full design/history: `2026-07-01-secret-handshake-design.md` (same folder).
 Read that spec top to bottom before changing anything; this file is only
 "where we are and what is next".
 
+## UPDATE 2026-07-06: retry friction + double-count fixed (commit cbb9dc79)
+
+Remi's weekend testing surfaced two real usability bugs, both fixed
+lab-first and deployed to the robot:
+
+1. Immediate retry after success/abort silently failed. The machine
+   dropped to idle and re-required pose gate + 0.5 s settle (+ 2 s
+   cooldown after success); live, the user's hands jostle the floppy head,
+   the gate flickers, and taps thrown before re-arm are discarded.
+   NOW: success and abort return STRAIGHT to armed (pose gate only guards
+   boot / torque-off transitions). Note: no `armed` journal line after a
+   success/abort anymore, the machine is already armed.
+2. A firm knock pressed longer than the 0.25 s refractory counted twice
+   (contact + release re-crossing), so 2 knocks could prime (Remi saw
+   this; there is NO boot-state bug). NOW: a release latch requires 80 ms
+   of continuous not-pressed dwell between counts. The threshold separates
+   "crossing the band while releasing" (~40 ms) from "resting in contact
+   between re-knocks" (>=110 ms in default.json, whose knocker never fully
+   separates the antennas; the plain "must separate" rule failed replay).
+
+`cooldown_s` is gone from both configs. Replay regression unchanged
+(3 collisions + primed on all defaults), 50 tests, worst-case detector
+cost 542 ns/call.
+
 ## UPDATE 2026-07-04 (later): deployed and LIVE-VALIDATED on the wireless robot
 
 Option B install done (`/venvs/mini_daemon` at 1.8.4 from this branch),
