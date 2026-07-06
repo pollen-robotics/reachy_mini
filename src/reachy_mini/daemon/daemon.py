@@ -541,9 +541,11 @@ class Daemon:
 
         Opt-in via REACHY_HANDSHAKE_WIFI_PROVISION=1 (default OFF: the
         handshake then only plays its sounds). Wireless version only. When
-        enabled, a completed handshake on a robot that is NOT connected to
-        a WiFi network starts the camera QR scan
-        (app/services/wifi_provisioning.py).
+        enabled, a completed handshake starts the camera QR scan
+        (app/services/wifi_provisioning.py) even if WiFi is already
+        connected, so the gesture can also RE-provision a robot (design
+        decision 2026-07-06; availability will eventually be gated by an
+        app instead).
         """
         import os
 
@@ -567,22 +569,15 @@ class Daemon:
 
         def run() -> None:
             try:
-                from .app.routers.wifi_config import WifiMode, get_current_wifi_mode
                 from .app.services.wifi_provisioning import get_shared_provisioner
 
-                if get_current_wifi_mode() == WifiMode.WLAN:
-                    self.logger.info(
-                        "Handshake complete but WiFi already connected: "
-                        "not starting QR provisioning."
-                    )
-                    return
                 backend = self.backend
                 if backend is None:
                     return
                 media_server = self._media_server
                 camera_specs = getattr(media_server, "camera_specs", None)
                 provisioner = get_shared_provisioner(
-                    backend.play_sound, camera_specs
+                    backend.play_sound, camera_specs, backend
                 )
                 provisioner.start()
             except Exception:

@@ -27,7 +27,7 @@ def _provisioner(daemon: Daemon):  # type: ignore[no-untyped-def]
         raise HTTPException(status_code=503, detail="Backend not running")
     media_server = getattr(daemon, "_media_server", None)
     camera_specs = getattr(media_server, "camera_specs", None)
-    return get_shared_provisioner(backend.play_sound, camera_specs)
+    return get_shared_provisioner(backend.play_sound, camera_specs, backend)
 
 
 @router.post("/start")

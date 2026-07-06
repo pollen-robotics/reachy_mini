@@ -7,8 +7,12 @@ step, so it works on a freshly built robot with no network.
 
 The flow (QrWifiProvisioner.start(), runs in its own thread):
 
-    SCANNING     grab camera frames (~4 Hz) and look for a WiFi QR code,
-                 up to scan_timeout_s. Plays wifi_scanning.wav at start.
+    (intro)      plays the narrated wifi_setup_intro.wav immediately and
+                 runs the injected `prepare` hook (torque on + goto the
+                 base pose so the camera looks forward, 1.5 s).
+    SCANNING     once the narration is over (intro_wait_s), grab camera
+                 frames (~4 Hz) and look for a WiFi QR code, up to
+                 scan_timeout_s (one minute).
     CONNECTING   credentials found: hand them to the connect function
                  (the same nmcli path as the /wifi/connect endpoint) and
                  wait for the WiFi to come up.
@@ -16,6 +20,9 @@ The flow (QrWifiProvisioner.start(), runs in its own thread):
     FAILED       no QR in time, or the connection never came up: plays
                  handshake_aborted.wav.
     UNAVAILABLE  no QR decoder (opencv not installed) or no camera.
+
+    Every exit path runs the injected `finish` hook (goto sleep + torque
+    off, which also re-arms the secret handshake).
 
 Every dependency (camera, QR decoder, connect, status, sounds) is injected,
 so the whole flow is unit-tested offline (test_wifi_provisioning.py); the
@@ -35,7 +42,7 @@ from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-SOUND_SCANNING = "wifi_scanning.wav"
+SOUND_INTRO = "wifi_setup_intro.wav"  # narrated voice explaining the flow
 SOUND_SUCCESS = "handshake_success.wav"
 SOUND_FAILED = "handshake_aborted.wav"
 
@@ -133,6 +140,15 @@ class QrWifiProvisioner:
                      onboarding: success = wlan on the target ssid,
                      hotspot after busy = the daemon reverted (failed).
     play_sound       (asset_name) -> None.
+    prepare          optional; runs first, before the camera opens. The
+                     daemon wires "torque on + goto the base pose" here so
+                     the camera looks forward instead of at the table.
+    finish           optional; runs on EVERY exit path (success, failure,
+                     no camera). The daemon wires "goto sleep + torque
+                     off" here, which also re-arms the handshake.
+    intro_wait_s     scanning (and its one-minute clock) only starts this
+                     long after the intro narration begins, so fumbling
+                     for a QR code during the explanation costs nothing.
     """
 
     def __init__(
@@ -142,9 +158,12 @@ class QrWifiProvisioner:
         connect: Callable[[str, Optional[str]], None],
         wifi_status: Callable[[], tuple[str, Optional[str]]],
         play_sound: Callable[[str], None],
-        scan_timeout_s: float = 90.0,
+        prepare: Optional[Callable[[], None]] = None,
+        finish: Optional[Callable[[], None]] = None,
+        scan_timeout_s: float = 60.0,
         connect_timeout_s: float = 45.0,
         scan_period_s: float = 0.25,
+        intro_wait_s: float = 0.0,
     ) -> None:
         """Store the injected dependencies (see class docstring)."""
         self._camera_factory = camera_factory
@@ -152,9 +171,12 @@ class QrWifiProvisioner:
         self._connect = connect
         self._wifi_status = wifi_status
         self._play_sound = play_sound
+        self._prepare = prepare
+        self._finish = finish
         self.scan_timeout_s = scan_timeout_s
         self.connect_timeout_s = connect_timeout_s
         self.scan_period_s = scan_period_s
+        self.intro_wait_s = intro_wait_s
         self._status = ProvisioningStatus()
         self._lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
@@ -183,6 +205,19 @@ class QrWifiProvisioner:
 
     # ------------------------------------------------------------------
     def _run(self) -> None:
+        # The narration gives instant feedback; the robot rises to the base
+        # pose while it plays; scanning starts once the narration is over.
+        started_at = time.monotonic()
+        self._safe_sound(SOUND_INTRO)
+        self._safe_hook(self._prepare, "prepare")
+        try:
+            self._run_provisioning(started_at)
+        finally:
+            # Back to sleep + torque off on every exit, re-arming the
+            # handshake for the next attempt.
+            self._safe_hook(self._finish, "finish")
+
+    def _run_provisioning(self, started_at: float) -> None:
         try:
             camera = self._camera_factory()
         except Exception as e:
@@ -192,7 +227,9 @@ class QrWifiProvisioner:
             )
             return
         try:
-            self._safe_sound(SOUND_SCANNING)
+            remaining_intro = self.intro_wait_s - (time.monotonic() - started_at)
+            if remaining_intro > 0:
+                time.sleep(remaining_intro)
             creds = self._scan(camera)
         finally:
             try:
@@ -284,6 +321,14 @@ class QrWifiProvisioner:
         except Exception:
             logger.exception("QR provisioning: sound failed")
 
+    def _safe_hook(self, hook: Optional[Callable[[], None]], name: str) -> None:
+        if hook is None:
+            return
+        try:
+            hook()
+        except Exception:
+            logger.exception(f"QR provisioning: {name} hook failed")
+
 
 # ---------------------------------------------------------------------------
 # Production wiring
@@ -294,18 +339,39 @@ _shared_lock = threading.Lock()
 
 
 def get_shared_provisioner(
-    play_sound: Callable[[str], None], camera_specs: object = None
+    play_sound: Callable[[str], None],
+    camera_specs: object = None,
+    backend: object = None,
 ) -> QrWifiProvisioner:
     """Return the daemon-wide provisioner (lazy singleton, thread-safe)."""
     global _shared
     with _shared_lock:
         if _shared is None:
-            _shared = build_default_provisioner(play_sound, camera_specs)
+            _shared = build_default_provisioner(play_sound, camera_specs, backend)
         return _shared
 
 
+def _intro_duration_s() -> float:
+    """Length of the narration wav, so scanning starts after it ends."""
+    import contextlib
+    import wave
+    from importlib import resources
+
+    try:
+        asset = resources.files("reachy_mini") / "assets" / SOUND_INTRO
+        with resources.as_file(asset) as path, contextlib.closing(
+            wave.open(str(path), "rb")
+        ) as w:
+            return w.getnframes() / float(w.getframerate())
+    except Exception:
+        logger.exception("QR provisioning: could not read intro duration")
+        return 0.0
+
+
 def build_default_provisioner(
-    play_sound: Callable[[str], None], camera_specs: object = None
+    play_sound: Callable[[str], None],
+    camera_specs: object = None,
+    backend: object = None,
 ) -> QrWifiProvisioner:
     """Wire the provisioner to the real robot.
 
@@ -317,6 +383,9 @@ def build_default_provisioner(
     drives (POST /wifi/connect then polling GET /wifi/status), so behavior
     including the revert-to-hotspot fallback stays identical to the
     existing, battle-tested flow.
+    Robot motion: prepare = torque on + goto the base pose (1.5 s) so the
+    camera looks forward; finish = goto sleep + torque off on every exit,
+    which also re-arms the secret handshake.
     """
 
     def camera_factory() -> object:
@@ -353,10 +422,35 @@ def build_default_provisioner(
         status = get_wifi_status()
         return status.mode.value, status.connected_network
 
+    prepare: Optional[Callable[[], None]] = None
+    finish: Optional[Callable[[], None]] = None
+    if backend is not None and hasattr(backend, "enable_motors"):
+
+        def prepare() -> None:
+            import asyncio
+
+            backend.enable_motors()  # pins the present pose: no snap
+            asyncio.run(
+                backend.goto_target(
+                    head=backend.INIT_HEAD_POSE,
+                    antennas=backend.INIT_ANTENNAS_JOINT_POSITIONS,
+                    duration=1.5,
+                )
+            )
+
+        def finish() -> None:
+            import asyncio
+
+            asyncio.run(backend.goto_sleep())
+            backend.disable_motors()
+
     return QrWifiProvisioner(
         camera_factory=camera_factory,
         qr_decode=qr_decode,
         connect=connect,
         wifi_status=wifi_status,
         play_sound=play_sound,
+        prepare=prepare,
+        finish=finish,
+        intro_wait_s=_intro_duration_s(),
     )

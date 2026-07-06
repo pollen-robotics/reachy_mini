@@ -78,6 +78,7 @@ def make_provisioner(
     decoder_available=True,
     scan_timeout_s=0.5,
     connect_timeout_s=0.5,
+    intro_wait_s=0.0,
 ):
     """Provisioner wired to fakes.
 
@@ -90,12 +91,22 @@ def make_provisioner(
     camera = camera if camera is not None else FakeCamera()
     if status_after_connect is None:
         status_after_connect = [("busy", None), ("wlan", "net")]
-    seen = {"n": 0, "n_status": 0, "connect": None, "sounds": []}
+    seen = {
+        "n": 0,
+        "n_status": 0,
+        "connect": None,
+        "sounds": [],
+        "events": [],
+        "first_decode_t": None,
+        "started_t": None,
+    }
 
     def camera_factory():
         return camera
 
     def qr_decode(frame):
+        if seen["first_decode_t"] is None:
+            seen["first_decode_t"] = time.monotonic()
         if payloads is None:
             return None
         p = payloads[min(seen["n"], len(payloads) - 1)]
@@ -112,15 +123,22 @@ def make_provisioner(
         seen["n_status"] += 1
         return s
 
+    def play_sound(name):
+        seen["sounds"].append(name)
+        seen["events"].append(f"sound:{name}")
+
     prov = QrWifiProvisioner(
         camera_factory=camera_factory,
         qr_decode=qr_decode if decoder_available else None,
         connect=connect,
         wifi_status=wifi_status,
-        play_sound=lambda name: seen["sounds"].append(name),
+        play_sound=play_sound,
+        prepare=lambda: seen["events"].append("prepare"),
+        finish=lambda: seen["events"].append("finish"),
         scan_timeout_s=scan_timeout_s,
         connect_timeout_s=connect_timeout_s,
         scan_period_s=0.01,
+        intro_wait_s=intro_wait_s,
     )
     return prov, seen
 
@@ -142,8 +160,60 @@ def test_full_success_path():
     assert prov.status().state == ProvisioningState.SUCCESS
     assert prov.status().ssid == "net"
     assert seen["connect"] == ("net", "pw")
-    assert "wifi_scanning.wav" in seen["sounds"]
+    assert "wifi_setup_intro.wav" in seen["sounds"]
     assert "handshake_success.wav" in seen["sounds"]
+
+
+def test_prepare_and_finish_wrap_the_run():
+    """The robot wakes before scanning and returns to sleep at the end."""
+    prov, seen = make_provisioner(payloads=["WIFI:T:WPA;S:net;P:pw;;"])
+    prov.start()
+    wait_done(prov)
+    events = seen["events"]
+    # narration first (instant feedback), the robot rises while it plays,
+    # and finish comes after the final outcome sound
+    assert events[0] == "sound:wifi_setup_intro.wav"
+    assert events[1] == "prepare"
+    assert events[-1] == "finish"
+    assert "sound:handshake_success.wav" in events
+
+
+def test_finish_runs_on_timeout_too():
+    """The robot must return to sleep even when no QR was ever shown."""
+    prov, seen = make_provisioner(payloads=None, scan_timeout_s=0.1)
+    prov.start()
+    wait_done(prov)
+    assert prov.status().state == ProvisioningState.FAILED
+    assert seen["events"][-1] == "finish"
+
+
+def test_finish_runs_when_camera_is_unavailable():
+    """The robot must return to sleep even if the camera never opened."""
+
+    class BrokenCameraFactory:
+        def __call__(self):
+            raise RuntimeError("no camera")
+
+    prov, seen = make_provisioner()
+    prov._camera_factory = BrokenCameraFactory()
+    prov.start()
+    wait_done(prov)
+    assert prov.status().state == ProvisioningState.UNAVAILABLE
+    assert seen["events"][-1] == "finish"
+
+
+def test_scan_clock_starts_after_the_intro():
+    """The one-minute countdown must not tick while the narration plays."""
+    prov, seen = make_provisioner(
+        payloads=["WIFI:T:WPA;S:net;P:pw;;"], intro_wait_s=0.2, scan_timeout_s=0.3
+    )
+    t0 = time.monotonic()
+    prov.start()
+    seen["started_t"] = t0
+    wait_done(prov)
+    assert prov.status().state == ProvisioningState.SUCCESS
+    # no decode may happen before the intro is over
+    assert seen["first_decode_t"] - t0 >= 0.2
 
 
 def test_ignores_non_wifi_qr_and_keeps_scanning():
