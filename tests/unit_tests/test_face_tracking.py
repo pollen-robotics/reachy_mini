@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from reachy_mini.vision.face_tracking import Tracker, _offset_faces, to_observation
+from reachy_mini.vision.face_tracking import Tracker, to_observation
 
 
 def _face(
@@ -71,28 +71,3 @@ def test_tracker_drops_track_after_misses_then_reacquires() -> None:
     assert tracker.select([far], 200, 200) is None  # miss 1, track held
     assert tracker.select([far], 200, 200) is None  # miss 2, track dropped
     assert tracker.select([far], 200, 200) is far  # re-acquired
-
-
-def test_tracker_roi_is_none_until_locked_then_crops_around_track() -> None:
-    """ROI is full-frame (None) until a lock, then a crop box centered on the track."""
-    tracker = Tracker(min_area_frac=0.0, crop=100)
-    assert tracker.roi(200, 200) is None
-
-    tracker.select(
-        [_face((90.0, 88.0, 20.0, 20.0), (95.0, 95.0), (105.0, 95.0))], 200, 200
-    )
-    roi = tracker.roi(200, 200)
-    assert roi is not None
-    x0, y0, x1, y1 = roi
-    assert (x1 - x0, y1 - y0) == (100, 100)
-    assert x0 <= 100 <= x1 and y0 <= 95 <= y1  # contains the eye center
-
-
-def test_offset_faces_maps_crop_coords_to_full_frame() -> None:
-    """A face found in a crop is shifted by the crop origin; its size is unchanged."""
-    shifted = _offset_faces(
-        [_face((10.0, 20.0, 30.0, 40.0), (15.0, 25.0), (35.0, 25.0))], 100, 200
-    )
-    assert shifted[0].bbox == (110.0, 220.0, 30.0, 40.0)
-    assert shifted[0].right_eye == (115.0, 225.0)
-    assert shifted[0].left_eye == (135.0, 225.0)

@@ -84,11 +84,9 @@ ICE_NEGOTIATION_DEADLINE_S = 12
 SESSION_FAILED_REASON_ICE_TIMEOUT = "ice_negotiation_timeout"
 SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 
-# Downscaled, rate-limited camera stream for the out-of-process face tracker — keeps the
-# daemon's per-frame convert cheap (vs. serving the full-res IPC) so it never starves the
-# control loop. The tracker reports normalized coords, so the exact size only sets accuracy.
-TRACKING_WIDTH = 640
-TRACKING_FPS = 10
+# Downscaled, rate-limited feed for the out-of-process tracker; width & fps trade quality vs CPU.
+TRACKING_WIDTH = 320
+TRACKING_FPS = 30
 
 
 @dataclass

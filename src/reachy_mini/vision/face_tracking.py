@@ -20,9 +20,6 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger("reachymini-face-tracker")
 
-# Full-frame detect cadence while locked, so a moved or new face is re-found within ~1 s.
-_FULL_SCAN_INTERVAL = 12
-
 
 @dataclass
 class FaceObservation:
@@ -51,18 +48,6 @@ def _dist2(a: tuple[float, float], b: tuple[float, float]) -> float:
     return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
 
 
-def _offset_faces(faces: "list[Face]", dx: int, dy: int) -> "list[Face]":
-    """Shift faces detected in a crop back to full-frame pixel coordinates."""
-    return [
-        type(f)(
-            bbox=(f.bbox[0] + dx, f.bbox[1] + dy, f.bbox[2], f.bbox[3]),
-            right_eye=(f.right_eye[0] + dx, f.right_eye[1] + dy),
-            left_eye=(f.left_eye[0] + dx, f.left_eye[1] + dy),
-        )
-        for f in faces
-    ]
-
-
 class Tracker:
     """Greedy single-face track that rejects spurious detections.
 
@@ -77,13 +62,11 @@ class Tracker:
         min_area_frac: float = 0.003,
         max_jump: float = 0.5,
         max_misses: int = 20,
-        crop: int = 128,  # 128-px detect input: same locked recall as 192 at ~half the CPU (on-robot bench)
     ) -> None:
-        """Create a tracker with the given gates and ROI crop size (pixels)."""
+        """Create a tracker with the given selection gates."""
         self._min_area_frac = min_area_frac
         self._max_jump = max_jump
         self._max_misses = max_misses
-        self._crop = crop
         self._center: tuple[float, float] | None = None
         self._misses = 0
 
@@ -108,21 +91,6 @@ class Tracker:
         self._center = _eye_center(face, width, height)
         self._misses = 0
         return face
-
-    def roi(self, width: int, height: int) -> tuple[int, int, int, int] | None:
-        """Fixed-size crop box around the track, or None when unlocked.
-
-        The size is constant (the center is clamped, not the box) so the detector
-        keeps one input size across crop frames and skips regenerating its priors.
-        """
-        if self._center is None:
-            return None
-        half = self._crop // 2
-        cx = round((self._center[0] + 1.0) * 0.5 * max(width - 1, 1))
-        cy = round((self._center[1] + 1.0) * 0.5 * max(height - 1, 1))
-        cx = min(max(cx, half), max(width - half, half))
-        cy = min(max(cy, half), max(height - half, half))
-        return (cx - half, cy - half, cx + half, cy + half)
 
     def _miss(self) -> None:
         self._misses += 1
@@ -201,7 +169,6 @@ def run(conn: Connection, stop: EventType, camera_specs: "CameraSpecs") -> None:
 
     crop_scale = camera_specs.default_resolution.value[3]
     camera_matrix: NDArray[np.float64] | None = None
-    since_full_scan = 0
     try:
         while not stop.is_set():
             sample = appsink.emit("try-pull-sample", 200_000_000)
@@ -218,16 +185,7 @@ def run(conn: Connection, stop: EventType, camera_specs: "CameraSpecs") -> None:
                 camera_matrix = intrinsics_for_size(
                     camera_specs.K, crop_scale, (width, height)
                 )
-            roi = tracker.roi(width, height)
-            if roi is None or since_full_scan >= _FULL_SCAN_INTERVAL:
-                faces = detector.detect(frame)
-                since_full_scan = 0
-            else:
-                x0, y0, x1, y1 = roi
-                window = np.ascontiguousarray(frame[y0:y1, x0:x1])
-                faces = _offset_faces(detector.detect(window), x0, y0)
-                since_full_scan += 1
-            face = tracker.select(faces, width, height)
+            face = tracker.select(detector.detect(frame), width, height)
             obs = to_observation(
                 face,
                 width,
