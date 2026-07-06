@@ -1,15 +1,15 @@
 """Face detection with OpenCV's YuNet model."""
 
-import os
 from dataclasses import dataclass
 
 import cv2
 import numpy as np
+from huggingface_hub import hf_hub_download
 from numpy.typing import NDArray
 
-from reachy_mini.utils.constants import ASSETS_ROOT_PATH
-
-_MODEL_PATH = os.path.join(ASSETS_ROOT_PATH, "face_detection_yunet_2023mar.onnx")
+_MODEL_REPO = "pollen-robotics/yunet-face-detection-2023mar"
+_MODEL_FILE = "face_detection_yunet_2023mar.onnx"
+_MODEL_REVISION = "664c75e50253bd3021bd976b497896149ef22c7b"
 
 
 @dataclass(frozen=True)
@@ -28,8 +28,9 @@ class FaceDetector:
         self, score_threshold: float = 0.6, nms_threshold: float = 0.3
     ) -> None:
         """Create the YuNet detector."""
+        model_path = hf_hub_download(_MODEL_REPO, _MODEL_FILE, revision=_MODEL_REVISION)
         self._detector = cv2.FaceDetectorYN.create(
-            _MODEL_PATH, "", (320, 320), score_threshold, nms_threshold
+            model_path, "", (320, 320), score_threshold, nms_threshold
         )
         self._input_size: tuple[int, int] | None = None
 
