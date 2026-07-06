@@ -239,7 +239,11 @@ class QrWifiProvisioner:
 
         if creds is None:
             self._status = ProvisioningStatus(
-                ProvisioningState.FAILED, "no WiFi QR code seen in time"
+                ProvisioningState.FAILED,
+                "no WiFi QR code seen in time "
+                f"(frames ok={getattr(self, 'scan_frames_ok', 0)}, "
+                f"empty={getattr(self, 'scan_frames_empty', 0)}, "
+                f"qr texts={getattr(self, 'scan_decoded_texts', 0)})",
             )
             self._safe_sound(SOUND_FAILED)
             return
@@ -295,6 +299,11 @@ class QrWifiProvisioner:
 
     def _scan(self, camera) -> Optional[WifiQrCredentials]:
         assert self._qr_decode is not None
+        # Frame/decode counters: on timeout they distinguish "camera gave
+        # no frames" from "frames came but no QR decoded" (live debugging).
+        self.scan_frames_ok = 0
+        self.scan_frames_empty = 0
+        self.scan_decoded_texts = 0
         deadline = time.monotonic() + self.scan_timeout_s
         while time.monotonic() < deadline:
             frame = None
@@ -303,16 +312,25 @@ class QrWifiProvisioner:
             except Exception:
                 logger.exception("QR provisioning: camera read failed")
             if frame is not None:
+                self.scan_frames_ok += 1
                 try:
                     text = self._qr_decode(frame)
                 except Exception:
                     logger.exception("QR provisioning: QR decode failed")
                     text = None
                 if text:
+                    self.scan_decoded_texts += 1
                     creds = parse_wifi_qr(text)
                     if creds is not None:
                         return creds
+            else:
+                self.scan_frames_empty += 1
             time.sleep(self.scan_period_s)
+        logger.info(
+            "QR provisioning: scan timed out "
+            f"(frames ok={self.scan_frames_ok} empty={self.scan_frames_empty} "
+            f"qr texts={self.scan_decoded_texts})"
+        )
         return None
 
     def _safe_sound(self, name: str) -> None:
