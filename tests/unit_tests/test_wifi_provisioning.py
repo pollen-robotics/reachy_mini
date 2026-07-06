@@ -99,6 +99,7 @@ def make_provisioner(
         "events": [],
         "first_decode_t": None,
         "started_t": None,
+        "frames_saved": [],
     }
 
     def camera_factory():
@@ -135,6 +136,7 @@ def make_provisioner(
         play_sound=play_sound,
         prepare=lambda: seen["events"].append("prepare"),
         finish=lambda: seen["events"].append("finish"),
+        save_frame=lambda i, frame: seen["frames_saved"].append(i),
         scan_timeout_s=scan_timeout_s,
         connect_timeout_s=connect_timeout_s,
         scan_period_s=0.01,
@@ -161,7 +163,11 @@ def test_full_success_path():
     assert prov.status().ssid == "net"
     assert seen["connect"] == ("net", "pw")
     assert "wifi_setup_intro.wav" in seen["sounds"]
-    assert "handshake_success.wav" in seen["sounds"]
+    assert "wifi_qr_detected.wav" in seen["sounds"]
+    assert "wifi_connect_success.wav" in seen["sounds"]
+    # every scanned frame was handed to the frame sink (diag snapshots)
+    assert seen["frames_saved"] == list(range(len(seen["frames_saved"])))
+    assert len(seen["frames_saved"]) >= 1
 
 
 def test_prepare_and_finish_wrap_the_run():
@@ -175,7 +181,7 @@ def test_prepare_and_finish_wrap_the_run():
     assert events[0] == "sound:wifi_setup_intro.wav"
     assert events[1] == "prepare"
     assert events[-1] == "finish"
-    assert "sound:handshake_success.wav" in events
+    assert "sound:wifi_connect_success.wav" in events
 
 
 def test_finish_runs_on_timeout_too():
@@ -230,7 +236,27 @@ def test_times_out_when_no_qr():
     prov.start()
     wait_done(prov)
     assert prov.status().state == ProvisioningState.FAILED
-    assert "handshake_aborted.wav" in seen["sounds"]
+    assert "wifi_failed_no_qr.wav" in seen["sounds"]
+
+
+def test_each_failure_mode_has_its_own_voice_line():
+    """Bad password (hotspot revert) and connect timeout speak differently."""
+    prov, seen = make_provisioner(
+        payloads=["WIFI:T:WPA;S:net;P:badpw;;"],
+        status_after_connect=[("busy", None), ("hotspot", None)],
+    )
+    prov.start()
+    wait_done(prov)
+    assert "wifi_failed_bad_credentials.wav" in seen["sounds"]
+
+    prov, seen = make_provisioner(
+        payloads=["WIFI:T:WPA;S:net;P:pw;;"],
+        status_after_connect=[("busy", None)],  # never comes up
+        connect_timeout_s=0.1,
+    )
+    prov.start()
+    wait_done(prov)
+    assert "wifi_failed_connect_timeout.wav" in seen["sounds"]
 
 
 def test_fails_when_connection_never_comes_up():

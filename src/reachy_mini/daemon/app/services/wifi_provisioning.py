@@ -42,9 +42,19 @@ from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-SOUND_INTRO = "wifi_setup_intro.wav"  # narrated voice explaining the flow
-SOUND_SUCCESS = "handshake_success.wav"
-SOUND_FAILED = "handshake_aborted.wav"
+# Diagnostic frame snapshots from the last scan (wiped at each scan start).
+FRAME_DUMP_DIR = "/tmp/reachy_wifi_qr_frames"
+
+# Narrated voice lines, one per outcome (until the voices are recorded the
+# assets are copies of the handshake tones; replacing the wav replaces the
+# cue, no code change).
+SOUND_INTRO = "wifi_setup_intro.wav"  # explains the flow at start
+SOUND_QR_DETECTED = "wifi_qr_detected.wav"  # QR read, connecting now
+SOUND_SUCCESS = "wifi_connect_success.wav"
+SOUND_FAILED_NO_QR = "wifi_failed_no_qr.wav"  # scan window elapsed
+SOUND_FAILED_CONNECT = "wifi_failed_connect_timeout.wav"
+SOUND_FAILED_REVERTED = "wifi_failed_bad_credentials.wav"  # hotspot revert
+SOUND_UNAVAILABLE = "wifi_camera_unavailable.wav"
 
 
 @dataclass(frozen=True)
@@ -160,6 +170,7 @@ class QrWifiProvisioner:
         play_sound: Callable[[str], None],
         prepare: Optional[Callable[[], None]] = None,
         finish: Optional[Callable[[], None]] = None,
+        save_frame: Optional[Callable[[int, object], None]] = None,
         scan_timeout_s: float = 60.0,
         connect_timeout_s: float = 45.0,
         scan_period_s: float = 0.25,
@@ -173,6 +184,7 @@ class QrWifiProvisioner:
         self._play_sound = play_sound
         self._prepare = prepare
         self._finish = finish
+        self._save_frame = save_frame
         self.scan_timeout_s = scan_timeout_s
         self.connect_timeout_s = connect_timeout_s
         self.scan_period_s = scan_period_s
@@ -225,6 +237,7 @@ class QrWifiProvisioner:
             self._status = ProvisioningStatus(
                 ProvisioningState.UNAVAILABLE, f"camera unavailable: {e}"
             )
+            self._safe_sound(SOUND_UNAVAILABLE)
             return
         try:
             remaining_intro = self.intro_wait_s - (time.monotonic() - started_at)
@@ -245,11 +258,12 @@ class QrWifiProvisioner:
                 f"empty={getattr(self, 'scan_frames_empty', 0)}, "
                 f"qr texts={getattr(self, 'scan_decoded_texts', 0)})",
             )
-            self._safe_sound(SOUND_FAILED)
+            self._safe_sound(SOUND_FAILED_NO_QR)
             return
 
         logger.info(f"QR provisioning: connecting to '{creds.ssid}'")
         self._status = ProvisioningStatus(ProvisioningState.CONNECTING, ssid=creds.ssid)
+        self._safe_sound(SOUND_QR_DETECTED)
         try:
             self._connect(creds.ssid, creds.password)
         except Exception as e:
@@ -257,7 +271,7 @@ class QrWifiProvisioner:
             self._status = ProvisioningStatus(
                 ProvisioningState.FAILED, f"connect failed: {e}", ssid=creds.ssid
             )
-            self._safe_sound(SOUND_FAILED)
+            self._safe_sound(SOUND_FAILED_CONNECT)
             return
 
         # Confirm the outcome exactly like the desktop app onboarding does:
@@ -286,7 +300,7 @@ class QrWifiProvisioner:
                     "daemon reverted to hotspot (wrong password?)",
                     ssid=creds.ssid,
                 )
-                self._safe_sound(SOUND_FAILED)
+                self._safe_sound(SOUND_FAILED_REVERTED)
                 return
             time.sleep(self.scan_period_s)
 
@@ -295,7 +309,7 @@ class QrWifiProvisioner:
             "connection did not come up in time",
             ssid=creds.ssid,
         )
-        self._safe_sound(SOUND_FAILED)
+        self._safe_sound(SOUND_FAILED_CONNECT)
 
     def _scan(self, camera) -> Optional[WifiQrCredentials]:
         assert self._qr_decode is not None
@@ -312,6 +326,11 @@ class QrWifiProvisioner:
             except Exception:
                 logger.exception("QR provisioning: camera read failed")
             if frame is not None:
+                if self._save_frame is not None:
+                    try:
+                        self._save_frame(self.scan_frames_ok, frame)
+                    except Exception:
+                        logger.exception("QR provisioning: frame save failed")
                 self.scan_frames_ok += 1
                 try:
                     text = self._qr_decode(frame)
@@ -414,6 +433,7 @@ def build_default_provisioner(
         return camera
 
     qr_decode: Optional[Callable[[object], Optional[str]]] = None
+    save_frame: Optional[Callable[[int, object], None]] = None
     try:
         import cv2
 
@@ -422,6 +442,18 @@ def build_default_provisioner(
         def qr_decode(frame: object) -> Optional[str]:
             text, _points, _raw = detector.detectAndDecode(frame)
             return text or None
+
+        def save_frame(index: int, frame: object) -> None:
+            # Diagnostic snapshots of every scanned frame; the directory is
+            # wiped at each scan start so it never accumulates across runs
+            # (and /tmp is RAM-backed, gone on reboot anyway).
+            import os
+            import shutil
+
+            if index == 0:
+                shutil.rmtree(FRAME_DUMP_DIR, ignore_errors=True)
+                os.makedirs(FRAME_DUMP_DIR, exist_ok=True)
+            cv2.imwrite(f"{FRAME_DUMP_DIR}/frame_{index:04d}.jpg", frame)
 
     except ImportError:
         logger.warning("QR provisioning unavailable: opencv is not installed")
@@ -448,11 +480,13 @@ def build_default_provisioner(
             import asyncio
 
             backend.enable_motors()  # pins the present pose: no snap
+            # Slow on purpose: the human's hands are often still on the
+            # antennas right after the handshake.
             asyncio.run(
                 backend.goto_target(
                     head=backend.INIT_HEAD_POSE,
                     antennas=backend.INIT_ANTENNAS_JOINT_POSITIONS,
-                    duration=1.5,
+                    duration=5.0,
                 )
             )
 
@@ -470,5 +504,6 @@ def build_default_provisioner(
         play_sound=play_sound,
         prepare=prepare,
         finish=finish,
+        save_frame=save_frame,
         intro_wait_s=_intro_duration_s(),
     )
