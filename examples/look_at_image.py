@@ -16,6 +16,7 @@ Note:
 
 import argparse
 import sys
+from datetime import datetime
 from typing import Any
 
 try:
@@ -46,6 +47,7 @@ def main(backend: str) -> None:
     cv2.setMouseCallback("Reachy Mini Camera", click, param=state)
 
     print("Click on the image to make ReachyMini look at that point.")
+    print("Press 's' to save the current image on disk.")
     print("Press 'q' to quit the camera feed.")
     with ReachyMini(media_backend=backend) as reachy_mini:
         # Uncomment these three lines to change resolution
@@ -61,9 +63,14 @@ def main(backend: str) -> None:
                     continue
 
                 cv2.imshow("Reachy Mini Camera", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
                     print("Exiting...")
                     break
+                if key == ord("s"):
+                    filename = datetime.now().strftime("reachy_mini_%Y%m%d_%H%M%S.png")
+                    cv2.imwrite(filename, frame)
+                    print(f"Saved image to {filename}")
 
                 if state["just_clicked"]:
                     reachy_mini.look_at_image(state["x"], state["y"], duration=0.3)
