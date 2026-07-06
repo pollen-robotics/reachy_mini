@@ -145,11 +145,11 @@ class GStreamerCamera(CameraBase):
             should_restart = True
 
         self._resolution = resolution
+        # No framerate constraint: the daemon may serve the IPC feed below the capture rate.
         caps_video = Gst.Caps.from_string(
             f"video/x-raw,format=BGR,"
             f"width={self._resolution.value[0]},"
-            f"height={self._resolution.value[1]},"
-            f"framerate={self.framerate}/1"
+            f"height={self._resolution.value[1]}"
         )
         self._appsink_video.set_property("caps", caps_video)
 
