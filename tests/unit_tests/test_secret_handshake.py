@@ -120,20 +120,25 @@ def test_full_turn_offsets_are_normalized():
     assert run_detector(crossed) == 0
 
 
-def test_slow_press_counts_once():
-    """One knock is one collision even when the press outlasts the refractory."""
-    # A firm knock re-crosses the band while releasing; with only the time
-    # refractory a press longer than 0.25 s counted twice (seen live:
-    # primed after 2 knocks). The release latch requires a not-pressed
-    # dwell between counts.
+def test_slow_press_double_count_is_a_known_quirk():
+    """A press held past the refractory counts twice: accepted, documented."""
+    # The release re-crossing of a long press counts as a second collision,
+    # so a prime can happen in 2 firm knocks. A release latch fixing this
+    # was tried and REVERTED: it dropped knocks during fast tapping (see
+    # CollisionConfig). This test pins the accepted behavior so a future
+    # change is a conscious decision, not an accident.
     slow_knock = seg(CONTACT, 0.04) + seg(PRESS, 0.4) + seg(CONTACT, 0.04)
-    assert run_detector(seg(REST, 0.5) + slow_knock + seg(REST, 0.5)) == 1
+    assert run_detector(seg(REST, 0.5) + slow_knock + seg(REST, 0.5)) == 2
 
 
-def test_starting_inside_region_is_inert_until_released():
-    """Antennas resting crossed at the touch point must not pre-count."""
-    assert run_detector(seg(CONTACT, 2.0)) == 0
-    assert run_detector(seg(CONTACT, 2.0) + seg(REST, 0.3) + tap()) == 1
+def test_fast_taps_all_count():
+    """Fast tapping (short apart windows) must not drop knocks."""
+    # Live regression 2026-07-06: a release latch required 80 ms not
+    # pressed between counts, but fast tapping separates for only 2-3
+    # ticks, so knocks were dropped and the gesture only worked slowly.
+    # 0.12 s apart -> 0.26 s per knock, the fastest rhythm the 0.25 s
+    # refractory is meant to accept (~4 knocks/s).
+    assert run_detector(seg(REST, 0.5) + taps(3, release_s=0.12)) == 3
 
 
 # ---------------------------------------------------------------------------

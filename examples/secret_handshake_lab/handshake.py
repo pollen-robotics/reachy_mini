@@ -28,8 +28,8 @@ TUNABLES AT A GLANCE (the single source of truth is the two config
 dataclasses: CollisionConfig in collision.py, HandshakeConfig below)
 
   collision region      l + r in [-9, 0] deg  AND  l in [20, 150] deg
-  collision debounce    release latch (antennas must separate between
-                        counts) + 0.25 s refractory
+  collision debounce    0.25 s refractory (a >0.25 s press counts twice:
+                        known accepted quirk, see CollisionConfig)
   sequence reset        1.0 s without a collision -> count goes back to 0
   taps per round        3
   arming settle         head in sleep pose for 0.5 s -> ARMED (idle only:
@@ -184,9 +184,9 @@ class HandshakeStateMachine:
         Round-tripping through idle forced the pose gate + settle (plus a
         cooldown) on every retry; live, the user's hands jostle the floppy
         head, the gate flickers, and an immediate retry silently fails.
-        Armed is safe to re-enter directly: counting a new collision
-        requires a real release first (the detector's release latch), so
-        the tail of the previous gesture cannot phantom-count.
+        Re-entering armed directly is safe: at worst the release tail of
+        the final knock counts as one stray tap, which expires after
+        max_gap_s without ever reaching the 3 needed to prime.
         """
         self.state = "armed"
         self._pose_ok_since = None

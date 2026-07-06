@@ -174,27 +174,27 @@ def test_detector_crossed_park_with_turn_offset_is_inert() -> None:
     assert in_ticks == 0
 
 
-def test_detector_slow_press_counts_once() -> None:
-    """One knock is one collision even when the press outlasts the refractory."""
-    # A firm knock passes through the band twice (contact, then again while
-    # releasing). When the press lasts longer than the 0.25 s refractory the
-    # release crossing used to count as a second collision (seen live:
-    # primed after 2 knocks). Counting must require a not-pressed dwell in
-    # between (the release latch), not just elapsed time.
+def test_detector_slow_press_double_count_is_a_known_quirk() -> None:
+    """A press held past the refractory counts twice: accepted, documented."""
+    # The release re-crossing of a long press counts as a second collision,
+    # so a prime can happen in 2 firm knocks. A release latch fixing this
+    # was tried and REVERTED: it dropped knocks during fast tapping (see
+    # CollisionConfig). This test pins the accepted behavior so a future
+    # change is a conscious decision, not an accident.
     slow_knock = seg(CONTACT, 0.04) + seg(PRESS, 0.4) + seg(CONTACT, 0.04)
     onsets, _ = run_detector(seg(REST, 0.5) + slow_knock + seg(REST, 0.5))
-    assert onsets == 1
+    assert onsets == 2
 
 
-def test_detector_starting_inside_region_is_inert_until_released() -> None:
-    """Antennas resting crossed at the touch point must not pre-count."""
-    # Seen live: the antennas can be parked touching at the center. Sitting
-    # there (or noise-jittering around the region edge) must count nothing;
-    # only after a real separation may collisions count again.
-    onsets, _ = run_detector(seg(CONTACT, 2.0))
-    assert onsets == 0
-    onsets, _ = run_detector(seg(CONTACT, 2.0) + seg(REST, 0.3) + tap())
-    assert onsets == 1
+def test_detector_fast_taps_all_count() -> None:
+    """Fast tapping (short apart windows) must not drop knocks."""
+    # Live regression 2026-07-06: a release latch required 80 ms not
+    # pressed between counts, but fast tapping separates for only 2-3
+    # ticks, so knocks were dropped and the gesture only worked slowly.
+    # 0.12 s apart -> 0.26 s per knock, the fastest rhythm the 0.25 s
+    # refractory is meant to accept (~4 knocks/s).
+    onsets, _ = run_detector(seg(REST, 0.5) + taps(3, release_s=0.12))
+    assert onsets == 3
 
 
 # ---------------------------------------------------------------------------

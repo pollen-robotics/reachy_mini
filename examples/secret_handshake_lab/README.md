@@ -36,7 +36,7 @@ One source of truth: `CollisionConfig` (collision.py) and `HandshakeConfig`
 | what | value |
 |---|---|
 | collision region | `l + r` in [-9, 0] deg AND `l` in [20, 150] deg (angles wrapped to [-180, 180): the encoders are multi-turn) |
-| collision debounce | release latch (80 ms not-pressed dwell between counts) + 0.25 s refractory |
+| collision debounce | 0.25 s refractory (a >0.25 s press counts twice: known accepted quirk, see `CollisionConfig`) |
 | collisions per round | 3 |
 | sequence reset | 1.0 s without a collision |
 | arming settle | head in sleep pose for 0.5 s (idle only: boot and torque-off transitions) |

@@ -20,15 +20,21 @@ lab-first and deployed to the robot:
    success/abort anymore, the machine is already armed.
 2. A firm knock pressed longer than the 0.25 s refractory counted twice
    (contact + release re-crossing), so 2 knocks could prime (Remi saw
-   this; there is NO boot-state bug). NOW: a release latch requires 80 ms
-   of continuous not-pressed dwell between counts. The threshold separates
-   "crossing the band while releasing" (~40 ms) from "resting in contact
-   between re-knocks" (>=110 ms in default.json, whose knocker never fully
-   separates the antennas; the plain "must separate" rule failed replay).
+   this; there is NO boot-state bug). A release latch (80 ms not-pressed
+   dwell between counts) fixed it in the lab and passed replay, but was
+   REVERTED within the hour: live fast tapping separates the antennas for
+   only 2-3 control ticks, so the latch dropped knocks and the gesture
+   only worked slowly (Remi's live report). The double count is now a
+   documented ACCEPTED QUIRK, pinned by a test. Lessons: (a) the recorded
+   default.json knocker never fully separates the antennas, so "must
+   separate between counts" fails replay; (b) fast-tap apart windows and
+   release-crossing durations overlap, so no static dwell threshold works;
+   (c) velocity discrimination stays rejected. Missed knocks are far worse
+   than an occasional 2-knock prime.
 
 `cooldown_s` is gone from both configs. Replay regression unchanged
 (3 collisions + primed on all defaults), 50 tests, worst-case detector
-cost 542 ns/call.
+cost unchanged (sub-microsecond).
 
 ## UPDATE 2026-07-04 (later): deployed and LIVE-VALIDATED on the wireless robot
 
