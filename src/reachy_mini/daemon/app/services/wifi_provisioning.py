@@ -516,12 +516,17 @@ def build_default_provisioner(
 
     prepare: Optional[Callable[[], None]] = None
     finish: Optional[Callable[[], None]] = None
-    if backend is not None and hasattr(backend, "enable_motors"):
+    if backend is not None and hasattr(backend, "set_motor_control_mode"):
+        # set_motor_control_mode (not enable/disable_motors directly): it
+        # updates motor_control_mode, so /api/motors/status stays truthful
+        # and the handshake detector disarms while the robot moves itself.
 
         def prepare() -> None:
             import asyncio
 
-            backend.enable_motors()  # pins the present pose: no snap
+            from reachy_mini.io.protocol import MotorControlMode
+
+            backend.set_motor_control_mode(MotorControlMode.Enabled)
             # Slow on purpose: the human's hands are often still on the
             # antennas right after the handshake.
             asyncio.run(
@@ -535,8 +540,10 @@ def build_default_provisioner(
         def finish() -> None:
             import asyncio
 
+            from reachy_mini.io.protocol import MotorControlMode
+
             asyncio.run(backend.goto_sleep())
-            backend.disable_motors()
+            backend.set_motor_control_mode(MotorControlMode.Disabled)
 
     return QrWifiProvisioner(
         camera_factory=camera_factory,
