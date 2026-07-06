@@ -6,6 +6,34 @@ Full design/history: `2026-07-01-secret-handshake-design.md` (same folder).
 Read that spec top to bottom before changing anything; this file is only
 "where we are and what is next".
 
+## UPDATE 2026-07-06 (late): goto antenna-jump root cause + fix (goto.py wrap)
+
+The provisioning wake goto exposed a LATENT CORE BUG: violent antenna
+sweep mid-goto. Full mechanism (rustypot source + live probes + a 50 Hz
+trace of the incident, all timestamps matching):
+
+  1. STS3215 firmware tracks MULTI-TURN present positions: hand-spinning
+     a floppy antenna past +-180 makes reads carry whole turns.
+  2. goal_position is single-turn (0..4095); rustypot AnglePosition::
+     to_raw (src/servo/dynamixel/mx.rs) is linear, NO wrap/clamp, so
+     commands beyond +-180 emit out-of-range registers the firmware
+     SILENTLY REJECTS (probe: goto +170->+190 follows to +180, 35 deg/s,
+     then holds). Torque-enable sets goal := present in firmware (and
+     resets the turn counter: the reading re-bases +-360 at enable).
+  3. A goto starting from a multi-turn reading has ALL its commands
+     rejected until the interpolation crosses +-180; the first accepted
+     command is a huge step and the servo whips (incident: 1800 deg/s at
+     2.1 s of a 5 s goto, predicted 2.1 s by min-jerk crossing math).
+
+Fix: GotoMove wraps start_antennas into one turn (tests in
+tests/unit_tests/test_goto_move.py). A/B on the robot: hand-wound
+-368 deg reading, goto with fix = 6 deg/s glide (round B with the fix
+reverted was interrupted; script ready:
+examples/secret_handshake_lab/repro_goto_antenna_jump.py, it waits for
+the spin, then one goto). Longer-term options for Remi to arbitrate:
+wrap in rustypot to_raw, and/or normalize antenna reads at the daemon
+boundary.
+
 ## UPDATE 2026-07-06 (evening): WiFi QR provisioning LIVE-VALIDATED end to end
 
 Full flow observed on the wireless robot: handshake -> narrated intro
