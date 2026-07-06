@@ -71,3 +71,24 @@ def test_tracker_drops_track_after_misses_then_reacquires() -> None:
     assert tracker.select([far], 200, 200) is None  # miss 1, track held
     assert tracker.select([far], 200, 200) is None  # miss 2, track dropped
     assert tracker.select([far], 200, 200) is far  # re-acquired
+
+
+def test_tracker_switches_to_dominant_challenger_after_dwell() -> None:
+    """Gaze switches to a clearly more prominent face once it leads for the dwell window."""
+    tracker = Tracker(min_area_frac=0.0, switch_dwell=3)
+    a = _face((90.0, 90.0, 20.0, 20.0), (95.0, 95.0), (105.0, 95.0))
+    b = _face((110.0, 90.0, 60.0, 60.0), (120.0, 100.0), (140.0, 100.0))
+    assert tracker.select([a], 200, 200) is a
+    assert tracker.select([a, b], 200, 200) is a  # streak 1 < dwell
+    assert tracker.select([a, b], 200, 200) is a  # streak 2 < dwell
+    assert tracker.select([a, b], 200, 200) is b  # streak reaches dwell -> switch
+
+
+def test_tracker_holds_track_against_below_margin_face() -> None:
+    """A bigger-but-not-dominant face never steals the track (no ping-pong)."""
+    tracker = Tracker(min_area_frac=0.0, switch_dwell=3)
+    a = _face((80.0, 80.0, 40.0, 40.0), (95.0, 95.0), (105.0, 95.0))
+    b = _face((110.0, 80.0, 45.0, 45.0), (120.0, 95.0), (130.0, 95.0))
+    assert tracker.select([a], 200, 200) is a
+    for _ in range(10):
+        assert tracker.select([a, b], 200, 200) is a

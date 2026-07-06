@@ -48,13 +48,21 @@ def _dist2(a: tuple[float, float], b: tuple[float, float]) -> float:
     return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
 
 
+def _salience(face: "Face", width: int, height: int) -> float:
+    centrality = max(
+        0.0, 1.0 - 0.5 * _dist2(_eye_center(face, width, height), (0.0, 0.0))
+    )
+    return _area(face) * centrality
+
+
 class Tracker:
     """Greedy single-face track that rejects spurious detections.
 
     Acquires the largest face above a minimum size, then sticks to the face
     nearest the current track, so a stray detection elsewhere can't yank the
-    head around. Drops the track after a run of misses so a new person can be
-    acquired.
+    head around. Gaze switches to a clearly more prominent face (someone
+    stepping forward / more central) once it dominates for a dwell window, and
+    the track drops after a run of misses so a new person can be acquired.
     """
 
     def __init__(
@@ -62,13 +70,18 @@ class Tracker:
         min_area_frac: float = 0.003,
         max_jump: float = 0.5,
         max_misses: int = 20,
+        switch_margin: float = 1.6,
+        switch_dwell: int = 8,
     ) -> None:
         """Create a tracker with the given selection gates."""
         self._min_area_frac = min_area_frac
         self._max_jump = max_jump
         self._max_misses = max_misses
+        self._switch_margin = switch_margin
+        self._switch_dwell = switch_dwell
         self._center: tuple[float, float] | None = None
         self._misses = 0
+        self._challenger_streak = 0
 
     def select(self, faces: "list[Face]", width: int, height: int) -> "Face | None":
         """Pick the face to aim at, or None when no plausible target is present."""
@@ -80,20 +93,35 @@ class Tracker:
             if _area(face) < self._min_area_frac * width * height:
                 self._miss()
                 return None
+            self._challenger_streak = 0
         else:
             center = self._center
-            face = min(
+            held = min(
                 faces, key=lambda f: _dist2(_eye_center(f, width, height), center)
             )
-            if _dist2(_eye_center(face, width, height), center) > self._max_jump**2:
+            if _dist2(_eye_center(held, width, height), center) > self._max_jump**2:
                 self._miss()
                 return None
+            # Require a dominant challenger to persist for a dwell window, to avoid ping-pong.
+            best = max(faces, key=lambda f: _salience(f, width, height))
+            if (
+                best is not held
+                and _salience(best, width, height)
+                > _salience(held, width, height) * self._switch_margin
+            ):
+                self._challenger_streak += 1
+            else:
+                self._challenger_streak = 0
+            face = best if self._challenger_streak >= self._switch_dwell else held
+            if face is best:
+                self._challenger_streak = 0
         self._center = _eye_center(face, width, height)
         self._misses = 0
         return face
 
     def _miss(self) -> None:
         self._misses += 1
+        self._challenger_streak = 0
         if self._misses > self._max_misses:
             self._center = None
 
