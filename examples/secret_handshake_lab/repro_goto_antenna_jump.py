@@ -1,27 +1,36 @@
-"""Minimal repro: a goto whose antenna path crosses +-180 deg jumps violently.
+"""Repro: one hand-spun turn + one plain goto = violent antenna sweep.
 
-No torque tricks, no multi-turn setup: TWO plain gotos.
+THE MECHANISM (all confirmed against rustypot source, a live boundary
+probe, and the 50 Hz trace of the 2026-07-06 incident):
 
-    1. goto left antenna to +170 deg   (in range: smooth, as always)
-    2. goto left antenna to +190 deg   (a 20 deg nudge... in theory)
+  - The STS3215 firmware tracks MULTI-TURN present positions: spinning a
+    floppy (torque off) antenna past +-180 deg makes the reading carry
+    whole turns (e.g. physical +82 deg read as -278 deg).
+  - goal_position is a single-turn register (0..4095 = -180..+180 deg).
+    rustypot's AnglePosition::to_raw is linear, no wrap, no clamp
+    (src/servo/dynamixel/mx.rs): commands beyond +-180 deg produce
+    out-of-range registers that the firmware SILENTLY REJECTS (probe:
+    goto +170 -> +190 deg follows smoothly to +180 then holds, 35 deg/s).
+  - On torque enable the firmware sets goal := present, so enabling never
+    jumps by itself.
+  - A goto whose start came from a multi-turn reading interpolates its
+    commands from that offset value: every command is rejected until the
+    interpolation crosses +-180 deg, and the FIRST ACCEPTED command sits
+    a large step away from the physical position. The servo chases it at
+    full speed (incident trace: +82 -> -177 deg, ~1800 deg/s peak, at 42%
+    of a 5 s min-jerk goto, then perfect tracking).
 
-Root cause (rustypot src/servo/dynamixel/mx.rs, used by the STS3215
-goal_position register): `to_raw(value) = (4096*(pi+value)/(2*pi)) as i16`
-is a pure linear conversion, no wrap, no clamp. The goal register is one
-turn (0..4095); any command beyond +-180 deg leaves that range and the
-firmware effectively masks it, so while the interpolated command crosses
-+-180 the register teleports from ~4095 to ~0: one full turn. The servo
-chases it at full speed.
+A goto alone cannot build the multi-turn gap (torque-on antennas stop at
+the boundary), hence the one manual step below. GotoMove now wraps its
+start into one turn (commit "goto: wrap multi-turn antenna start"), which
+kills the bug: run this against a daemon WITHOUT that commit to see the
+whip, and with it to see a gentle glide - same script.
 
-This is exactly what the WiFi-provisioning wake goto triggered on
-2026-07-06: the STS3215 firmware tracks multi-turn PRESENT positions
-(reads carried a stale -278 deg for a physical +82 after torque-off
-antenna play), the goto interpolated from that multi-turn start toward
--10 deg, and the command crossed -180 mid-move (violent sweep at 2.1 s of
-a 5 s min-jerk goto, ~1800 deg/s, matching the recorded trace).
-
-Run (robot on the LAN, torque will be enabled, HOLD NOTHING):
+Run (robot on the LAN; keep hands clear after the spin):
     python examples/secret_handshake_lab/repro_goto_antenna_jump.py
+    -> antennas go torque-off for 12 s: spin the LEFT antenna one full
+       turn (either direction), let it rest, hands off
+    -> a single goto to (+-10 deg) runs; peak speed is printed
 """
 
 import math
@@ -33,6 +42,7 @@ import numpy as np
 from reachy_mini import ReachyMini
 
 RAD2DEG = 180.0 / math.pi
+SPIN_WINDOW_S = 12.0
 
 
 def record(mini: ReachyMini, out: list, stop: threading.Event) -> None:
@@ -43,35 +53,37 @@ def record(mini: ReachyMini, out: list, stop: threading.Event) -> None:
         time.sleep(0.02)
 
 
-def report(trace: list, label: str) -> None:
-    worst = 0.0
-    for (t0, l0, _), (t1, l1, _) in zip(trace, trace[1:]):
-        speed = abs(l1 - l0) / (t1 - t0)
-        worst = max(worst, speed)
-    print(f"{label}: left antenna peak speed {worst:7.0f} deg/s")
-
-
 def main() -> None:
     with ReachyMini(media_backend="no_media") as mini:
+        mini.disable_motors()
+        print(
+            f"Torque OFF: spin the LEFT antenna ONE FULL TURN now "
+            f"({SPIN_WINDOW_S:.0f} s)..."
+        )
+        time.sleep(SPIN_WINDOW_S)
+
+        ant = mini.get_present_antenna_joint_positions()
+        l_deg = ant[0] * RAD2DEG
+        print(f"left antenna reads {l_deg:+.1f} deg "
+              f"({'multi-turn offset present' if abs(l_deg) > 180 else 'NO turn offset: spin it further and rerun'})")
+
         mini.enable_motors()
         time.sleep(0.5)
 
-        # step 0: park the left antenna near +170 deg, gently (in range)
-        mini.goto_target(antennas=np.radians([170.0, -10.0]), duration=3.0)
-        time.sleep(0.3)
-
-        # step 1: the "20 deg nudge" whose command path crosses +180 deg
         trace: list = []
         stop = threading.Event()
         rec = threading.Thread(target=record, args=(mini, trace, stop))
         rec.start()
-        mini.goto_target(antennas=np.radians([190.0, -10.0]), duration=2.0)
+        mini.goto_target(antennas=np.radians([-10.0, 10.0]), duration=5.0)
         stop.set()
         rec.join()
-        report(trace, "goto +170 -> +190 deg (crosses +180)")
 
-        # cleanup: back to a sane position, torque off
-        mini.goto_target(antennas=np.radians([10.0, -10.0]), duration=3.0)
+        worst = 0.0
+        for (t0, l0, _), (t1, l1, _) in zip(trace, trace[1:]):
+            worst = max(worst, abs(l1 - l0) / (t1 - t0))
+        print(f"goto to -10 deg: left antenna peak speed {worst:7.0f} deg/s")
+        print("(> 500 deg/s = the bug; < 100 deg/s = wrapped start, fixed)")
+
         mini.disable_motors()
 
 
