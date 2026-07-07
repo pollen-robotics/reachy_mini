@@ -35,8 +35,9 @@ except ImportError as e:
     ) from e
 
 gi.require_version("Gst", "1.0")
+gi.require_version("GstApp", "1.0")
 
-from gi.repository import Gst  # noqa: E402
+from gi.repository import Gst, GstApp  # noqa: E402
 
 
 class CameraBase(ABC):
@@ -57,9 +58,9 @@ class CameraBase(ABC):
         self.camera_specs: Optional[CameraSpecs] = None
         self.resized_K: Optional[npt.NDArray[np.float64]] = None
         self._jpeg_pipeline: Gst.Pipeline = None
-        self._jpeg_appsrc: Gst.Element = None
-        self._jpeg_appsink: Gst.Element = None
-        self._jpeg_size: Optional[tuple[int, int]] = None
+        self._jpeg_appsrc: GstApp.AppSrc = None
+        self._jpeg_appsink: GstApp.AppSink = None
+        self._jpeg_resolution: Optional[tuple[int, int]] = None
 
     @property
     def resolution(self) -> tuple[int, int]:
@@ -185,17 +186,17 @@ class CameraBase(ABC):
         if frame is None:
             return None
         height, width = frame.shape[:2]
-        if self._jpeg_pipeline is None or self._jpeg_size != (width, height):
+        if self._jpeg_pipeline is None or self._jpeg_resolution != (width, height):
             self._release_jpeg_encoder()
             self._build_jpeg_encoder(width, height)
         self._jpeg_pipeline.set_state(Gst.State.PLAYING)
-        self._jpeg_appsrc.emit("push-buffer", Gst.Buffer.new_wrapped(frame.tobytes()))
+        self._jpeg_appsrc.push_buffer(Gst.Buffer.new_wrapped(frame.tobytes()))
         jpeg = get_sample(self._jpeg_appsink, self.logger)
         self._jpeg_pipeline.set_state(Gst.State.PAUSED)
         return jpeg
 
     def _build_jpeg_encoder(self, width: int, height: int) -> None:
-        """Build the reusable JPEG encoder pipeline for the given frame size."""
+        """Build the reusable JPEG encoder pipeline for the given resolution."""
         pipeline = Gst.Pipeline.new("jpeg_encoder")
         appsrc = Gst.ElementFactory.make("appsrc")
         videoconvert = Gst.ElementFactory.make("videoconvert")
@@ -219,7 +220,7 @@ class CameraBase(ABC):
         self._jpeg_pipeline = pipeline
         self._jpeg_appsrc = appsrc
         self._jpeg_appsink = appsink
-        self._jpeg_size = (width, height)
+        self._jpeg_resolution = (width, height)
 
     def _release_jpeg_encoder(self) -> None:
         """Tear down the JPEG encoder pipeline if one exists."""
@@ -228,7 +229,7 @@ class CameraBase(ABC):
             self._jpeg_pipeline = None
             self._jpeg_appsrc = None
             self._jpeg_appsink = None
-            self._jpeg_size = None
+            self._jpeg_resolution = None
 
     @abstractmethod
     def close(self) -> None:
