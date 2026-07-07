@@ -7,7 +7,7 @@ import numpy as np
 from huggingface_hub import hf_hub_download
 from numpy.typing import NDArray
 
-_MODEL_REPO = "pollen-robotics/yunet-face-detection-2023mar"
+_MODEL_REPO = "pollen-robotics/face_detection_yunet_2023mar"
 _MODEL_FILE = "face_detection_yunet_2023mar.onnx"
 _MODEL_REVISION = "664c75e50253bd3021bd976b497896149ef22c7b"
 
