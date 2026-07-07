@@ -276,7 +276,7 @@ class ReachyMini:
 
         """
         self.client.send_command(SetHeadTrackingCmd(enabled=True, weight=weight))
-        self.logger.info("Head tracking enabled")
+        self.logger.debug("Head tracking enabled (weight=%.1f)", weight)
 
     def stop_head_tracking(self) -> None:
         """Disable daemon-side visual head tracking."""
