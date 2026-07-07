@@ -105,6 +105,21 @@ class AppManager:
             AppState.STOPPING,
         )
 
+    def get_running_app_url(self) -> str | None:
+        """Return the running app's ``custom_app_url``, or ``None``.
+
+        The JSON-RPC relay uses this to reach the app's ``/rpc`` endpoint. The
+        URL is read from the app's ``main.py`` (same cheap scrape the launcher
+        uses); the relay normalizes the host (``0.0.0.0`` -> ``127.0.0.1``).
+        """
+        if self.current_app is None or not self.is_app_running():
+            return None
+        return local_common_venv._get_custom_app_url_from_file(
+            self.current_app.status.info.name,
+            self.wireless_version,
+            self.desktop_app_daemon,
+        )
+
     async def start_app(
         self,
         app_name: str,

@@ -24,6 +24,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
+from reachy_mini.io.jsonrpc import looks_like_jsonrpc
 from reachy_mini.io.protocol import (
     AnyCommand,
     AppendRecordCmd,
@@ -303,6 +304,14 @@ class Backend:
         self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
             None
         )
+        # JSON-RPC control surface. When set, DataChannel frames carrying a
+        # ``"jsonrpc": "2.0"`` field are handed to this handler (the daemon's
+        # app relay) instead of the legacy ``{"type": ...}`` command path.
+        # Signature: ``handler(raw_message, reply)`` where ``reply`` sends a
+        # response dict back to the originating peer. Wired by ``Daemon.start``.
+        self._jsonrpc_handler: Optional[
+            Callable[[str, Callable[[dict[str, Any]], None]], None]
+        ] = None
         # WS broadcast callback. Set by WSServer.start() so the
         # backend can fan unsolicited events out to every WS client
         # using the same drop-oldest queues the state publishers use.
@@ -2173,9 +2182,26 @@ class Backend:
             media_server.set_peer_disconnect_handler(self._on_peer_disconnect)
         self._send_message_to_webrtc = media_server.send_data_message
 
+    def set_jsonrpc_handler(
+        self, handler: Callable[[str, Callable[[dict[str, Any]], None]], None]
+    ) -> None:
+        """Wire the JSON-RPC control handler (the daemon app relay)."""
+        self._jsonrpc_handler = handler
+
     def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
         def send(resp: dict[str, Any]) -> None:
             self._send_webrtc_response(peer_id, resp)
+
+        # JSON-RPC frames go to the app relay; legacy {"type": ...} commands
+        # fall through to command_adapter. Both share the DataChannel.
+        if self._jsonrpc_handler is not None:
+            try:
+                obj = json.loads(message)
+            except (json.JSONDecodeError, ValueError):
+                obj = None
+            if looks_like_jsonrpc(obj):
+                self._jsonrpc_handler(message, send)
+                return
 
         try:
             cmd = command_adapter.validate_json(message)
