@@ -432,13 +432,16 @@ def build_default_provisioner(
         import cv2
 
         # Decoder preference, measured on real scan frames of a phone
-        # screen (examples: 2026-07-06 live session, 108 frames):
-        #   WeChatQRCode + CNN models  44/108 decoded, ~12 ms/frame
+        # screen (2026-07-06 live session, 108 frames) plus a CM4 timing
+        # pass (2026-07-07, opencv-contrib 4.13, 1280x720):
+        #   WeChatQRCode + CNN models  44/108 decoded; ~70 ms/frame on the
+        #                              CM4 (model load ~70 ms once, +~66 MB RSS)
         #   WeChatQRCode, no models    42/108
-        #   cv2.QRCodeDetector          0/108 (!) at ~270 ms/frame on Pi
+        #   cv2.QRCodeDetector          0/108 (!) at ~270 ms/frame on the CM4
         # The CNN models (~1 MB, Apache-2.0, WeChatCV/opencv_3rdparty)
-        # ship in assets/wechat_qrcode/. WeChatQRCode is contrib-only, so
-        # fall back gracefully when this cv2 build lacks it.
+        # ship in assets/wechat_qrcode/. WeChatQRCode is a contrib module
+        # (needs opencv-contrib-python, NOT plain opencv-python), so fall
+        # back gracefully when this cv2 build lacks it.
         detector = None
         try:
             from importlib import resources
