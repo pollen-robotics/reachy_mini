@@ -562,11 +562,10 @@ class UploadAudioStartCmd(BaseModel):
     matching move is held until either a matching move arrives or
     the TTL expires.
 
-    ``encoding`` is currently always ``"wav-base64"``: raw PCM WAV
-    bytes (any container the GStreamer playbin can decode) sliced
-    into chunks and base64-encoded.  Defined as an enum so a future
-    encoding (raw binary frames, opus, ...) can be added without
-    breaking older clients.
+    ``encoding`` is ``"<container>-base64"``: transport is always
+    base64, the prefix just sets the written file's extension (playbin
+    sniffs content, so playback works regardless).  Defaults to
+    ``"wav-base64"`` for older clients.
     """
 
     type: Literal["upload_audio_start"] = "upload_audio_start"
@@ -577,7 +576,16 @@ class UploadAudioStartCmd(BaseModel):
     # exposing the CM4 to multi-GB allocations on a misbehaving
     # client.
     total_chunks: int = Field(..., ge=1, le=16384)
-    encoding: Literal["wav-base64"] = "wav-base64"
+    encoding: Literal[
+        "wav-base64",
+        "mp3-base64",
+        "ogg-base64",
+        "oga-base64",
+        "opus-base64",
+        "flac-base64",
+        "m4a-base64",
+        "aac-base64",
+    ] = "wav-base64"
     description: str = ""
 
 

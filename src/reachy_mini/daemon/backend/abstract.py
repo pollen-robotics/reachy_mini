@@ -349,6 +349,11 @@ class Backend:
         # declines, or ``None`` once the update job has been accepted.
         self._start_update_callback: Optional[Callable[[bool], Optional[str]]] = None
 
+        # Synchronous callback fired once every time wake_up() completes. Wired
+        # in by `Daemon` to auto-start a configured startup app after the robot
+        # wakes (however the wake was triggered: on-start, button, or REST).
+        self._on_wake_up_callback: Optional[Callable[[], None]] = None
+
     # Life cycle methods
     def wrapped_run(self) -> None:
         """Run the backend in a try-except block to store errors."""
@@ -987,6 +992,9 @@ class Backend:
         # Go back to the initial position
         await self.goto_target(self.INIT_HEAD_POSE, duration=0.2)
 
+        if self._on_wake_up_callback is not None:
+            self._on_wake_up_callback()
+
     async def goto_sleep(self) -> None:
         """Put the robot to sleep by moving the head and antennas to a predefined sleep position.
 
@@ -1036,6 +1044,9 @@ class Backend:
 
         self._last_head_pose = self.SLEEP_HEAD_POSE
         await asyncio.sleep(sleep_time)
+
+        # Rest limp at the sleep pose, like a fresh boot.
+        self.set_motor_control_mode(MotorControlMode.Disabled)
 
     # Motor control modes
     @abstractmethod
@@ -1700,7 +1711,9 @@ class Backend:
 
             raw = base64.b64decode(payload, validate=False)
             os.makedirs(self._audio_temp_dir, exist_ok=True)
-            path = os.path.join(self._audio_temp_dir, f"{cmd.upload_id}.wav")
+            # encoding "<container>-base64" → file extension; wav for legacy clients.
+            ext = str(meta.get("encoding", "wav-base64")).split("-")[0] or "wav"
+            path = os.path.join(self._audio_temp_dir, f"{cmd.upload_id}.{ext}")
             with open(path, "wb") as f:
                 f.write(raw)
         except Exception as e:
@@ -2202,6 +2215,16 @@ class Backend:
         running), or ``None`` once the job has been accepted.
         """
         self._start_update_callback = callback
+
+    def set_on_wake_up_callback(self, callback: Callable[[], None]) -> None:
+        """Wire a callback fired once each time ``wake_up()`` completes.
+
+        ``Daemon`` injects this to auto-start a configured startup app after
+        the robot wakes, regardless of how the wake was triggered. The callback
+        runs inside the event loop, so it must return promptly (it schedules
+        any async work as a task).
+        """
+        self._on_wake_up_callback = callback
 
     def setup_media_server(self, media_server: Any) -> None:
         """Connect the backend to the media server.

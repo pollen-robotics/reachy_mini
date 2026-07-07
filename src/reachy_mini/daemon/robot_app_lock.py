@@ -112,6 +112,30 @@ class RobotAppLock:
     # Local acquire / release
     # ------------------------------------------------------------------
 
+    def try_acquire_local(self, app_name: str) -> bool:
+        """Acquire the lock for a local Python app only if the slot is free.
+
+        Returns:
+            True if the lock was acquired. False if another local app or a
+            remote session already holds it. Unlike
+            :meth:`acquire_local_evicting_remote`, this never evicts a remote
+            session.
+
+        """
+        with self._mutex:
+            if self._state != RobotAppLockState.FREE:
+                logger.info(
+                    "RobotAppLock: local acquire refused (state=%s holder=%r requester=%r)",
+                    self._state.value,
+                    self._holder_name,
+                    app_name,
+                )
+                return False
+            self._state = RobotAppLockState.LOCAL_APP
+            self._holder_name = app_name
+            logger.info("RobotAppLock: acquired by local app %r", app_name)
+            return True
+
     async def acquire_local_evicting_remote(self, app_name: str) -> None:
         """Acquire the lock for a local Python app, evicting any remote session.
 

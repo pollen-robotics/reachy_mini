@@ -24,6 +24,7 @@ import {
     bytesToBase64,
     gzipBase64,
     clampVolume,
+    audioUploadEncoding,
 } from './upload-helpers.js';
 import type {
     ApplyAudioConfigOptions,
@@ -1565,7 +1566,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 type: 'upload_audio_start',
                 upload_id: uploadId,
                 total_chunks: audioTotal,
-                encoding: 'wav-base64',
+                encoding: audioUploadEncoding(audioBlob),
                 description,
             });
             for (let i = 0; i < audioTotal; i++) {
@@ -1664,7 +1665,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             type: 'upload_audio_start',
             upload_id: uploadId,
             total_chunks: total,
-            encoding: 'wav-base64',
+            encoding: audioUploadEncoding(audioBlob),
             description,
         });
         for (let i = 0; i < total; i++) {

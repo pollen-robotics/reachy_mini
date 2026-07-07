@@ -57,7 +57,10 @@ class GotoMove(Move):
         interp_time = time_trajectory(t / self.duration, method=self.method)
 
         interp_head_pose = linear_pose_interpolation(
-            self.start_head_pose, self.target_head_pose, interp_time
+            self.start_head_pose,
+            self.target_head_pose,
+            interp_time,
+            yaw_as_scalar=True,
         )
         interp_antennas_joint = (
             self.start_antennas

@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import threading
 from enum import Enum
 from typing import Any, Callable, Optional
@@ -49,6 +50,8 @@ LOCAL_GSTREAMER_SIGNALING = "ws://127.0.0.1:8443"
 
 # Reconnection settings
 RECONNECT_INTERVAL = 5.0  # seconds
+MAX_RECONNECT_INTERVAL = 60.0  # seconds - cap for the reconnect backoff
+RECONNECT_BACKOFF_JITTER = 0.1  # fractional jitter (+0-10%) per backoff
 TOKEN_CHECK_INTERVAL = 30.0  # seconds - how often to check for token when not connected
 LOCAL_WS_CONNECT_TIMEOUT = 5.0  # seconds - timeout for local websocket connection
 LOCAL_WS_WELCOME_TIMEOUT = (
@@ -623,6 +626,22 @@ class CentralSignalingRelay:
         finally:
             self._closing = False
 
+    def _reconnect_delay(self) -> float:
+        """Return the next reconnect wait using capped exponential backoff.
+
+        The delay grows as ``RECONNECT_INTERVAL * 2 ** (attempts - 1)`` per
+        consecutive failed attempt, capped at ``MAX_RECONNECT_INTERVAL``, with
+        a small additive jitter to de-synchronize reconnects across a fleet.
+        ``_connection_attempts`` resets to 0 on a successful connection, so the
+        backoff restarts from ``RECONNECT_INTERVAL`` after recovery. The
+        ``_token_updated`` event still short-circuits the wait, so a login or
+        token refresh reconnects immediately regardless of the backoff.
+        """
+        exponent = min(max(self._connection_attempts - 1, 0), 20)
+        base: float = min(RECONNECT_INTERVAL * (2**exponent), MAX_RECONNECT_INTERVAL)
+        jitter: float = random.uniform(0.0, base * RECONNECT_BACKOFF_JITTER)
+        return base + jitter
+
     async def _run_loop(self) -> None:
         """Maintain connections and relay messages."""
         logger.info("[Central Relay] _run_loop started")
@@ -697,7 +716,8 @@ class CentralSignalingRelay:
                     self._token_updated.clear()
                     try:
                         await asyncio.wait_for(
-                            self._token_updated.wait(), timeout=RECONNECT_INTERVAL
+                            self._token_updated.wait(),
+                            timeout=self._reconnect_delay(),
                         )
                     except asyncio.TimeoutError:
                         pass

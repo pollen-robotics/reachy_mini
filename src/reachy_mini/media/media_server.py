@@ -39,6 +39,7 @@ from reachy_mini.daemon.utils import (
     SimulationMode,
     is_local_camera_available,
 )
+from reachy_mini.media.audio_base import AEC_CHANNELS, AEC_PROBE_NAME, AEC_RATE
 from reachy_mini.media.audio_control_utils import init_respeaker_usb
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.camera_constants import (
@@ -236,6 +237,10 @@ class GstMediaServer:
         self._playbin: Optional[Gst.Element] = None
         self._head_wobbler: Optional[HeadWobbler] = None
         self._pipeline_playback: Optional[Gst.Pipeline] = None
+        # Software AEC: set in _configure_audio; the probe is created there and
+        # reused across per-peer playback pipelines (see _on_consumer_pad_added).
+        self._aec_enabled = False
+        self._webrtcechoprobe: Optional[Gst.Element] = None
 
         self._build_pipeline()
 
@@ -487,12 +492,26 @@ class GstMediaServer:
 
         appsink_wobbler = self._make_wobbler_appsink()
 
+        # Software AEC far-end reference: tap the speaker branch (what is
+        # physically played) with the shared echo probe. opusdec emits S16LE@48k,
+        # which the probe accepts, so no convert/resample is needed. The probe
+        # is reused across peers, so detach it from any previous pipeline first.
+        # Caveat: there is one probe (webrtcdsp binds a single far-end), so with
+        # several peers streaming at once AEC only references the most recently
+        # connected one. Fine for the usual single-conversation case.
+        webrtcechoprobe = self._webrtcechoprobe if self._aec_enabled else None
+        if webrtcechoprobe is not None:
+            old_parent = webrtcechoprobe.get_parent()
+            if old_parent is not None:
+                old_parent.remove(webrtcechoprobe)
+
         for elem in [
             appsrc,
             rtpopusdepay,
             opusdec,
             tee,
             queue_speaker,
+            *([webrtcechoprobe] if webrtcechoprobe is not None else []),
             ac_speaker,
             ar_speaker,
             audiosink,
@@ -506,7 +525,11 @@ class GstMediaServer:
         rtpopusdepay.link(opusdec)
         opusdec.link(tee)
         tee.link(queue_speaker)
-        queue_speaker.link(ac_speaker)
+        if webrtcechoprobe is not None:
+            queue_speaker.link(webrtcechoprobe)
+            webrtcechoprobe.link(ac_speaker)
+        else:
+            queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
         ar_speaker.link(audiosink)
         tee.link(queue_wobbler)
@@ -570,6 +593,12 @@ class GstMediaServer:
         playback_pipe = info.get("playback_pipeline")
         if playback_pipe is not None:
             playback_pipe.set_state(Gst.State.NULL)
+            # Rescue the shared echo probe so it survives for the next peer.
+            if (
+                self._webrtcechoprobe is not None
+                and self._webrtcechoprobe.get_parent() is playback_pipe
+            ):
+                playback_pipe.remove(self._webrtcechoprobe)
         self._logger.info(f"Cleaned up incoming audio for peer {peer_id}")
 
     def clear_incoming_audio(self) -> None:
@@ -1007,32 +1036,75 @@ class GstMediaServer:
             )
             return
 
-        # Prevent PulseAudio/PipeWire audio sources from becoming the
-        # pipeline clock provider.  Their clock causes unixfdsink to stall
-        # because it cannot synchronise video buffers against the audio
-        # clock.  ALSA sources (wireless CM4) don't have this issue and
-        # must keep their default clock behaviour to match the original
-        # daemon.  autoaudiosrc is a GstBin and does not expose the
-        # property at all.
-        factory = audiosrc.get_factory()
-        factory_name = factory.get_name() if factory else ""
-        if (
-            factory_name != "alsasrc"
-            and factory_name != "osxaudiosrc"
-            and audiosrc.find_property("provide-clock") is not None
-        ):
-            audiosrc.set_property("provide-clock", False)
-            self._logger.debug(f"Set provide-clock=False on {factory_name}")
-        else:
-            self._logger.debug(
-                f"{factory_name} — keeping default provide-clock behaviour."
-            )
-
         queue = Gst.ElementFactory.make("queue", "queue_audiosrc")
         pipeline.add(audiosrc)
         pipeline.add(queue)
-        audiosrc.link(queue)
+
+        # Software AEC on the autoaudiosrc fallback (no Reachy Mini card → no
+        # XMOS hardware AEC). webrtcdsp subtracts the far-end reference captured
+        # by the paired webrtcechoprobe from the mic signal. The probe must
+        # exist before webrtcdsp starts, so create it here; both elements are
+        # needed, so disable AEC if either is unavailable.
+        self._aec_enabled = False
+        webrtcdsp = None
+        factory = audiosrc.get_factory()
+        factory_name = factory.get_name() if factory else ""
+        if factory_name == "autoaudiosrc":
+            if self._webrtcechoprobe is None:
+                self._webrtcechoprobe = Gst.ElementFactory.make("webrtcechoprobe")
+                if self._webrtcechoprobe is not None:
+                    self._webrtcechoprobe.set_property("name", AEC_PROBE_NAME)
+            if self._webrtcechoprobe is not None:
+                webrtcdsp = Gst.ElementFactory.make("webrtcdsp")
+            if webrtcdsp is None:
+                self._logger.warning(
+                    "webrtcdsp/webrtcechoprobe unavailable; "
+                    "software echo cancellation disabled."
+                )
+
+        if webrtcdsp is not None:
+            self._aec_enabled = True
+            webrtcdsp.set_property("probe", AEC_PROBE_NAME)
+            # webrtcdsp requires S16LE at 8/16/32/48 kHz.
+            chain = self._make_aec_caps_chain()
+            for el in (*chain, webrtcdsp):
+                pipeline.add(el)
+            audiosrc.link(chain[0])
+            for upstream, downstream in zip(chain, chain[1:]):
+                upstream.link(downstream)
+            chain[-1].link(webrtcdsp)
+            webrtcdsp.link(queue)
+            self._logger.info("No hardware AEC; enabled software echo cancellation.")
+        else:
+            audiosrc.link(queue)
+
+        # Link into webrtcsink last, once the full upstream chain exists, so its
+        # request pad / stream discovery sees a fully-linked input.
         queue.link(webrtcsink)
+
+    def _make_aec_caps_chain(self) -> list[Gst.Element]:
+        """Build the convert/resample/caps chain feeding an AEC element.
+
+        ``webrtcdsp`` and ``webrtcechoprobe`` only accept S16LE at
+        8/16/32/48 kHz, so each is fronted by
+        ``audioconvert → audioresample → capsfilter(S16LE @ AEC_RATE)``.
+
+        Returns:
+            The three elements in link order; the caller adds them to its
+            pipeline and links the last one into the AEC element.
+
+        """
+        audioconvert = Gst.ElementFactory.make("audioconvert")
+        audioresample = Gst.ElementFactory.make("audioresample")
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        capsfilter.set_property(
+            "caps",
+            Gst.Caps.from_string(
+                f"audio/x-raw,format=S16LE,rate={AEC_RATE},"
+                f"channels={AEC_CHANNELS},layout=interleaved"
+            ),
+        )
+        return [audioconvert, audioresample, capsfilter]
 
     def _build_audio_source(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio source element.
@@ -1650,7 +1722,7 @@ class GstMediaServer:
     def _on_data_channel_message(
         self, channel: Gst.Element, message: str, peer_id: str
     ) -> None:
-        self._logger.info(f"Data channel message from peer {peer_id}: {message}")
+        self._logger.debug(f"Data channel message from peer {peer_id}: {message}")
         if self._on_data_message:
             self._on_data_message(peer_id, message)
 
