@@ -6,12 +6,13 @@ Every finished code beeps 🔊.
 
 | Icon | Means |
 |------|-------|
+| ⬅️ / ➡️ | tilt that antenna the way the arrow points |
+| • | keep that antenna still |
 | 🥁 | knock the two antennas together |
-| ⬅️➡️ | tilt **OUT** (apart) |
-| ➡️⬅️ | tilt **IN** (together) |
-| **L / R** | left / right antenna |
 
-Read each code as **beats**, left to right: do one beat, then the next. Icons **in the same beat happen together**. Keep it snappy: a pause over 1 second resets.
+Antennas apart = **external**, antennas toward each other = **internal**.
+
+Read each code as **beats** ① ② ③, left to right: do one beat, then the next. In every beat, move the **L** line and the **R** line **together**. Keep it snappy: a pause over 1 second resets.
 
 ## When it listens
 
@@ -23,8 +24,8 @@ Read each code as **beats**, left to right: do one beat, then the next. Icons **
 | | Code | ① | ② | ③ | ④ | ⑤ |
 |---|---|---|---|---|---|---|
 | 🔔 | Wake | 🥁 | 🥁 | 🥁 | | |
-| 📶 | Wi-Fi | L+R ⬅️➡️ | L+R ➡️⬅️ | | | |
-| 😴 | Go limp | L ⬅️➡️ | L ⬅️➡️ | L ⬅️➡️ | R ⬅️➡️ | R ⬅️➡️ |
-| 🎉 | Emotion | L ⬅️➡️ | R ⬅️➡️ | L ⬅️➡️ | R ⬅️➡️ | |
+| 📶 | Wi-Fi | L ⬅️<br>R ➡️ | L ➡️<br>R ⬅️ | | | |
+| 😴 | Go limp | L ⬅️<br>R • | L ⬅️<br>R • | L ⬅️<br>R • | L •<br>R ➡️ | L •<br>R ➡️ |
+| 🎉 | Emotion | L ⬅️<br>R • | L •<br>R ➡️ | L ⬅️<br>R • | L •<br>R ➡️ | |
 
 *(Go limp L/R still to confirm on the robot.)*
