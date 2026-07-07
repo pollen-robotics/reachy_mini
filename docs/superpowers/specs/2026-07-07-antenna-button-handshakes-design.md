@@ -18,26 +18,31 @@ provisioning. The redesign splits interaction into two subsystems:
 
 ## 2. The press primitive (the correction that motivated this spec)
 
-The antennas' resting position moved. `INIT_ANTENNAS_JOINT_POSITIONS` is now
-`[-0.1745, +0.1745]` rad (`reachy_mini.py:60`, `backend/abstract.py:943`):
-each antenna leans ~10 deg outward at rest. The `fire_nation_attacked`
-button definition (`|angle| > 0.18 rad`) measures from ZERO and only works
-there because that game pins the antennas at `[0, 0]`. At the awake base
-pose, `|angle|` at rest is already `0.1745`, essentially at the threshold, so
-the from-zero definition would read the resting antennas as pressed.
+The `fire_nation_attacked` button definition (`|angle| > 0.18 rad`) measures
+from ZERO and only works because that game pins the antennas at `[0, 0]`. The
+antennas now rest at `INIT_ANTENNAS_JOINT_POSITIONS = [-0.1745, +0.1745]` rad
+(~10 deg out), so from-zero would read the resting antennas as pressed. A
+first fix measured deviation from that fixed base, but that only works at the
+base pose.
 
-**A press is therefore defined RELATIVE TO THE BASE POSITION**, not zero:
+**A press is defined as a deviation of the PRESENT angle from the antenna's
+live GOAL (commanded target)**, not from zero and not from a fixed base:
 
-- `base = INIT_ANTENNAS_JOINT_POSITIONS` (imported, never hardcoded, so it
-  tracks any future base change).
-- Per antenna `i`, deviation `d_i = wrap_to_pi(angle_i) - base_i`. Wrap first
-  (encoders are multi-turn; collision law v3 established this).
-- Base-lean direction is the external direction: `ext_i = sign(base_i)`, i.e.
-  index 0 external is negative, index 1 external is positive.
-- **External press**: `d_i * ext_i > PRESS_THRESHOLD` (0.18 rad).
+- Per antenna `i`, deviation `d_i = wrap_to_pi(present_i - goal_i)`. Wrap
+  first (encoders are multi-turn; collision law v3 established this).
+- External direction per antenna: `ext_i = sign(base_i)` (index 0 external is
+  negative, index 1 positive). `base` NO LONGER references the deviation; it
+  only fixes each antenna's external side.
+- **External press**: `d_i * ext_i > PRESS_THRESHOLD` (0.18 rad, ~10 deg).
 - **Internal press**: `d_i * ext_i < -PRESS_THRESHOLD`.
-- At rest `d_i = 0`, so no false press. Threshold unchanged (0.18 rad on the
-  deviation); `max useful ~0.65 rad` absolute still holds.
+- No goal known (`goal_i is None`) -> the button subsystem is inert.
+
+Why goal-relative is more robust: it works in ANY pose, and it is immune to
+the robot's OWN commanded motion. When the robot moves the antennas on
+purpose the present angle tracks the goal, so `d_i` stays ~0 and nothing
+triggers; only an EXTERNAL push (present diverges from the commanded goal)
+registers. The live goal is `RobotBackend.target_antenna_joint_positions`,
+passed into the detector each tick.
 
 The left/right index mapping (fire_nation uses `[0]=right, [1]=left`; the
 collision code uses `[0]=left`) does NOT affect press DETECTION: external is
@@ -98,9 +103,10 @@ the daemon. New pure modules, each one clear purpose, no I/O, sub-microsecond
 per tick (50 Hz, CM4):
 
 - `antenna_buttons.py` -- `AntennaButtonConfig` + `AntennaButtonDetector`.
-  `update(t, ant0, ant1) -> list[Press]` where `Press` names antenna index +
-  direction (external/internal). Holds the per-antenna release latch and a
-  refractory. Base + thresholds in the config. Imports the base constant.
+  `update(t, ant0, ant1, goal0, goal1) -> list[Press]` where `Press` names
+  antenna index + direction (external/internal); the press is a deviation of
+  present from goal. Holds the per-antenna release latch. `base` (config)
+  only fixes each external direction; no goal -> no presses.
 - `button_codes.py` -- `ButtonCodeConfig` + `ButtonCodeMachine`.
   `update(t, presses, torque_on) -> CodeEvent | None`. Encodes the three
   sequences, the <1 s gap reset, and the simultaneity window for the WiFi
