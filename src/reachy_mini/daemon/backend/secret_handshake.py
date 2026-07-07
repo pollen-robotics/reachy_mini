@@ -1,59 +1,43 @@
-"""Secret handshake: antenna-collision gesture detector for the control loop.
+"""Secret handshake: antenna gesture detectors for the control loop.
 
-Right after a Wireless Reachy Mini is built it has no WiFi and cannot run
-any app. This detector gives it a first sign of life that works fully
-offline: with all motors torque OFF and the head resting in the sleep pose,
-knock the antennas together 3 times (confirmation beep), then 3 more times
-within a few seconds (success sound). The caller decides what each returned
-Event does; this module never touches I/O.
+Two subsystems share one facade, gated by torque state (design spec
+docs/superpowers/specs/2026-07-07-antenna-button-handshakes-design.md):
 
-THE GESTURE AND ITS SAFETY
+TORQUE OFF -> the WAKE BUTTON
+    A freshly built or sleeping Wireless robot is torque off with the head in
+    the sleep pose. Knock the antennas together 3 times in quick succession
+    (single round) and the caller wakes the robot (`wake_up`: torque on, goto
+    base pose, flute "toudoum"). Waking is safe, reversible and obvious, so
+    one round of 3 is enough. Armed only while `motor_control_mode ==
+    Disabled`, behind the sleep-pose gate, so it is inert during normal use.
 
-Armed ONLY while `motor_control_mode == Disabled` (all motors torque off),
-so it is inert during any normal robot use: apps, moves, teleoperation all
-run with torque on. A freshly booted Wireless robot is torque off, so it is
-armed out of the box. The two-round rhythm plus the sleep-pose gate make an
-accidental trigger while manipulating a floppy robot very unlikely.
+TORQUE ON -> the ANTENNA BUTTONS
+    While awake (torque on, antennas at the base pose) the four antenna
+    directions are soft buttons (antenna_buttons.py) and short coded
+    sequences (button_codes.py) trigger actions: WiFi provisioning, torque
+    off, an emotion. Armed only while torque is on (the mirror of the
+    collision gate). Presses are BASE-RELATIVE: the antennas rest ~10 deg
+    outward, so a press is a deviation from that base, not from zero.
+
+This module never touches I/O: `update()` returns an Event and the caller
+(RobotBackend._update) decides what each event does.
 
 THE COLLISION LAW (geometric, measured by hand on 3 robots; degrees)
 
 The antennas physically collide "at the center" when BOTH:
 
-    1) l + r  in the working band [-9, 0]   (measured [-7, -3] + margin,
-                                             top relaxed to 0 = the
-                                             theoretical symmetric touch)
+    1) l + r  in the working band [-9, 0]
     2) l      in [20, 150]
 
-where l = antenna index 0 (left), r = index 1 (right), as returned by
-`get_present_antenna_joint_positions()`. A collision EVENT = entering that
-region; a firm press flexes the antennas through the band and back, so a
-0.25 s refractory merges the double crossing into one count. Validated on
-the RemiFabre/secret-handshake recordings: exactly 3 collisions found on
-each recorded gesture, zero on 30 s of adversarial slide data, rest and
-single-antenna play inert (full evidence: examples/secret_handshake_lab/).
+where l = antenna index 0 (left), r = index 1 (right). A collision EVENT =
+entering that region; a firm press flexes through the band and back, so a
+0.25 s refractory merges the double crossing into one count.
 
-=============================================================================
-TUNABLES AT A GLANCE (single source of truth: the two dataclasses below)
-
-  collision region      l + r in [-9, 0] deg  AND  l in [20, 150] deg
-  collision debounce    0.25 s refractory (a >0.25 s press counts twice:
-                        known accepted quirk, see CollisionConfig)
-  collisions per round  3, in quick succession
-  sequence reset        1.0 s without a collision -> count goes back to 0
-  arming settle         head in sleep pose for 0.5 s -> armed (idle only:
-                        boot and torque-off transitions)
-  round 2 window        3.0 s after the prime beep -> aborted
-  after success/abort   straight back to armed (immediate retry works)
-=============================================================================
-
-COST: sub-microsecond per call (see examples/secret_handshake_lab/bench.py:
-115 ns on the torque-ON path that runs during all normal use, <1 us worst
-case under continuous tapping, on an M-series Mac). No allocation, no I/O.
-
-Known limitation: `motor_control_mode` does not track per-motor torque set
-through `set_motor_torque_ids`, so partially re-enabled motors after a full
-disable do not disarm the detector. Not reachable in the first-boot
-scenario this ships for.
+COST: sub-microsecond per call, no allocation beyond the small press list, no
+I/O. Known limitation: `motor_control_mode` does not track per-motor torque
+set through `set_motor_torque_ids`, so partially re-enabled motors after a
+full disable do not disarm the collision detector. Not reachable in the
+first-boot scenario this ships for.
 """
 
 from __future__ import annotations
@@ -61,6 +45,9 @@ from __future__ import annotations
 import enum
 import math
 from dataclasses import dataclass, field
+
+from .antenna_buttons import AntennaButtonConfig, AntennaButtonDetector
+from .button_codes import ButtonCodeConfig, ButtonCodeMachine, CodeEvent
 
 _RAD2DEG = 180.0 / math.pi
 
@@ -75,6 +62,7 @@ def _wrap_deg(deg: float) -> float:
     """
     return (deg + 180.0) % 360.0 - 180.0
 
+
 # Copy of ReachyMiniBackend.SLEEP_HEAD_POSE (abstract.py), kept local so this
 # module stays import-free and trivially testable.
 _SLEEP_HEAD_POSE = (
@@ -85,8 +73,7 @@ _SLEEP_HEAD_POSE = (
 )
 
 # Sleep-pose gate tolerances, generous on purpose: it is a sanity gate, the
-# real security is torque-off plus the two-round rhythm. Derived from the
-# recorded gestures (head settled within these margins in all recordings).
+# real security is torque-off plus the collision rhythm.
 _TOL_X_M = 0.015
 _TOL_Y_M = 0.012
 _TOL_Z_M = 0.012
@@ -130,13 +117,9 @@ class CollisionConfig:
     margin_deg: float = 4.0  # widens the sum band by margin/2 on each side
     refractory_s: float = 0.25  # one count per knock (press = double crossing)
     # KNOWN QUIRK, accepted: a press held longer than the refractory counts
-    # twice (contact + release re-crossing), so a prime can happen in 2 firm
-    # knocks. A "release latch" (require a not-pressed dwell between counts)
-    # was tried and REVERTED: live fast tapping has apart windows of only
-    # 2-3 ticks, under any dwell threshold that still blocks the release
-    # crossing, so fast gestures dropped knocks (far worse than an
-    # occasional extra count). Velocity-based discrimination is rejected
-    # by design; do not reintroduce either without new measured data.
+    # twice (contact + release re-crossing). A "release latch" was tried and
+    # REVERTED: fast tapping has apart windows of only 2-3 ticks, so it
+    # dropped knocks. Do not reintroduce without new measured data.
 
 
 class CollisionDetector:
@@ -159,8 +142,6 @@ class CollisionDetector:
     def update(self, t: float, ant0: float, ant1: float) -> bool:
         """Return True exactly on the tick a new collision is seen."""
         l_deg = _wrap_deg(ant0 * _RAD2DEG)
-        # Wrap the sum too: l and r wrapped independently can land one full
-        # turn apart (e.g. l=+170, r=-190 -> wrapped r=+170, sum=+340).
         sum_deg = _wrap_deg(l_deg + _wrap_deg(ant1 * _RAD2DEG))
         inside = (
             self.cfg.l_min_deg <= l_deg <= self.cfg.l_max_deg
@@ -180,27 +161,28 @@ class CollisionDetector:
 class Event(enum.Enum):
     """What just happened; the caller decides what each event does."""
 
-    ARMED = "armed"  # gate passed, listening (no sound recommended)
-    PRIMED = "primed"  # first 3 collisions -> play the confirmation sound
-    SUCCESS = "success"  # 3 more collisions -> play the success sound
-    ABORTED = "aborted"  # round 2 did not happen in time
+    ARMED = "armed"  # collision path armed (no sound recommended)
+    WAKE = "wake"  # 3 collisions (torque off) -> wake the robot
+    WIFI = "wifi"  # button code (torque on) -> WiFi provisioning
+    TORQUE_OFF = "torque_off"  # button code -> disable all torque
+    EMOTION = "emotion"  # button code -> play a fixed emotion move
 
 
 @dataclass(frozen=True)
 class HandshakeConfig:
-    """All handshake tunables (see the banner in the module docstring)."""
+    """All handshake tunables (see the module docstring)."""
 
     collision: CollisionConfig = field(default_factory=CollisionConfig)
-    taps_required: int = 3
-    max_gap_s: float = 1.0  # 1 s without a collision -> sequence resets
+    button: AntennaButtonConfig = field(default_factory=AntennaButtonConfig)
+    codes: ButtonCodeConfig = field(default_factory=ButtonCodeConfig)
+    taps_required: int = 3  # collisions to wake, single round
+    max_gap_s: float = 1.0  # 1 s without a collision -> count resets
     min_tap_spacing_s: float = 0.12  # bounce guard
     arm_settle_s: float = 0.5  # sleep pose held this long -> armed
-    primed_refractory_s: float = 0.25  # ignore contact right after the beep
-    primed_timeout_s: float = 3.0  # time allowed for round 2
 
 
-class _StateMachine:
-    """idle -> armed -> primed -> (success | aborted). Pure, event-driven."""
+class _CollisionMachine:
+    """idle -> armed -> WAKE (single round of 3 collisions). Pure."""
 
     def __init__(self, config: HandshakeConfig) -> None:
         self.cfg = config
@@ -208,7 +190,6 @@ class _StateMachine:
         self.state: str = "idle"
         self._pose_ok_since: float | None = None
         self._taps: list[float] = []
-        self._primed_at: float = 0.0
 
     def reset(self) -> None:
         self.state = "idle"
@@ -216,14 +197,7 @@ class _StateMachine:
         self._pose_ok_since = None
         self._taps.clear()
 
-    def update(
-        self, t: float, ant0: float, ant1: float, torque_off: bool, pose_ok: bool
-    ) -> Event | None:
-        if not torque_off:
-            if self.state != "idle" or self._pose_ok_since is not None:
-                self.reset()
-            return None
-
+    def update(self, t: float, ant0: float, ant1: float, pose_ok: bool) -> Event | None:
         if self._taps and t - self._taps[-1] > self.cfg.max_gap_s:
             self._taps.clear()
 
@@ -241,25 +215,11 @@ class _StateMachine:
                 self._pose_ok_since = None
             return None
 
-        if self.state == "armed":
-            if onset and self._count_tap(t):
-                if len(self._taps) >= self.cfg.taps_required:
-                    self.state = "primed"
-                    self._primed_at = t
-                    self._taps.clear()
-                    return Event.PRIMED
-            return None
-
-        # state == "primed"
-        if t - self._primed_at > self.cfg.primed_timeout_s:
-            self._rearm()
-            return Event.ABORTED
-        if t - self._primed_at < self.cfg.primed_refractory_s:
-            return None
+        # state == "armed"
         if onset and self._count_tap(t):
             if len(self._taps) >= self.cfg.taps_required:
                 self._rearm()
-                return Event.SUCCESS
+                return Event.WAKE
         return None
 
     def _count_tap(self, t: float) -> bool:
@@ -269,18 +229,25 @@ class _StateMachine:
         return True
 
     def _rearm(self) -> None:
-        """Return straight to armed after a success or an abort.
+        """Return straight to armed after a wake (no idle round-trip).
 
-        Round-tripping through idle forced the pose gate + settle (plus a
-        cooldown) on every retry; live, the user's hands jostle the floppy
-        head, the gate flickers, and an immediate retry silently fails.
-        Re-entering armed directly is safe: at worst the release tail of
-        the final knock counts as one stray tap, which expires after
-        max_gap_s without ever reaching the 3 needed to prime.
+        Round-tripping through idle forced the pose gate + settle on every
+        retry; live, the user's hands jostle the floppy head, the gate
+        flickers, and an immediate retry silently fails. Re-entering armed
+        directly is safe: at worst the release tail of the final knock counts
+        as one stray tap, which expires after max_gap_s.
         """
         self.state = "armed"
         self._pose_ok_since = None
         self._taps.clear()
+
+
+# Map the pure button-code events to the facade's Event enum.
+_CODE_EVENTS = {
+    CodeEvent.WIFI: Event.WIFI,
+    CodeEvent.TORQUE_OFF: Event.TORQUE_OFF,
+    CodeEvent.EMOTION: Event.EMOTION,
+}
 
 
 class SecretHandshake:
@@ -293,23 +260,30 @@ class SecretHandshake:
     head_pose  present 4x4 head pose (numpy array or nested sequence)
     torque_off True when motor_control_mode is Disabled (ALL motors off)
 
-    Returns an Event to react to (play a sound), or None on most ticks.
+    Torque OFF runs the collision -> WAKE path; torque ON runs the
+    antenna-button code path. Returns an Event to react to, or None.
     """
 
     def __init__(self, config: HandshakeConfig | None = None) -> None:
-        """Build the detector; pass a HandshakeConfig to tune it."""
-        self.machine = _StateMachine(config or HandshakeConfig())
+        """Build both detectors; pass a HandshakeConfig to tune them."""
+        cfg = config or HandshakeConfig()
+        self._collision = _CollisionMachine(cfg)
+        self._buttons = AntennaButtonDetector(cfg.button)
+        self._codes = ButtonCodeMachine(cfg.codes)
 
     def update(
         self, t: float, ant0: float, ant1: float, head_pose, torque_off: bool
     ) -> Event | None:
         """Feed one control tick; return an Event to react to, or None."""
-        # The machine only consults the pose gate while idle: skip the 4x4
-        # checks everywhere else, including the torque-ON path that runs
-        # during all normal robot use.
-        pose_ok = (
-            torque_off
-            and self.machine.state == "idle"
-            and head_in_sleep_pose(head_pose)
-        )
-        return self.machine.update(t, ant0, ant1, torque_off, pose_ok)
+        if torque_off:
+            # The button path is idle; keep it clean for the next torque-on.
+            self._codes.reset()
+            self._buttons.reset()
+            pose_ok = self._collision.state == "idle" and head_in_sleep_pose(head_pose)
+            return self._collision.update(t, ant0, ant1, pose_ok)
+
+        # Torque on: the collision path is inert; run the button codes.
+        self._collision.reset()
+        presses = self._buttons.update(t, ant0, ant1)
+        code_event = self._codes.update(t, presses, torque_on=True)
+        return _CODE_EVENTS.get(code_event) if code_event is not None else None

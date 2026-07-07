@@ -1,8 +1,15 @@
-"""Unit tests for the secret-handshake detector (daemon module).
+"""Unit tests for the secret-handshake orchestrator (daemon module).
 
-Pure and offline: synthetic 50 Hz antenna samples shaped like the real
-gesture (validated against the recordings in RemiFabre/secret-handshake,
-see examples/secret_handshake_lab/). No hardware, no daemon.
+Pure and offline: synthetic 50 Hz antenna samples. Two subsystems share the
+one facade (see docs/superpowers/specs/2026-07-07-antenna-button-handshakes-design.md):
+
+  torque OFF: 3 antenna collisions (sleep pose) -> Event.WAKE (wake the robot)
+  torque ON : antenna-button codes -> Event.WIFI / TORQUE_OFF / EMOTION
+
+The collision law itself (CollisionDetector) is unchanged and its tests are
+kept verbatim. Button-primitive and code internals are covered exhaustively
+in test_antenna_buttons.py / test_button_codes.py; here we test the facade's
+routing and the collapsed single-round wake gesture.
 """
 
 import math
@@ -29,16 +36,18 @@ SLEEP_HEAD_POSE = np.array(
 )
 WAKE_HEAD_POSE = np.eye(4)
 
+BASE = (-0.1745, 0.1745)  # INIT_ANTENNAS_JOINT_POSITIONS
+
 
 def d2r(deg: float) -> float:
     return math.radians(deg)
 
 
 # Characteristic antenna configurations, degrees (left, right):
-REST = (-12.0, 10.0)  # floppy rest: sum in band but l fails condition 2
-CONTACT = (60.0, -65.0)  # touching at center: in the collision region
-PRESS = (65.0, -30.0)  # firm press, flexed out of the band
-CROSSED = (149.0, -160.0)  # slid past each other and parked: sum ~ -11
+REST = (-12.0, 10.0)
+CONTACT = (60.0, -65.0)
+PRESS = (65.0, -30.0)
+CROSSED = (149.0, -160.0)
 
 
 def seg(sample, seconds):
@@ -46,7 +55,6 @@ def seg(sample, seconds):
 
 
 def tap(release_s=0.3):
-    """One collision: into the band, press through, release."""
     return seg(CONTACT, 0.04) + seg(PRESS, 0.06) + seg(CONTACT, 0.04) + seg(REST, release_s)
 
 
@@ -55,6 +63,29 @@ def taps(n, release_s=0.3):
     for _ in range(n):
         out += tap(release_s)
     return out
+
+
+# Button-press samples, in radians, relative to the awake base pose.
+def _hold(a0, a1, n):
+    return [(a0, a1)] * n
+
+
+def button_single(antenna, external, n_press=3, n_release=8):
+    a = list(BASE)
+    delta = 0.30
+    if antenna == 0:
+        a[0] = BASE[0] + (-delta if external else delta)
+    else:
+        a[1] = BASE[1] + (delta if external else -delta)
+    return _hold(a[0], a[1], n_press) + _hold(BASE[0], BASE[1], n_release)
+
+
+def button_sym(external, n_press=3, n_release=8):
+    if external:
+        a = (BASE[0] - 0.30, BASE[1] + 0.30)
+    else:
+        a = (BASE[0] + 0.30, BASE[1] - 0.30)
+    return _hold(a[0], a[1], n_press) + _hold(BASE[0], BASE[1], n_release)
 
 
 class Runner:
@@ -72,7 +103,7 @@ class Runner:
 
 
 # ---------------------------------------------------------------------------
-# Collision detector: the geometric law
+# Collision detector: the geometric law (unchanged)
 # ---------------------------------------------------------------------------
 
 
@@ -97,17 +128,11 @@ def test_press_through_band_counts_once():
 def test_rest_single_antenna_and_crossed_are_inert():
     assert run_detector(seg(REST, 2.0)) == 0
     assert run_detector(seg(CROSSED, 2.0)) == 0
-    # only the left antenna swings, the right stays at rest
     swing = [(d2r(l), d2r(10.0)) for l in range(-170, 171, 2)]
     assert run_detector(swing) == 0
 
 
 def test_full_turn_offsets_are_normalized():
-    """Taps must be detected even when the encoders carry whole turns."""
-    # The antenna encoders are multi-turn: handling the floppy antennas can
-    # park them whole turns away from the calibrated zero (seen live at
-    # rest: l=-340 deg, r=+334 deg, physically l=+20, r=-26). The law must
-    # apply to the wrapped angle, not the raw multi-turn reading.
     turn = 2 * math.pi
     for l_turns, r_turns in [(-1, 1), (1, -1), (2, 0), (0, -2)]:
         samples = [
@@ -115,43 +140,28 @@ def test_full_turn_offsets_are_normalized():
             for a0, a1 in seg(REST, 0.5) + taps(3)
         ]
         assert run_detector(samples) == 3, (l_turns, r_turns)
-    # and wrapping must not turn the parked-crossed state into a collision
     crossed = [(a0 - turn, a1 + turn) for a0, a1 in seg(CROSSED, 2.0)]
     assert run_detector(crossed) == 0
 
 
 def test_slow_press_double_count_is_a_known_quirk():
-    """A press held past the refractory counts twice: accepted, documented."""
-    # The release re-crossing of a long press counts as a second collision,
-    # so a prime can happen in 2 firm knocks. A release latch fixing this
-    # was tried and REVERTED: it dropped knocks during fast tapping (see
-    # CollisionConfig). This test pins the accepted behavior so a future
-    # change is a conscious decision, not an accident.
     slow_knock = seg(CONTACT, 0.04) + seg(PRESS, 0.4) + seg(CONTACT, 0.04)
     assert run_detector(seg(REST, 0.5) + slow_knock + seg(REST, 0.5)) == 2
 
 
 def test_fast_taps_all_count():
-    """Fast tapping (short apart windows) must not drop knocks."""
-    # Live regression 2026-07-06: a release latch required 80 ms not
-    # pressed between counts, but fast tapping separates for only 2-3
-    # ticks, so knocks were dropped and the gesture only worked slowly.
-    # 0.12 s apart -> 0.26 s per knock, the fastest rhythm the 0.25 s
-    # refractory is meant to accept (~4 knocks/s).
     assert run_detector(seg(REST, 0.5) + taps(3, release_s=0.12)) == 3
 
 
 # ---------------------------------------------------------------------------
-# Full handshake through the daemon-facing facade
+# Subsystem A: collision -> single-round wake (torque OFF)
 # ---------------------------------------------------------------------------
 
 
-def test_full_default_handshake():
+def test_three_collisions_wake_the_robot():
     r = Runner()
     r.feed(seg(REST, 1.0) + taps(3))
-    assert r.events == [Event.ARMED, Event.PRIMED]
-    r.feed(seg(REST, 0.5) + taps(3))
-    assert r.events == [Event.ARMED, Event.PRIMED, Event.SUCCESS]
+    assert r.events == [Event.ARMED, Event.WAKE]
 
 
 def test_does_not_arm_when_head_not_in_sleep_pose():
@@ -160,66 +170,91 @@ def test_does_not_arm_when_head_not_in_sleep_pose():
     assert r.events == []
 
 
-def test_inert_while_torque_on():
+def test_collision_path_inert_while_torque_on():
     r = Runner()
     r.feed(seg(REST, 1.0) + taps(6), torque_off=False)
-    assert r.events == []
+    assert Event.WAKE not in r.events
+    assert Event.ARMED not in r.events
 
 
-def test_torque_on_mid_gesture_resets():
+def test_torque_on_mid_gesture_resets_collisions():
     r = Runner()
     r.feed(seg(REST, 1.0) + taps(2))
     r.feed(tap(), torque_off=False)
     r.feed(seg(REST, 0.2) + tap())
-    # the sequence died with torque; one fresh tap must not prime
-    assert Event.PRIMED not in r.events
+    assert Event.WAKE not in r.events
 
 
 def test_gap_of_one_second_resets_the_count():
     r = Runner()
     r.feed(seg(REST, 1.0) + taps(2))
-    r.feed(seg(REST, 1.2))  # 1 s without a collision -> count back to 0
+    r.feed(seg(REST, 1.2))
     r.feed(tap())
-    assert Event.PRIMED not in r.events
+    assert Event.WAKE not in r.events
     r.feed(taps(2))
-    assert r.events[-1] == Event.PRIMED  # 3 quick ones prime
+    assert r.events[-1] == Event.WAKE
 
 
-def test_primed_times_out_with_abort():
+def test_immediate_retry_after_wake():
     r = Runner()
     r.feed(seg(REST, 1.0) + taps(3))
-    r.feed(seg(REST, 3.5))  # 3 s round-2 window
-    assert Event.ABORTED in r.events
-    assert Event.SUCCESS not in r.events
-    # an abort re-arms directly: an immediate retry must work
-    r.feed(taps(3))
-    assert r.events[-1] == Event.PRIMED
-
-
-def test_immediate_retry_after_success():
-    """After a success the machine is instantly ready for a new round."""
-    # Live report: retrying right after a success (or abort) silently
-    # failed because the machine dropped to idle and had to re-pass the
-    # pose gate + settle + cooldown while the user's hands jostle the
-    # floppy head. Success/abort must return straight to armed.
-    r = Runner()
-    r.feed(seg(REST, 1.0) + taps(3) + seg(REST, 0.5) + taps(3))
-    assert r.events[-1] == Event.SUCCESS
+    assert r.events[-1] == Event.WAKE
     r.feed(taps(3))  # retry immediately, no pause
-    assert r.events[-1] == Event.PRIMED
-    r.feed(seg(REST, 0.5) + taps(3))
-    assert r.events[-1] == Event.SUCCESS
+    assert r.events[-1] == Event.WAKE
 
 
-def test_handshake_is_repeatable():
+def test_wake_is_repeatable():
     r = Runner()
     for _ in range(2):
-        r.feed(seg(REST, 3.5))  # a calm pause between rounds still works
-        r.feed(taps(3) + seg(REST, 0.5) + taps(3))
-    assert r.events.count(Event.SUCCESS) == 2
+        r.feed(seg(REST, 3.5))
+        r.feed(taps(3))
+    assert r.events.count(Event.WAKE) == 2
+
+
+# ---------------------------------------------------------------------------
+# Subsystem B: antenna-button codes (torque ON)
+# ---------------------------------------------------------------------------
+
+
+def test_button_wifi_code_via_facade():
+    r = Runner()
+    r.feed(button_sym(external=True) + button_sym(external=False), torque_off=False)
+    assert r.events == [Event.WIFI]
+
+
+def test_button_torque_off_code_via_facade():
+    r = Runner()
+    samples = (
+        button_single(0, external=True) * 1
+        + button_single(0, external=True)
+        + button_single(0, external=True)
+        + button_single(1, external=True)
+        + button_single(1, external=True)
+    )
+    r.feed(samples, torque_off=False)
+    assert r.events == [Event.TORQUE_OFF]
+
+
+def test_button_emotion_code_via_facade():
+    r = Runner()
+    samples = (
+        button_single(0, external=True)
+        + button_single(1, external=True)
+        + button_single(0, external=True)
+        + button_single(1, external=True)
+    )
+    r.feed(samples, torque_off=False)
+    assert r.events == [Event.EMOTION]
+
+
+def test_buttons_inert_while_torque_off():
+    r = Runner()
+    r.feed(button_sym(external=True) + button_sym(external=False), torque_off=True)
+    assert Event.WIFI not in r.events
 
 
 def test_never_raises_on_weird_inputs():
     hs = SecretHandshake(HandshakeConfig())
     assert hs.update(0.0, 0.0, 0.0, np.zeros((4, 4)), True) is None
     assert hs.update(0.0, 1e9, -1e9, SLEEP_HEAD_POSE, True) is None
+    assert hs.update(0.0, 1e9, -1e9, SLEEP_HEAD_POSE, False) is None
