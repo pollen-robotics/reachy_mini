@@ -1,238 +1,155 @@
 # Secret handshake + WiFi QR provisioning: agent handoff
 
-Date: 2026-07-04. Branch: `1245-improve-the-first-interaction-after-building-the-robot`
-(push small commits directly to it, short messages, NEVER main).
+Branch: `1245-improve-the-first-interaction-after-building-the-robot`
+(push small commits directly to it, short messages, NEVER main/develop).
 Full design/history: `2026-07-01-secret-handshake-design.md` (same folder).
-Read that spec top to bottom before changing anything; this file is only
-"where we are and what is next".
+This file is "current state + what's next" only.
 
-## NEXT UP (2026-07-07 redesign, requested by Remi, NOT yet built)
+## NEXT UP (redesign requested by Remi, NOT yet built)
 
-Big coherent redesign of the handshake layer. Build lab-first (new modules
-in examples/secret_handshake_lab/ + tests + replay), then mirror into the
-daemon, then iterate on the wireless robot. Keep changes minimal; reuse the
-existing collision detector + state-machine patterns.
+Build lab-first (new modules in `examples/secret_handshake_lab/` + tests +
+replay), then mirror into the daemon, then iterate on the wireless robot.
+Keep changes minimal; reuse the existing collision detector + state-machine
+patterns.
 
-STATE WHEN THIS WAS WRITTEN: the current deployed flow is 3+3 antenna
-collisions (torque OFF) -> WiFi provisioning, no robot motion, voice lines
-per outcome. That is filmable as-is. The redesign below REPLACES the
-collision trigger's action and adds a new torque-ON subsystem.
+CURRENT DEPLOYED FLOW (filmable as-is): 3+3 antenna collisions (torque OFF)
+-> WiFi provisioning, no robot motion, a voice line per outcome. The
+redesign REPLACES the collision trigger's action and adds a torque-ON
+subsystem.
 
-A. TORQUE-OFF handshake (simplify to a wake button)
-   - Trigger: 3 antenna collisions in fast succession, <1 s between each
-     (single round; drop the current second round). Torque off + sleep-pose
-     gate as today.
-   - Action: call the daemon's existing `wake_up()` (backend/abstract.py):
-     it torques on, gotos the base/init pose, and plays the flute
-     "toudoum" (wake_up.wav). Do NOT hand-roll motion; reuse wake_up.
-   - Rationale: waking is safe/reversible/obvious, so one round of 3 is
-     enough; accidental trigger is low-stakes. WiFi is NO LONGER triggered
-     by collisions (moves to a torque-on code, below).
+### A. Torque-OFF handshake -> a simple wake button
+- Trigger: 3 antenna collisions in fast succession, <1 s between each
+  (single round; drop the current second round). Torque-off + sleep-pose
+  gate as today.
+- Action: call the daemon's existing `wake_up()` (backend/abstract.py): it
+  torques on, gotos the base/init pose, plays the flute "toudoum"
+  (wake_up.wav). Do NOT hand-roll motion; reuse `wake_up`.
+- Rationale: waking is safe/reversible/obvious, so one round of 3 is enough.
+  WiFi is NO LONGER triggered by collisions (moves to a torque-on code).
 
-B. TORQUE-ON antenna-button handshakes (NEW subsystem)
-   Most handshakes now happen while awake (torque on, base pose). The
-   antennas are 4 buttons (soft PID => safe to move them under torque;
-   validated by Remi in the fire_nation_attacked game).
-   - BUTTON-PRESS DEFINITION (from fire_nation_attacked/main.py): a press =
-     |antenna angle| > PULL_THRESHOLD (0.18 rad ~= 10 deg); MAX_PULL ~ 0.65
-     rad. The SIGN of the angle = direction, giving 4 buttons:
-     left-external, left-internal, right-external, right-internal.
-     CONVENTION TRAP: fire_nation uses antennas[0]=right, [1]=left; our
-     collision code uses [0]=left. Confirm on the robot which sign is
-     "external" for each antenna before trusting the mapping (spin/probe
-     like examples/secret_handshake_lab/live_contact_probe.py).
-   - Use EXTERNAL presses only in codes (narrows accidental triggers).
-   - Timing: <1 s between presses/movements or the sequence resets. Reuse
-     the collision detector's refractory + a release latch (angle must fall
-     back below threshold between counted presses).
-   - Three codes and their actions:
-     1. WiFi provisioning: SIMULTANEOUS symmetric move -- BOTH antennas
-        external together, then BOTH internal together, <1 s between the
-        two movements, with a small simultaneity window (both within a few
-        ticks; margin not too large). Action: start the existing
-        provisioner (get_shared_provisioner(...).start()). Robot is already
-        awake, so provisioning stays no-motion (Part 1 already is).
-     2. Torque OFF everything: 3x left-external, then 2x right-external,
-        <1 s between. Action: backend.set_motor_control_mode(Disabled).
-        Screenless way back to torque-off (then a collision-wake or WiFi
-        can follow).
-     3. Emotion: left-ext, right-ext, left-ext, right-ext (alternating, 4
-        presses), <1 s between. Action: play ONE FIXED "excited" emotion
-        move (NOT random -- some are very long). Pick a short excited move
-        from reachy-mini-emotions-library; play via the daemon's move
-        playback (see design spec section 8 for the bundling plan).
+### B. Torque-ON antenna-button handshakes (NEW subsystem)
+Most handshakes now happen while awake (torque on, base pose). The antennas
+are 4 buttons (soft PID => safe to move them under torque; Remi validated
+this in the `fire_nation_attacked` game).
+- BUTTON-PRESS DEFINITION (from `../fire_nation_attacked/.../main.py`): a
+  press = `|antenna angle| > 0.18 rad` (~10 deg); max useful ~0.65 rad. The
+  SIGN of the angle = direction => 4 buttons: left-external, left-internal,
+  right-external, right-internal.
+  CONVENTION TRAP: fire_nation uses `antennas[0]=right, [1]=left`; our
+  collision code uses `[0]=left`. Confirm on the robot which sign is
+  "external" per antenna before trusting the mapping (probe like
+  `examples/secret_handshake_lab/live_contact_probe.py`).
+- Use EXTERNAL presses only in codes (narrows accidental triggers).
+- Timing: <1 s between presses/movements or the sequence resets. Reuse the
+  collision refractory + a release latch (angle must fall back below
+  threshold between counted presses).
+- Three codes and their actions:
+  1. WiFi provisioning: SIMULTANEOUS symmetric move -- BOTH antennas
+     external together, then BOTH internal together, <1 s between the two
+     movements, small simultaneity window (a few ticks; margin not too
+     large). Action: `get_shared_provisioner(...).start()`. Robot is
+     already awake, so provisioning stays no-motion (already is).
+  2. Torque OFF everything: 3x left-external, then 2x right-external, <1 s
+     between. Action: `backend.set_motor_control_mode(Disabled)`. Screenless
+     way back to torque-off (then a collision-wake or WiFi can follow).
+  3. Emotion: left-ext, right-ext, left-ext, right-ext (alternating, 4
+     presses), <1 s between. Action: play ONE FIXED "excited" emotion move
+     (NOT random -- some are very long). Short excited move from
+     `reachy-mini-emotions-library`; play via the daemon move playback
+     (design spec section 8 has the bundling plan).
 
-C. WIRING NOTES
-   - wake_up / goto_sleep / set_motor_control_mode all already exist on the
-     backend. Emotion playback: find the offline RecordedMoves/play_move
-     path; bundle the one excited move under assets so it ships (spec s8).
-   - The torque-ON detector must be armed only while torque is ON (mirror
-     of the collision detector's torque-off gate). Keep it sub-microsecond
-     per tick (runs in the 50 Hz control loop, CM4).
-   - Accidental-trigger safety comes from: external-only, exact sequences,
-     <1 s timing, and requiring a release between presses.
+### C. Wiring notes
+- `wake_up` / `goto_sleep` / `set_motor_control_mode` already exist on the
+  backend. Emotion playback: find the offline RecordedMoves/play_move path;
+  bundle the one excited move under `assets/` so it ships (spec s8).
+- The torque-ON detector must be armed only while torque is ON (mirror of
+  the collision detector's torque-off gate). Keep it sub-microsecond per
+  tick (50 Hz control loop, CM4).
+- Accidental-trigger safety = external-only + exact sequences + <1 s timing
+  + a release between presses.
 
-## UPDATE 2026-07-06 (late): goto antenna-jump root cause + fix (goto.py wrap)
+## Current state (deployed + validated on the wireless robot)
 
-The provisioning wake goto exposed a LATENT CORE BUG: violent antenna
-sweep mid-goto. Full mechanism (rustypot source + live probes + a 50 Hz
-trace of the incident, all timestamps matching):
+WHAT WORKS NOW: collision handshake (torque-off) -> WiFi QR provisioning,
+no motion, narrated voice line per outcome. Handshake detection and the
+full provisioning flow are live-validated on the wireless robot.
 
-  1. STS3215 firmware tracks MULTI-TURN present positions: hand-spinning
-     a floppy antenna past +-180 makes reads carry whole turns.
-  2. goal_position is single-turn (0..4095); rustypot AnglePosition::
-     to_raw (src/servo/dynamixel/mx.rs) is linear, NO wrap/clamp, so
-     commands beyond +-180 emit out-of-range registers the firmware
-     SILENTLY REJECTS (probe: goto +170->+190 follows to +180, 35 deg/s,
-     then holds). Torque-enable sets goal := present in firmware (and
-     resets the turn counter: the reading re-bases +-360 at enable).
-  3. A goto starting from a multi-turn reading has ALL its commands
-     rejected until the interpolation crosses +-180; the first accepted
-     command is a huge step and the servo whips (incident: 1800 deg/s at
-     2.1 s of a 5 s goto, predicted 2.1 s by min-jerk crossing math).
+Code map:
+- `src/reachy_mini/daemon/backend/secret_handshake.py` -- pure collision
+  detector + state machine. One guarded call in `RobotBackend._update()`,
+  armed ONLY when `motor_control_mode == Disabled`. Kill switch
+  `REACHY_HANDSHAKE_ENABLED=0`.
+- `src/reachy_mini/daemon/app/services/wifi_provisioning.py` -- provisioner
+  (dependency-injected; offline tests in
+  `tests/unit_tests/test_wifi_provisioning.py`). No robot motion: runs in
+  place, plays cues + voice lines.
+- `src/reachy_mini/daemon/app/routers/wifi_provision.py` -- endpoints
+  `POST/GET /wifi/provision_qr/{start,status}`.
+- Assets: `src/reachy_mini/assets/wifi_*.wav` (intro + one voice per
+  outcome; ElevenLabs, Jean Atlas voice), `handshake_*.wav`,
+  `assets/wechat_qrcode/` (QR CNN models, ~1 MB, Apache-2.0).
+- Lab (tuning ground): `examples/secret_handshake_lab/` -- detector, state
+  machine, 50 tests, `replay_validate.py` (HF dataset regression),
+  `bench.py`, live probes.
 
-Fix: GotoMove wraps start_antennas into one turn (tests in
-tests/unit_tests/test_goto_move.py). A/B on the robot: hand-wound
--368 deg reading, goto with fix = 6 deg/s glide (round B with the fix
-reverted was interrupted; script ready:
-examples/secret_handshake_lab/repro_goto_antenna_jump.py, it waits for
-the spin, then one goto). Longer-term options for Remi to arbitrate:
-wrap in rustypot to_raw, and/or normalize antenna reads at the daemon
-boundary.
+## Deploy / operate on the wireless robot
 
-## UPDATE 2026-07-06 (evening): WiFi QR provisioning LIVE-VALIDATED end to end
+- SSH: `pollen@reachy-mini.local` (password `root`). It runs a branch build
+  in `/venvs/mini_daemon`.
+- UPDATE CODE BY FILE SYNC, NOT pip reinstall: a pip `--force-reinstall`
+  re-breaks opencv (see below) and churns deps. Use rsync:
+  `rsync -az --exclude=__pycache__ --exclude='*.pyc' src/reachy_mini/ \
+   pollen@reachy-mini.local:/venvs/mini_daemon/lib/python3.12/site-packages/reachy_mini/`
+  then `sudo systemctl restart reachy-mini-daemon`.
+- Enable WiFi-on-handshake (opt-in, default OFF): drop-in
+  `/etc/systemd/system/reachy-mini-daemon.service.d/override.conf` with
+  `[Service]\nEnvironment=REACHY_HANDSHAKE_WIFI_PROVISION=1` (the unit file
+  itself is overwritten by the launcher on restart, so use a drop-in).
+- Verify: `journalctl -u reachy-mini-daemon -f` -> `Secret handshake:
+  armed`; `curl -s localhost:8000/wifi/provision_qr/status`.
 
-Full flow observed on the wireless robot: handshake -> narrated intro
-(ElevenLabs voices in assets/wifi_*.wav, one per outcome) -> torque on +
-5 s goto base pose -> camera scan -> QR decoded on the FIRST frame ->
-/wifi/connect path -> success voice -> goto sleep + torque off. Journey
-to get there, all committed:
+## Durable decisions (do NOT re-litigate)
 
-1. Stock cv2.QRCodeDetector decoded 0/108 real scan frames (phone screen,
-   blur + auto-exposure blowout) at ~270 ms/frame on the CM4. Replaced by
-   cv2.wechat_qrcode.WeChatQRCode + its CNN models (bundled in
-   assets/wechat_qrcode/, ~1 MB, Apache-2.0): 44/108 decoded at
-   ~110 ms/frame on the CM4. Frames of every scan are dumped to
-   /tmp/reachy_wifi_qr_frames (wiped per run) for diagnosis.
-2. The robot had BOTH opencv-python 4.13 and opencv-contrib-python 4.11
-   installed (mediapipe pulls contrib; something else pulled plain); they
-   share the cv2 dir, so contrib modules were clobbered. Fixed on-robot:
-   single opencv-contrib-python 4.13. PACKAGING DECISION: the wireless
-   extra should declare opencv-contrib-python explicitly.
-3. The handshake->provisioning trigger no longer skips when WiFi is
-   already connected (re-provisioning allowed; an app will gate this
-   later). Enabled on the robot via
-   /etc/systemd/system/reachy-mini-daemon.service.d/override.conf
-   (REACHY_HANDSHAKE_WIFI_PROVISION=1).
-4. prepare/finish hooks use set_motor_control_mode (NOT
-   enable/disable_motors directly), so motor_control_mode stays truthful
-   during the self-moves and the handshake disarms while the robot moves.
-
-Still open: erase-credentials + hotspot re-provision test (stage 2), the
-section 10 soak, and the emotion action layer (section 8, not built).
-
-## UPDATE 2026-07-06: retry friction + double-count fixed (commit cbb9dc79)
-
-Remi's weekend testing surfaced two real usability bugs, both fixed
-lab-first and deployed to the robot:
-
-1. Immediate retry after success/abort silently failed. The machine
-   dropped to idle and re-required pose gate + 0.5 s settle (+ 2 s
-   cooldown after success); live, the user's hands jostle the floppy head,
-   the gate flickers, and taps thrown before re-arm are discarded.
-   NOW: success and abort return STRAIGHT to armed (pose gate only guards
-   boot / torque-off transitions). Note: no `armed` journal line after a
-   success/abort anymore, the machine is already armed.
-2. A firm knock pressed longer than the 0.25 s refractory counted twice
-   (contact + release re-crossing), so 2 knocks could prime (Remi saw
-   this; there is NO boot-state bug). A release latch (80 ms not-pressed
-   dwell between counts) fixed it in the lab and passed replay, but was
-   REVERTED within the hour: live fast tapping separates the antennas for
-   only 2-3 control ticks, so the latch dropped knocks and the gesture
-   only worked slowly (Remi's live report). The double count is now a
-   documented ACCEPTED QUIRK, pinned by a test. Lessons: (a) the recorded
-   default.json knocker never fully separates the antennas, so "must
-   separate between counts" fails replay; (b) fast-tap apart windows and
-   release-crossing durations overlap, so no static dwell threshold works;
-   (c) velocity discrimination stays rejected. Missed knocks are far worse
-   than an occasional 2-knock prime.
-
-`cooldown_s` is gone from both configs. Replay regression unchanged
-(3 collisions + primed on all defaults), 50 tests, worst-case detector
-cost unchanged (sub-microsecond).
-
-## UPDATE 2026-07-04 (later): deployed and LIVE-VALIDATED on the wireless robot
-
-Option B install done (`/venvs/mini_daemon` at 1.8.4 from this branch),
-daemon restarted, and the full flow observed in the journal with Remi at
-the robot: `armed -> primed -> success -> re-armed`, both sounds played
-through ALSA. One real bug was found and fixed live (commit d8715149):
-the antenna encoders are MULTI-TURN, and on Remi's robot they were parked
-a full turn away from zero (rest read l=-340 deg, physically +20). The
-raw `l in [20, 150]` gate could never pass. The collision law now wraps
-angles to [-180, 180) in both the lab detector and the daemon module
-(failing test written in the lab first, replay regression unchanged).
-
-Still open: spec section 10 soak/multi-person validation, QR provisioning
-live test (opencv is not installed on the robot), emotion action layer
-(spec section 8, not built).
-
-## State: everything is implemented and pushed, awaiting on-robot validation
-
-1. Collision law v3 (GEOMETRIC, measured by Remi, degrees): collision at
-   center = `l+r in [-9, 0]` AND `l in [20, 150]` (l = antenna index 0).
-   v1 (angle diff) and v2 (velocities) were REJECTED; do not re-propose.
-2. Lab (`examples/secret_handshake_lab/`): validated detector + two-round
-   state machine, 28 tests, replay regression against the HF dataset
-   (exactly 3 collisions per recorded gesture), bench.py, live probes with
-   beeps. Remi live-validated the detector on 3 robots (100% detection).
-3. Daemon (sounds only, default handshake 3+3, no hold gesture):
-   - `src/reachy_mini/daemon/backend/secret_handshake.py` (pure module)
-   - one guarded call in `RobotBackend._update()`; armed ONLY when
-     `motor_control_mode == Disabled` (all torque off)
-   - kill switch `REACHY_HANDSHAKE_ENABLED=0`
-   - sounds `assets/handshake_*.wav` = tap-lab tones, regenerate with
-     `examples/secret_handshake_lab/render_daemon_sounds.py`
-   - tests `tests/unit_tests/test_secret_handshake.py`
-4. WiFi QR provisioning (wireless only, additive):
-   - `daemon/app/services/wifi_provisioning.py` (dependency-injected,
-     offline tests in `tests/unit_tests/test_wifi_provisioning.py`)
-   - endpoints `POST/GET /wifi/provision_qr/{start,status}`
-   - camera = media server's existing IPC branch (GStreamerCamera);
-     QR = lazy cv2 (state `unavailable` if opencv missing; opencv is NOT
-     in the wireless-version extra, ISO decision pending)
-   - connect/confirm mirrors the desktop-app onboarding
-     (reachy-mini-desktop-app WiFiConfiguration.jsx): /wifi/connect route
-     + /wifi/status polling (busy -> wlan+ssid ok, hotspot = reverted)
-   - handshake SUCCESS -> provisioning is OPT-IN:
-     `REACHY_HANDSHAKE_WIFI_PROVISION=1` (default OFF)
-
-## Next step (was in progress at handoff): deploy to the wireless robot
-
-Follow `docs/source/platforms/reachy_mini/install_daemon_from_branch.md`
-Option B: `ssh pollen@reachy-mini.local` (password `root`), pip install the
-branch into `/venvs/mini_daemon`, `sudo systemctl restart
-reachy-mini-daemon`, then `journalctl -u reachy-mini-daemon -f` and have
-Remi do the gesture: expect log lines `Secret handshake: primed/success`
-and the sounds from the robot speaker.
-
-BLOCKER at handoff: the robot did not answer on the LAN (mDNS cached
-192.168.1.14 but dead; no `_reachy-mini._tcp` zeroconf advert). Likely
-hotspot fallback or mid-boot; ask Remi about the robot's network state.
-
-Then: spec section 10 validation (accidental-trigger soak, multi-person
-reliability), QR provisioning live test (needs opencv on the robot),
-and the emotion action layer (spec section 8, NOT built yet).
+- Collision law v3 (GEOMETRIC, measured, degrees): collision at center =
+  `l+r in [-9,0]` AND `l in [20,150]`, with all antenna angles WRAPPED to
+  [-180,180) first (the encoders are MULTI-TURN; a floppy antenna handled
+  past +-180 reads a whole turn off). v1 (angle diff) and v2 (velocities)
+  were REJECTED; do not re-propose dynamic/velocity laws.
+- Collision debounce = 0.25 s refractory ONLY. A firm press held >0.25 s
+  double-counts (a prime can happen in 2 knocks): this is an ACCEPTED QUIRK,
+  pinned by a test. A "release latch / must-separate" fix was tried and
+  REVERTED -- it drops knocks during fast tapping (apart windows are only
+  2-3 ticks). No static threshold separates the two cases. Missed knocks
+  are worse than an occasional extra count.
+- Success/abort re-arm STRAIGHT to armed (no cooldown, no idle round-trip):
+  the pose gate flickers under the user's hands, so a round-trip made
+  immediate retries silently fail. (No `armed` journal line after
+  success/abort -- it never left armed.)
+- QR decoding: stock `cv2.QRCodeDetector` read 0/108 real scan frames (phone
+  screen, blur) at ~270 ms/frame on the CM4. Use
+  `cv2.wechat_qrcode.WeChatQRCode` + the bundled CNN models (44/108,
+  ~110 ms/frame). Graceful fallback chain: models -> no-models -> plain.
+- opencv on the robot: must be a SINGLE `opencv-contrib-python` install.
+  Having both `opencv-python` and `opencv-contrib-python` clobbers the
+  contrib modules (incl. WeChatQRCode). PACKAGING: the wireless extra should
+  declare `opencv-contrib-python` explicitly.
+- Provisioning connect/confirm reuses the desktop-app onboarding path
+  (`/wifi/connect` then poll `/wifi/status`: busy -> wlan+ssid = success,
+  hotspot after busy = reverted/failed), including revert-to-hotspot on bad
+  credentials. Nothing new was reinvented there.
 
 ## Gotchas
 
 - Remi's Lite daemon often runs on his Mac holding port 8000:
-  `test_wireless.py`, `test_daemon.py` fail and
-  `test_app.py::test_faulty_app` HANGS. Environmental; deselect locally,
-  CI is the arbiter. `test_daemon_wireless_client_disconnection` needs a
-  live wireless robot on the LAN.
-- All tunables live in the two config dataclasses (secret_handshake.py in
-  the daemon, mirrored in the lab); the lab README has the values table
-  and the measured evidence (`data/touch_sweep_*.csv`).
+  `test_wireless.py` / `test_daemon.py` fail and
+  `test_app.py::test_faulty_app` HANGS. Environmental; CI is the arbiter.
+- All tunables live in the config dataclasses (daemon `secret_handshake.py`,
+  mirrored in the lab); the lab README has the values table + measured
+  evidence (`data/touch_sweep_*.csv`).
 - The lab is the tuning ground: change law/timing there first, re-run its
-  tests + replay_validate.py, then mirror into the daemon module.
+  tests + `replay_validate.py`, THEN mirror into the daemon module.
+- Antenna gotos after floppy handling: encoders are multi-turn, so a goto
+  whose start is a multi-turn read can behave oddly on hardware. The
+  collision law wraps angles for detection; motion (wake_up goto) does not.
+  A `GotoMove` start-wrap was tried and REVERTED (Remi could not reproduce a
+  bad goto on the Lite); left as-is. Watch this when wiring wake_up.
