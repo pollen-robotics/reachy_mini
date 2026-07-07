@@ -94,9 +94,11 @@ class Runner:
         self.t = 0.0
         self.events = []
 
-    def feed(self, samples, pose=SLEEP_HEAD_POSE, torque_off=True):
+    def feed(self, samples, pose=SLEEP_HEAD_POSE, torque_off=True, goal=BASE):
         for ant0, ant1 in samples:
-            e = self.hs.update(self.t, ant0, ant1, pose, torque_off)
+            e = self.hs.update(
+                self.t, ant0, ant1, pose, torque_off, goal[0], goal[1]
+            )
             if e is not None:
                 self.events.append(e)
             self.t += DT
@@ -251,6 +253,31 @@ def test_buttons_inert_while_torque_off():
     r = Runner()
     r.feed(button_sym(external=True) + button_sym(external=False), torque_off=True)
     assert Event.WIFI not in r.events
+
+
+def test_button_code_works_at_a_nonbase_goal():
+    # The robot is holding a non-base antenna pose (goal != base). Presses are
+    # deviations from THAT goal, so the emotion code still works there.
+    goal = (0.5, -0.3)
+
+    def hold(a0, a1, n):
+        return [(a0, a1)] * n
+
+    def one(ant, npr=3, nrl=8):
+        a = list(goal)
+        a[ant] = goal[ant] + (-0.30 if ant == 0 else 0.30)  # external push
+        return hold(a[0], a[1], npr) + hold(goal[0], goal[1], nrl)
+
+    r = Runner()
+    r.feed(one(0) + one(1) + one(0) + one(1), torque_off=False, goal=goal)
+    assert r.events == [Event.EMOTION]
+
+
+def test_holding_a_nonbase_goal_fires_nothing():
+    goal = (0.5, -0.3)
+    r = Runner()
+    r.feed([(goal[0], goal[1])] * 100, torque_off=False, goal=goal)
+    assert r.events == []
 
 
 def test_never_raises_on_weird_inputs():

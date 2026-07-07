@@ -4,27 +4,27 @@ Pure, dependency-free, fast: this runs every tick on the 50 Hz control loop
 (CM4), so it is a handful of float compares, no allocation beyond the small
 returned list, no I/O.
 
-WHY BASE-RELATIVE (the correction that motivated the redesign)
+WHY GOAL-RELATIVE (the robust definition)
 
-The antennas now rest at the awake base pose
-`INIT_ANTENNAS_JOINT_POSITIONS = [-0.1745, +0.1745]` rad (~10 deg outward
-each). The `fire_nation_attacked` button definition (`|angle| > 0.18 rad`)
-measures deviation from ZERO and only works there because that game pins the
-antennas at [0, 0]. At the awake base pose `|angle|` is already ~0.1745 at
-rest, right at that threshold, so a from-zero definition would read the
-resting antennas as pressed.
+A press is a deviation of the PRESENT antenna angle from its GOAL (the
+commanded target), not from zero and not from a fixed base:
 
-A PRESS IS THEREFORE A DEVIATION FROM THE BASE POSITION, not from zero:
-
-    dev_i = wrap_to_pi(angle_i - base_i)        # wrap: encoders are multi-turn
-    ext_i = sign(base_i)                        # the base lean IS "external"
+    dev_i = wrap_to_pi(present_i - goal_i)      # wrap: encoders are multi-turn
+    ext_i = sign(base_i)                        # each antenna's external side
     external press:  dev_i * ext_i >  press_threshold
     internal press:  dev_i * ext_i < -press_threshold
 
-Index 0's external direction is negative, index 1's is positive (the base
-signs). The left/right labelling (fire_nation `[0]=right`, collision code
-`[0]=left`) does NOT affect detection; it only matters when mapping the coded
-sequences, which is confirmed on the robot.
+This is robust in ANY pose and immune to the robot's own commanded motion:
+when the robot moves the antennas on purpose the present angle tracks the
+goal, so dev stays ~0 and nothing triggers; only an EXTERNAL push (present
+diverges from the commanded goal) registers as a press. If the goal is
+unknown (None), the subsystem stays inert (no presses).
+
+`base` only fixes each antenna's external DIRECTION: index 0's external is
+negative, index 1's is positive (the awake-base lean signs). It is no longer
+the deviation reference. The left/right labelling (fire_nation `[0]=right`,
+collision code `[0]=left`) does NOT affect detection; it only matters when
+mapping the coded sequences, confirmed on the robot.
 
 RELEASE LATCH (hysteresis)
 
@@ -74,8 +74,8 @@ class Press(NamedTuple):
 class AntennaButtonConfig:
     """Tunables for the press primitive (all radians)."""
 
-    base: tuple[float, float] = DEFAULT_BASE
-    press_threshold_rad: float = 0.18  # deviation from base to count a press
+    base: tuple[float, float] = DEFAULT_BASE  # only fixes each external direction
+    press_threshold_rad: float = 0.18  # deviation from goal to count a press
     release_threshold_rad: float = 0.12  # must fall below this to re-arm
 
 
@@ -106,11 +106,25 @@ class AntennaButtonDetector:
         self._latched = [False, False]
         self.dev = [0.0, 0.0]
 
-    def update(self, t: float, ant0: float, ant1: float) -> list[Press]:
-        """Return the presses that started this tick (edge-detected)."""
+    def update(
+        self,
+        t: float,
+        ant0: float,
+        ant1: float,
+        goal0: float | None = None,
+        goal1: float | None = None,
+    ) -> list[Press]:
+        """Return the presses that started this tick (edge-detected).
+
+        A press is a deviation of the present angle from the commanded goal.
+        With no goal (goal0/goal1 is None) the subsystem stays inert.
+        """
+        if goal0 is None or goal1 is None:
+            return []
+        goals = (goal0, goal1)
         presses: list[Press] = []
         for i, angle in enumerate((ant0, ant1)):
-            dev = _wrap_pi(angle - self.cfg.base[i])
+            dev = _wrap_pi(angle - goals[i])
             signed = dev * self._ext[i]  # >0 external, <0 internal
             self.dev[i] = signed
             if self._latched[i]:

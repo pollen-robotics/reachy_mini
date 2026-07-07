@@ -286,13 +286,20 @@ class RobotBackend(Backend):
                 # Fail-safe: any error is logged and swallowed.
                 if self._secret_handshake is not None:
                     try:
+                        # Button presses are deviations from the commanded
+                        # antenna goal (robust in any pose, ignores the robot's
+                        # own motion). No goal set -> the button path is inert.
+                        goal = self.target_antenna_joint_positions
+                        goal0 = float(goal[0]) if goal is not None else None
+                        goal1 = float(goal[1]) if goal is not None else None
                         hs_event = self._secret_handshake.update(
                             time.monotonic(),
                             antenna_positions[0],
                             antenna_positions[1],
                             self.current_head_pose,
-                            torque_off=self.motor_control_mode
-                            == MotorControlMode.Disabled,
+                            self.motor_control_mode == MotorControlMode.Disabled,
+                            goal0,
+                            goal1,
                         )
                         if hs_event is not None:
                             self.logger.info(f"Secret handshake: {hs_event.value}")

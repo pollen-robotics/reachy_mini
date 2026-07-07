@@ -39,12 +39,17 @@ EXT1 = BASE[1] + 0.30  # antenna 1 pushed further out (more positive)
 INT1 = BASE[1] - 0.30  # antenna 1 pulled inward
 
 
-def feed(det, samples):
-    """Feed (ant0, ant1) samples tick by tick; return the flat list of presses."""
+def feed(det, samples, goal=BASE):
+    """Feed (ant0, ant1) samples tick by tick against a fixed goal; return presses.
+
+    A press is a deviation from the GOAL (commanded target), not from base. The
+    default goal is the resting base pose, so the base-relative scenarios below
+    read the same as before.
+    """
     out = []
     t = 0.0
     for ant0, ant1 in samples:
-        out += det.update(t, ant0, ant1)
+        out += det.update(t, ant0, ant1, goal[0], goal[1])
         t += DT
     return out
 
@@ -152,6 +157,61 @@ def test_multiturn_reading_is_wrapped():
     turn = 2 * math.pi
     # Both antennas at base + one full turn: physically at rest -> no press.
     assert feed(det, hold(BASE[0] + turn, BASE[1] - turn, 2.0)) == []
+
+
+# ---------------------------------------------------------------------------
+# Goal-relative: a press is a deviation from the live commanded target, so it
+# works in ANY pose and ignores the robot's own commanded motion.
+# ---------------------------------------------------------------------------
+
+
+def test_no_press_when_present_tracks_a_nonbase_goal():
+    det = AntennaButtonDetector(AntennaButtonConfig(base=BASE))
+    goal = (0.5, -0.3)  # an arbitrary non-base commanded pose
+    out = []
+    t = 0.0
+    for _ in range(100):
+        out += det.update(t, goal[0], goal[1], goal[0], goal[1])
+        t += DT
+    assert out == []
+
+
+def test_press_is_deviation_from_goal_not_base():
+    det = AntennaButtonDetector(AntennaButtonConfig(base=BASE))
+    goal = (0.5, -0.3)
+    # Present sits AT the goal (0.5 is far from base but that must not count),
+    # then antenna 0 is pushed further external (more negative) than the goal.
+    samples = [(goal[0], goal[1])] * 10 + [(goal[0] - 0.30, goal[1])] * 10
+    out = []
+    t = 0.0
+    for a0, a1 in samples:
+        out += det.update(t, a0, a1, goal[0], goal[1])
+        t += DT
+    assert out == [Press(antenna=0, direction=Direction.EXTERNAL)]
+
+
+def test_moving_goal_perfectly_tracked_is_no_press():
+    # The robot ramps the antennas on purpose; present equals goal every tick.
+    det = AntennaButtonDetector(AntennaButtonConfig(base=BASE))
+    out = []
+    t = 0.0
+    for k in range(100):
+        g0 = BASE[0] - 0.005 * k  # ramps well past the press threshold
+        g1 = BASE[1] + 0.005 * k
+        out += det.update(t, g0, g1, g0, g1)
+        t += DT
+    assert out == []
+
+
+def test_no_press_while_goal_unknown():
+    det = AntennaButtonDetector(AntennaButtonConfig(base=BASE))
+    out = []
+    t = 0.0
+    # A big deviation, but with no known goal the subsystem stays inert.
+    for _ in range(50):
+        out += det.update(t, BASE[0] - 0.5, BASE[1] + 0.5, None, None)
+        t += DT
+    assert out == []
 
 
 if __name__ == "__main__":

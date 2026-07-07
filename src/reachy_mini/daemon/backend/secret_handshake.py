@@ -272,9 +272,21 @@ class SecretHandshake:
         self._codes = ButtonCodeMachine(cfg.codes)
 
     def update(
-        self, t: float, ant0: float, ant1: float, head_pose, torque_off: bool
+        self,
+        t: float,
+        ant0: float,
+        ant1: float,
+        head_pose,
+        torque_off: bool,
+        goal0: float | None = None,
+        goal1: float | None = None,
     ) -> Event | None:
-        """Feed one control tick; return an Event to react to, or None."""
+        """Feed one control tick; return an Event to react to, or None.
+
+        goal0/goal1 are the commanded antenna targets; button presses are
+        deviations from them (robust in any pose, immune to the robot's own
+        motion). With no goal the button path stays inert.
+        """
         if torque_off:
             # The button path is idle; keep it clean for the next torque-on.
             self._codes.reset()
@@ -284,6 +296,6 @@ class SecretHandshake:
 
         # Torque on: the collision path is inert; run the button codes.
         self._collision.reset()
-        presses = self._buttons.update(t, ant0, ant1)
+        presses = self._buttons.update(t, ant0, ant1, goal0, goal1)
         code_event = self._codes.update(t, presses, torque_on=True)
         return _CODE_EVENTS.get(code_event) if code_event is not None else None
