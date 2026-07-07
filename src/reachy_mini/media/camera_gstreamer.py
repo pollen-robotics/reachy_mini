@@ -109,7 +109,6 @@ class GStreamerCamera(CameraBase):
         """
         super().__init__(log_level=log_level)
 
-        Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
 
@@ -271,5 +270,6 @@ class GStreamerCamera(CameraBase):
 
     def close(self) -> None:
         """Stop the pipeline and release resources."""
+        self._release_jpeg_encoder()
         self._loop.quit()
         self.pipeline.set_state(Gst.State.NULL)

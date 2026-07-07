@@ -836,6 +836,7 @@ class GstMediaServer:
         capsfilter.set_property("caps", caps_mjpeg)
 
         queue = Gst.ElementFactory.make("queue")
+        # Decode MJPEG to raw so all platforms share one IPC/WebRTC pipeline.
         jpegdec = Gst.ElementFactory.make("jpegdec")
         videoconvert = Gst.ElementFactory.make("videoconvert")
 
