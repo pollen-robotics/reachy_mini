@@ -631,9 +631,14 @@ class RobotBackend(Backend):
         """
         if event is HandshakeEvent.ARMED:
             return
+        # Immediate audio cue that a gesture registered, played BEFORE the
+        # (possibly slow) action so feedback is instant on every handshake.
+        self.play_sound("handshake_success.wav")
         if event is HandshakeEvent.WAKE:
-            # wake_up torques on, gotos the base pose and plays the flute.
-            self._spawn_handshake_action(self.wake_up())
+            # wake_up() only gotos + plays the flute; the control loop ignores
+            # motion targets while torque is off, so torque MUST be enabled
+            # first or the robot plays the sound without moving.
+            self._spawn_handshake_action(self._wake_from_handshake())
         elif event is HandshakeEvent.WIFI:
             if self._handshake_wifi_callback is not None:
                 self._handshake_wifi_callback()
@@ -651,6 +656,16 @@ class RobotBackend(Backend):
                 )
             else:
                 self.logger.info("Handshake emotion: no bundled move, skipping.")
+
+    async def _wake_from_handshake(self) -> None:
+        """Enable torque (pinned to present pose, no snap), then wake up.
+
+        The collision path fires only while torque is OFF, and wake_up() does
+        not enable torque itself, so the enable has to happen here or the
+        robot plays the flute without moving.
+        """
+        self.set_motor_control_mode(MotorControlMode.Enabled)
+        await self.wake_up()
 
     def _spawn_handshake_action(self, coro: Any) -> None:
         """Drive an async backend action on its own daemon thread + loop."""
