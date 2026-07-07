@@ -57,6 +57,8 @@ def _wrap_pi(rad: float) -> float:
 
 
 class Direction(enum.Enum):
+    """Which way an antenna was pressed, relative to its base lean."""
+
     EXTERNAL = "external"  # deviation in the same sign as the base lean
     INTERNAL = "internal"  # deviation toward / past center
 
@@ -87,6 +89,7 @@ class AntennaButtonDetector:
     """
 
     def __init__(self, config: AntennaButtonConfig | None = None) -> None:
+        """Build the detector; precompute each antenna's external direction."""
         self.cfg = config or AntennaButtonConfig()
         self._ext = (
             _sign(self.cfg.base[0]),
@@ -99,6 +102,7 @@ class AntennaButtonDetector:
         self.dev = [0.0, 0.0]
 
     def reset(self) -> None:
+        """Forget the latch state and cached deviations."""
         self._latched = [False, False]
         self.dev = [0.0, 0.0]
 
