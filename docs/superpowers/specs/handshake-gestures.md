@@ -12,7 +12,7 @@ Every finished code beeps 🔊.
 
 Antennas apart = **external**, antennas toward each other = **internal**.
 
-Read each code as **beats** ① ② ③, left to right: do one beat, then the next. In every beat, move the **L** line and the **R** line **together**. Keep it snappy: a pause over 1 second resets.
+Read each code left to right, **one beat per column** ① ② ③. Inside a beat, do **L** and **R** together. Keep it snappy: a pause over 1 second resets.
 
 ## When it listens
 
@@ -22,10 +22,10 @@ Read each code as **beats** ① ② ③, left to right: do one beat, then the ne
 ## The codes
 
 | | Code | ① | ② | ③ | ④ | ⑤ |
-|---|---|---|---|---|---|---|
-| 🔔 | Wake | 🥁 | 🥁 | 🥁 | | |
-| 📶 | Wi-Fi | L ⬅️<br>R ➡️ | L ➡️<br>R ⬅️ | | | |
-| 😴 | Go limp | L ⬅️<br>R • | L ⬅️<br>R • | L ⬅️<br>R • | L •<br>R ➡️ | L •<br>R ➡️ |
-| 🎉 | Emotion | L ⬅️<br>R • | L •<br>R ➡️ | L ⬅️<br>R • | L •<br>R ➡️ | |
+|---|---|:---:|:---:|:---:|:---:|:---:|
+| 🔔 | **Wake** | 🥁 | 🥁 | 🥁 | | |
+| 📶 | **Wi-Fi** | L ⬅️&nbsp;&nbsp;&nbsp;R ➡️ | L ➡️&nbsp;&nbsp;&nbsp;R ⬅️ | | | |
+| 😴 | **Go limp** | L ⬅️&nbsp;&nbsp;&nbsp;R • | L ⬅️&nbsp;&nbsp;&nbsp;R • | L ⬅️&nbsp;&nbsp;&nbsp;R • | L •&nbsp;&nbsp;&nbsp;R ➡️ | L •&nbsp;&nbsp;&nbsp;R ➡️ |
+| 🎉 | **Emotion** | L ⬅️&nbsp;&nbsp;&nbsp;R • | L •&nbsp;&nbsp;&nbsp;R ➡️ | L ⬅️&nbsp;&nbsp;&nbsp;R • | L •&nbsp;&nbsp;&nbsp;R ➡️ | |
 
 *(Go limp L/R still to confirm on the robot.)*
