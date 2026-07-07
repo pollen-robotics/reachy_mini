@@ -5,7 +5,20 @@ Branch: `1245-improve-the-first-interaction-after-building-the-robot`
 Full design/history: `2026-07-01-secret-handshake-design.md` (same folder).
 This file is "current state + what's next" only.
 
-## NEXT UP (redesign requested by Remi, NOT yet built)
+## NEXT UP (redesign) -- BUILT + DEPLOYED 2026-07-07
+
+STATUS: implemented, tested, and deployed/validated on the wireless robot
+(logic level; physical gesture testing pending). See the current spec
+`2026-07-07-antenna-button-handshakes-design.md` in this folder. The one
+correction from the plan below: a button press is BASE-RELATIVE (the antennas
+now rest at INIT_ANTENNAS_JOINT_POSITIONS=[-0.1745,+0.1745], ~10 deg out), so
+press = deviation from base, not `|angle|>0.18` from zero. Modules:
+`antenna_buttons.py` + `button_codes.py` (lab + daemon), orchestrated by the
+rewritten `secret_handshake.py`; actions wired in `robot/backend.py`. Emotion
+move bundled at `assets/handshake_moves/excited.{json,wav}`. OPEN: confirm the
+left/right antenna-index mapping for the torque-off code on the robot.
+
+The original plan (kept for reference):
 
 Build lab-first (new modules in `examples/secret_handshake_lab/` + tests +
 replay), then mirror into the daemon, then iterate on the wireless robot.
