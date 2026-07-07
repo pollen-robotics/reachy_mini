@@ -267,3 +267,36 @@ async def test_clearing_handler_disables_eviction_callback() -> None:
     lock.set_remote_eviction_handler(None)
     await lock.acquire_local_evicting_remote("app_a")
     assert called is False
+
+
+def test_keep_remote_acquire_does_not_evict() -> None:
+    """acquire_local_keeping_remote takes the slot without firing eviction."""
+    lock = RobotAppLock()
+    evicted: list[bool] = []
+
+    async def handler() -> None:
+        evicted.append(True)
+
+    lock.set_remote_eviction_handler(handler)
+    assert lock.try_acquire_remote("remote") is True
+
+    lock.acquire_local_keeping_remote("conv")
+
+    assert lock.status().state == RobotAppLockState.LOCAL_APP
+    assert lock.status().holder_name == "conv"
+    assert evicted == []  # the remote (control) session was kept, not evicted
+
+
+def test_keep_remote_acquire_from_free() -> None:
+    """It also works from the free state (no remote session held)."""
+    lock = RobotAppLock()
+    lock.acquire_local_keeping_remote("conv")
+    assert lock.status().state == RobotAppLockState.LOCAL_APP
+
+
+def test_keep_remote_acquire_raises_if_local_held() -> None:
+    """A second local app can't take the slot, keep_remote or not."""
+    lock = RobotAppLock()
+    lock.acquire_local_keeping_remote("a")
+    with pytest.raises(RuntimeError):
+        lock.acquire_local_keeping_remote("b")

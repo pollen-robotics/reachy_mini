@@ -125,6 +125,7 @@ class AppManager:
         app_name: str,
         *args: Any,
         evict_remote: bool = True,
+        keep_remote: bool = False,
         **kwargs: Any,
     ) -> AppStatus:
         """Start the app as a subprocess.
@@ -132,6 +133,12 @@ class AppManager:
         Raises RuntimeError if an app is already running. When
         ``evict_remote`` is false, a remote WebRTC session holding the app slot
         makes the start fail instead of being evicted.
+
+        ``keep_remote`` (used when the start is *requested by* the connected
+        remote client, e.g. the mobile app driving a conversation) takes the
+        local-app slot **without** evicting the remote session: the client is a
+        controller of this app, not a competitor for the robot, so its
+        DataChannel must survive. Takes precedence over ``evict_remote``.
         """
         if self.is_app_running():
             raise RuntimeError("An app is already running")
@@ -143,7 +150,9 @@ class AppManager:
         # the normal case, but the lock is the single source of truth
         # shared with the relay thread).
         if self.daemon is not None:
-            if evict_remote:
+            if keep_remote:
+                self.daemon.robot_app_lock.acquire_local_keeping_remote(app_name)
+            elif evict_remote:
                 await self.daemon.robot_app_lock.acquire_local_evicting_remote(
                     app_name
                 )

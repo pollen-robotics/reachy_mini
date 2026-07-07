@@ -65,8 +65,9 @@ class FakeAppManager:
     def get_running_app_url(self) -> str | None:
         return self._url
 
-    async def start_app(self, name: str) -> Any:
+    async def start_app(self, name: str, keep_remote: bool = False) -> Any:
         self.started.append(name)
+        self.last_keep_remote = keep_remote
         self.current_app = SimpleNamespace(
             status=SimpleNamespace(
                 state="running",
@@ -134,6 +135,7 @@ async def test_apps_start_and_stop() -> None:
         replies.append,
     )
     assert apps.started == ["conv"]
+    assert apps.last_keep_remote is True
     assert replies[-1]["result"]["state"] == "running"
     assert replies[-1]["result"]["info"]["name"] == "conv"
 

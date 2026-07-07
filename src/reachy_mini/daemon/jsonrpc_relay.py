@@ -111,7 +111,9 @@ class JsonRpcRelay:
                     "apps.start requires a 'name'", reason="invalid_params", code=-32602
                 )
             try:
-                status = await self._apps.start_app(name)
+                # keep_remote: the requester is this connected client that will
+                # drive the app; don't evict its own WebRTC/DataChannel session.
+                status = await self._apps.start_app(name, keep_remote=True)
             except RuntimeError as e:
                 # start_app raises when an app already holds the robot slot.
                 raise JsonRpcError(str(e), reason="already_running") from e

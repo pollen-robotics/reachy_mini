@@ -179,6 +179,33 @@ class RobotAppLock:
                     "RobotAppLock: remote eviction handler raised", exc_info=True
                 )
 
+    def acquire_local_keeping_remote(self, app_name: str) -> None:
+        """Acquire the local-app slot **without** evicting a remote session.
+
+        Used when the local app is started *by* the connected remote client
+        (e.g. the mobile app launching a conversation it will then drive): the
+        client is a controller, not a competitor for the robot, so its WebRTC
+        session must stay up. Transitions ``remote_session``/``free`` ->
+        ``local_app`` and does **not** invoke the eviction handler.
+
+        Raises:
+            RuntimeError: If another local app already holds the lock.
+
+        """
+        with self._mutex:
+            if self._state == RobotAppLockState.LOCAL_APP:
+                raise RuntimeError(
+                    f"A local app is already running: {self._holder_name!r}"
+                )
+            prev = self._state
+            self._state = RobotAppLockState.LOCAL_APP
+            self._holder_name = app_name
+            logger.info(
+                "RobotAppLock: acquired by local app %r (kept remote session, prev=%s)",
+                app_name,
+                prev.value,
+            )
+
     def release_local(self, app_name: Optional[str] = None) -> None:
         """Release the lock held by a local app.
 
