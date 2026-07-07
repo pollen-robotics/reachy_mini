@@ -1,0 +1,7 @@
+INFO     reachy_mini.media.media_manager:media_manager.py:161 No media backend selected.
+WARNING  reachy_mini.media.media_manager:media_manager.py:253 Camera is not initialized.
+WARNING  reachy_mini.media.media_manager:media_manager.py:295 Audio system is not initialized.
+WARNING  reachy_mini.media.media_manager:media_manager.py:302 Audio system is not initialized.
+WARNING  reachy_mini.media.media_manager:media_manager.py:309 Audio system is not initialized.
+WARNING  reachy_mini.media.media_manager:media_manager.py:316 Audio system is not initialized.
+WARNING  reachy_mini.media.media_manager:media_manager.py:323 Audio system is not initialized.
