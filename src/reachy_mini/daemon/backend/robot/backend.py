@@ -651,11 +651,24 @@ class RobotBackend(Backend):
         elif event is HandshakeEvent.EMOTION:
             move = self._get_handshake_emotion_move()
             if move is not None:
-                self._spawn_handshake_action(
-                    self.play_move(move, initial_goto_duration=0.5)
-                )
+                self._spawn_handshake_action(self._play_emotion_and_return(move))
             else:
                 self.logger.info("Handshake emotion: no bundled move, skipping.")
+
+    async def _play_emotion_and_return(self, move: Any) -> None:
+        """Play the handshake emotion, then goto the base pose.
+
+        Recorded emotions end wherever their last frame is, not at rest, which
+        would leave the antennas off-base and break the next button code (the
+        press is measured relative to the base pose). Returning here keeps the
+        handshake usable back to back.
+        """
+        await self.play_move(move, initial_goto_duration=0.5)
+        await self.goto_target(
+            self.INIT_HEAD_POSE,
+            antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
+            duration=0.5,
+        )
 
     async def _wake_from_handshake(self) -> None:
         """Enable torque (pinned to present pose, no snap), then wake up.
