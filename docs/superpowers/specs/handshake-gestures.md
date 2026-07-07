@@ -1,30 +1,30 @@
 # 🤖 Reachy Mini — Antenna Handshakes
 
-Tilt the antennas like little levers. **Every finished gesture beeps 🔊.**
+Every finished code beeps 🔊.
 
-## The language
+## Icons
 
 | Icon | Means |
 |------|-------|
-| **OUT** ⬅️ ➡️ | tilt antenna(s) **outward** (away from center) |
-| **IN** ➡️ ⬅️ | tilt antenna(s) **inward** (toward center) |
+| 🥁 | knock the two antennas together |
+| ⬅️➡️ | tilt **OUT** (apart) |
+| ➡️⬅️ | tilt **IN** (together) |
 | **L / R** | left / right antenna |
-| 👐 | knock the two antennas **together** |
 
-Rules: do the steps **quickly** — more than **1 second** between steps and it resets.
+Read each code as **beats**, left to right: do one beat, then the next. Icons **in the same beat happen together**. Keep it snappy: a pause over 1 second resets.
 
 ## When it listens
 
-- 😴 **Asleep** (limp): only the **Wake** knock works.
-- 🙂 **Awake**: the three button codes work.
+- 😴 **Asleep** (limp): only **Wake** works.
+- 🙂 **Awake**: all the other codes work.
 
-## The gestures
+## The codes
 
-| | Gesture | Do this | Result |
-|---|---------|---------|--------|
-| 🔔 | **Wake** | 👐 👐 👐 — knock antennas together **3×** | robot wakes up |
-| 📶 | **Wi-Fi setup** | **both OUT** ⬅️➡️, then **both IN** ➡️⬅️ | starts Wi-Fi QR setup |
-| 😴 | **Go limp** | **L OUT ×3**, then **R OUT ×2** | torque off (goes floppy) |
-| 🎉 | **Emotion** | **L OUT, R OUT, L OUT, R OUT** | plays a happy move |
+| | Code | ① | ② | ③ | ④ | ⑤ |
+|---|---|---|---|---|---|---|
+| 🔔 | Wake | 🥁 | 🥁 | 🥁 | | |
+| 📶 | Wi-Fi | L+R ⬅️➡️ | L+R ➡️⬅️ | | | |
+| 😴 | Go limp | L ⬅️➡️ | L ⬅️➡️ | L ⬅️➡️ | R ⬅️➡️ | R ⬅️➡️ |
+| 🎉 | Emotion | L ⬅️➡️ | R ⬅️➡️ | L ⬅️➡️ | R ⬅️➡️ | |
 
-*(Left/right for **Go limp** still to be confirmed on the robot.)*
+*(Go limp L/R still to confirm on the robot.)*
