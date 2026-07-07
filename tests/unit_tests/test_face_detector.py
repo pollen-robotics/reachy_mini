@@ -1,40 +1,60 @@
-"""Tests for the YuNet face detector."""
+"""Tests for the YuNet face detector (ONNX Runtime)."""
+
+import math
 
 import numpy as np
 import pytest
 
-pytest.importorskip("cv2")
+pytest.importorskip("onnxruntime")
 
-from reachy_mini.vision.face_detector import Face, FaceDetector
+from reachy_mini.vision import face_detector
+
+
+def _detector(score_threshold: float = 0.6) -> "face_detector.FaceDetector":
+    try:
+        return face_detector.FaceDetector(score_threshold=score_threshold)
+    except Exception as exc:  # model repo unreachable / offline
+        pytest.skip(f"YuNet model unavailable: {exc}")
 
 
 def test_detect_returns_empty_on_blank_frame() -> None:
     """A frame with no faces yields no detections."""
-    detector = FaceDetector()
-    blank = np.zeros((480, 640, 3), dtype=np.uint8)
-    assert detector.detect(blank) == []
+    blank = np.zeros((180, 320, 3), dtype=np.uint8)
+    assert _detector().detect(blank) == []
 
 
-class _FakeYuNet:
-    """Stub of cv2.FaceDetectorYN returning a fixed detection array."""
+def test_matches_opencv_reference() -> None:
+    """The ONNX Runtime decode reproduces cv2.FaceDetectorYN on the same model and frame."""
+    cv2 = pytest.importorskip("cv2")
+    from huggingface_hub import hf_hub_download
 
-    def __init__(self, faces: np.ndarray) -> None:
-        self._faces = faces
+    score = 0.015  # low, to force detections on a synthetic (faceless) frame
+    detector = _detector(score)
 
-    def setInputSize(self, size: tuple[int, int]) -> None:
-        pass
+    width, height = 320, 180
+    frame = cv2.blur(
+        np.random.default_rng(5).integers(0, 255, (height, width, 3), dtype=np.uint8),
+        (15, 15),
+    )
+    ours = detector.detect(frame)
 
-    def detect(self, frame: np.ndarray) -> tuple[int, np.ndarray]:
-        return 1, self._faces
+    # cv2 running the same model on the same /32-padded frame is the reference decode.
+    padded_w = math.ceil(width / 32) * 32
+    padded_h = math.ceil(height / 32) * 32
+    padded = np.zeros((padded_h, padded_w, 3), dtype=np.uint8)
+    padded[:height, :width] = frame
+    model = hf_hub_download(
+        face_detector._MODEL_REPO,
+        face_detector._MODEL_FILE,
+        revision=face_detector._MODEL_REVISION,
+    )
+    reference = cv2.FaceDetectorYN.create(model, "", (padded_w, padded_h), score, 0.3)
+    reference.setInputSize((padded_w, padded_h))
+    _, cv_faces = reference.detect(padded)
+    cv_faces = np.empty((0, 15), np.float32) if cv_faces is None else cv_faces
 
-
-def test_detect_maps_yunet_columns_to_face() -> None:
-    """Detections map YuNet's [bbox, eyes, ...] columns onto Face fields."""
-    detector = FaceDetector()
-    detector._detector = _FakeYuNet(np.arange(15, dtype=np.float32).reshape(1, 15))
-
-    faces = detector.detect(np.zeros((10, 10, 3), dtype=np.uint8))
-
-    assert faces == [
-        Face(bbox=(0.0, 1.0, 2.0, 3.0), right_eye=(4.0, 5.0), left_eye=(6.0, 7.0))
-    ]
+    assert len(ours) == len(cv_faces)
+    for face, ref in zip(ours, cv_faces):
+        assert np.allclose(face.bbox, ref[:4], atol=1e-2)
+        assert np.allclose(face.right_eye, ref[4:6], atol=1e-2)
+        assert np.allclose(face.left_eye, ref[6:8], atol=1e-2)
