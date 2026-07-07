@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 
 _MODEL_REPO = "pollen-robotics/face_detection_yunet_2023mar"
 _MODEL_FILE = "face_detection_yunet_2023mar.onnx"
-_MODEL_REVISION = "664c75e50253bd3021bd976b497896149ef22c7b"
+_MODEL_REVISION = "cae5105442f526e640c80d47b86e1e492e9dd08a"
 
 
 @dataclass(frozen=True)
