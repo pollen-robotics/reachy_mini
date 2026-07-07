@@ -6,6 +6,72 @@ Full design/history: `2026-07-01-secret-handshake-design.md` (same folder).
 Read that spec top to bottom before changing anything; this file is only
 "where we are and what is next".
 
+## NEXT UP (2026-07-07 redesign, requested by Remi, NOT yet built)
+
+Big coherent redesign of the handshake layer. Build lab-first (new modules
+in examples/secret_handshake_lab/ + tests + replay), then mirror into the
+daemon, then iterate on the wireless robot. Keep changes minimal; reuse the
+existing collision detector + state-machine patterns.
+
+STATE WHEN THIS WAS WRITTEN: the current deployed flow is 3+3 antenna
+collisions (torque OFF) -> WiFi provisioning, no robot motion, voice lines
+per outcome. That is filmable as-is. The redesign below REPLACES the
+collision trigger's action and adds a new torque-ON subsystem.
+
+A. TORQUE-OFF handshake (simplify to a wake button)
+   - Trigger: 3 antenna collisions in fast succession, <1 s between each
+     (single round; drop the current second round). Torque off + sleep-pose
+     gate as today.
+   - Action: call the daemon's existing `wake_up()` (backend/abstract.py):
+     it torques on, gotos the base/init pose, and plays the flute
+     "toudoum" (wake_up.wav). Do NOT hand-roll motion; reuse wake_up.
+   - Rationale: waking is safe/reversible/obvious, so one round of 3 is
+     enough; accidental trigger is low-stakes. WiFi is NO LONGER triggered
+     by collisions (moves to a torque-on code, below).
+
+B. TORQUE-ON antenna-button handshakes (NEW subsystem)
+   Most handshakes now happen while awake (torque on, base pose). The
+   antennas are 4 buttons (soft PID => safe to move them under torque;
+   validated by Remi in the fire_nation_attacked game).
+   - BUTTON-PRESS DEFINITION (from fire_nation_attacked/main.py): a press =
+     |antenna angle| > PULL_THRESHOLD (0.18 rad ~= 10 deg); MAX_PULL ~ 0.65
+     rad. The SIGN of the angle = direction, giving 4 buttons:
+     left-external, left-internal, right-external, right-internal.
+     CONVENTION TRAP: fire_nation uses antennas[0]=right, [1]=left; our
+     collision code uses [0]=left. Confirm on the robot which sign is
+     "external" for each antenna before trusting the mapping (spin/probe
+     like examples/secret_handshake_lab/live_contact_probe.py).
+   - Use EXTERNAL presses only in codes (narrows accidental triggers).
+   - Timing: <1 s between presses/movements or the sequence resets. Reuse
+     the collision detector's refractory + a release latch (angle must fall
+     back below threshold between counted presses).
+   - Three codes and their actions:
+     1. WiFi provisioning: SIMULTANEOUS symmetric move -- BOTH antennas
+        external together, then BOTH internal together, <1 s between the
+        two movements, with a small simultaneity window (both within a few
+        ticks; margin not too large). Action: start the existing
+        provisioner (get_shared_provisioner(...).start()). Robot is already
+        awake, so provisioning stays no-motion (Part 1 already is).
+     2. Torque OFF everything: 3x left-external, then 2x right-external,
+        <1 s between. Action: backend.set_motor_control_mode(Disabled).
+        Screenless way back to torque-off (then a collision-wake or WiFi
+        can follow).
+     3. Emotion: left-ext, right-ext, left-ext, right-ext (alternating, 4
+        presses), <1 s between. Action: play ONE FIXED "excited" emotion
+        move (NOT random -- some are very long). Pick a short excited move
+        from reachy-mini-emotions-library; play via the daemon's move
+        playback (see design spec section 8 for the bundling plan).
+
+C. WIRING NOTES
+   - wake_up / goto_sleep / set_motor_control_mode all already exist on the
+     backend. Emotion playback: find the offline RecordedMoves/play_move
+     path; bundle the one excited move under assets so it ships (spec s8).
+   - The torque-ON detector must be armed only while torque is ON (mirror
+     of the collision detector's torque-off gate). Keep it sub-microsecond
+     per tick (runs in the 50 Hz control loop, CM4).
+   - Accidental-trigger safety comes from: external-only, exact sequences,
+     <1 s timing, and requiring a release between presses.
+
 ## UPDATE 2026-07-06 (late): goto antenna-jump root cause + fix (goto.py wrap)
 
 The provisioning wake goto exposed a LATENT CORE BUG: violent antenna
