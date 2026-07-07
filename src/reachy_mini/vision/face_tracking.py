@@ -4,6 +4,7 @@ import logging
 import multiprocessing as mp
 import os
 import platform
+import signal
 import time
 from dataclasses import dataclass
 from multiprocessing.connection import Connection
@@ -162,6 +163,8 @@ def run(conn: Connection, stop: EventType, camera_specs: "CameraSpecs") -> None:
     The daemon serves an already downscaled + rate-limited BGR stream on the tracking
     socket, so this only detects and reports normalized eye centers — no resize or pacing.
     """
+    # The daemon coordinates shutdown via `stop`, ignore Ctrl+C so it doesn't traceback here
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     # Lowest priority so YuNet bursts never preempt the daemon's 50 Hz control loop.
     if hasattr(os, "nice"):
         os.nice(19)
