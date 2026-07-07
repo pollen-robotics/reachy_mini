@@ -7,22 +7,22 @@ step, so it works on a freshly built robot with no network.
 
 The flow (QrWifiProvisioner.start(), runs in its own thread):
 
-    (intro)      plays the narrated wifi_setup_intro.wav immediately and
-                 runs the injected `prepare` hook (torque on + goto the
-                 base pose so the camera looks forward, 1.5 s).
+    (intro)      plays the narrated wifi_setup_intro.wav immediately.
     SCANNING     once the narration is over (intro_wait_s), grab camera
                  frames (~4 Hz) and look for a WiFi QR code, up to
                  scan_timeout_s (one minute).
-    CONNECTING   credentials found: hand them to the connect function
-                 (the same nmcli path as the /wifi/connect endpoint) and
-                 wait for the WiFi to come up.
-    SUCCESS      connected: plays handshake_success.wav.
-    FAILED       no QR in time, or the connection never came up: plays
-                 handshake_aborted.wav.
+    CONNECTING   credentials found: cut the narration, play the detected
+                 beep, hand the credentials to the connect function (the
+                 same nmcli path as the /wifi/connect endpoint), and wait
+                 for the WiFi to come up.
+    SUCCESS      connected: plays wifi_connect_success.wav.
+    FAILED       plays a specific voice line per cause (no QR in time,
+                 wrong credentials / hotspot revert, connect timeout).
     UNAVAILABLE  no QR decoder (opencv not installed) or no camera.
 
-    Every exit path runs the injected `finish` hook (goto sleep + torque
-    off, which also re-arms the secret handshake).
+    The robot does NOT move during any of this: the flow is triggered by
+    the torque-off handshake, so the robot is already resting with torque
+    off, and it simply plays sounds and voice lines in place.
 
 Every dependency (camera, QR decoder, connect, status, sounds) is injected,
 so the whole flow is unit-tested offline (test_wifi_provisioning.py); the
@@ -149,15 +149,15 @@ class QrWifiProvisioner:
                      onboarding: success = wlan on the target ssid,
                      hotspot after busy = the daemon reverted (failed).
     play_sound       (asset_name) -> None.
-    prepare          optional; runs first, before the camera opens. The
-                     daemon wires "torque on + goto the base pose" here so
-                     the camera looks forward instead of at the table.
-    finish           optional; runs on EVERY exit path (success, failure,
-                     no camera). The daemon wires "goto sleep + torque
-                     off" here, which also re-arms the handshake.
+    stop_sound       optional; cut any sound still playing (used to stop the
+                     narration the instant a QR is detected).
     intro_wait_s     scanning (and its one-minute clock) only starts this
                      long after the intro narration begins, so fumbling
                      for a QR code during the explanation costs nothing.
+
+    The procedure does NOT move the robot: it is triggered by the torque-off
+    handshake, so the robot is already resting with torque off, and it stays
+    that way. Only sounds and voice lines play.
     """
 
     def __init__(
@@ -168,8 +168,6 @@ class QrWifiProvisioner:
         wifi_status: Callable[[], tuple[str, Optional[str]]],
         play_sound: Callable[[str], None],
         stop_sound: Optional[Callable[[], None]] = None,
-        prepare: Optional[Callable[[], None]] = None,
-        finish: Optional[Callable[[], None]] = None,
         save_frame: Optional[Callable[[int, object], None]] = None,
         scan_timeout_s: float = 60.0,
         connect_timeout_s: float = 45.0,
@@ -183,8 +181,6 @@ class QrWifiProvisioner:
         self._wifi_status = wifi_status
         self._play_sound = play_sound
         self._stop_sound = stop_sound
-        self._prepare = prepare
-        self._finish = finish
         self._save_frame = save_frame
         self.scan_timeout_s = scan_timeout_s
         self.connect_timeout_s = connect_timeout_s
@@ -218,17 +214,12 @@ class QrWifiProvisioner:
 
     # ------------------------------------------------------------------
     def _run(self) -> None:
-        # The narration gives instant feedback; the robot rises to the base
-        # pose while it plays; scanning starts once the narration is over.
+        # The narration gives instant feedback and plays while the robot
+        # holds still; scanning starts once the narration is over. No motion:
+        # the robot stays where the handshake left it (torque off, resting).
         started_at = time.monotonic()
         self._safe_sound(SOUND_INTRO)
-        self._safe_hook(self._prepare, "prepare")
-        try:
-            self._run_provisioning(started_at)
-        finally:
-            # Back to sleep + torque off on every exit, re-arming the
-            # handshake for the next attempt.
-            self._safe_hook(self._finish, "finish")
+        self._run_provisioning(started_at)
 
     def _run_provisioning(self, started_at: float) -> None:
         try:
@@ -423,9 +414,8 @@ def build_default_provisioner(
     drives (POST /wifi/connect then polling GET /wifi/status), so behavior
     including the revert-to-hotspot fallback stays identical to the
     existing, battle-tested flow.
-    Robot motion: prepare = torque on + goto the base pose (1.5 s) so the
-    camera looks forward; finish = goto sleep + torque off on every exit,
-    which also re-arms the secret handshake.
+    No robot motion: the flow runs in place (triggered by the torque-off
+    handshake), so it never enables torque or moves the head/antennas.
     """
 
     def camera_factory() -> object:
@@ -506,37 +496,6 @@ def build_default_provisioner(
         status = get_wifi_status()
         return status.mode.value, status.connected_network
 
-    prepare: Optional[Callable[[], None]] = None
-    finish: Optional[Callable[[], None]] = None
-    if backend is not None and hasattr(backend, "set_motor_control_mode"):
-        # set_motor_control_mode (not enable/disable_motors directly): it
-        # updates motor_control_mode, so /api/motors/status stays truthful
-        # and the handshake detector disarms while the robot moves itself.
-
-        def prepare() -> None:
-            import asyncio
-
-            from reachy_mini.io.protocol import MotorControlMode
-
-            backend.set_motor_control_mode(MotorControlMode.Enabled)
-            # Slow on purpose: the human's hands are often still on the
-            # antennas right after the handshake.
-            asyncio.run(
-                backend.goto_target(
-                    head=backend.INIT_HEAD_POSE,
-                    antennas=backend.INIT_ANTENNAS_JOINT_POSITIONS,
-                    duration=5.0,
-                )
-            )
-
-        def finish() -> None:
-            import asyncio
-
-            from reachy_mini.io.protocol import MotorControlMode
-
-            asyncio.run(backend.goto_sleep())
-            backend.set_motor_control_mode(MotorControlMode.Disabled)
-
     def stop_sound() -> None:
         if backend is not None and hasattr(backend, "stop_sound"):
             backend.stop_sound()
@@ -548,7 +507,5 @@ def build_default_provisioner(
         wifi_status=wifi_status,
         play_sound=play_sound,
         stop_sound=stop_sound,
-        prepare=prepare,
-        finish=finish,
         intro_wait_s=_intro_duration_s(),
     )

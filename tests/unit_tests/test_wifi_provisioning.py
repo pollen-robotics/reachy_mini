@@ -135,8 +135,6 @@ def make_provisioner(
         wifi_status=wifi_status,
         play_sound=play_sound,
         stop_sound=lambda: seen["events"].append("stop_sound"),
-        prepare=lambda: seen["events"].append("prepare"),
-        finish=lambda: seen["events"].append("finish"),
         save_frame=lambda i, frame: seen["frames_saved"].append(i),
         scan_timeout_s=scan_timeout_s,
         connect_timeout_s=connect_timeout_s,
@@ -174,31 +172,40 @@ def test_full_success_path():
     assert len(seen["frames_saved"]) >= 1
 
 
-def test_prepare_and_finish_wrap_the_run():
-    """The robot wakes before scanning and returns to sleep at the end."""
+def test_no_robot_motion_only_narration_then_success():
+    """The flow narrates then succeeds with NO motion hooks in between."""
     prov, seen = make_provisioner(payloads=["WIFI:T:WPA;S:net;P:pw;;"])
     prov.start()
     wait_done(prov)
     events = seen["events"]
-    # narration first (instant feedback), the robot rises while it plays,
-    # and finish comes after the final outcome sound
+    # narration is the first thing; the success voice is the LAST sound
+    # (nothing plays after it to clobber it, e.g. no go-to-sleep sound)
     assert events[0] == "sound:wifi_setup_intro.wav"
-    assert events[1] == "prepare"
-    assert events[-1] == "finish"
-    assert "sound:wifi_connect_success.wav" in events
+    assert events[-1] == "sound:wifi_connect_success.wav"
+    # no motion happened
+    assert "prepare" not in events
+    assert "finish" not in events
 
 
-def test_finish_runs_on_timeout_too():
-    """The robot must return to sleep even when no QR was ever shown."""
+def test_success_voice_is_the_final_sound():
+    """Regression: the outcome voice must not be cut off by a later sound."""
+    prov, seen = make_provisioner(payloads=["WIFI:T:WPA;S:net;P:pw;;"])
+    prov.start()
+    wait_done(prov)
+    assert seen["sounds"][-1] == "wifi_connect_success.wav"
+
+
+def test_timeout_voice_is_the_final_sound():
+    """A scan timeout ends on its own voice line, nothing after."""
     prov, seen = make_provisioner(payloads=None, scan_timeout_s=0.1)
     prov.start()
     wait_done(prov)
     assert prov.status().state == ProvisioningState.FAILED
-    assert seen["events"][-1] == "finish"
+    assert seen["sounds"][-1] == "wifi_failed_no_qr.wav"
 
 
-def test_finish_runs_when_camera_is_unavailable():
-    """The robot must return to sleep even if the camera never opened."""
+def test_camera_unavailable_voice_is_the_final_sound():
+    """A missing camera ends on its own voice line, nothing after."""
 
     class BrokenCameraFactory:
         def __call__(self):
@@ -209,7 +216,7 @@ def test_finish_runs_when_camera_is_unavailable():
     prov.start()
     wait_done(prov)
     assert prov.status().state == ProvisioningState.UNAVAILABLE
-    assert seen["events"][-1] == "finish"
+    assert seen["sounds"][-1] == "wifi_camera_unavailable.wav"
 
 
 def test_scan_clock_starts_after_the_intro():
