@@ -5,12 +5,17 @@ It handles the control loop, joint positions, torque enabling/disabling, and pro
 It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
 """
 
+import asyncio
+import json
 import logging
 import os
 import struct
 import time
 from datetime import timedelta
+from importlib import resources
 from multiprocessing import Event  # It seems to be more accurate than threading.Event
+from pathlib import Path
+from threading import Thread
 from typing import Annotated, Any, Callable
 
 import log_throttling
@@ -28,15 +33,15 @@ from reachy_mini.io.protocol import (
 from reachy_mini.utils.hardware_config.parser import parse_yaml_config
 
 from ..abstract import Backend
+from ..antenna_buttons import AntennaButtonConfig
 from ..secret_handshake import Event as HandshakeEvent
-from ..secret_handshake import SecretHandshake
+from ..secret_handshake import HandshakeConfig, SecretHandshake
 
-# Sound feedback for the secret handshake (assets/, see secret_handshake.py).
-_HANDSHAKE_SOUNDS = {
-    HandshakeEvent.PRIMED: "handshake_primed.wav",
-    HandshakeEvent.SUCCESS: "handshake_success.wav",
-    HandshakeEvent.ABORTED: "handshake_aborted.wav",
-}
+# The one fixed "excited" move played by the torque-ON emotion button code,
+# bundled under assets/ so it ships in the wheel (see secret_handshake.py and
+# the design spec). Missing asset -> the emotion is skipped, not an error.
+_HANDSHAKE_EMOTION_DIR = "handshake_moves"
+_HANDSHAKE_EMOTION_NAME = "excited"
 
 
 class RobotBackend(Backend):
@@ -105,16 +110,28 @@ class RobotBackend(Backend):
         self.logger.info(f"Motor control mode: {self.motor_control_mode}")
         self.last_alive: float | None = None
 
-        # Secret handshake detector (torque-off antenna gesture, sound
-        # feedback only). Kill switch: REACHY_HANDSHAKE_ENABLED=0.
+        # Secret handshake detectors: torque-OFF collisions -> wake button,
+        # torque-ON antenna-button codes -> WiFi / torque-off / emotion.
+        # Kill switch: REACHY_HANDSHAKE_ENABLED=0.
         self._secret_handshake: SecretHandshake | None = None
-        self._handshake_success_callback: Callable[[], None] | None = None
+        # Fired on the WIFI button code (real work spawned by the daemon).
+        self._handshake_wifi_callback: Callable[[], None] | None = None
+        # Lazily loaded bundled "excited" move for the emotion button code.
+        self._handshake_emotion_move: Any = None
         if os.environ.get("REACHY_HANDSHAKE_ENABLED", "1").lower() not in (
             "0",
             "false",
             "no",
         ):
-            self._secret_handshake = SecretHandshake()
+            # Presses are base-relative: hand the detector the authoritative
+            # awake base pose so it tracks any future change to the constant.
+            base = (
+                float(self.INIT_ANTENNAS_JOINT_POSITIONS[0]),
+                float(self.INIT_ANTENNAS_JOINT_POSITIONS[1]),
+            )
+            self._secret_handshake = SecretHandshake(
+                HandshakeConfig(button=AntennaButtonConfig(base=base))
+            )
 
         self._status = RobotBackendStatus(
             motor_control_mode=self.motor_control_mode,
@@ -263,9 +280,10 @@ class RobotBackend(Backend):
                             f"IK error: {e}"
                         )
 
-                # Secret handshake: one sub-microsecond call per tick, armed
-                # only while ALL motors are torque off (inert during normal
-                # use). Fail-safe: any error is logged and swallowed.
+                # Secret handshake: one sub-microsecond call per tick. The
+                # torque-off collision path and the torque-on button-code
+                # path are each inert unless their torque state holds.
+                # Fail-safe: any error is logged and swallowed.
                 if self._secret_handshake is not None:
                     try:
                         hs_event = self._secret_handshake.update(
@@ -278,14 +296,7 @@ class RobotBackend(Backend):
                         )
                         if hs_event is not None:
                             self.logger.info(f"Secret handshake: {hs_event.value}")
-                            hs_sound = _HANDSHAKE_SOUNDS.get(hs_event)
-                            if hs_sound is not None:
-                                self.play_sound(hs_sound)
-                            if (
-                                hs_event is HandshakeEvent.SUCCESS
-                                and self._handshake_success_callback is not None
-                            ):
-                                self._handshake_success_callback()
+                            self._dispatch_handshake_event(hs_event)
                     except Exception as e:
                         log_throttling.by_time(self.logger, interval=5).warning(
                             f"Secret handshake error: {e}"
@@ -602,13 +613,80 @@ class RobotBackend(Backend):
         # Set the head joint current
         self.set_target_head_joint_current(current)
 
-    def set_handshake_success_callback(self, callback: Callable[[], None]) -> None:
-        """Wire an action to a completed secret handshake (sound always plays).
+    def set_handshake_wifi_callback(self, callback: Callable[[], None]) -> None:
+        """Wire WiFi provisioning to the torque-ON WiFi button code.
 
-        Called from the control loop thread on the SUCCESS event; the
-        callback MUST return promptly (spawn a thread for real work).
+        Called from the control loop thread on the WIFI event; the callback
+        MUST return promptly (it spawns a thread for the real work, like the
+        daemon's QR-provisioning trigger).
         """
-        self._handshake_success_callback = callback
+        self._handshake_wifi_callback = callback
+
+    def _dispatch_handshake_event(self, event: HandshakeEvent) -> None:
+        """Run the action for a handshake event off the control-loop thread.
+
+        This runs INSIDE the 50 Hz control loop, so it must never block:
+        every real action is handed to a short-lived daemon thread (mirroring
+        the daemon's ``_spawn_qr_provisioning``).
+        """
+        if event is HandshakeEvent.ARMED:
+            return
+        if event is HandshakeEvent.WAKE:
+            # wake_up torques on, gotos the base pose and plays the flute.
+            self._spawn_handshake_action(self.wake_up())
+        elif event is HandshakeEvent.WIFI:
+            if self._handshake_wifi_callback is not None:
+                self._handshake_wifi_callback()
+        elif event is HandshakeEvent.TORQUE_OFF:
+            Thread(
+                target=lambda: self.set_motor_control_mode(MotorControlMode.Disabled),
+                daemon=True,
+                name="handshake-torque-off",
+            ).start()
+        elif event is HandshakeEvent.EMOTION:
+            move = self._get_handshake_emotion_move()
+            if move is not None:
+                self._spawn_handshake_action(
+                    self.play_move(move, initial_goto_duration=0.5)
+                )
+            else:
+                self.logger.info("Handshake emotion: no bundled move, skipping.")
+
+    def _spawn_handshake_action(self, coro: Any) -> None:
+        """Drive an async backend action on its own daemon thread + loop."""
+
+        def run() -> None:
+            try:
+                asyncio.run(coro)
+            except Exception:
+                self.logger.exception("Handshake action failed")
+
+        Thread(target=run, daemon=True, name="handshake-action").start()
+
+    def _get_handshake_emotion_move(self) -> Any:
+        """Load (once) the bundled excited move, or None if it is not shipped."""
+        if self._handshake_emotion_move is not None:
+            return self._handshake_emotion_move
+        try:
+            from reachy_mini.motion.recorded_move import RecordedMove
+
+            base = (
+                resources.files("reachy_mini")
+                / "assets"
+                / _HANDSHAKE_EMOTION_DIR
+            )
+            move_file = base / f"{_HANDSHAKE_EMOTION_NAME}.json"
+            if not move_file.is_file():
+                return None
+            with move_file.open("r") as f:
+                data = json.load(f)
+            sound_file = base / f"{_HANDSHAKE_EMOTION_NAME}.wav"
+            sound_path = Path(str(sound_file)) if sound_file.is_file() else None
+            self._handshake_emotion_move = RecordedMove(data, sound_path)
+            return self._handshake_emotion_move
+        except Exception:
+            self.logger.exception("Failed to load handshake emotion move")
+            return None
 
     def get_motor_control_mode(self) -> MotorControlMode:
         """Get the motor control mode."""

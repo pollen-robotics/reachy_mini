@@ -42,7 +42,15 @@ from .antenna_buttons import Direction, Press
 #   ("single", antenna_index, Direction)   -- one antenna pressed
 #   ("sym", Direction)                      -- both antennas pressed together
 #   ("invalid",)                            -- an ambiguous group (never matches)
-_Move = tuple
+_Move = tuple[object, ...]
+
+
+def _single(antenna: int, direction: Direction) -> _Move:
+    return ("single", antenna, direction)
+
+
+def _sym(direction: Direction) -> _Move:
+    return ("sym", direction)
 
 
 class CodeEvent(enum.Enum):
@@ -80,18 +88,18 @@ class ButtonCodeMachine:
         ext, internal = Direction.EXTERNAL, Direction.INTERNAL
         # (event, sequence of moves). No code is a prefix of another.
         self._codes: list[tuple[CodeEvent, list[_Move]]] = [
-            (CodeEvent.WIFI, [("sym", ext), ("sym", internal)]),
+            (CodeEvent.WIFI, [_sym(ext), _sym(internal)]),
             (
                 CodeEvent.TORQUE_OFF,
-                [("single", left, ext)] * 3 + [("single", right, ext)] * 2,
+                [_single(left, ext)] * 3 + [_single(right, ext)] * 2,
             ),
             (
                 CodeEvent.EMOTION,
                 [
-                    ("single", left, ext),
-                    ("single", right, ext),
-                    ("single", left, ext),
-                    ("single", right, ext),
+                    _single(left, ext),
+                    _single(right, ext),
+                    _single(left, ext),
+                    _single(right, ext),
                 ],
             ),
         ]

@@ -537,15 +537,15 @@ class Daemon:
         )
 
     def _maybe_wire_handshake_wifi_provisioning(self) -> None:
-        """Optionally chain QR WiFi provisioning to the secret handshake.
+        """Optionally chain QR WiFi provisioning to the WiFi button code.
 
-        Opt-in via REACHY_HANDSHAKE_WIFI_PROVISION=1 (default OFF: the
-        handshake then only plays its sounds). Wireless version only. When
-        enabled, a completed handshake starts the camera QR scan
-        (app/services/wifi_provisioning.py) even if WiFi is already
-        connected, so the gesture can also RE-provision a robot (design
-        decision 2026-07-06; availability will eventually be gated by an
-        app instead).
+        In the redesign WiFi is triggered by the torque-ON WiFi antenna-button
+        code (both antennas external, then both internal), not by collisions.
+        Opt-in via REACHY_HANDSHAKE_WIFI_PROVISION=1 (default OFF). Wireless
+        version only. When enabled, the code starts the camera QR scan
+        (app/services/wifi_provisioning.py) even if WiFi is already connected,
+        so it can also RE-provision a robot (design decision 2026-07-06;
+        availability will eventually be gated by an app instead).
         """
         import os
 
@@ -558,11 +558,11 @@ class Daemon:
         ):
             return
         if self.backend is None or not hasattr(
-            self.backend, "set_handshake_success_callback"
+            self.backend, "set_handshake_wifi_callback"
         ):
             return
-        self.logger.info("Secret handshake wired to QR WiFi provisioning.")
-        self.backend.set_handshake_success_callback(self._spawn_qr_provisioning)
+        self.logger.info("WiFi button code wired to QR WiFi provisioning.")
+        self.backend.set_handshake_wifi_callback(self._spawn_qr_provisioning)
 
     def _spawn_qr_provisioning(self) -> None:
         """Start QR WiFi provisioning on a fresh thread (control-loop safe)."""
