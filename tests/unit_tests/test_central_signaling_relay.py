@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 
+from reachy_mini.daemon.robot_app_lock import RobotAppLock, RobotAppLockState
 from reachy_mini.media.central_signaling_relay import (
     HEARTBEAT_DEFAULT_INTERVAL,
     HEARTBEAT_MAX_INTERVAL,
@@ -549,3 +550,62 @@ def test_reconnect_delay_grows_and_is_capped() -> None:
         <= MAX_RECONNECT_INTERVAL * (1 + RECONNECT_BACKOFF_JITTER) + 1e-9
     )
 
+
+
+# ---------------------------------------------------------------------------
+# startSession robot-lock gating (free / local_app control-only / busy)
+# ---------------------------------------------------------------------------
+
+
+def _relay_with_lock(
+    lock: RobotAppLock,
+) -> tuple[CentralSignalingRelay, _SendJournal, _SendJournal]:
+    """Relay wired to a real lock, with central + local sends journaled."""
+    relay = _make_relay()
+    relay._robot_app_lock = lock
+    central, local = _SendJournal(), _SendJournal()
+    relay._send_to_central = central  # type: ignore[method-assign]
+    relay._send_to_local = local  # type: ignore[method-assign]
+    return relay, central, local
+
+
+def _start_session(relay: CentralSignalingRelay) -> None:
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s1"}
+        )
+    )
+
+
+def test_startsession_acquires_lock_when_free() -> None:
+    """A remote peer takes remote_session when the robot is free."""
+    lock = RobotAppLock()
+    relay, central, local = _relay_with_lock(lock)
+    _start_session(relay)
+    assert lock.status().state == RobotAppLockState.REMOTE_SESSION
+    assert not any(m.get("type") == "endSession" for m in central.sent)
+    assert any(m.get("type") == "list" for m in local.sent)  # session proceeds
+
+
+def test_startsession_control_only_while_local_app_runs() -> None:
+    """While a local app holds the robot, a remote peer connects control-only."""
+    lock = RobotAppLock()
+    lock.acquire_local_keeping_remote("reachy_mini_conversation_app")
+    relay, central, local = _relay_with_lock(lock)
+    _start_session(relay)
+    # accepted (session proceeds) WITHOUT taking the lock or ending the session
+    assert lock.status().state == RobotAppLockState.LOCAL_APP
+    assert not any(m.get("type") == "endSession" for m in central.sent)
+    assert any(m.get("type") == "list" for m in local.sent)
+
+
+def test_startsession_refused_when_another_remote_holds() -> None:
+    """A second remote peer is refused while another remote session owns the robot."""
+    lock = RobotAppLock()
+    assert lock.try_acquire_remote("other") is True
+    relay, central, local = _relay_with_lock(lock)
+    _start_session(relay)
+    assert any(
+        m.get("type") == "endSession" and m.get("reason") == "robot_busy"
+        for m in central.sent
+    )
