@@ -781,6 +781,15 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # A name set by a client (e.g. the mobile app over the data channel) is
+    # persisted on the robot and wins over the CLI default so the rename
+    # survives reboots. Fail-safe: falls back to --robot-name on any error.
+    from reachy_mini.utils.robot_name import get_robot_name as get_persisted_robot_name
+
+    persisted_robot_name = get_persisted_robot_name()
+    if persisted_robot_name:
+        args.robot_name = persisted_robot_name
+
     if args.log_file:
         file_handler = logging.FileHandler(args.log_file, mode="a")
         file_handler.setFormatter(
