@@ -6,7 +6,7 @@ quits so the robots stay put and the handshakes keep working. Built to be run
 over and over between takes.
 
 Default mapping (override with --lite-id / --wireless-id):
-    Lite     <- pose 1 (dominant)
+    Lite     <- pose 3 (dominant)
     wireless <- pose 2 (submissive)
 
 Note:
@@ -49,7 +49,7 @@ def send(robot: str, pose: dict, duration: float) -> None:
 def main() -> None:
     """Send both poses concurrently, then exit."""
     parser = argparse.ArgumentParser(description="Set the two-robot video pose.")
-    parser.add_argument("--lite-id", type=int, default=1, help="Pose ID for the Lite.")
+    parser.add_argument("--lite-id", type=int, default=3, help="Pose ID for the Lite.")
     parser.add_argument(
         "--wireless-id", type=int, default=2, help="Pose ID for the wireless robot."
     )
