@@ -28,7 +28,7 @@ class DummyKinematics:
 
 
 class DummyTracker:
-    """Spy standing in for the out-of-process face tracker."""
+    """Spy standing in for the face tracker."""
 
     def __init__(self) -> None:
         """Initialize spy state."""
@@ -60,7 +60,7 @@ def _make_backend() -> MockupSimBackend:
 
 
 def test_set_head_tracking_command_toggles_tracking() -> None:
-    """The protocol command arms the gate and starts/stops the tracker process."""
+    """The protocol command arms the gate and starts/stops the tracker."""
     backend = _make_backend()
     backend._media_server = SimpleNamespace(camera_specs=object())
     tracker = DummyTracker()
@@ -257,7 +257,7 @@ def test_tracking_sustained_loss_recenters_to_neutral() -> None:
 
 
 def test_enable_head_tracking_weight_zero_pauses_without_stopping() -> None:
-    """Weight 0 pauses the worker and frees the head, keeping the process."""
+    """Weight 0 pauses the tracker and frees the head without stopping it."""
     backend = _make_backend()
     backend._media_server = SimpleNamespace(camera_specs=object())
     tracker = DummyTracker()

@@ -98,7 +98,7 @@ from reachy_mini.utils.interpolation import (
     linear_pose_interpolation,
     time_trajectory,
 )
-from reachy_mini.vision.face_tracking import FaceTrackerProcess
+from reachy_mini.vision.face_tracking import FaceTracker
 from reachy_mini.vision.look_at import (
     default_head_to_camera_transform,
     look_at_image_pose,
@@ -322,7 +322,7 @@ class Backend:
         self._tracking_target_pose: Annotated[NDArray[np.float64], (4, 4)] | None = None
         self._tracking_last_center: tuple[float, float] | None = None
         self._last_face_seen: float | None = None
-        self._tracker: FaceTrackerProcess | None = None
+        self._tracker: FaceTracker | None = None
         self._tracking_lock = threading.Lock()
         self._face_target = FaceTarget()
         self.T_head_cam = default_head_to_camera_transform()
@@ -607,7 +607,7 @@ class Backend:
                 return False
             if self._tracking_requested_weight > 0.0:
                 if self._tracker is None:
-                    self._tracker = FaceTrackerProcess()
+                    self._tracker = FaceTracker()
                 self._tracker.start(self._media_server.camera_specs)
                 self._tracker.set_active(True)
             else:
@@ -618,7 +618,7 @@ class Backend:
         return True
 
     def disable_head_tracking(self) -> None:
-        """Disable daemon-side visual head tracking, stopping the detector process."""
+        """Disable daemon-side visual head tracking, stopping the detector thread."""
         with self._tracking_lock:
             self._tracking_enabled = False
             tracker = self._tracker

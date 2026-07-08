@@ -1,10 +1,16 @@
-"""Tests for out-of-process face-tracking selection and observation reduction."""
+"""Tests for face-tracking selection, observation reduction, and thread lifecycle."""
 
+import threading
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
+import pytest
 
-from reachy_mini.vision.face_tracking import Tracker, to_observation
+from reachy_mini.vision.face_tracking import FaceTracker, Tracker, to_observation
+
+if TYPE_CHECKING:
+    from reachy_mini.media.camera_constants import CameraSpecs
 
 
 def _face(
@@ -72,3 +78,31 @@ def test_tracker_drops_track_after_misses_then_reacquires() -> None:
     assert tracker.select([far], 200, 200) is None  # miss 1, track held
     assert tracker.select([far], 200, 200) is None  # miss 2, track dropped
     assert tracker.select([far], 200, 200) is far  # re-acquired
+
+
+def test_stuck_stop_never_double_spawns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stop() that times out keeps the thread handle so restarts stay single."""
+    release = threading.Event()
+    runs: list[threading.Thread] = []
+
+    def fake_run(self: FaceTracker, camera_specs: "CameraSpecs") -> None:
+        runs.append(threading.current_thread())
+        release.wait(10.0)
+
+    monkeypatch.setattr(FaceTracker, "_run", fake_run)
+    specs = cast("CameraSpecs", None)
+    tracker = FaceTracker()
+    tracker.start(specs)
+    tracker.start(specs)
+    assert len(runs) == 1  # start on a running tracker is a no-op
+
+    tracker.stop()  # the stub ignores the stop event, so the join times out
+    tracker.start(specs)
+    assert len(runs) == 1  # the live thread is kept; no second detector
+
+    release.set()
+    runs[0].join(timeout=5.0)
+    assert not runs[0].is_alive()
+    tracker.start(specs)
+    assert len(runs) == 2  # once the thread has exited, restart works
+    tracker.stop()

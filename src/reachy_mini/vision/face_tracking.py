@@ -1,15 +1,12 @@
-"""Out-of-process face tracking: a YuNet detector feeding the daemon over a pipe."""
+"""Face tracking: a YuNet detector thread feeding the daemon the latest observation."""
 
 import logging
-import multiprocessing as mp
 import os
 import platform
-import signal
+import queue
+import threading
 import time
 from dataclasses import dataclass
-from multiprocessing.connection import Connection
-from multiprocessing.process import BaseProcess
-from multiprocessing.synchronize import Event as EventType
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -19,7 +16,7 @@ if TYPE_CHECKING:
     from reachy_mini.media.camera_constants import CameraSpecs
     from reachy_mini.vision.face_detector import Face
 
-_logger = logging.getLogger("reachymini-face-tracker")
+logger = logging.getLogger(__name__)
 
 # Detector input width; smaller trades recall for CPU.
 _TRACKING_WIDTH = 320
@@ -126,148 +123,30 @@ def to_observation(
     )
 
 
-def run(
-    conn: Connection, stop: EventType, active: EventType, camera_specs: "CameraSpecs"
-) -> None:
-    """Detect faces on the camera IPC feed and pipe observations until stopped."""
-    # The daemon coordinates shutdown via `stop`; ignore Ctrl+C so it doesn't traceback here.
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-    # Lowest priority so YuNet bursts never preempt the daemon's 50 Hz control loop.
-    if hasattr(os, "nice"):
-        os.nice(19)
-    try:
-        import gi
-
-        gi.require_version("Gst", "1.0")
-        gi.require_version("GstApp", "1.0")
-        # GstApp is unused directly but installs appsink.try_pull_sample().
-        from gi.repository import Gst, GstApp  # noqa: F401
-
-        from reachy_mini.daemon.utils import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
-        from reachy_mini.media.camera_utils import intrinsics_for_size
-        from reachy_mini.vision.face_detector import FaceDetector
-
-        Gst.init([])
-        if platform.system() == "Windows":
-            source = Gst.ElementFactory.make("win32ipcvideosrc")
-            source.set_property("pipe-name", CAMERA_PIPE_NAME)
-        else:
-            source = Gst.ElementFactory.make("unixfdsrc")
-            source.set_property("socket-path", CAMERA_SOCKET_PATH)
-        queue = Gst.ElementFactory.make("queue")
-        queue.set_property("leaky", 2)
-        queue.set_property("max-size-buffers", 1)
-        # Prefer v4l2convert: on the RPi the ISP does the scale + convert in hardware.
-        convert_chain = [Gst.ElementFactory.make("v4l2convert")]
-        if convert_chain[0] is None:
-            convert_chain = [
-                Gst.ElementFactory.make("videoscale"),
-                Gst.ElementFactory.make("videoconvert"),
-            ]
-        src_w, src_h = camera_specs.default_resolution.value[:2]
-        width = min(_TRACKING_WIDTH, src_w)
-        height = max(2, round(width * src_h / src_w / 2) * 2)
-        capsfilter = Gst.ElementFactory.make("capsfilter")
-        capsfilter.set_property(
-            "caps",
-            Gst.Caps.from_string(
-                f"video/x-raw,format=BGR,width={width},height={height}"
-            ),
-        )
-        appsink = Gst.ElementFactory.make("appsink")
-        appsink.set_property("drop", True)
-        appsink.set_property("max-buffers", 1)
-        appsink.set_property("sync", False)
-
-        pipeline = Gst.Pipeline.new("face-tracker")
-        chain = [source, queue, *convert_chain, capsfilter, appsink]
-        for element in chain:
-            pipeline.add(element)
-        for upstream, downstream in zip(chain, chain[1:]):
-            upstream.link(downstream)
-        detector = FaceDetector()
-        tracker = Tracker()
-    except Exception as e:
-        _logger.warning("Face tracker failed to start: %s", e)
-        return
-
-    crop_scale = camera_specs.default_resolution.value[3]
-    camera_matrix: NDArray[np.float64] | None = None
-    playing = False
-    try:
-        while not stop.is_set():
-            if not active.is_set():
-                if playing:
-                    # Disconnect while paused so the daemon serves nothing to this client.
-                    pipeline.set_state(Gst.State.NULL)
-                    playing = False
-                active.wait(0.2)
-                continue
-            if not playing:
-                pipeline.set_state(Gst.State.PLAYING)
-                playing = True
-            sample = appsink.try_pull_sample(200 * Gst.MSECOND)
-            if sample is None:
-                continue
-            structure = sample.get_caps().get_structure(0)
-            width = structure.get_value("width")
-            height = structure.get_value("height")
-            buf = sample.get_buffer()
-            frame = np.frombuffer(
-                buf.extract_dup(0, buf.get_size()), dtype=np.uint8
-            ).reshape((height, width, 3))
-            if camera_matrix is None:
-                camera_matrix = intrinsics_for_size(
-                    camera_specs.K, crop_scale, (width, height)
-                )
-            face = tracker.select(detector.detect(frame), width, height)
-            obs = to_observation(
-                face,
-                width,
-                height,
-                camera_matrix,
-                camera_specs.D,
-                time.monotonic(),
-            )
-            try:
-                conn.send(obs)
-            except (BrokenPipeError, OSError):
-                break
-    finally:
-        pipeline.set_state(Gst.State.NULL)
-
-
-class FaceTrackerProcess:
-    """Spawn and manage the out-of-process face detector."""
+class FaceTracker:
+    """Run the face detector in a daemon thread and expose the latest observation."""
 
     def __init__(self) -> None:
-        """Initialize the manager; no process is started until ``start``."""
-        self._ctx = mp.get_context("spawn")
-        self._proc: BaseProcess | None = None
-        self._conn: Connection | None = None
-        self._stop: EventType | None = None
-        self._active: EventType | None = None
+        """Initialize the tracker; no thread is started until ``start``."""
+        self._thread: threading.Thread | None = None
+        self._stop = threading.Event()
+        self._active = threading.Event()
+        self._observations: queue.SimpleQueue[FaceObservation] = queue.SimpleQueue()
 
     def start(self, camera_specs: "CameraSpecs") -> None:
-        """Spawn the detector process if it is not already running."""
-        if self._proc is not None and self._proc.is_alive():
+        """Start the detector thread if it is not already running."""
+        if self._thread is not None and self._thread.is_alive():
             return
-        recv_conn, send_conn = self._ctx.Pipe(duplex=False)
-        self._stop = self._ctx.Event()
-        self._active = self._ctx.Event()
-        self._conn = recv_conn
-        self._proc = self._ctx.Process(
-            target=run,
-            args=(send_conn, self._stop, self._active, camera_specs),
-            daemon=True,
+        self._stop.clear()
+        # Drop observations left over from a previous run.
+        self._observations = queue.SimpleQueue()
+        self._thread = threading.Thread(
+            target=self._run, args=(camera_specs,), daemon=True, name="face-tracker"
         )
-        self._proc.start()
-        send_conn.close()
+        self._thread.start()
 
     def set_active(self, active: bool) -> None:
-        """Pause or resume detection; a paused worker disconnects from the camera feed."""
-        if self._active is None:
-            return
+        """Pause or resume detection; a paused tracker disconnects from the camera feed."""
         if active:
             self._active.set()
         else:
@@ -275,26 +154,145 @@ class FaceTrackerProcess:
 
     def latest(self) -> FaceObservation | None:
         """Return the most recent observation, draining any backlog."""
-        if self._conn is None:
-            return None
         obs: FaceObservation | None = None
-        try:
-            while self._conn.poll():
-                obs = self._conn.recv()
-        except (EOFError, OSError):
-            return obs
+        while not self._observations.empty():
+            obs = self._observations.get_nowait()
         return obs
 
     def stop(self) -> None:
-        """Stop the detector process and release the pipe."""
-        if self._stop is not None:
-            self._stop.set()
-        if self._proc is not None:
-            self._proc.join(timeout=2.0)
-            if self._proc.is_alive():
-                self._proc.terminate()
-        if self._conn is not None:
-            self._conn.close()
-        self._proc = None
-        self._conn = None
-        self._stop = None
+        """Stop the detector thread."""
+        self._stop.set()
+        if self._thread is None:
+            return
+        self._thread.join(timeout=2.0)
+        if self._thread.is_alive():
+            # Keep the handle: forgetting a live thread lets start() clear its stop flag and double-run.
+            logger.warning("Face tracker thread did not stop in time.")
+        else:
+            self._thread = None
+
+    def _run(self, camera_specs: "CameraSpecs") -> None:
+        # Lowest priority so YuNet bursts never preempt the daemon's 50 Hz control loop.
+        try:
+            os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 19)
+        except (AttributeError, OSError):
+            # Per-thread niceness is Linux-only; other platforms run unprioritized.
+            pass
+        try:
+            import gi
+
+            gi.require_version("Gst", "1.0")
+            gi.require_version("GstApp", "1.0")
+            # GstApp is unused directly but installs appsink.try_pull_sample().
+            from gi.repository import Gst, GstApp  # noqa: F401
+
+            from reachy_mini.daemon.utils import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
+            from reachy_mini.media.camera_utils import intrinsics_for_size
+            from reachy_mini.vision.face_detector import FaceDetector
+
+            Gst.init([])
+            if platform.system() == "Windows":
+                source = Gst.ElementFactory.make("win32ipcvideosrc")
+                source.set_property("pipe-name", CAMERA_PIPE_NAME)
+            else:
+                source = Gst.ElementFactory.make("unixfdsrc")
+                source.set_property("socket-path", CAMERA_SOCKET_PATH)
+            queue_frames = Gst.ElementFactory.make("queue")
+            queue_frames.set_property("leaky", 2)
+            queue_frames.set_property("max-size-buffers", 1)
+            # Prefer v4l2convert: on the RPi the ISP does the scale + convert in hardware.
+            convert_chain = [Gst.ElementFactory.make("v4l2convert")]
+            if convert_chain[0] is None:
+                convert_chain = [
+                    Gst.ElementFactory.make("videoscale"),
+                    Gst.ElementFactory.make("videoconvert"),
+                ]
+            src_w, src_h = camera_specs.default_resolution.value[:2]
+            width = min(_TRACKING_WIDTH, src_w)
+            height = max(2, round(width * src_h / src_w / 2) * 2)
+            capsfilter = Gst.ElementFactory.make("capsfilter")
+            capsfilter.set_property(
+                "caps",
+                Gst.Caps.from_string(
+                    f"video/x-raw,format=BGR,width={width},height={height}"
+                ),
+            )
+            appsink = Gst.ElementFactory.make("appsink")
+            appsink.set_property("drop", True)
+            appsink.set_property("max-buffers", 1)
+            appsink.set_property("sync", False)
+
+            pipeline = Gst.Pipeline.new("face-tracker")
+            chain = [source, queue_frames, *convert_chain, capsfilter, appsink]
+            for element in chain:
+                pipeline.add(element)
+            for upstream, downstream in zip(chain, chain[1:]):
+                if not upstream.link(downstream):
+                    raise RuntimeError(
+                        f"could not link {upstream.get_name()} to {downstream.get_name()}"
+                    )
+            detector = FaceDetector()
+            tracker = Tracker()
+        except Exception as e:
+            logger.warning("Face tracker failed to start: %s", e)
+            return
+
+        crop_scale = camera_specs.default_resolution.value[3]
+        camera_matrix: NDArray[np.float64] | None = None
+        playing = False
+        feed_lost = False
+        try:
+            while not self._stop.is_set():
+                if not self._active.is_set():
+                    if playing:
+                        # Disconnect while paused so the daemon serves nothing to this client.
+                        pipeline.set_state(Gst.State.NULL)
+                        playing = False
+                    self._active.wait(0.2)
+                    continue
+                if not playing:
+                    if (
+                        pipeline.set_state(Gst.State.PLAYING)
+                        == Gst.StateChangeReturn.FAILURE
+                    ):
+                        if not feed_lost:
+                            feed_lost = True
+                            logger.warning(
+                                "Face tracker cannot reach the camera feed; retrying."
+                            )
+                        # A stopped appsink returns instantly, so back off instead of busy-polling it.
+                        pipeline.set_state(Gst.State.NULL)
+                        self._stop.wait(1.0)
+                        continue
+                    feed_lost = False
+                    playing = True
+                sample = appsink.try_pull_sample(200 * Gst.MSECOND)
+                if sample is None:
+                    continue
+                structure = sample.get_caps().get_structure(0)
+                frame_width = structure.get_value("width")
+                frame_height = structure.get_value("height")
+                buf = sample.get_buffer()
+                frame = np.frombuffer(
+                    buf.extract_dup(0, buf.get_size()), dtype=np.uint8
+                ).reshape((frame_height, frame_width, 3))
+                if camera_matrix is None:
+                    camera_matrix = intrinsics_for_size(
+                        camera_specs.K, crop_scale, (frame_width, frame_height)
+                    )
+                face = tracker.select(detector.detect(frame), frame_width, frame_height)
+                self._observations.put(
+                    to_observation(
+                        face,
+                        frame_width,
+                        frame_height,
+                        camera_matrix,
+                        camera_specs.D,
+                        time.monotonic(),
+                    )
+                )
+        except Exception:
+            # With no process boundary left, this is the only place a detector crash gets reported.
+            logger.exception("Face tracker crashed.")
+        finally:
+            pipeline.set_state(Gst.State.NULL)
