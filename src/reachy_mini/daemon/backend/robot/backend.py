@@ -655,6 +655,15 @@ class RobotBackend(Backend):
                 daemon=True,
                 name="handshake-torque-off",
             ).start()
+        elif event is HandshakeEvent.ORDER_66:
+            # Video gag: let the detection beep breathe, then say the line.
+            def _play_order_66() -> None:
+                time.sleep(0.4)
+                self.play_sound("order_66.wav")
+
+            Thread(
+                target=_play_order_66, daemon=True, name="handshake-order-66"
+            ).start()
         elif event is HandshakeEvent.EMOTION:
             move = self._get_handshake_emotion_move()
             if move is not None:
@@ -685,7 +694,7 @@ class RobotBackend(Backend):
         robot plays the flute without moving.
         """
         self.set_motor_control_mode(MotorControlMode.Enabled)
-        await self.wake_up()
+        await self.wake_up(sound_file="hello_there.wav")
 
     def _spawn_handshake_action(self, coro: Any) -> None:
         """Drive an async backend action on its own daemon thread + loop."""

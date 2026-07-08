@@ -953,8 +953,13 @@ class Backend:
         ]
     )
 
-    async def wake_up(self) -> None:
-        """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
+    async def wake_up(self, sound_file: str = "wake_up.wav") -> None:
+        """Wake up the robot - go to the initial head position and play the wake up emote and sound.
+
+        Args:
+            sound_file (str): Asset played during the wake emote. Default is the
+                "toudoum" earcon; the handshake wake passes a spoken greeting.
+        """
         await asyncio.sleep(0.1)
 
         _, _, magic_distance = distance_between_poses(
@@ -968,8 +973,8 @@ class Backend:
         )
         await asyncio.sleep(0.1)
 
-        # Toudoum
-        self.play_sound("wake_up.wav")
+        # Toudoum (or a spoken greeting when the caller overrides it)
+        self.play_sound(sound_file)
 
         # Roll 20° to the left
         pose = self.INIT_HEAD_POSE.copy()
