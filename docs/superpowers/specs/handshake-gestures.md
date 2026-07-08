@@ -24,8 +24,9 @@ Read each code left to right, **one beat per column** ① ② ③. Inside a beat
 | | Code | ① | ② | ③ | ④ | ⑤ |
 |---|---|:---:|:---:|:---:|:---:|:---:|
 | 🔔 | **Wake** | 🥁 | 🥁 | 🥁 | | |
-| 📶 | **Wi-Fi** | L ⬅️&nbsp;&nbsp;&nbsp;R ➡️ | L ➡️&nbsp;&nbsp;&nbsp;R ⬅️ | | | |
+| 📶 | **Wi-Fi** | L ⬅️&nbsp;&nbsp;&nbsp;R ➡️ | L ➡️&nbsp;&nbsp;&nbsp;R ⬅️ | L ⬅️&nbsp;&nbsp;&nbsp;R ➡️ | | |
 | 😴 | **Go limp** | L ⬅️&nbsp;&nbsp;&nbsp;R • | L ⬅️&nbsp;&nbsp;&nbsp;R • | L ⬅️&nbsp;&nbsp;&nbsp;R • | L •&nbsp;&nbsp;&nbsp;R ➡️ | L •&nbsp;&nbsp;&nbsp;R ➡️ |
 | 🎉 | **Emotion** | L ⬅️&nbsp;&nbsp;&nbsp;R • | L •&nbsp;&nbsp;&nbsp;R ➡️ | L ⬅️&nbsp;&nbsp;&nbsp;R • | L •&nbsp;&nbsp;&nbsp;R ➡️ | |
+| 🎬 | **Order 66** *(gag)* | L ⬅️&nbsp;&nbsp;&nbsp;R ➡️ | L ⬅️&nbsp;&nbsp;&nbsp;R ➡️ | L ⬅️&nbsp;&nbsp;&nbsp;R ➡️ | | |
 
 *(Go limp L/R still to confirm on the robot.)*
