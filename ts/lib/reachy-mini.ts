@@ -183,6 +183,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _micVolumeResolve: ((v: number | null) => void) | null = null;
     private _firstWakeUpResolve: ((v: boolean | null) => void) | null = null;
     private _robotNameResolve: ((v: string | null) => void) | null = null;
+    private _deleteHfTokenResolve: ((v: boolean | null) => void) | null = null;
     // applyAudioConfig() / readAudioParameter() share the same single-slot
     // pattern as the volume helpers. Separate slots so the two can be
     // in-flight concurrently without collision.
@@ -732,6 +733,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         if (this._robotNameResolve) { this._robotNameResolve(null); this._robotNameResolve = null; }
+        if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Session stopped'));
@@ -780,6 +782,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         if (this._robotNameResolve) { this._robotNameResolve(null); this._robotNameResolve = null; }
+        if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Disconnected'));
@@ -1355,6 +1358,27 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             () => this._robotNameResolve,
             (next) => { this._robotNameResolve = next; },
             { type: 'set_robot_name', name },
+        );
+    }
+
+    /**
+     * Sign this robot out of Hugging Face: asks the daemon to delete its
+     * stored HF token, which de-registers the robot from the central
+     * signaling relay (it disappears from its owner's robot list until it
+     * is set up again). Works over the WebRTC data channel, so it reaches
+     * the robot remotely (no LAN HTTP path required).
+     *
+     * Resolves `true` when the daemon acked success, `false` on a daemon
+     * error, or `null` when the channel isn't open / the daemon predates
+     * the `delete_hf_token` command. Note the sign-out drops the central
+     * relay, so the session may tear down right after the ack - callers
+     * should treat a post-call session drop as expected.
+     */
+    signOut(): Promise<boolean | null> {
+        return this._slotRoundtrip(
+            () => this._deleteHfTokenResolve,
+            (next) => { this._deleteHfTokenResolve = next; },
+            { type: 'delete_hf_token' },
         );
     }
 
@@ -1971,6 +1995,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     data.status === 'error' ? null : ((data.name as string | null) ?? null),
                 );
                 this._robotNameResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'delete_hf_token') {
+            if (this._deleteHfTokenResolve) {
+                this._deleteHfTokenResolve(data.status === 'error' ? false : true);
+                this._deleteHfTokenResolve = null;
             }
             return;
         }
