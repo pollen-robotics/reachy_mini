@@ -3019,6 +3019,7 @@ dependencies = [
     { name = "libusb-package" },
     { name = "log-throttling" },
     { name = "numpy" },
+    { name = "onnxruntime" },
     { name = "pip" },
     { name = "platformdirs" },
     { name = "psutil" },
@@ -3053,7 +3054,6 @@ all = [
     { name = "lgpio", marker = "sys_platform == 'linux'" },
     { name = "mujoco" },
     { name = "nmcli", marker = "sys_platform == 'linux'" },
-    { name = "onnxruntime" },
     { name = "opencv-python" },
     { name = "placo", marker = "sys_platform != 'win32'" },
     { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux'" },
@@ -3073,9 +3073,6 @@ examples = [
 mujoco = [
     { name = "mujoco" },
 ]
-nn-kinematics = [
-    { name = "onnxruntime" },
-]
 opencv = [
     { name = "cv2-enumerate-cameras" },
     { name = "opencv-python" },
@@ -3086,9 +3083,6 @@ placo-kinematics = [
 ]
 rerun = [
     { name = "rerun-sdk" },
-]
-vision = [
-    { name = "onnxruntime" },
 ]
 wireless-version = [
     { name = "cryptography" },
@@ -3131,8 +3125,7 @@ requires-dist = [
     { name = "mujoco", marker = "extra == 'mujoco'", specifier = "==3.3.0" },
     { name = "nmcli", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.5" },
     { name = "numpy", specifier = ">=2.2.5" },
-    { name = "onnxruntime", marker = "extra == 'nn-kinematics'", specifier = "==1.27.0" },
-    { name = "onnxruntime", marker = "extra == 'vision'", specifier = "==1.27.0" },
+    { name = "onnxruntime", specifier = "==1.27.0" },
     { name = "opencv-python", marker = "extra == 'examples'", specifier = "<=5.0" },
     { name = "opencv-python", marker = "extra == 'opencv'", specifier = "<=5.0" },
     { name = "pip", specifier = ">=26.1" },
@@ -3174,7 +3167,7 @@ requires-dist = [
     { name = "websockets", specifier = ">=12,<16" },
     { name = "zeroconf", specifier = ">=0.149.7,<1" },
 ]
-provides-extras = ["examples", "mujoco", "nn-kinematics", "placo-kinematics", "rerun", "wireless-version", "opencv", "vision", "all"]
+provides-extras = ["examples", "mujoco", "placo-kinematics", "rerun", "wireless-version", "opencv", "all"]
 
 [package.metadata.requires-dev]
 dev = [
