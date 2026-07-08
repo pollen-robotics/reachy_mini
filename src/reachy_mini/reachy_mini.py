@@ -272,7 +272,7 @@ class ReachyMini:
             weight: Blend factor in ``[0, 1]``. ``1`` lets tracking fully own the
                 head orientation; intermediate values let app motion show through
                 while biasing toward the face; ``0`` pauses detection (freeing the
-                head and CPU) without tearing the process down, for cheap on/off.
+                head and CPU) without tearing the tracker down, for cheap on/off.
 
         """
         self.client.send_command(SetHeadTrackingCmd(enabled=True, weight=weight))
@@ -685,7 +685,7 @@ class ReachyMini:
     ) -> npt.NDArray[np.float64]:
         """Make the robot head look at a point defined by a pixel position (u,v).
 
-        # TODO image of reachy mini coordinate system
+        Pixels are counted from the image top-left corner: u to the right, v down.
 
         Args:
             u (int): Horizontal coordinate in image frame.
@@ -748,7 +748,7 @@ class ReachyMini:
     ) -> npt.NDArray[np.float64]:
         """Look at a specific point in 3D space in Reachy Mini's reference frame.
 
-        TODO include image of reachy mini coordinate system
+        The frame sits at the neutral head origin: x forward, y left, z up.
 
         Args:
             x (float): X coordinate in meters.

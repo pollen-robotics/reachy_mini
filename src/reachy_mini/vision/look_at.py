@@ -1,4 +1,4 @@
-"""Shared look-at geometry for camera-guided head aiming."""
+"""Look-at geometry shared by the SDK's look_at_* methods and the daemon's face tracking."""
 
 import numpy as np
 import numpy.typing as npt
@@ -6,6 +6,7 @@ from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.media.camera_utils import undistort_points
 
+# Camera extrinsics from the CAD: camera offset in the head frame, plus the optical→head axis rotation.
 DEFAULT_HEAD_TO_CAMERA_TRANSFORM: npt.NDArray[np.float64] = np.eye(4)
 DEFAULT_HEAD_TO_CAMERA_TRANSFORM[:3, 3] = [0.0437, 0.0, 0.0512]
 DEFAULT_HEAD_TO_CAMERA_TRANSFORM[:3, :3] = np.array(
@@ -23,7 +24,7 @@ def default_head_to_camera_transform() -> npt.NDArray[np.float64]:
 
 
 def look_at_world_pose(x: float, y: float, z: float) -> npt.NDArray[np.float64]:
-    """Return the head pose that points the head's +X axis at a world point."""
+    """Return a head pose that re-centers the head on the origin and aims its +X axis at the world point."""
     target_position = np.array([x, y, z], dtype=np.float64)
     target_norm = np.linalg.norm(target_position)
     if target_norm < 1e-12:
