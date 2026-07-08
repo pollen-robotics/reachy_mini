@@ -62,6 +62,7 @@ class AudioBase(ABC):
 
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize shared audio attributes (DoA helper)."""
+        Gst.init([])
         self.logger = logging.getLogger(type(self).__module__)
         self.logger.setLevel(log_level)
         self._doa = AudioDoA()
