@@ -4,8 +4,7 @@ Reachy Mini turns its head to follow the closest face. Detection runs inside
 the daemon, so this script only toggles tracking and reads the result.
 
 Note:
-    The daemon must be running with the vision extra installed
-    (pip install reachy_mini[vision]) before executing this script.
+    The daemon must be running before executing this script.
 
 """
 

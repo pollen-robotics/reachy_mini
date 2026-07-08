@@ -46,7 +46,7 @@ The returned frame is a numpy array with shape `(height, width, 3)` and data typ
 
 ### Head Tracking 👀
 
-The daemon can track the closest face and turn the head to follow it (aiming at the nose). Detection runs inside the daemon — the daemon host needs the vision extra (`pip install reachy_mini[vision]`).
+The daemon can track the closest face and turn the head to follow it (aiming at the nose). Detection runs inside the daemon.
 
 ```python
 from reachy_mini import ReachyMini
