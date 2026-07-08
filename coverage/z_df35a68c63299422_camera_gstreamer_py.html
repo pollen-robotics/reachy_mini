@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_df35a68c63299422_camera_utils_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.14.3">coverage.py v7.14.3</a>,
-            created at 2026-07-07 13:52 +0000
+            created at 2026-07-08 15:47 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -226,11 +226,11 @@
     <p class="mis show_mis"><span class="n"><a id="t144" href="#t144">144</a></span><span class="t">            <span class="nam">should_restart</span> <span class="op">=</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t145" href="#t145">145</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t146" href="#t146">146</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_resolution</span> <span class="op">=</span> <span class="nam">resolution</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t147" href="#t147">147</a></span><span class="t">        <span class="nam">caps_video</span> <span class="op">=</span> <span class="nam">Gst</span><span class="op">.</span><span class="nam">Caps</span><span class="op">.</span><span class="nam">from_string</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t148" href="#t148">148</a></span><span class="t">            <span class="fst">f"</span><span class="fst">video/x-raw,format=BGR,</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t149" href="#t149">149</a></span><span class="t">            <span class="fst">f"</span><span class="fst">width=</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">_resolution</span><span class="op">.</span><span class="nam">value</span><span class="op">[</span><span class="num">0</span><span class="op">]</span><span class="op">}</span><span class="fst">,</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t150" href="#t150">150</a></span><span class="t">            <span class="fst">f"</span><span class="fst">height=</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">_resolution</span><span class="op">.</span><span class="nam">value</span><span class="op">[</span><span class="num">1</span><span class="op">]</span><span class="op">}</span><span class="fst">,</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t151" href="#t151">151</a></span><span class="t">            <span class="fst">f"</span><span class="fst">framerate=</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">framerate</span><span class="op">}</span><span class="fst">/1</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t147" href="#t147">147</a></span><span class="t">        <span class="com"># No framerate constraint: the daemon may serve the IPC feed below the capture rate.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t148" href="#t148">148</a></span><span class="t">        <span class="nam">caps_video</span> <span class="op">=</span> <span class="nam">Gst</span><span class="op">.</span><span class="nam">Caps</span><span class="op">.</span><span class="nam">from_string</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t149" href="#t149">149</a></span><span class="t">            <span class="fst">f"</span><span class="fst">video/x-raw,format=BGR,</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t150" href="#t150">150</a></span><span class="t">            <span class="fst">f"</span><span class="fst">width=</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">_resolution</span><span class="op">.</span><span class="nam">value</span><span class="op">[</span><span class="num">0</span><span class="op">]</span><span class="op">}</span><span class="fst">,</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t151" href="#t151">151</a></span><span class="t">            <span class="fst">f"</span><span class="fst">height=</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">_resolution</span><span class="op">.</span><span class="nam">value</span><span class="op">[</span><span class="num">1</span><span class="op">]</span><span class="op">}</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t152" href="#t152">152</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t153" href="#t153">153</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_appsink_video</span><span class="op">.</span><span class="nam">set_property</span><span class="op">(</span><span class="str">"caps"</span><span class="op">,</span> <span class="nam">caps_video</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t154" href="#t154">154</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -364,7 +364,7 @@
             <a class="nav" href="z_df35a68c63299422_camera_utils_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.14.3">coverage.py v7.14.3</a>,
-            created at 2026-07-07 13:52 +0000
+            created at 2026-07-08 15:47 +0000
         </p>
     </div>
 </footer>
