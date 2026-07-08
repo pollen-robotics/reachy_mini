@@ -1300,7 +1300,7 @@ def _daemon_request(
 # of the BLE scan list before connecting. Proxies to the daemon's
 # /api/media/play_sound route — note the /api prefix: the media router is
 # mounted under the prefixed APIRouter, unlike the /wifi and /update routes.
-_IDENTIFY_SOUND_FILE = "wake_up.wav"
+_IDENTIFY_SOUND_FILE = "surprise.ogg"
 
 
 def _identify() -> str:
