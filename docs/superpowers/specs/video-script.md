@@ -1,47 +1,23 @@
-# Reachy Mini — interaction ideas video (draft script)
+I'd like your opinion on a design choice for this robot.
 
-Short social video. Ask the community what they think of two ways to interact
-with the robot without voice/WiFi. Edit freely, this is a working draft.
+Hello there.
 
-## Cold open (skit, ~15 s)
+What if we used a secret handshake like this to communicate with the robot?
 
-Background robot is already gently dancing (soft, out of focus) so the payoff lands.
+Executing order 66.
 
-- **Me** (holding the robot): "I'd like your opinion on a design choice for this robot."
-- *(I tap the antennas: 3 knocks.)*
-- **Robot**: "Hello there." *(real: handshake wake plays `hello_there.wav`)*
-- **Me** (to camera): "So I'm exploring using a combination of moves to talk to your robot, instead of your voice. Like this."
-- *(I pause, think, then do the combination: both antennas OUT, three times.)*
-- **Robot** (flat, ominous): "Executing order 66." *(real: `order_66.wav`)*
-- *(Background robot freezes, slowly turns and looks at me, worried.)*
-- *(Hard cut.)*
+Normally you talk to this robot. But in most cases, voice interaction needs internet.
 
-## Explainer (after the cut, ~75 s)
+And maybe this is a stupid idea, but I've been exploring how you interact with the robot when you don't have WiFi yet. For example, when you've just finished building your robot, or when you're traveling.
 
-Okay, that's obviously a joke. But the real idea is serious, and I want your take.
+I like this idea of encoding meaning through movement. For example, a simple command to shut it down.
 
-Normally you talk to this robot. But voice needs WiFi, because the models run on
-a real machine somewhere else. So I've been exploring how you interact with the
-robot when you don't have WiFi yet. The most common case is the very first one:
-you just built it, how do you bring it to life before it's even on your network?
+Hello there!
 
-The idea I like: a secret handshake. You give it a code with movement. We'd ship
-a few built in, the most useful being the WiFi setup. Watch.
+You could create your own secret handshake and use it as a password to tell the robot that it's you. Maybe it boots with a different personality with you versus your kids.
 
-*(Real demo: knock 3x to wake, then the WiFi code (both OUT, both IN, both OUT),
-robot wakes/greets, I show the WiFi QR, beep, success line.)*
+You could also use this to give it internet access.
 
-No app. And on top of the built-in ones, you could make your own codes for your
-own behaviors.
+A simpler version is ArUco tags. We could add little printed markers you can show to the camera. Less flexible, but very simple and very robust.
 
-A simpler version is ArUco tags, little printed markers you show to the camera.
-Less sexy, but more robust. The catch is you have to be carrying your tags. The
-handshake is always on you.
-
-So: should this ship to everyone, or stay an optional power-user thing? Tell me.
-
-## Notes / open
-
-- One video (both ideas), not two.
-- Keep the real WiFi demo in, it's the proof the gag isn't fake.
-- "Executing order 66" deadpan beats excited.
+What do you think?
