@@ -6,11 +6,13 @@ and returns a `CodeEvent` when a full coded sequence completes; the caller
 decides what each event does (start WiFi provisioning, disable torque, play
 an emotion).
 
-THE THREE CODES (design spec 2026-07-07, section 4)
+THE CODES (design spec 2026-07-07, section 4)
 
-  WiFi        BOTH antennas external together, then BOTH internal together
+  WiFi        BOTH external, BOTH internal, BOTH external (3 beats, harder to
+              trigger by accident)
   Torque off  3x left-external, then 2x right-external
   Emotion     left-ext, right-ext, left-ext, right-ext (alternating)
+  Order 66    BOTH external x3 (video gag: plays the "order 66" line)
 
 DESIGN
 
@@ -56,9 +58,10 @@ def _sym(direction: Direction) -> _Move:
 class CodeEvent(enum.Enum):
     """A completed button code; the caller runs the matching action."""
 
-    WIFI = "wifi"  # both external, then both internal
+    WIFI = "wifi"  # both external, both internal, both external
     TORQUE_OFF = "torque_off"  # 3x left-external, then 2x right-external
     EMOTION = "emotion"  # left, right, left, right (external, alternating)
+    ORDER_66 = "order_66"  # both external x3 (video gag)
 
 
 @dataclass(frozen=True)
@@ -88,7 +91,8 @@ class ButtonCodeMachine:
         ext, internal = Direction.EXTERNAL, Direction.INTERNAL
         # (event, sequence of moves). No code is a prefix of another.
         self._codes: list[tuple[CodeEvent, list[_Move]]] = [
-            (CodeEvent.WIFI, [_sym(ext), _sym(internal)]),
+            (CodeEvent.WIFI, [_sym(ext), _sym(internal), _sym(ext)]),
+            (CodeEvent.ORDER_66, [_sym(ext)] * 3),
             (
                 CodeEvent.TORQUE_OFF,
                 [_single(left, ext)] * 3 + [_single(right, ext)] * 2,

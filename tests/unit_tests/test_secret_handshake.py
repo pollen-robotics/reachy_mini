@@ -220,8 +220,24 @@ def test_wake_is_repeatable():
 
 def test_button_wifi_code_via_facade():
     r = Runner()
-    r.feed(button_sym(external=True) + button_sym(external=False), torque_off=False)
+    r.feed(
+        button_sym(external=True)
+        + button_sym(external=False)
+        + button_sym(external=True),
+        torque_off=False,
+    )
     assert r.events == [Event.WIFI]
+
+
+def test_button_order_66_code_via_facade():
+    r = Runner()
+    r.feed(
+        button_sym(external=True)
+        + button_sym(external=True)
+        + button_sym(external=True),
+        torque_off=False,
+    )
+    assert r.events == [Event.ORDER_66]
 
 
 def test_button_torque_off_code_via_facade():

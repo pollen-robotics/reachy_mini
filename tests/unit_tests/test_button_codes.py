@@ -42,7 +42,12 @@ def empties(n):
 
 def test_wifi_code_fires_and_nothing_else():
     m = ButtonCodeMachine(ButtonCodeConfig())
-    assert feed(m, sym(EXT) + sym(INT)) == [CodeEvent.WIFI]
+    assert feed(m, sym(EXT) + sym(INT) + sym(EXT)) == [CodeEvent.WIFI]
+
+
+def test_order_66_code_fires():
+    m = ButtonCodeMachine(ButtonCodeConfig())
+    assert feed(m, sym(EXT) + sym(EXT) + sym(EXT)) == [CodeEvent.ORDER_66]
 
 
 def test_torque_off_code_fires():
@@ -84,16 +89,24 @@ def test_disarmed_when_torque_off():
 
 def test_wifi_needs_both_antennas_within_the_window():
     m = ButtonCodeMachine(ButtonCodeConfig())
-    ticks = [[Press(0, EXT)]] + empties(6) + [[Press(1, EXT)]] + empties(6) + sym(INT)
+    ticks = (
+        [[Press(0, EXT)]]
+        + empties(6)
+        + [[Press(1, EXT)]]
+        + empties(6)
+        + sym(INT)
+        + sym(EXT)
+    )
     assert CodeEvent.WIFI not in feed(m, ticks)
 
 
 def test_wifi_needs_internal_move_second():
+    # ext, int, int is not a code (wifi wants ext, int, ext).
     m = ButtonCodeMachine(ButtonCodeConfig())
-    assert feed(m, sym(EXT) + sym(EXT)) == []
+    assert feed(m, sym(EXT) + sym(INT) + sym(INT)) == []
 
 
 def test_stray_press_before_wifi_still_fires():
     m = ButtonCodeMachine(ButtonCodeConfig())
-    ticks = one(R, EXT) + sym(EXT) + sym(INT)
+    ticks = one(R, EXT) + sym(EXT) + sym(INT) + sym(EXT)
     assert feed(m, ticks) == [CodeEvent.WIFI]

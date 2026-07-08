@@ -166,6 +166,7 @@ class Event(enum.Enum):
     WIFI = "wifi"  # button code (torque on) -> WiFi provisioning
     TORQUE_OFF = "torque_off"  # button code -> disable all torque
     EMOTION = "emotion"  # button code -> play a fixed emotion move
+    ORDER_66 = "order_66"  # button code -> play the "order 66" line (gag)
 
 
 @dataclass(frozen=True)
@@ -247,6 +248,7 @@ _CODE_EVENTS = {
     CodeEvent.WIFI: Event.WIFI,
     CodeEvent.TORQUE_OFF: Event.TORQUE_OFF,
     CodeEvent.EMOTION: Event.EMOTION,
+    CodeEvent.ORDER_66: Event.ORDER_66,
 }
 
 
