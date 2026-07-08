@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ....media.gstreamer_utils import is_valid_audio_file
 from ...daemon import Daemon
@@ -66,6 +66,12 @@ class PlaySoundRequest(BaseModel):
     """Request body for the play_sound endpoint."""
 
     file: str
+
+
+class EnableTrackingRequest(BaseModel):
+    """Request body for enabling daemon-side head tracking."""
+
+    weight: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
 @router.post("/play_sound")
@@ -156,6 +162,46 @@ async def disable_wobbling(
         backend._media_server.disable_wobbling()
     backend.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
     return {"status": "ok"}
+
+
+@router.post("/tracking/enable")
+async def enable_tracking(
+    body: EnableTrackingRequest | None = None,
+    daemon: Daemon = Depends(get_daemon),
+) -> dict[str, str | bool]:
+    """Enable daemon-side visual head tracking."""
+    backend = daemon.backend
+    if backend is None or not backend.ready.is_set():
+        raise HTTPException(status_code=503, detail="Backend not running")
+
+    weight = body.weight if body is not None else 1.0
+    enabled = backend.enable_head_tracking(weight=weight)
+    return {"status": "ok" if enabled else "unavailable", "enabled": enabled}
+
+
+@router.post("/tracking/disable")
+async def disable_tracking(
+    daemon: Daemon = Depends(get_daemon),
+) -> dict[str, str | bool]:
+    """Disable daemon-side visual head tracking."""
+    backend = daemon.backend
+    if backend is None or not backend.ready.is_set():
+        raise HTTPException(status_code=503, detail="Backend not running")
+
+    backend.disable_head_tracking()
+    return {"status": "ok", "enabled": False}
+
+
+@router.get("/tracking/face")
+async def get_tracked_face(
+    daemon: Daemon = Depends(get_daemon),
+) -> dict[str, object]:
+    """Return the latest face observed by daemon-side head tracking."""
+    backend = daemon.backend
+    if backend is None or not backend.ready.is_set():
+        raise HTTPException(status_code=503, detail="Backend not running")
+
+    return {"status": "ok", "face_target": backend.get_tracked_face().model_dump()}
 
 
 @router.post("/sounds/upload")

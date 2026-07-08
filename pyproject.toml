@@ -8,38 +8,41 @@ version = "1.9.0rc1"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "numpy>=2.2.5",
-    "scipy>=1.15.3, <2.0.0",
-    "reachy_mini_motor_controller>=1.5.5",
-    "psutil",
-    "jinja2",
-    "uvicorn[standard]",
-    "fastapi",
-    "pydantic>=2.12.5,<3.0.0",
-    "python-multipart>=0.0.27",
-    "starlette<1.0.0", # TODO: update TemplateResponse(request, name, context) before allowing Starlette 1.x
-    "pyserial",
-    "huggingface-hub>=1.17.0,<2.0.0",
-    "reachy-mini-rust-kinematics>=1.0.3",
-    "asgiref",
     "aiohttp>=3.14.0",
-    "log-throttling==0.0.3",
-    "pyusb>=1.2.1",
+    "asgiref",
+    "fastapi",
+    "huggingface-hub>=1.17.0,<2.0.0",
+    "jinja2",
     "libusb_package>=1.0.26.3",
+    "log-throttling==0.0.3",
+    "numpy>=2.2.5",
+    "onnxruntime==1.27.0",
     "pip>=26.1",
     "platformdirs",
-    "rich",
-    "questionary",
-    "websockets>=12,<16",
-    "toml",
-    "rustypot>=1.4.2",
-    "pyyaml>=6.0",
-    "requests>=2.33.0",
-    "zeroconf>=0.149.7,<1",
-    "pycaw>=20240210; sys_platform == 'win32'",
+    "psutil",
     "pulsectl>=24.1.0; sys_platform == 'linux'",
+    "pycaw>=20240210; sys_platform == 'win32'",
+    "pydantic>=2.12.5,<3.0.0",
+    "pyserial",
+    "python-multipart>=0.0.27",
+    "pyusb>=1.2.1",
+    "pyyaml>=6.0",
+    "questionary",
+    "requests>=2.33.0",
+    "rich",
+    "rustypot>=1.4.2",
+    "scipy>=1.15.3, <2.0.0",
+    "starlette<1.0.0", # TODO: update TemplateResponse(request, name, context) before allowing Starlette 1.x
+    "toml",
+    "uvicorn[standard]",
+    "websockets>=12,<16",
+    "zeroconf>=0.149.7,<1",
+
+    # Reachy Mini specifics
+    "reachy-mini-rust-kinematics>=1.0.3",
+    "reachy_mini_motor_controller>=1.5.5",
 
     "gstreamer-bundle==1.28.3; sys_platform != 'linux'",
     # OS-specific: use PyGObject for Linux
@@ -55,7 +58,6 @@ examples = [
     "gradio-client",
 ]
 mujoco = ["mujoco==3.3.0"]
-nn_kinematics = ["onnxruntime==1.22.1"]
 placo_kinematics = [
     "placo==0.9.14; sys_platform != 'win32'",
     "tornado>=6.5.5; sys_platform != 'win32'", # security floor for meshcat transitive dependency
@@ -76,7 +78,6 @@ opencv = ["opencv-python<=5.0", "cv2_enumerate_cameras>=1.2.1"]
 all = [
     "reachy_mini[examples]",
     "reachy_mini[mujoco]",
-    "reachy_mini[nn_kinematics]",
     "reachy_mini[placo_kinematics]",
     "reachy_mini[rerun]",
     "reachy_mini[wireless-version]",

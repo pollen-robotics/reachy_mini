@@ -17,7 +17,7 @@ The daemon starts its media pipeline automatically unless the `--no-media` flag 
 1. Opens the camera (platform-aware: v4l2, libcamera, DirectShow, AVFoundation, or UDP for simulation).
 2. Opens the audio device (platform-aware: PulseAudio, ALSA, WASAPI, CoreAudio).
 3. Feeds both into a WebRTC server (`webrtcsink`) for remote streaming.
-4. Exposes raw camera frames via a local IPC endpoint (`unixfdsink` on Linux/macOS, `win32ipcvideosink` on Windows).
+4. Exposes raw camera frames via a local IPC endpoint (`unixfdsink` on Linux/macOS, `win32ipcvideosink` on Windows). The IPC feed is served at a capped framerate (10 fps) below the capture rate: local vision clients convert every frame they are served, so the cap keeps on-device CPU low regardless of the camera mode.
 
 [![Reachy Mini Media Daemon](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/reachymini_media_daemon.png)]()
 

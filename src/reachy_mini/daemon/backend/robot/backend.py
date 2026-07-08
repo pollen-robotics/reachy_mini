@@ -230,6 +230,8 @@ class RobotBackend(Backend):
                     np.array(antenna_positions),
                 )
 
+                self.step_head_tracking()
+
                 # Update the target head joint positions from IK if necessary
                 # - does nothing if the targets did not change
                 if self.ik_required:

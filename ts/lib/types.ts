@@ -37,6 +37,14 @@ export interface RobotInfo {
 }
 
 /** Latest robot telemetry mirrored on `robot.robotState` (wire shape). */
+export interface FaceTarget {
+    detected: boolean;
+    x?: number | null;
+    y?: number | null;
+    roll?: number | null;
+    ts?: number | null;
+}
+
 export interface RobotState {
     /** Flat row-major 4×4 head pose (16 numbers). */
     head?: number[];
@@ -46,6 +54,7 @@ export interface RobotState {
     body_yaw?: number;
     motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';
     is_move_running?: boolean;
+    face_target?: FaceTarget;
 }
 
 /** SDK constructor options. */
@@ -336,6 +345,12 @@ export interface ReachyMiniInstance extends EventTarget {
     playSound(file: string): boolean;
     /** Drop incoming audio queued for the robot speaker (barge-in). */
     clearIncomingAudio(): boolean;
+    /** Enable daemon-side visual head tracking. */
+    startHeadTracking(weight?: number): boolean;
+    /** Disable daemon-side visual head tracking. */
+    stopHeadTracking(): boolean;
+    /** Read the latest face observed by daemon-side head tracking. */
+    getTrackedFace(): Promise<FaceTarget | null>;
 
     setAudioMuted(muted: boolean): void;
     setMicMuted(muted: boolean): void;
