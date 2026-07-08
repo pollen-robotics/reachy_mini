@@ -78,12 +78,10 @@ opencv = ["opencv-python<=5.0", "cv2_enumerate_cameras>=1.2.1"]
 all = [
     "reachy_mini[examples]",
     "reachy_mini[mujoco]",
-    "reachy_mini[nn_kinematics]",
     "reachy_mini[placo_kinematics]",
     "reachy_mini[rerun]",
     "reachy_mini[wireless-version]",
     "reachy_mini[opencv]",
-    "reachy_mini[vision]",
 ]
 
 [dependency-groups]

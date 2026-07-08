@@ -7,14 +7,20 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
+import gi
 import numpy as np
 from numpy.typing import NDArray
 
-if TYPE_CHECKING:
-    from reachy_mini.media.camera_constants import CameraSpecs
-    from reachy_mini.vision.face_detector import Face
+from reachy_mini.daemon.utils import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
+from reachy_mini.media.camera_constants import CameraSpecs
+from reachy_mini.media.camera_utils import intrinsics_for_size
+from reachy_mini.vision.face_detector import Face, FaceDetector
+
+gi.require_version("Gst", "1.0")
+gi.require_version("GstApp", "1.0")
+# GstApp is unused directly but installs appsink.try_pull_sample().
+from gi.repository import Gst, GstApp  # noqa: E402, F401
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +41,11 @@ class FaceObservation:
     timestamp: float
 
 
-def _area(face: "Face") -> float:
+def _area(face: Face) -> float:
     return face.bbox[2] * face.bbox[3]
 
 
-def _center(face: "Face", width: int, height: int) -> tuple[float, float]:
+def _center(face: Face, width: int, height: int) -> tuple[float, float]:
     # Aim at the nose, because centering on the eye midpoint makes the robot look slightly above.
     return (
         face.nose[0] / max(width - 1, 1) * 2 - 1,
@@ -67,7 +73,7 @@ class Tracker:
         self._center: tuple[float, float] | None = None
         self._misses = 0
 
-    def select(self, faces: "list[Face]", width: int, height: int) -> "Face | None":
+    def select(self, faces: list[Face], width: int, height: int) -> Face | None:
         """Pick the face to aim at, or None when no plausible target is present."""
         if not faces:
             self._miss()
@@ -94,7 +100,7 @@ class Tracker:
 
 
 def to_observation(
-    face: "Face | None",
+    face: Face | None,
     width: int,
     height: int,
     camera_matrix: NDArray[np.float64],
@@ -133,7 +139,7 @@ class FaceTracker:
         self._active = threading.Event()
         self._observations: queue.SimpleQueue[FaceObservation] = queue.SimpleQueue()
 
-    def start(self, camera_specs: "CameraSpecs") -> None:
+    def start(self, camera_specs: CameraSpecs) -> None:
         """Start the detector thread if it is not already running."""
         if self._thread is not None and self._thread.is_alive():
             return
@@ -171,77 +177,65 @@ class FaceTracker:
         else:
             self._thread = None
 
-    def _run(self, camera_specs: "CameraSpecs") -> None:
-        # Lowest priority so YuNet bursts never preempt the daemon's 50 Hz control loop.
-        try:
+    def _run(self, camera_specs: CameraSpecs) -> None:
+        # Lowest priority (Linux-only per-thread nice) so the detector yields CPU to the rest of the daemon.
+        if platform.system() == "Linux":
             os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 19)
-        except (AttributeError, OSError):
-            # Per-thread niceness is Linux-only; other platforms run unprioritized.
-            pass
-        try:
-            import gi
-
-            gi.require_version("Gst", "1.0")
-            gi.require_version("GstApp", "1.0")
-            # GstApp is unused directly but installs appsink.try_pull_sample().
-            from gi.repository import Gst, GstApp  # noqa: F401
-
-            from reachy_mini.daemon.utils import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
-            from reachy_mini.media.camera_utils import intrinsics_for_size
-            from reachy_mini.vision.face_detector import FaceDetector
-
-            Gst.init([])
-            if platform.system() == "Windows":
-                source = Gst.ElementFactory.make("win32ipcvideosrc")
-                source.set_property("pipe-name", CAMERA_PIPE_NAME)
-            else:
-                source = Gst.ElementFactory.make("unixfdsrc")
-                source.set_property("socket-path", CAMERA_SOCKET_PATH)
-            queue_frames = Gst.ElementFactory.make("queue")
-            queue_frames.set_property("leaky", 2)
-            queue_frames.set_property("max-size-buffers", 1)
-            # Prefer v4l2convert: on the RPi the ISP does the scale + convert in hardware.
-            convert_chain = [Gst.ElementFactory.make("v4l2convert")]
-            if convert_chain[0] is None:
-                convert_chain = [
-                    Gst.ElementFactory.make("videoscale"),
-                    Gst.ElementFactory.make("videoconvert"),
-                ]
-            src_w, src_h = camera_specs.default_resolution.value[:2]
-            width = min(_TRACKING_WIDTH, src_w)
-            height = max(2, round(width * src_h / src_w / 2) * 2)
-            capsfilter = Gst.ElementFactory.make("capsfilter")
-            capsfilter.set_property(
-                "caps",
-                Gst.Caps.from_string(
-                    f"video/x-raw,format=BGR,width={width},height={height}"
-                ),
-            )
-            appsink = Gst.ElementFactory.make("appsink")
-            appsink.set_property("drop", True)
-            appsink.set_property("max-buffers", 1)
-            appsink.set_property("sync", False)
-
-            pipeline = Gst.Pipeline.new("face-tracker")
-            chain = [source, queue_frames, *convert_chain, capsfilter, appsink]
-            for element in chain:
-                pipeline.add(element)
-            for upstream, downstream in zip(chain, chain[1:]):
-                if not upstream.link(downstream):
-                    raise RuntimeError(
-                        f"could not link {upstream.get_name()} to {downstream.get_name()}"
-                    )
-            detector = FaceDetector()
-            tracker = Tracker()
-        except Exception as e:
-            logger.warning("Face tracker failed to start: %s", e)
+        Gst.init([])
+        windows = platform.system() == "Windows"
+        source = Gst.ElementFactory.make("win32ipcvideosrc" if windows else "unixfdsrc")
+        queue_frames = Gst.ElementFactory.make("queue")
+        # Prefer v4l2convert: on the RPi the ISP does the scale + convert in hardware.
+        convert_chain = [Gst.ElementFactory.make("v4l2convert")]
+        if convert_chain[0] is None:
+            convert_chain = [
+                Gst.ElementFactory.make("videoscale"),
+                Gst.ElementFactory.make("videoconvert"),
+            ]
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        appsink = Gst.ElementFactory.make("appsink")
+        chain = [source, queue_frames, *convert_chain, capsfilter, appsink]
+        if any(element is None for element in chain):
+            logger.warning("Face tracking unavailable: missing GStreamer plugins.")
             return
+        if windows:
+            source.set_property("pipe-name", CAMERA_PIPE_NAME)
+        else:
+            source.set_property("socket-path", CAMERA_SOCKET_PATH)
+        queue_frames.set_property("leaky", 2)
+        queue_frames.set_property("max-size-buffers", 1)
+        src_w, src_h = camera_specs.default_resolution.value[:2]
+        width = min(_TRACKING_WIDTH, src_w)
+        height = max(2, round(width * src_h / src_w / 2) * 2)
+        capsfilter.set_property(
+            "caps",
+            Gst.Caps.from_string(
+                f"video/x-raw,format=BGR,width={width},height={height}"
+            ),
+        )
+        appsink.set_property("drop", True)
+        appsink.set_property("max-buffers", 1)
+        appsink.set_property("sync", False)
+
+        pipeline = Gst.Pipeline.new("face-tracker")
+        for element in chain:
+            pipeline.add(element)
+        for upstream, downstream in zip(chain, chain[1:]):
+            if not upstream.link(downstream):
+                logger.warning(
+                    "Face tracking unavailable: could not link %s to %s.",
+                    upstream.get_name(),
+                    downstream.get_name(),
+                )
+                return
 
         crop_scale = camera_specs.default_resolution.value[3]
         camera_matrix: NDArray[np.float64] | None = None
         playing = False
         feed_lost = False
         try:
+            detector = FaceDetector()
+            tracker = Tracker()
             while not self._stop.is_set():
                 if not self._active.is_set():
                     if playing:
