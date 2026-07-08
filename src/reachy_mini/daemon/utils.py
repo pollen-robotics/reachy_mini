@@ -26,11 +26,6 @@ CAMERA_SOCKET_PATH = "/tmp/reachymini_camera_socket"
 # Windows named-pipe path (e.g. \\.\pipe\<name>).
 CAMERA_PIPE_NAME = "\\\\.\\pipe\\reachymini_camera_pipe"
 
-# Separate, downscaled + rate-limited camera IPC used only by the out-of-process face
-# tracker, so the daemon converts a cheap small stream instead of the full-res one.
-CAMERA_TRACKING_SOCKET_PATH = "/tmp/reachymini_tracking_socket"
-CAMERA_TRACKING_PIPE_NAME = "\\\\.\\pipe\\reachymini_tracking_pipe"
-
 
 def is_localhost(ip: str | None) -> bool:
     """Check if an IP address corresponds to localhost.

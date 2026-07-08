@@ -21,12 +21,16 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger("reachymini-face-tracker")
 
+# Detector input budget: width and fps trade recall and freshness against CPU.
+_TRACKING_WIDTH = 320
+_TRACKING_FPS = 10
+
 
 @dataclass
 class FaceObservation:
-    """A face target in ``set_tracking_face`` form (eye center normalized to [-1, 1])."""
+    """A face target in ``set_tracking_face`` form (face center normalized to [-1, 1])."""
 
-    eye_center: tuple[float, float] | None
+    center: tuple[float, float] | None
     roll: float | None
     width: int
     height: int
@@ -39,50 +43,33 @@ def _area(face: "Face") -> float:
     return face.bbox[2] * face.bbox[3]
 
 
-def _eye_center(face: "Face", width: int, height: int) -> tuple[float, float]:
-    cx = (face.right_eye[0] + face.left_eye[0]) / 2
-    cy = (face.right_eye[1] + face.left_eye[1]) / 2
-    return (cx / max(width - 1, 1) * 2 - 1, cy / max(height - 1, 1) * 2 - 1)
+def _center(face: "Face", width: int, height: int) -> tuple[float, float]:
+    # Aim at the nose, because centering on the eye midpoint makes the robot look slightly above.
+    return (
+        face.nose[0] / max(width - 1, 1) * 2 - 1,
+        face.nose[1] / max(height - 1, 1) * 2 - 1,
+    )
 
 
 def _dist2(a: tuple[float, float], b: tuple[float, float]) -> float:
     return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
 
 
-def _salience(face: "Face", width: int, height: int) -> float:
-    centrality = max(
-        0.0, 1.0 - 0.5 * _dist2(_eye_center(face, width, height), (0.0, 0.0))
-    )
-    return _area(face) * centrality
-
-
 class Tracker:
-    """Greedy single-face track that rejects spurious detections.
-
-    Acquires the largest face above a minimum size, then sticks to the face
-    nearest the current track, so a stray detection elsewhere can't yank the
-    head around. Gaze switches to a clearly more prominent face (someone
-    stepping forward / more central) once it dominates for a dwell window, and
-    the track drops after a run of misses so a new person can be acquired.
-    """
+    """Track one face: acquire largest, associate nearest, drop after misses."""
 
     def __init__(
         self,
         min_area_frac: float = 0.003,
         max_jump: float = 0.5,
         max_misses: int = 20,
-        switch_margin: float = 1.6,
-        switch_dwell: int = 8,
     ) -> None:
         """Create a tracker with the given selection gates."""
         self._min_area_frac = min_area_frac
         self._max_jump = max_jump
         self._max_misses = max_misses
-        self._switch_margin = switch_margin
-        self._switch_dwell = switch_dwell
         self._center: tuple[float, float] | None = None
         self._misses = 0
-        self._challenger_streak = 0
 
     def select(self, faces: "list[Face]", width: int, height: int) -> "Face | None":
         """Pick the face to aim at, or None when no plausible target is present."""
@@ -94,35 +81,18 @@ class Tracker:
             if _area(face) < self._min_area_frac * width * height:
                 self._miss()
                 return None
-            self._challenger_streak = 0
         else:
             center = self._center
-            held = min(
-                faces, key=lambda f: _dist2(_eye_center(f, width, height), center)
-            )
-            if _dist2(_eye_center(held, width, height), center) > self._max_jump**2:
+            face = min(faces, key=lambda f: _dist2(_center(f, width, height), center))
+            if _dist2(_center(face, width, height), center) > self._max_jump**2:
                 self._miss()
                 return None
-            # Require a dominant challenger to persist for a dwell window, to avoid ping-pong.
-            best = max(faces, key=lambda f: _salience(f, width, height))
-            if (
-                best is not held
-                and _salience(best, width, height)
-                > _salience(held, width, height) * self._switch_margin
-            ):
-                self._challenger_streak += 1
-            else:
-                self._challenger_streak = 0
-            face = best if self._challenger_streak >= self._switch_dwell else held
-            if face is best:
-                self._challenger_streak = 0
-        self._center = _eye_center(face, width, height)
+        self._center = _center(face, width, height)
         self._misses = 0
         return face
 
     def _miss(self) -> None:
         self._misses += 1
-        self._challenger_streak = 0
         if self._misses > self._max_misses:
             self._center = None
 
@@ -147,7 +117,7 @@ def to_observation(
         )
     )
     return FaceObservation(
-        _eye_center(face, width, height),
+        _center(face, width, height),
         roll,
         width,
         height,
@@ -157,13 +127,11 @@ def to_observation(
     )
 
 
-def run(conn: Connection, stop: EventType, camera_specs: "CameraSpecs") -> None:
-    """Read the tracker camera stream, detect faces, and stream observations until stopped.
-
-    The daemon serves an already downscaled + rate-limited BGR stream on the tracking
-    socket, so this only detects and reports normalized eye centers — no resize or pacing.
-    """
-    # The daemon coordinates shutdown via `stop`, ignore Ctrl+C so it doesn't traceback here
+def run(
+    conn: Connection, stop: EventType, active: EventType, camera_specs: "CameraSpecs"
+) -> None:
+    """Detect faces on the camera IPC feed and pipe observations until stopped."""
+    # The daemon coordinates shutdown via `stop`; ignore Ctrl+C so it doesn't traceback here.
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     # Lowest priority so YuNet bursts never preempt the daemon's 50 Hz control loop.
     if hasattr(os, "nice"):
@@ -172,26 +140,56 @@ def run(conn: Connection, stop: EventType, camera_specs: "CameraSpecs") -> None:
         import gi
 
         gi.require_version("Gst", "1.0")
-        from gi.repository import Gst
+        gi.require_version("GstApp", "1.0")
+        # GstApp is unused directly but installs appsink.try_pull_sample().
+        from gi.repository import Gst, GstApp  # noqa: F401
 
-        from reachy_mini.daemon.utils import (
-            CAMERA_TRACKING_PIPE_NAME,
-            CAMERA_TRACKING_SOCKET_PATH,
-        )
+        from reachy_mini.daemon.utils import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
         from reachy_mini.media.camera_utils import intrinsics_for_size
         from reachy_mini.vision.face_detector import FaceDetector
 
         Gst.init([])
         if platform.system() == "Windows":
-            source = f"win32ipcvideosrc pipe-name={CAMERA_TRACKING_PIPE_NAME}"
+            source = Gst.ElementFactory.make("win32ipcvideosrc")
+            source.set_property("pipe-name", CAMERA_PIPE_NAME)
         else:
-            source = f"unixfdsrc socket-path={CAMERA_TRACKING_SOCKET_PATH}"
-        pipeline = Gst.parse_launch(
-            f"{source} ! queue leaky=2 max-size-buffers=1 ! "
-            "appsink name=sink drop=true max-buffers=1 sync=false"
+            source = Gst.ElementFactory.make("unixfdsrc")
+            source.set_property("socket-path", CAMERA_SOCKET_PATH)
+        queue = Gst.ElementFactory.make("queue")
+        queue.set_property("leaky", 2)
+        queue.set_property("max-size-buffers", 1)
+        # Drop to the detection rate before converting so skipped frames cost nothing.
+        videorate = Gst.ElementFactory.make("videorate")
+        videorate.set_property("drop-only", True)
+        videorate.set_property("max-rate", _TRACKING_FPS)
+        # Prefer v4l2convert: on the RPi the ISP does the scale + convert in hardware.
+        convert_chain = [Gst.ElementFactory.make("v4l2convert")]
+        if convert_chain[0] is None:
+            convert_chain = [
+                Gst.ElementFactory.make("videoscale"),
+                Gst.ElementFactory.make("videoconvert"),
+            ]
+        src_w, src_h = camera_specs.default_resolution.value[:2]
+        width = min(_TRACKING_WIDTH, src_w)
+        height = max(2, round(width * src_h / src_w / 2) * 2)
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        capsfilter.set_property(
+            "caps",
+            Gst.Caps.from_string(
+                f"video/x-raw,format=BGR,width={width},height={height}"
+            ),
         )
-        pipeline.set_state(Gst.State.PLAYING)
-        appsink = pipeline.get_by_name("sink")
+        appsink = Gst.ElementFactory.make("appsink")
+        appsink.set_property("drop", True)
+        appsink.set_property("max-buffers", 1)
+        appsink.set_property("sync", False)
+
+        pipeline = Gst.Pipeline.new("face-tracker")
+        chain = [source, queue, videorate, *convert_chain, capsfilter, appsink]
+        for element in chain:
+            pipeline.add(element)
+        for upstream, downstream in zip(chain, chain[1:]):
+            upstream.link(downstream)
         detector = FaceDetector()
         tracker = Tracker()
     except Exception as e:
@@ -200,9 +198,20 @@ def run(conn: Connection, stop: EventType, camera_specs: "CameraSpecs") -> None:
 
     crop_scale = camera_specs.default_resolution.value[3]
     camera_matrix: NDArray[np.float64] | None = None
+    playing = False
     try:
         while not stop.is_set():
-            sample = appsink.emit("try-pull-sample", 200_000_000)
+            if not active.is_set():
+                if playing:
+                    # Disconnect while paused so the daemon serves nothing to this client.
+                    pipeline.set_state(Gst.State.NULL)
+                    playing = False
+                active.wait(0.2)
+                continue
+            if not playing:
+                pipeline.set_state(Gst.State.PLAYING)
+                playing = True
+            sample = appsink.try_pull_sample(200 * Gst.MSECOND)
             if sample is None:
                 continue
             structure = sample.get_caps().get_structure(0)
@@ -242,6 +251,7 @@ class FaceTrackerProcess:
         self._proc: BaseProcess | None = None
         self._conn: Connection | None = None
         self._stop: EventType | None = None
+        self._active: EventType | None = None
 
     def start(self, camera_specs: "CameraSpecs") -> None:
         """Spawn the detector process if it is not already running."""
@@ -249,14 +259,24 @@ class FaceTrackerProcess:
             return
         recv_conn, send_conn = self._ctx.Pipe(duplex=False)
         self._stop = self._ctx.Event()
+        self._active = self._ctx.Event()
         self._conn = recv_conn
         self._proc = self._ctx.Process(
             target=run,
-            args=(send_conn, self._stop, camera_specs),
+            args=(send_conn, self._stop, self._active, camera_specs),
             daemon=True,
         )
         self._proc.start()
         send_conn.close()
+
+    def set_active(self, active: bool) -> None:
+        """Pause or resume detection; a paused worker disconnects from the camera feed."""
+        if self._active is None:
+            return
+        if active:
+            self._active.set()
+        else:
+            self._active.clear()
 
     def latest(self) -> FaceObservation | None:
         """Return the most recent observation, draining any backlog."""

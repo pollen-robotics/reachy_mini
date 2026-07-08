@@ -599,12 +599,7 @@ class Backend:
         self.ik_required = True
 
     def enable_head_tracking(self, weight: float = 1.0) -> bool:
-        """Enable daemon-side visual head tracking, spawning the detector process.
-
-        ``weight`` 0 pauses detection (closes the video branch) and hands the head
-        back to app motion without tearing the process down, so callers can toggle
-        tracking on/off per turn cheaply.
-        """
+        """Enable head tracking; ``weight`` 0 pauses the worker without stopping it."""
         with self._tracking_lock:
             self._tracking_requested_weight = min(max(float(weight), 0.0), 1.0)
             if self._media_server is None:
@@ -614,9 +609,10 @@ class Backend:
                 if self._tracker is None:
                     self._tracker = FaceTrackerProcess()
                 self._tracker.start(self._media_server.camera_specs)
-                self._media_server.set_tracking_active(True)
+                self._tracker.set_active(True)
             else:
-                self._media_server.set_tracking_active(False)
+                if self._tracker is not None:
+                    self._tracker.set_active(False)
                 self.clear_tracking_aim()
             self._tracking_enabled = True
         return True
@@ -625,8 +621,6 @@ class Backend:
         """Disable daemon-side visual head tracking, stopping the detector process."""
         with self._tracking_lock:
             self._tracking_enabled = False
-            if self._media_server is not None:
-                self._media_server.set_tracking_active(False)
             tracker = self._tracker
             self._tracker = None
             self.clear_tracking_aim()
@@ -658,7 +652,7 @@ class Backend:
                 obs = self._tracker.latest()
                 if obs is not None:
                     self.set_tracking_face(
-                        obs.eye_center,
+                        obs.center,
                         obs.roll,
                         obs.width,
                         obs.height,
@@ -666,7 +660,7 @@ class Backend:
                         obs.distortion,
                         obs.timestamp,
                     )
-                    if obs.eye_center is not None:
+                    if obs.center is not None:
                         self._last_face_seen = now
             if (
                 self._last_face_seen is not None
@@ -684,7 +678,7 @@ class Backend:
 
     def set_tracking_face(
         self,
-        eye_center: tuple[float, float] | None,
+        center: tuple[float, float] | None,
         roll: float | None,
         width: int,
         height: int,
@@ -696,13 +690,13 @@ class Backend:
         if not self._tracking_enabled:
             return
 
-        if eye_center is None:
+        if center is None:
             # Hold the last target on a transient loss so the head doesn't lurch to neutral.
             self._face_target = FaceTarget(detected=False, ts=timestamp)
             return
 
-        x_norm = float(eye_center[0])
-        y_norm = float(eye_center[1])
+        x_norm = float(center[0])
+        y_norm = float(center[1])
         self._tracking_weight = self._tracking_requested_weight
         self._face_target = FaceTarget(
             detected=True,

@@ -1,4 +1,4 @@
-"""Face detection with YuNet on ONNX Runtime (no OpenCV dependency)."""
+"""Face detection with YuNet on ONNX Runtime."""
 
 import math
 from dataclasses import dataclass
@@ -17,11 +17,12 @@ _MAX_STRIDE = 32
 
 @dataclass(frozen=True)
 class Face:
-    """A face detected in pixel coordinates: bounding box and eye centers."""
+    """A face detected in pixel coordinates: bounding box, eye centers, and nose."""
 
     bbox: tuple[float, float, float, float]
     right_eye: tuple[float, float]
     left_eye: tuple[float, float]
+    nose: tuple[float, float]
 
 
 def _nms(
@@ -95,7 +96,6 @@ class FaceDetector:
     def _decode(
         self, outputs: dict[str, NDArray[np.float32]], width: int
     ) -> list[Face]:
-        # Decode YuNet's per-stride heads into faces, then suppress overlaps.
         boxes: list[tuple[float, float, float, float]] = []
         scores: list[float] = []
         faces: list[Face] = []
@@ -135,6 +135,10 @@ class FaceDetector:
                         left_eye=(
                             float((col[k] + kps[k, 2]) * stride),
                             float((row[k] + kps[k, 3]) * stride),
+                        ),
+                        nose=(
+                            float((col[k] + kps[k, 4]) * stride),
+                            float((row[k] + kps[k, 5]) * stride),
                         ),
                     )
                 )

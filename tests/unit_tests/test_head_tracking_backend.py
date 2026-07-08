@@ -34,10 +34,15 @@ class DummyTracker:
         """Initialize spy state."""
         self.started = False
         self.stopped = False
+        self.active_calls: list[bool] = []
 
     def start(self, camera_specs: object) -> None:
         """Record that the tracker was started."""
         self.started = True
+
+    def set_active(self, active: bool) -> None:
+        """Record pause/resume toggles."""
+        self.active_calls.append(active)
 
     def latest(self) -> None:
         """Report no observation."""
@@ -57,9 +62,7 @@ def _make_backend() -> MockupSimBackend:
 def test_set_head_tracking_command_toggles_tracking() -> None:
     """The protocol command arms the gate and starts/stops the tracker process."""
     backend = _make_backend()
-    backend._media_server = SimpleNamespace(
-        camera_specs=object(), set_tracking_active=lambda active: None
-    )
+    backend._media_server = SimpleNamespace(camera_specs=object())
     tracker = DummyTracker()
     backend._tracker = tracker
 
@@ -73,6 +76,7 @@ def test_set_head_tracking_command_toggles_tracking() -> None:
     assert backend._tracking_enabled is True
     assert backend._tracking_requested_weight == 0.6
     assert tracker.started is True
+    assert tracker.active_calls[-1] is True
     assert responses[-1] == {
         "status": "ok",
         "command": "set_head_tracking",
@@ -97,7 +101,7 @@ def test_get_tracked_face_command_returns_latest_face() -> None:
     backend = _make_backend()
     backend._tracking_enabled = True
     backend.set_tracking_face(
-        eye_center=(0.25, -0.5),
+        center=(0.25, -0.5),
         roll=0.1,
         width=640,
         height=480,
@@ -200,7 +204,7 @@ def test_tracking_face_loss_holds_last_target() -> None:
     backend._tracking_target_pose = target
 
     backend.set_tracking_face(
-        eye_center=None,
+        center=None,
         roll=None,
         width=640,
         height=480,
@@ -253,12 +257,9 @@ def test_tracking_sustained_loss_recenters_to_neutral() -> None:
 
 
 def test_enable_head_tracking_weight_zero_pauses_without_stopping() -> None:
-    """Weight 0 closes the tracking branch and frees the head, keeping the process."""
+    """Weight 0 pauses the worker and frees the head, keeping the process."""
     backend = _make_backend()
-    active_calls: list[bool] = []
-    backend._media_server = SimpleNamespace(
-        camera_specs=object(), set_tracking_active=active_calls.append
-    )
+    backend._media_server = SimpleNamespace(camera_specs=object())
     tracker = DummyTracker()
     backend._tracker = tracker
     backend._tracking_aim = np.eye(4, dtype=np.float64)
@@ -266,6 +267,6 @@ def test_enable_head_tracking_weight_zero_pauses_without_stopping() -> None:
 
     backend.enable_head_tracking(weight=0.0)
 
-    assert active_calls[-1] is False
+    assert tracker.active_calls[-1] is False
     assert backend._tracking_weight == 0.0
     assert tracker.stopped is False

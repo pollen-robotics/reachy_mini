@@ -58,3 +58,4 @@ def test_matches_opencv_reference() -> None:
         assert np.allclose(face.bbox, ref[:4], atol=1e-2)
         assert np.allclose(face.right_eye, ref[4:6], atol=1e-2)
         assert np.allclose(face.left_eye, ref[6:8], atol=1e-2)
+        assert np.allclose(face.nose, ref[8:10], atol=1e-2)
