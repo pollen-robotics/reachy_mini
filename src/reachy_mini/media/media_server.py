@@ -82,8 +82,8 @@ ICE_NEGOTIATION_DEADLINE_S = 12
 SESSION_FAILED_REASON_ICE_TIMEOUT = "ice_negotiation_timeout"
 SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 
-# Cap the local IPC feed below the capture rate; vision readers don't need the full frame rate.
-IPC_FPS = 15
+# Cap the local IPC feed below the capture rate; it also paces every client, face tracker included.
+IPC_FPS = 10
 
 
 @dataclass

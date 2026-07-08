@@ -21,9 +21,8 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger("reachymini-face-tracker")
 
-# Detector input budget: width and fps trade recall and freshness against CPU.
+# Detector input width; smaller trades recall for CPU.
 _TRACKING_WIDTH = 320
-_TRACKING_FPS = 10
 
 
 @dataclass
@@ -158,10 +157,6 @@ def run(
         queue = Gst.ElementFactory.make("queue")
         queue.set_property("leaky", 2)
         queue.set_property("max-size-buffers", 1)
-        # Drop to the detection rate before converting so skipped frames cost nothing.
-        videorate = Gst.ElementFactory.make("videorate")
-        videorate.set_property("drop-only", True)
-        videorate.set_property("max-rate", _TRACKING_FPS)
         # Prefer v4l2convert: on the RPi the ISP does the scale + convert in hardware.
         convert_chain = [Gst.ElementFactory.make("v4l2convert")]
         if convert_chain[0] is None:
@@ -185,7 +180,7 @@ def run(
         appsink.set_property("sync", False)
 
         pipeline = Gst.Pipeline.new("face-tracker")
-        chain = [source, queue, videorate, *convert_chain, capsfilter, appsink]
+        chain = [source, queue, *convert_chain, capsfilter, appsink]
         for element in chain:
             pipeline.add(element)
         for upstream, downstream in zip(chain, chain[1:]):
