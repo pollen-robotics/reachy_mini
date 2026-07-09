@@ -216,3 +216,35 @@ async def test_relay_no_app_running() -> None:
         replies.append,
     )
     assert replies[0]["error"]["data"]["reason"] == "not_running"
+
+
+@pytest.mark.asyncio
+async def test_apps_install(monkeypatch: pytest.MonkeyPatch) -> None:
+    """apps.install runs the install-if-missing helper and reports the result."""
+    calls: list[str] = []
+
+    async def fake_ensure(apps: Any, name: str) -> bool:
+        calls.append(name)
+        return name == "conv"
+
+    monkeypatch.setattr(jsonrpc_relay, "ensure_startup_app_installed", fake_ensure)
+    relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None)
+    replies: list[dict[str, Any]] = []
+
+    await relay.handle(
+        '{"jsonrpc":"2.0","id":"1","method":"apps.install","params":{"name":"conv"}}',
+        replies.append,
+    )
+    assert calls == ["conv"]
+    assert replies[-1]["result"] == {"installed": True}
+
+    await relay.handle(
+        '{"jsonrpc":"2.0","id":"2","method":"apps.install","params":{"name":"nope"}}',
+        replies.append,
+    )
+    assert replies[-1]["error"]["data"]["reason"] == "install_failed"
+
+    await relay.handle(
+        '{"jsonrpc":"2.0","id":"3","method":"apps.install"}', replies.append
+    )
+    assert replies[-1]["error"]["data"]["reason"] == "invalid_params"

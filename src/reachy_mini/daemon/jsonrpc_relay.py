@@ -27,6 +27,7 @@ from urllib.parse import urlparse
 from websockets.asyncio.client import ClientConnection, connect
 
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.daemon.app.startup_app import ensure_startup_app_installed
 from reachy_mini.io.jsonrpc import (
     JsonRpcError,
     RpcRequest,
@@ -121,6 +122,25 @@ class JsonRpcRelay:
         elif verb == "stop":
             await self._apps.stop_current_app()
             result = {"stopped": True}
+        elif verb == "install":
+            name = req.params.get("name")
+            if not isinstance(name, str) or not name:
+                raise JsonRpcError(
+                    "apps.install requires a 'name'",
+                    reason="invalid_params",
+                    code=-32602,
+                )
+            # Install-if-missing from the HF catalog (no-op when already
+            # installed). Can take minutes on a first install — callers
+            # should use a generous timeout. Runs as its own task, so
+            # other RPCs (apps.status polling, ...) keep answering.
+            if not await ensure_startup_app_installed(self._apps, name):
+                raise JsonRpcError(
+                    f"could not install app {name!r} (not in the catalog, "
+                    "or the install failed — see the daemon logs)",
+                    reason="install_failed",
+                )
+            result = {"installed": True}
         elif verb == "status":
             result = self._current_status_dict()
         else:
