@@ -2,147 +2,25 @@
   "stats": {
     "total": 310,
     "passed": 307,
-    "new": 20,
     "skipped": 3
   },
   "status": "passed",
-  "newTests": [
-    {
-      "id": "e85fa8698a950804cf51e8e69efcbb62",
-      "name": "test_enable_head_tracking_weight_zero_pauses_without_stopping",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "25bb324bf2764e8bccbf4e7fe51d30c1",
-      "name": "test_tracking_sustained_loss_recenters_to_neutral",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "f7e7226cce4d4814afa51c9189300605",
-      "name": "test_tracking_face_loss_holds_last_target",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "dc56337b94c0c901ea43c6dba9f7dbbb",
-      "name": "test_set_head_tracking_command_toggles_tracking",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "33356063d2940d2780cf14109442ac6e",
-      "name": "test_tracking_deadband_ignores_subthreshold_motion",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "e6bff6010cd1111d1038ae779c35972f",
-      "name": "test_tracker_sticks_to_track_and_rejects_far_jump",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "72c0bf90da3478baffab559f8b581dd2",
-      "name": "test_step_head_tracking_eases_toward_target",
-      "status": "passed",
-      "duration": 2
-    },
-    {
-      "id": "eb29164699aa382c5fb3b90488ba93c8",
-      "name": "test_detect_returns_empty_on_blank_frame",
-      "status": "passed",
-      "duration": 1019
-    },
-    {
-      "id": "d53d65068407af09537fd386c8be8c6b",
-      "name": "test_get_tracked_face_command_returns_latest_face",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "d53d08efe9a201eebeb36f6cbcd90b47",
-      "name": "test_tracker_acquires_largest_above_min_size",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "29957c00dca879504b34aaae2f96820f",
-      "name": "test_stuck_stop_never_double_spawns",
-      "status": "passed",
-      "duration": 2002
-    },
-    {
-      "id": "b55553764f790b9aff9958db525b9adc",
-      "name": "test_start_head_tracking_sends_enable_command",
-      "status": "passed",
-      "duration": 4
-    },
-    {
-      "id": "8bfe2890344e63e3e94aa80354257d7e",
-      "name": "test_stop_head_tracking_sends_disable_command",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "ee2d3c4e04b0b9667375972032a20689",
-      "name": "test_tracking_blend_respects_zero_and_full_weight",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "665b6800fc7107a5e9276c509c4251f4",
-      "name": "test_to_observation_no_face_reports_undetected",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "a3d23712142124586d1b6a4d21910916",
-      "name": "test_tracker_drops_track_after_misses_then_reacquires",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "4d1debe96f684018a0f9c5180ed44e32",
-      "name": "test_matches_opencv_reference",
-      "status": "passed",
-      "duration": 64
-    },
-    {
-      "id": "8883a6a73b433eef08861d93732e47cf",
-      "name": "test_tracker_rejects_specks_on_acquisition",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "bbd0f243fc1b208902d4c0834b5efd79",
-      "name": "test_to_observation_normalizes_nose_and_roll",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "fa518d4d8ee2f1d79fcaeb1b66e7d60f",
-      "name": "test_full_weight_tracking_ignores_unrelated_app_head_updates",
-      "status": "passed",
-      "duration": 1
-    }
-  ],
+  "newTests": [],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 37021,
-  "createdAt": 1783525621495,
+  "duration": 39929,
+  "createdAt": 1783612147189,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "fde441de-dc3b-423a-a5b0-6db5b8e89971",
+    "reportId": "798133ba-efbe-4659-9756-94870eac5ab4",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/28955871841",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/29030927831",
   "href": "awesome/",
-  "coverage": 34
+  "coverage": 35
 }
