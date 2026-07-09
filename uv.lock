@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.11"
 
 [options]
-exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
+exclude-newer = "2026-07-02T15:43:07.113901626Z"
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
@@ -3007,7 +3007,7 @@ wheels = [
 
 [[package]]
 name = "reachy-mini"
-version = "1.9.0rc1"
+version = "1.9.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
