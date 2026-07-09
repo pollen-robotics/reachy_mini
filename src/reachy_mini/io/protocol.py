@@ -4,7 +4,7 @@ All messages use a {"type": "...", ...payload} envelope.
 
 Client->Server command types:
     set_target, set_head_joints, set_body_yaw, set_antennas, set_full_target,
-    goto_target, wake_up, goto_sleep, play_sound,
+    goto_target, wake_up, goto_sleep, play_sound, play_recorded_move,
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
     get_state, get_version, start_recording, stop_recording, append_record,
@@ -180,6 +180,23 @@ class PlaySoundCmd(BaseModel):
 
     type: Literal["play_sound"] = "play_sound"
     file: str
+
+
+class PlayRecordedMoveCmd(BaseModel):
+    """Play a named recorded move (motion + its sidecar sound) from a dataset.
+
+    Daemon-side equivalent of ``POST /api/move/play/recorded-move-dataset``:
+    the backend loads the move from the (cache-first) HF dataset and runs it
+    through ``Backend.play_move``, so the bundled sound plays in lockstep on
+    the robot speaker. Fire-and-forget: the ack only reports that the move was
+    dispatched (or an error like an unknown name / missing dataset), not that
+    playback finished. ``dataset_name`` defaults to the pre-downloaded emotions
+    library; callers can override it to source a move from another repo.
+    """
+
+    type: Literal["play_recorded_move"] = "play_recorded_move"
+    move_name: str
+    dataset_name: Optional[str] = None
 
 
 class SetMotorModeCmd(BaseModel):
@@ -789,6 +806,7 @@ AnyCommand = Annotated[
     | UploadAudioStartCmd
     | UploadAudioChunkCmd
     | UploadAudioFinishCmd
+    | PlayRecordedMoveCmd
     | PlayUploadedMoveCmd
     | CancelMoveCmd
     | PlayUploadedAudioCmd

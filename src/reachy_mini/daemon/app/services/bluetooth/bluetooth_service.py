@@ -883,12 +883,21 @@ class BluetoothCommandService:
                 logger.error(f"Error executing command: {e}")
             return "OK: System running"
         elif upper == "IDENTIFY":
-            # Play a short sound on the robot so the user can tell which
-            # physical Reachy maps to this entry in the BLE scan list. Public
-            # (no PIN): identification happens BEFORE authenticating, the action
+            # Back-compat alias for the identify move. Now plays a named
+            # recorded move (motion + sound) instead of the old hardcoded
+            # sound; superseded by the generic PLAY command below. Public
+            # (no PIN), see PLAY rationale.
+            self._run_async(lambda: _play_recorded_move(_IDENTIFY_MOVE))
+            return "OK: working"
+        elif upper.startswith("PLAY "):
+            # Play a named recorded move (emotions library) on the robot:
+            # motion + its bundled sound. Public (no PIN) like IDENTIFY -
+            # identification/feedback happens BEFORE authenticating, the action
             # is benign and the BLE range already bounds who can trigger it.
-            # Runs OFF the mainloop because it proxies to the daemon over HTTP.
-            self._run_async(_identify)
+            # Move names have no spaces, so the raw tail is the value. Runs OFF
+            # the mainloop because it proxies to the daemon over HTTP.
+            move_name = command_str[len("PLAY ") :].strip()
+            self._run_async(lambda: _play_recorded_move(move_name))
             return "OK: working"
         elif command_str.upper() == "JOURNAL_START":
             return self._start_journal()
@@ -977,6 +986,15 @@ class BluetoothCommandService:
                 return "ERROR: Not connected. Please authenticate first."
             ssid = command_str[len("WIFI_FORGET ") :]
             self._run_async(lambda: _wifi_forget(ssid))
+            return "OK: working"
+        # Set the robot display name over BLE (end of the setup flow). Mutating,
+        # so it requires a live TTL session like the WiFi commands. The name can
+        # contain spaces, so everything after "SET_NAME " is the raw value.
+        elif upper.startswith("SET_NAME "):
+            if not self._is_authed():
+                return "ERROR: Not connected. Please authenticate first."
+            name = command_str[len("SET_NAME ") :].strip()
+            self._run_async(lambda: _set_robot_name(name))
             return "OK: working"
 
         # else if command starts with "CMD_xxxxx" check if  commands directory contains the said named script command xxxx.sh and run its, show output or/and send to read
@@ -1295,27 +1313,41 @@ def _daemon_request(
             return raw.decode("utf-8", errors="replace")
 
 
-# --- Robot identification proxy (reuses _daemon_request above) ---------------
-# Plays a short sound on the robot speaker so the user can pick their Reachy out
-# of the BLE scan list before connecting. Proxies to the daemon's
-# /api/media/play_sound route — note the /api prefix: the media router is
-# mounted under the prefixed APIRouter, unlike the /wifi and /update routes.
-_IDENTIFY_SOUND_FILE = "surprise.ogg"
+# --- Named recorded-move playback proxy (reuses _daemon_request above) -------
+# Plays a named move (motion + its bundled sound) so the user gets physical
+# feedback during onboarding (identify in the BLE scan list, waiting/sleep cues
+# during Wi-Fi + naming). Proxies to the daemon's
+# /api/move/play/recorded-move-dataset/{dataset:path}/{move_name} route — note
+# the /api prefix: the media/move routers are mounted under the prefixed
+# APIRouter, unlike the /wifi and /update routes.
+#
+# NOTE: this file runs under the SYSTEM python (stdlib-only), so it can't import
+# reachy_mini.motion.recorded_move.DEFAULT_EMOTIONS_DATASET — keep this in sync.
+_EMOTIONS_DATASET = "pollen-robotics/reachy-mini-emotions-library"
+# Move played on IDENTIFY (the BLE scan-list "make a noise so I know it's you").
+_IDENTIFY_MOVE = "toc-toc-toc"
 
 
-def _identify() -> str:
-    """Play the identification sound on the robot speaker."""
+def _play_recorded_move(move_name: str) -> str:
+    """Play a named recorded move (motion + sound) on the robot."""
+    move_name = move_name.strip()
+    if not move_name:
+        return "ERROR: Missing move name"
+    path = (
+        "/api/move/play/recorded-move-dataset/"
+        + _EMOTIONS_DATASET
+        + "/"
+        + urllib.parse.quote(move_name, safe="")
+    )
     try:
-        _daemon_request(
-            "POST",
-            "/api/media/play_sound",
-            data={"file": _IDENTIFY_SOUND_FILE},
-        )
-        return "OK: Playing identification sound"
+        _daemon_request("POST", path)
+        return f"OK: Playing {move_name}"
     except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return "ERROR: Unknown move"
         if e.code == 503:
-            return "ERROR: Audio not ready"
-        return "ERROR: Identify failed"
+            return "ERROR: Robot not ready"
+        return "ERROR: Play failed"
     except urllib.error.URLError:
         return "ERROR: Daemon unreachable"
     except Exception as e:
@@ -1523,6 +1555,30 @@ def _wifi_connect_sealed(blob: str) -> str:
         if e.code == 409:
             return "ERROR: Busy"
         return "ERROR: Connect request failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _set_robot_name(name: str) -> str:
+    """Persist + live-apply the robot display name (proxy to the daemon).
+
+    Relays to the daemon's ``/api/daemon/robot-name`` route, which persists
+    the name and applies it live (status + central relay + mDNS) so it takes
+    effect without a restart. Best-effort by design: naming is the last,
+    non-critical step of setup.
+    """
+    name = name.strip()
+    if not name:
+        return "ERROR: Missing name"
+    try:
+        _daemon_request("POST", "/api/daemon/robot-name", data={"name": name})
+        return f"OK: Named {name}"
+    except urllib.error.HTTPError as e:
+        if e.code == 422:
+            return "ERROR: Invalid name"
+        return "ERROR: Set name failed"
     except urllib.error.URLError:
         return "ERROR: Daemon unreachable"
     except Exception as e:

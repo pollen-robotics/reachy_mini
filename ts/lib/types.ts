@@ -42,6 +42,11 @@ export interface RobotState {
     head?: number[];
     /** [rightRad, leftRad]. */
     antennas?: number[];
+    /** Per-motor head joint positions (7, radians): body yaw at [0], 6 neck
+     *  (Stewart) motors at [1..6]. */
+    head_joint_positions?: number[];
+    /** Per-motor antenna joint positions (2, radians): [right, left]. */
+    antennas_joint_positions?: number[];
     /** Radians. */
     body_yaw?: number;
     motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';

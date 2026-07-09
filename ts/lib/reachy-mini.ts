@@ -1150,6 +1150,23 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         return this._sendCommand({ type: 'play_sound', file });
     }
 
+    /**
+     * Play a named recorded move (motion + its bundled sound) from a HF
+     * dataset, daemon-side. Fire-and-forget: resolves `true` once the command
+     * is sent on the data channel (not when playback finishes), `false` if the
+     * channel isn't open. `dataset` defaults to the daemon's emotions library
+     * (`pollen-robotics/reachy-mini-emotions-library`), already pre-downloaded
+     * on the robot; pass it to source a move from another repo. The daemon
+     * self-guards against a concurrent move, so a rapid double call is a no-op.
+     */
+    playRecordedMove(moveName: string, { dataset }: { dataset?: string } = {}): boolean {
+        return this._sendCommand({
+            type: 'play_recorded_move',
+            move_name: moveName,
+            ...(dataset ? { dataset_name: dataset } : {}),
+        });
+    }
+
     clearIncomingAudio(): boolean {
         return this._sendCommand({ type: 'clear_incoming_audio' });
     }
@@ -2089,12 +2106,16 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             const s = data.state as {
                 head_pose?: number[][];
                 antennas?: [number, number];
+                head_joint_positions?: number[];
+                antennas_joint_positions?: number[];
                 body_yaw?: number;
                 motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';
                 is_move_running?: boolean;
             };
             if (s.head_pose) this._robotState.head = s.head_pose.flat();
             if (s.antennas) this._robotState.antennas = [s.antennas[0], s.antennas[1]];
+            if (s.head_joint_positions) this._robotState.head_joint_positions = s.head_joint_positions;
+            if (s.antennas_joint_positions) this._robotState.antennas_joint_positions = s.antennas_joint_positions;
             if (typeof s.body_yaw === 'number') this._robotState.body_yaw = s.body_yaw;
             if (s.motor_mode) this._robotState.motor_mode = s.motor_mode;
             if (typeof s.is_move_running === 'boolean') this._robotState.is_move_running = s.is_move_running;

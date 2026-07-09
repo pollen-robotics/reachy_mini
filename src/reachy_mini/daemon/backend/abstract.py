@@ -47,6 +47,7 @@ from reachy_mini.io.protocol import (
     MockupSimBackendStatus,
     MotorControlMode,
     MujocoBackendStatus,
+    PlayRecordedMoveCmd,
     PlaySoundCmd,
     PlayUploadedAudioCmd,
     PlayUploadedMoveCmd,
@@ -354,6 +355,12 @@ class Backend:
         # in by `Daemon` to auto-start a configured startup app after the robot
         # wakes (however the wake was triggered: on-start, button, or REST).
         self._on_wake_up_callback: Optional[Callable[[], None]] = None
+
+        # Synchronous callback fired after a `set_robot_name` command persists
+        # a new name. Wired in by the app lifespan to apply the rename live
+        # (daemon status + central relay + mDNS) so it takes effect without a
+        # restart. Receives the stored (trimmed) name and must return promptly.
+        self._set_robot_name_callback: Optional[Callable[[str], None]] = None
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -1195,6 +1202,9 @@ class Backend:
             self.play_sound(cmd.file)
             send_response({"status": "ok", "command": "play_sound"})
 
+        elif isinstance(cmd, PlayRecordedMoveCmd):
+            asyncio.create_task(self._async_play_recorded_move(cmd, send_response))
+
         elif isinstance(cmd, ClearIncomingAudioCmd):
             self.clear_incoming_audio()
             send_response({"status": "ok", "command": "clear_incoming_audio"})
@@ -1262,6 +1272,15 @@ class Backend:
                 "antennas": self.get_present_antenna_joint_positions().tolist()
                 if self.current_antenna_joint_positions is not None
                 else None,
+                # Per-motor joint positions (7 head incl. body yaw at [0], 2
+                # antennas), so WebRTC clients can check the physical pose motor
+                # by motor without the LAN /ws/sdk stream.
+                "head_joint_positions": self.get_present_head_joint_positions().tolist()
+                if self.current_head_joint_positions is not None
+                else None,
+                "antennas_joint_positions": self.get_present_antenna_joint_positions().tolist()
+                if self.current_antenna_joint_positions is not None
+                else None,
                 "body_yaw": self.get_present_body_yaw(),
                 "motor_mode": self.get_motor_control_mode().value,
                 "is_recording": self.is_recording,
@@ -1318,6 +1337,14 @@ class Backend:
 
             if isinstance(cmd, SetRobotNameCmd):
                 stored = set_robot_name(cmd.name)
+                # Apply the rename live (status + central relay + mDNS) so it
+                # takes effect without a daemon restart. Fail-safe: a wiring
+                # error here must not break the persisted rename or the ack.
+                if stored is not None and self._set_robot_name_callback is not None:
+                    try:
+                        self._set_robot_name_callback(stored)
+                    except Exception as e:  # noqa: BLE001 - never break the cmd loop
+                        self.logger.warning(f"set_robot_name live-apply failed: {e}")
                 send_response(
                     {
                         "command": "set_robot_name",
@@ -2060,6 +2087,56 @@ class Backend:
         except Exception as e:
             send_response({"error": str(e), "command": "goto_sleep"})
 
+    async def _async_play_recorded_move(
+        self,
+        cmd: PlayRecordedMoveCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Load a named move from a dataset and play it (motion + sound).
+
+        Mirrors the ``/api/move/play/recorded-move-dataset`` route but over the
+        data channel so it works on a remote WebRTC session. Fire-and-forget:
+        the ack reports dispatch success/failure (unknown move, missing
+        dataset), not playback completion. ``RecordedMoves`` reads the local
+        HF cache first, so on a pre-downloaded robot this stays off the
+        network.
+        """
+        from reachy_mini.motion.recorded_move import (
+            DEFAULT_EMOTIONS_DATASET,
+            RecordedMoves,
+        )
+
+        dataset = cmd.dataset_name or DEFAULT_EMOTIONS_DATASET
+        try:
+            move = RecordedMoves(dataset).get(cmd.move_name)
+        except Exception as e:
+            self.logger.warning(
+                f"play_recorded_move: {cmd.move_name!r} from {dataset!r} "
+                f"failed to load: {e}"
+            )
+            send_response(
+                {
+                    "command": "play_recorded_move",
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
+            return
+
+        # Dispatched: ack now (fire-and-forget), then run the move. play_move
+        # self-guards against a concurrent move, so a double-tap is a no-op.
+        send_response(
+            {
+                "command": "play_recorded_move",
+                "status": "ok",
+                "move_name": cmd.move_name,
+            }
+        )
+        try:
+            await self.play_move(move)
+        except Exception as e:
+            self.logger.warning(f"play_recorded_move: playback failed: {e}")
+
     async def _async_play_uploaded_move(self, cmd: PlayUploadedMoveCmd) -> None:
         """Run Backend.play_move on a previously-uploaded move slot.
 
@@ -2243,6 +2320,17 @@ class Backend:
         any async work as a task).
         """
         self._on_wake_up_callback = callback
+
+    def set_robot_name_callback(self, callback: Callable[[str], None]) -> None:
+        """Wire the live-apply hook for the ``set_robot_name`` DataChannel cmd.
+
+        The app lifespan injects a callback that refreshes the advertised
+        name in place (daemon status + central relay + mDNS) so a rename
+        takes effect without a daemon restart. It receives the persisted
+        (trimmed) name and MUST return promptly (any slow work is
+        thread-offloaded on its side).
+        """
+        self._set_robot_name_callback = callback
 
     def setup_media_server(self, media_server: Any) -> None:
         """Connect the backend to the media server.

@@ -220,6 +220,33 @@ class Daemon:
         except Exception as e:
             self.logger.debug(f"Error stopping central signaling relay: {e}")
 
+    def apply_robot_name(self, name: str) -> None:
+        """Apply a new robot name to the live daemon without a restart.
+
+        Refreshes the in-memory name and the daemon status, then nudges the
+        central relay so its next heartbeat advertises the new label. The
+        persistent store (``utils/robot_name``) is written by the caller
+        (the ``set_robot_name`` command handler); this only updates the
+        live/advertised copies. mDNS re-registration is wired separately in
+        the app lifespan, which owns the ``MdnsServiceRegistration``.
+
+        Safe to call from the backend's command thread: it only mutates
+        attributes and calls the relay's thread-safe name setter.
+        """
+        new_name = (name or "").strip()
+        if not new_name:
+            return
+        self.robot_name = new_name
+        self._status.robot_name = new_name
+        try:
+            from reachy_mini.media.central_signaling_relay import (
+                notify_robot_name_change,
+            )
+
+            notify_robot_name_change(new_name)
+        except Exception as e:
+            self.logger.warning(f"Failed to update relay robot name: {e}")
+
     async def start(
         self,
         sim: bool = False,
@@ -630,7 +657,9 @@ class Daemon:
 
         backend = self.backend
 
-        def _broadcast(status: str, *, line: str | None = None, error: str | None = None) -> None:
+        def _broadcast(
+            status: str, *, line: str | None = None, error: str | None = None
+        ) -> None:
             if backend is None:
                 return
             payload: dict[str, Any] = {"type": "update_progress", "status": status}

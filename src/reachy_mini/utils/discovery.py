@@ -40,7 +40,9 @@ class DiscoveredRobot:
 
     def __repr__(self) -> str:
         """Return a human-readable representation."""
-        return f"DiscoveredRobot(name={self.name!r}, host={self.host!r}, port={self.port})"
+        return (
+            f"DiscoveredRobot(name={self.name!r}, host={self.host!r}, port={self.port})"
+        )
 
 
 def _get_local_ip() -> str:
@@ -102,6 +104,21 @@ class MdnsServiceRegistration:
         thread = threading.Thread(target=self._do_unregister, daemon=True)
         thread.start()
         thread.join(timeout=5.0)
+
+    def update_name(self, robot_name: str) -> None:
+        """Re-advertise the service under a new name.
+
+        Unregisters the current service (if any) then registers a fresh
+        one so a live rename shows up on the LAN without a daemon restart.
+        No-op when the name is unchanged; never raises (register /
+        unregister already swallow their own errors).
+        """
+        new_name = (robot_name or "").strip()
+        if not new_name or new_name == self._robot_name:
+            return
+        self.unregister()
+        self._robot_name = new_name
+        self.register()
 
     def _do_register(self) -> None:
         try:
@@ -178,7 +195,9 @@ class _RobotCollector(ServiceListener):
 
         addresses = [socket.inet_ntoa(addr) for addr in info.addresses]
         props = {
-            k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else str(v)
+            k.decode() if isinstance(k, bytes) else k: v.decode()
+            if isinstance(v, bytes)
+            else str(v)
             for k, v in info.properties.items()
         }
 
@@ -382,8 +401,15 @@ def _filter_alive(robots: List[DiscoveredRobot]) -> List[DiscoveredRobot]:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Discover Reachy Mini robots on the local network.")
-    parser.add_argument("--timeout", type=float, default=5.0, help="Discovery timeout in seconds (default: 5.0)")
+    parser = argparse.ArgumentParser(
+        description="Discover Reachy Mini robots on the local network."
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=5.0,
+        help="Discovery timeout in seconds (default: 5.0)",
+    )
     args = parser.parse_args()
 
     robots = find_robots(timeout=args.timeout)
