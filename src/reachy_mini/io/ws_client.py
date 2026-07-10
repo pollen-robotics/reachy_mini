@@ -35,6 +35,16 @@ from reachy_mini.io.protocol import (
 
 logger = logging.getLogger(__name__)
 
+# Hosts that resolve to the local machine. On loopback, permessage-deflate
+# compression only adds CPU overhead (there's no network bandwidth to save),
+# so we skip negotiating it for these.
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def _is_loopback_host(host: str) -> bool:
+    """Return True if `host` is a loopback address (localhost/127.0.0.1/::1)."""
+    return host.strip().lower() in _LOOPBACK_HOSTS
+
 
 class WSClient(AbstractClient):
     """WebSocket client for Reachy Mini."""
@@ -72,8 +82,11 @@ class WSClient(AbstractClient):
         self._heartbeat = threading.Event()
 
         uri = f"ws://{host}:{port}/ws/sdk"
+        # permessage-deflate buys nothing on loopback (no network to save
+        # bandwidth on) and costs CPU at the daemon's 50 Hz state stream rate.
+        compression = None if _is_loopback_host(host) else "deflate"
         try:
-            self._ws = ws_sync.connect(uri)
+            self._ws = ws_sync.connect(uri, compression=compression)
         except (OSError, websockets.exceptions.InvalidHandshake, TimeoutError) as e:
             raise ConnectionError(f"Failed to connect to {uri}: {e}") from e
 
