@@ -1,6 +1,7 @@
 """Utilities for local common venv apps source."""
 
 import asyncio
+import importlib.util
 import logging
 import os
 import platform
@@ -153,6 +154,41 @@ def get_app_python(
         return Path(sys.executable)
 
 
+def _find_app_main_file(
+    app_name: str,
+    wireless_version: bool = False,
+    desktop_app_daemon: bool = False,
+) -> Path | None:
+    """Locate an app's ``main.py`` without importing it.
+
+    Tries the app venv's ``site-packages/<app>/main.py`` first (a regular
+    copy install, works across venvs). Falls back to ``importlib`` spec
+    resolution, which is what makes **editable installs** work: an ``-e``
+    install leaves no physical ``main.py`` under site-packages (the ``.pth``
+    redirects imports to the source tree), so the file-path probe misses and
+    only the spec knows the real location. The fallback only resolves when the
+    app is importable from *this* interpreter, i.e. SDK / shared-venv mode;
+    separate-venv apps still rely on the copy-install file path above.
+    """
+    site_packages = _get_app_site_packages(
+        app_name, wireless_version, desktop_app_daemon
+    )
+    if site_packages and site_packages.exists():
+        main_file = site_packages / app_name / "main.py"
+        if main_file.exists():
+            return main_file
+
+    try:
+        spec = importlib.util.find_spec(app_name)
+    except (ImportError, ValueError):
+        spec = None
+    if spec and spec.origin:
+        main_file = Path(spec.origin).parent / "main.py"
+        if main_file.exists():
+            return main_file
+    return None
+
+
 def _get_custom_app_url_from_file(
     app_name: str,
     wireless_version: bool = False,
@@ -163,17 +199,8 @@ def _get_custom_app_url_from_file(
     This is much faster than subprocess and avoids sys.path pollution.
     Looks for patterns like: custom_app_url: str | None = "http://..."
     """
-    site_packages = _get_app_site_packages(
-        app_name, wireless_version, desktop_app_daemon
-    )
-    if not site_packages or not site_packages.exists():
-        return None
-
-    # Try to find main.py in the app's package directory
-    app_dir = site_packages / app_name
-    main_file = app_dir / "main.py"
-
-    if not main_file.exists():
+    main_file = _find_app_main_file(app_name, wireless_version, desktop_app_daemon)
+    if main_file is None:
         return None
 
     try:
@@ -234,9 +261,7 @@ async def _list_apps_from_separate_venvs(
             return []
 
         app_names = [
-            name.strip()
-            for name in result.stdout.strip().split("\n")
-            if name.strip()
+            name.strip() for name in result.stdout.strip().split("\n") if name.strip()
         ]
         apps = []
         for app_name in app_names:
@@ -598,16 +623,12 @@ async def install_package(
 
             ret = await running_command(install_cmd, logger=logger)
             if ret != 0:
-                logger.warning(
-                    "Failed to pre-install reachy-mini, continuing anyway"
-                )
+                logger.warning("Failed to pre-install reachy-mini, continuing anyway")
         else:
             logger.info(f"Using existing shared venv at {venv_path}")
 
         # Install package in the venv
-        python_path = _get_app_python(
-            app_name, wireless_version, desktop_app_daemon
-        )
+        python_path = _get_app_python(app_name, wireless_version, desktop_app_daemon)
 
         if use_uv:
             install_cmd = [
@@ -711,9 +732,7 @@ async def uninstall_package(
 
         # Shared venv: just uninstall the package, preserve the venv
         logger.info(f"Uninstalling '{app_name}' from shared venv at {venv_path}")
-        python_path = _get_app_python(
-            app_name, wireless_version, desktop_app_daemon
-        )
+        python_path = _get_app_python(app_name, wireless_version, desktop_app_daemon)
 
         # Check if uv is available
         use_uv = _check_uv_available()
