@@ -21,7 +21,7 @@ on:
 
 jobs:
   build:
-    uses: huggingface/doc-builder/.github/workflows/build_main_documentation.yml@main
+    uses: pollen-robotics/doc-builder/.github/workflows/build_main_documentation.yml@add-python-version-input
     with:
       repo_owner: pollen-robotics
       commit_sha: ${{ github.sha }}
