@@ -1,1 +1,1 @@
-{"id":"b7330262bbb14fa8f4ba6293349146aa","fullName":"tests.unit_tests.test_robot_app_lock#test_release_local_is_idempotent_when_free","name":"test_release_local_is_idempotent_when_free","status":"passed","testResultsByEnv":{"default":"3d04a73564968d82f0d4c9e64f0a4216"}}
+{"id":"b7330262bbb14fa8f4ba6293349146aa","fullName":"tests.unit_tests.test_robot_app_lock#test_release_local_is_idempotent_when_free","name":"test_release_local_is_idempotent_when_free","status":"passed","testResultsByEnv":{"default":"f38e666b9471075dc6d858e51d5e07f0"}}
