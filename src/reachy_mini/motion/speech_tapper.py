@@ -149,10 +149,14 @@ class SwayRollRT:
             hop = self.carry[:self.hop]
             self.carry = self.carry[self.hop:]
 
+            # With the default HOP_MS > FRAME_MS, this starts empty on every
+            # iteration; retain the concatenation for future overlapping windows.
             if self.samples.size:
                 self.samples = np.concatenate([self.samples, hop])[-self.frame :]
             else:
                 self.samples = hop[-self.frame :].copy()
+            # The default hop already fills a frame; this remains needed if a
+            # future configuration uses overlapping windows.
             if self.samples.size < self.frame:
                 self.t += HOP_MS / 1000.0
                 continue
