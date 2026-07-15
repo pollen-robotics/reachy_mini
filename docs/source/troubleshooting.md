@@ -747,6 +747,13 @@ This is a [known issue](https://www.xmos.com/documentation/XM-014888-PC/html/mod
 </details>
 
 <details>
+<summary><strong>The sound quality is not great / the speaker sounds "boxy".</strong></summary>
+
+The daemon already applies a default equalizer to compensate for the head shell's acoustic coloration. If the sound still isn't to your liking, the per-band gains can be tuned — or the EQ disabled — via the `speaker_eq_gains` entry in the daemon config file. See [Advanced Media Controls → Speaker equalization](platforms/reachy_mini/media_advanced_controls.md#speaker-equalization).
+
+</details>
+
+<details>
 <summary><strong>How do I get camera frames?</strong></summary>
 
 Use the `media` object.

@@ -15,6 +15,7 @@ import platformdirs
 logger = logging.getLogger(__name__)
 
 _KEY = "startup_app"
+_EQ_KEY = "speaker_eq_gains"
 
 
 def _config_path() -> Path:
@@ -40,6 +41,22 @@ def get_startup_app() -> str | None:
     """Return the persisted startup app name, or None if unset."""
     value = _read().get(_KEY)
     return value if isinstance(value, str) else None
+
+
+def get_speaker_eq_gains() -> list[float] | None:
+    """Return the 10 speaker-EQ band gains (dB), or None if unset/invalid.
+
+    Invalid values (wrong length, non-numeric) are treated as unset so the
+    caller falls back to its built-in default.
+    """
+    value = _read().get(_EQ_KEY)
+    if (
+        isinstance(value, list)
+        and len(value) == 10
+        and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in value)
+    ):
+        return [float(x) for x in value]
+    return None
 
 
 def set_startup_app(name: str | None) -> None:

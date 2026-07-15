@@ -41,7 +41,10 @@ from reachy_mini.daemon.utils import (
 )
 from reachy_mini.media.audio_base import AEC_CHANNELS, AEC_PROBE_NAME, AEC_RATE
 from reachy_mini.media.audio_control_utils import init_respeaker_usb
-from reachy_mini.media.audio_utils import has_reachymini_asoundrc
+from reachy_mini.media.audio_utils import (
+    has_reachymini_asoundrc,
+    resolve_speaker_eq_gains,
+)
 from reachy_mini.media.camera_constants import (
     CameraSpecs,
     GenericWebcamSpecs,
@@ -489,6 +492,7 @@ class GstMediaServer:
         queue_speaker = Gst.ElementFactory.make("queue")
         ac_speaker = Gst.ElementFactory.make("audioconvert")
         ar_speaker = Gst.ElementFactory.make("audioresample")
+        eq_speaker = self._make_speaker_eq()
         queue_wobbler = Gst.ElementFactory.make("queue")
         ac_wobbler = Gst.ElementFactory.make("audioconvert")
         ar_wobbler = Gst.ElementFactory.make("audioresample")
@@ -517,6 +521,7 @@ class GstMediaServer:
             *([webrtcechoprobe] if webrtcechoprobe is not None else []),
             ac_speaker,
             ar_speaker,
+            *([eq_speaker] if eq_speaker is not None else []),
             audiosink,
             queue_wobbler,
             ac_wobbler,
@@ -534,7 +539,11 @@ class GstMediaServer:
         else:
             queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
-        ar_speaker.link(audiosink)
+        if eq_speaker is not None:
+            ar_speaker.link(eq_speaker)
+            eq_speaker.link(audiosink)
+        else:
+            ar_speaker.link(audiosink)
         tee.link(queue_wobbler)
         queue_wobbler.link(ac_wobbler)
         ac_wobbler.link(ar_wobbler)
@@ -1334,6 +1343,25 @@ class GstMediaServer:
         self._head_wobbler.feed(pcm, time.monotonic_ns())
         return Gst.FlowReturn.OK
 
+    def _make_speaker_eq(self) -> Optional[Gst.Element]:
+        """Build an equalizer-10bands from the configured gains, or None.
+
+        Returns None (caller keeps the direct link) when all gains are zero or
+        the element is unavailable, so uncalibrated robots stay byte-identical.
+        Inserted on the speaker branch only, after the wobbler tee, so head
+        motion is driven by the uncorrected signal.
+        """
+        gains = resolve_speaker_eq_gains()
+        if not any(gains):
+            return None
+        eq = Gst.ElementFactory.make("equalizer-10bands")
+        if eq is None:
+            self._logger.warning("equalizer-10bands unavailable; skipping speaker EQ")
+            return None
+        for i, gain in enumerate(gains):
+            eq.set_property(f"band{i}", float(gain))
+        return eq
+
     def _build_audiosink_tee_bin(self) -> Gst.Bin:
         """Build a Gst.Bin splitting audio to speaker and wobbler appsink.
 
@@ -1354,6 +1382,7 @@ class GstMediaServer:
         queue_speaker = Gst.ElementFactory.make("queue")
         ac_speaker = Gst.ElementFactory.make("audioconvert")
         ar_speaker = Gst.ElementFactory.make("audioresample")
+        eq_speaker = self._make_speaker_eq()
         audiosink = self._build_audiosink_element()
         queue_wobbler = Gst.ElementFactory.make("queue")
         ac_wobbler = Gst.ElementFactory.make("audioconvert")
@@ -1376,7 +1405,12 @@ class GstMediaServer:
         tee.link(queue_speaker)
         queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
-        ar_speaker.link(audiosink)
+        if eq_speaker is not None:
+            audio_bin.add(eq_speaker)
+            ar_speaker.link(eq_speaker)
+            eq_speaker.link(audiosink)
+        else:
+            ar_speaker.link(audiosink)
 
         tee.link(queue_wobbler)
         queue_wobbler.link(ac_wobbler)
