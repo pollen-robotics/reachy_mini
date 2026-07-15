@@ -30,15 +30,9 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 
-# --- Speaker EQ (head-shell "boxy" resonance correction) ----------------------
-# A GStreamer equalizer-10bands on the daemon's speaker branch (see
-# audio_gstreamer.py / media_server.py) corrects the head shell's coloration.
-# The 10 per-band gains (dB) come from the daemon config (speaker_eq_gains in
-# daemon_config.json); with no entry we fall back to DEFAULT_SPEAKER_EQ_GAINS,
-# the tested correction. The gains are produced offline by the calibration tool
-# reachy_mini/tools/speaker_eq_calibration/ — see its README.md.
-
-# Tested boxy-shell correction (differential hifiscan measurement, 16 kHz set).
+# Speaker EQ gains (dB) correcting the head-shell "boxy" resonance, derived
+# offline by tools/speaker_eq_calibration/. Overridable via the daemon config
+# (speaker_eq_gains); see resolve_speaker_eq_gains and the tool's README.
 DEFAULT_SPEAKER_EQ_GAINS = [
     0.0,
     -13.21,
