@@ -41,6 +41,61 @@ class FaceObservation:
     timestamp: float
 
 
+class AdaptiveCenterFilter:
+    """Smooth normalized face centers while remaining responsive to large motion.
+
+    Small changes are held inside a dead zone. Outside it, an exponential moving
+    average uses ``alpha`` for ordinary motion and ``fast_alpha`` when consecutive
+    raw observations move farther than ``movement_threshold``.
+    """
+
+    def __init__(
+        self,
+        alpha: float = 0.3,
+        fast_alpha: float = 0.6,
+        movement_threshold: float = 0.15,
+        dead_zone: float = 0.02,
+    ) -> None:
+        """Configure the filter in normalized image coordinates."""
+        if not 0.0 < alpha <= 1.0:
+            raise ValueError("alpha must be in (0, 1]")
+        if not 0.0 < fast_alpha <= 1.0:
+            raise ValueError("fast_alpha must be in (0, 1]")
+        if movement_threshold < 0.0:
+            raise ValueError("movement_threshold must be non-negative")
+        if dead_zone < 0.0:
+            raise ValueError("dead_zone must be non-negative")
+        self._alpha = alpha
+        self._fast_alpha = fast_alpha
+        self._movement_threshold = movement_threshold
+        self._dead_zone = dead_zone
+        self._value: NDArray[np.float64] | None = None
+        self._previous_input: NDArray[np.float64] | None = None
+
+    def update(self, center: tuple[float, float]) -> tuple[float, float]:
+        """Consume one raw center and return the filtered center."""
+        current = np.asarray(center, dtype=np.float64)
+        if self._value is None or self._previous_input is None:
+            self._value = current.copy()
+            self._previous_input = current.copy()
+            return center
+
+        movement = float(np.linalg.norm(current - self._previous_input))
+        self._previous_input = current.copy()
+        delta = current - self._value
+        if float(np.linalg.norm(delta)) < self._dead_zone:
+            return (float(self._value[0]), float(self._value[1]))
+
+        alpha = self._fast_alpha if movement > self._movement_threshold else self._alpha
+        self._value += alpha * delta
+        return (float(self._value[0]), float(self._value[1]))
+
+    def reset(self) -> None:
+        """Forget filter history so the next observation is accepted immediately."""
+        self._value = None
+        self._previous_input = None
+
+
 def _area(face: Face) -> float:
     return face.bbox[2] * face.bbox[3]
 
@@ -97,6 +152,11 @@ class Tracker:
         self._misses += 1
         if self._misses > self._max_misses:
             self._center = None
+
+    @property
+    def has_target(self) -> bool:
+        """Whether the tracker is still associated with a face."""
+        return self._center is not None
 
 
 def to_observation(
@@ -236,8 +296,10 @@ class FaceTracker:
         try:
             detector = FaceDetector()
             tracker = Tracker()
+            center_filter = AdaptiveCenterFilter()
             while not self._stop.is_set():
                 if not self._active.is_set():
+                    center_filter.reset()
                     if playing:
                         # Disconnect while paused so the daemon serves nothing to this client.
                         pipeline.set_state(Gst.State.NULL)
@@ -275,16 +337,19 @@ class FaceTracker:
                         camera_specs.K, crop_scale, (frame_width, frame_height)
                     )
                 face = tracker.select(detector.detect(frame), frame_width, frame_height)
-                self._observations.put(
-                    to_observation(
-                        face,
-                        frame_width,
-                        frame_height,
-                        camera_matrix,
-                        camera_specs.D,
-                        time.monotonic(),
-                    )
+                if face is None and not tracker.has_target:
+                    center_filter.reset()
+                observation = to_observation(
+                    face,
+                    frame_width,
+                    frame_height,
+                    camera_matrix,
+                    camera_specs.D,
+                    time.monotonic(),
                 )
+                if observation.center is not None:
+                    observation.center = center_filter.update(observation.center)
+                self._observations.put(observation)
         except Exception:
             # With no process boundary left, this is the only place a detector crash gets reported.
             logger.exception("Face tracker crashed.")

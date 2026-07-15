@@ -7,7 +7,12 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import pytest
 
-from reachy_mini.vision.face_tracking import FaceTracker, Tracker, to_observation
+from reachy_mini.vision.face_tracking import (
+    AdaptiveCenterFilter,
+    FaceTracker,
+    Tracker,
+    to_observation,
+)
 
 if TYPE_CHECKING:
     from reachy_mini.media.camera_constants import CameraSpecs
@@ -42,6 +47,51 @@ def test_to_observation_normalizes_nose_and_roll() -> None:
     )
     assert obs.center == (0.0, 0.0)
     assert obs.roll == float(np.arctan2(2.0, 2.0))
+
+
+def test_adaptive_filter_smooths_ordinary_motion() -> None:
+    """Ordinary motion uses the slow EMA coefficient."""
+    center_filter = AdaptiveCenterFilter(
+        alpha=0.25, fast_alpha=0.8, movement_threshold=1.0, dead_zone=0.0
+    )
+
+    assert center_filter.update((0.0, 0.0)) == (0.0, 0.0)
+    assert center_filter.update((0.4, -0.4)) == pytest.approx((0.1, -0.1))
+    assert center_filter.update((0.4, -0.4)) == pytest.approx((0.175, -0.175))
+
+
+def test_adaptive_filter_uses_fast_alpha_for_large_motion() -> None:
+    """A large frame-to-frame jump selects the responsive EMA coefficient."""
+    center_filter = AdaptiveCenterFilter(
+        alpha=0.25, fast_alpha=0.75, movement_threshold=0.5, dead_zone=0.0
+    )
+    center_filter.update((0.0, 0.0))
+
+    assert center_filter.update((0.8, 0.0)) == pytest.approx((0.6, 0.0))
+
+
+def test_adaptive_filter_holds_motion_inside_dead_zone() -> None:
+    """Sub-threshold target jitter keeps the last filtered center unchanged."""
+    center_filter = AdaptiveCenterFilter(
+        alpha=0.5, fast_alpha=0.5, movement_threshold=1.0, dead_zone=0.05
+    )
+    center_filter.update((0.0, 0.0))
+
+    assert center_filter.update((0.03, 0.02)) == (0.0, 0.0)
+    assert center_filter.update((0.06, 0.0)) == pytest.approx((0.03, 0.0))
+
+
+def test_adaptive_filter_reset_accepts_next_center_immediately() -> None:
+    """Reset removes EMA history rather than blending a reacquired face with stale aim."""
+    center_filter = AdaptiveCenterFilter(
+        alpha=0.1, fast_alpha=0.1, movement_threshold=1.0, dead_zone=0.0
+    )
+    center_filter.update((0.0, 0.0))
+    center_filter.update((0.5, 0.0))
+
+    center_filter.reset()
+
+    assert center_filter.update((-0.5, 0.25)) == (-0.5, 0.25)
 
 
 def test_tracker_acquires_largest_above_min_size() -> None:

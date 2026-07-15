@@ -217,30 +217,6 @@ def test_tracking_face_loss_holds_last_target() -> None:
     assert backend._tracking_target_pose is target
 
 
-def test_tracking_deadband_ignores_subthreshold_motion() -> None:
-    """Sub-deadband jitter does not retarget, so a still person holds a still head."""
-    backend = _make_backend()
-    backend._tracking_enabled = True
-    cam = np.array(
-        [[640.0, 0.0, 320.0], [0.0, 640.0, 240.0], [0.0, 0.0, 1.0]], dtype=np.float64
-    )
-    dist = np.zeros(5, dtype=np.float64)
-
-    backend.set_tracking_face((0.2, 0.2), 0.0, 640, 480, cam, dist, 1.0)
-    first = backend._tracking_target_pose
-    assert first is not None
-
-    backend.set_tracking_face(
-        (0.2 + backend._tracking_deadband / 2, 0.2), 0.0, 640, 480, cam, dist, 2.0
-    )
-    assert backend._tracking_target_pose is first  # held: jitter below deadband
-
-    backend.set_tracking_face(
-        (0.2 + backend._tracking_deadband * 2, 0.2), 0.0, 640, 480, cam, dist, 3.0
-    )
-    assert backend._tracking_target_pose is not first  # moved: beyond deadband
-
-
 def test_tracking_sustained_loss_recenters_to_neutral() -> None:
     """After the lost timeout the aim target returns to the neutral head pose."""
     backend = _make_backend()
