@@ -30,6 +30,7 @@ from reachy_mini.media.audio_control_utils import (
     init_respeaker_usb,
 )
 from reachy_mini.media.audio_doa import AudioDoA
+from reachy_mini.media.audio_utils import resolve_speaker_eq_gains
 from reachy_mini.media.gstreamer_utils import get_sample, handle_default_bus_message
 
 gi.require_version("Gst", "1.0")
@@ -41,6 +42,26 @@ from gi.repository import Gst  # noqa: E402
 AEC_RATE = 48_000
 AEC_CHANNELS = 2
 AEC_PROBE_NAME = "reachymini_aec_probe"
+
+
+def make_speaker_eq(logger: logging.Logger) -> Optional[Gst.Element]:
+    """Build an ``equalizer-10bands`` from the configured gains, or ``None``.
+
+    Returns ``None`` (caller keeps the direct link) when all gains are zero or
+    the element is unavailable, so uncalibrated robots stay byte-identical.
+    Callers insert it on the speaker branch only, after the wobbler tee, so head
+    motion is driven by the uncorrected signal.
+    """
+    gains = resolve_speaker_eq_gains()
+    if not any(gains):
+        return None
+    eq = Gst.ElementFactory.make("equalizer-10bands")
+    if eq is None:
+        logger.warning("equalizer-10bands unavailable; skipping speaker EQ")
+        return None
+    for i, gain in enumerate(gains):
+        eq.set_property(f"band{i}", float(gain))
+    return eq
 
 
 class AudioBase(ABC):

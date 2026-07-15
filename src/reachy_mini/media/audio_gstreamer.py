@@ -60,11 +60,13 @@ from typing import Optional
 
 import numpy as np
 
-from reachy_mini.media.audio_base import AEC_PROBE_NAME, AEC_RATE, AudioBase
-from reachy_mini.media.audio_utils import (
-    has_reachymini_asoundrc,
-    resolve_speaker_eq_gains,
+from reachy_mini.media.audio_base import (
+    AEC_PROBE_NAME,
+    AEC_RATE,
+    AudioBase,
+    make_speaker_eq,
 )
+from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
@@ -298,25 +300,6 @@ class GStreamerAudio(AudioBase):
         self._head_wobbler.feed(pcm, time.monotonic_ns())
         return Gst.FlowReturn.OK
 
-    def _make_speaker_eq(self) -> Optional[Gst.Element]:
-        """Build an equalizer-10bands from the configured gains, or None.
-
-        Returns None (caller keeps the direct link) when all gains are zero or
-        the element is unavailable, so uncalibrated robots stay byte-identical.
-        Inserted on the speaker branch only, after the wobbler tee, so head
-        motion is driven by the uncorrected signal.
-        """
-        gains = resolve_speaker_eq_gains()
-        if not any(gains):
-            return None
-        eq = Gst.ElementFactory.make("equalizer-10bands")
-        if eq is None:
-            print("equalizer-10bands unavailable; skipping speaker EQ")
-            return None
-        for i, gain in enumerate(gains):
-            eq.set_property(f"band{i}", float(gain))
-        return eq
-
     def _build_audiosink_tee_bin(self) -> Gst.Bin:
         """Build a Gst.Bin with a tee splitting audio to speaker and wobbler.
 
@@ -338,7 +321,7 @@ class GStreamerAudio(AudioBase):
         queue_speaker = Gst.ElementFactory.make("queue")
         ac_speaker = Gst.ElementFactory.make("audioconvert")
         ar_speaker = Gst.ElementFactory.make("audioresample")
-        eq_speaker = self._make_speaker_eq()
+        eq_speaker = make_speaker_eq(self.logger)
         audiosink = self._build_audiosink_element()
         queue_wobbler = Gst.ElementFactory.make("queue")
         ac_wobbler = Gst.ElementFactory.make("audioconvert")
@@ -413,7 +396,7 @@ class GStreamerAudio(AudioBase):
         queue_speaker = Gst.ElementFactory.make("queue")
         ac_speaker = Gst.ElementFactory.make("audioconvert")
         ar_speaker = Gst.ElementFactory.make("audioresample")
-        eq_speaker = self._make_speaker_eq()
+        eq_speaker = make_speaker_eq(self.logger)
         audiosink = self._build_audiosink_element()
         queue_wobbler = Gst.ElementFactory.make("queue")
         ac_wobbler = Gst.ElementFactory.make("audioconvert")

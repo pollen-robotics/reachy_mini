@@ -1,6 +1,6 @@
 """Unit tests for the runtime speaker-EQ gains resolution and element builder."""
 
-from typing import cast
+import logging
 
 import gi
 import pytest
@@ -9,13 +9,14 @@ gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
 from reachy_mini.daemon import startup_app_config  # noqa: E402
-from reachy_mini.media.audio_gstreamer import GStreamerAudio  # noqa: E402
+from reachy_mini.media.audio_base import make_speaker_eq  # noqa: E402
 from reachy_mini.media.audio_utils import (  # noqa: E402
     DEFAULT_SPEAKER_EQ_GAINS,
     resolve_speaker_eq_gains,
 )
 
 Gst.init([])
+_LOG = logging.getLogger(__name__)
 
 
 def test_resolve_gains_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -51,17 +52,14 @@ def test_config_gains_validation(
 
 def test_make_speaker_eq_default_active(monkeypatch: pytest.MonkeyPatch) -> None:
     """With no config the tested default is applied (EQ active out of the box)."""
-    # _make_speaker_eq ignores self, so a dummy instance is enough to exercise it.
     monkeypatch.setattr(startup_app_config, "get_speaker_eq_gains", lambda: None)
-    dummy = cast(GStreamerAudio, object())
-    eq = GStreamerAudio._make_speaker_eq(dummy)
+    eq = make_speaker_eq(_LOG)
     assert eq is not None
     assert eq.get_factory().get_name() == "equalizer-10bands"
     assert eq.get_property("band1") == pytest.approx(DEFAULT_SPEAKER_EQ_GAINS[1])
 
 
 def test_make_speaker_eq_noop_when_all_zero(monkeypatch: pytest.MonkeyPatch) -> None:
-    """All-zero gains disable the EQ (helper returns None, direct link kept)."""
+    """All-zero gains disable the EQ (returns None, direct link kept)."""
     monkeypatch.setattr(startup_app_config, "get_speaker_eq_gains", lambda: [0.0] * 10)
-    dummy = cast(GStreamerAudio, object())
-    assert GStreamerAudio._make_speaker_eq(dummy) is None
+    assert make_speaker_eq(_LOG) is None
