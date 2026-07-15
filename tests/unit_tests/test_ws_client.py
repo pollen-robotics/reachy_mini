@@ -16,7 +16,16 @@ from reachy_mini.io.ws_client import WSClient, _is_loopback_host
 
 @pytest.mark.parametrize(
     "host",
-    ["localhost", "127.0.0.1", "::1", "LOCALHOST", "Localhost", " 127.0.0.1 "],
+    [
+        "localhost",
+        "127.0.0.1",
+        "127.0.0.2",
+        "::1",
+        "[::1]",
+        "LOCALHOST",
+        "Localhost",
+        " 127.0.0.1 ",
+    ],
 )
 def test_is_loopback_host_true_for_loopback_addresses(host: str) -> None:
     """Loopback hostnames/IPs are recognized regardless of case/whitespace."""
@@ -25,7 +34,7 @@ def test_is_loopback_host_true_for_loopback_addresses(host: str) -> None:
 
 @pytest.mark.parametrize(
     "host",
-    ["192.168.1.42", "reachy.local", "example.com", "0.0.0.0", ""],
+    ["192.168.1.42", "reachy.local", "example.com", "0.0.0.0", "[not-an-ip]", ""],
 )
 def test_is_loopback_host_false_for_non_loopback_addresses(host: str) -> None:
     """Non-loopback hosts (including the all-interfaces address) are not matched."""

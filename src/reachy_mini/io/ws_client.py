@@ -4,6 +4,7 @@ Connects to the daemon's /ws/sdk endpoint and provides cached state,
 fire-and-forget commands, and task request/progress tracking.
 """
 
+import ipaddress
 import logging
 import threading
 import time
@@ -35,15 +36,15 @@ from reachy_mini.io.protocol import (
 
 logger = logging.getLogger(__name__)
 
-# Hosts that resolve to the local machine. On loopback, permessage-deflate
-# compression only adds CPU overhead (there's no network bandwidth to save),
-# so we skip negotiating it for these.
-_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
-
-
 def _is_loopback_host(host: str) -> bool:
-    """Return True if `host` is a loopback address (localhost/127.0.0.1/::1)."""
-    return host.strip().lower() in _LOOPBACK_HOSTS
+    """Return True if `host` is localhost or a loopback IP address."""
+    normalized_host = host.strip().strip("[]").lower()
+    if normalized_host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(normalized_host).is_loopback
+    except ValueError:
+        return False
 
 
 class WSClient(AbstractClient):
