@@ -45,8 +45,11 @@ jobs:
         run: |
           # The Azure runner kernel ships snd-dummy/snd-aloop in the
           # linux-modules-extra package, which isn't installed by default.
+          # depmod -a rebuilds modules.dep so modprobe can find the new .ko.
           sudo apt-get update
           sudo apt-get install -y "linux-modules-extra-$(uname -r)"
+          find "/lib/modules/$(uname -r)" \( -name 'snd-dummy*' -o -name 'snd-aloop*' \) -print || true
+          sudo depmod -a
           sudo modprobe snd-dummy id=respeaker
           arecord -l
           uv run python -c "from reachy_mini.media.audio_utils import write_asoundrc_to_home; write_asoundrc_to_home()"
