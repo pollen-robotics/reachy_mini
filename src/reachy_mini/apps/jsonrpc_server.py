@@ -32,8 +32,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from reachy_mini.io.jsonrpc import (
     JsonRpcError,
+    RpcNotification,
     error_from_exc,
-    make_notification,
     make_result,
     parse_request,
 )
@@ -77,7 +77,9 @@ class JsonRpcServer:
         self, method: str, params: Optional[dict[str, Any]] = None
     ) -> None:
         """Push a notification to every connected peer (call on the app loop)."""
-        payload = json.dumps(make_notification(method, params))
+        # Serialize once, on the event hot path, in a single pydantic-core step
+        # (no dict round-trip through the Python json module).
+        payload = RpcNotification(method=method, params=params or {}).model_dump_json()
         for ws in list(self._clients):
             try:
                 await ws.send_text(payload)

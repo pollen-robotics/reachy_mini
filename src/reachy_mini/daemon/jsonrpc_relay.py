@@ -19,7 +19,6 @@ app WS client live); transports schedule :meth:`handle` onto it.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import Any, Callable, Optional
 from urllib.parse import urlparse
@@ -30,10 +29,13 @@ from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.startup_app import ensure_startup_app_installed
 from reachy_mini.io.jsonrpc import (
     JsonRpcError,
+    RpcErrorResponse,
     RpcRequest,
+    RpcSuccess,
     error_from_exc,
     make_error,
     make_result,
+    parse_inbound,
     parse_request,
 )
 
@@ -170,18 +172,22 @@ class JsonRpcRelay:
 
         self._counter += 1
         relay_id = f"relay-{self._counter}"
-        original_id = req.id
+        # Record both correlation entries BEFORE the await: the reader task runs
+        # on this same loop and can process the app's reply *during*
+        # ``ws.send`` (a fast reply on the loopback WS). If `original_id` were
+        # set after the await, that reply would restore id=None and the caller
+        # would hang until timeout.
         self._pending[relay_id] = reply
-        frame = req.model_dump(exclude_none=False)
-        frame["id"] = relay_id
+        self._pending_original_id[relay_id] = req.id
+        # Forward the request under a relay-assigned id (model_copy keeps every
+        # other field intact); the reader restores `original_id` on the reply.
+        outgoing = req.model_copy(update={"id": relay_id})
         try:
-            await ws.send(json.dumps(frame))
+            await ws.send(outgoing.model_dump_json())
         except Exception as e:
             self._pending.pop(relay_id, None)
+            self._pending_original_id.pop(relay_id, None)
             raise JsonRpcError(f"app unavailable: {e}", reason="app_unavailable") from e
-        # The reply is delivered later by the reader task, which restores
-        # `original_id` before calling `reply`.
-        self._pending_original_id[relay_id] = original_id
 
     async def _ensure_app_ws(self) -> ClientConnection:
         async with self._app_ws_lock:
@@ -219,16 +225,23 @@ class JsonRpcRelay:
 
     def _on_app_frame(self, text: str) -> None:
         try:
-            obj = json.loads(text)
-        except json.JSONDecodeError:
-            return
-        rid = obj.get("id") if isinstance(obj, dict) else None
-        if rid is not None and rid in self._pending:
-            reply = self._pending.pop(rid)
-            obj["id"] = self._pending_original_id.pop(rid, None)
-            reply(obj)
+            msg = parse_inbound(text)
+        except JsonRpcError:
+            return  # unparseable frame from the app — drop it
+        # A correlated response (success or error) carries a relay-assigned id
+        # (always a `relay-N` str) we're waiting on; restore the caller's id and
+        # hand it back.
+        if (
+            isinstance(msg, (RpcSuccess, RpcErrorResponse))
+            and isinstance(msg.id, str)
+            and msg.id in self._pending
+        ):
+            reply = self._pending.pop(msg.id)
+            original_id = self._pending_original_id.pop(msg.id, None)
+            reply(msg.model_copy(update={"id": original_id}).model_dump())
         else:
-            # No id (a notification/event) — fan it out to every client.
+            # A notification/event (or an uncorrelated response) — fan it out to
+            # every client verbatim.
             self._broadcast(text)
 
     async def _drop_app_ws(self) -> None:
