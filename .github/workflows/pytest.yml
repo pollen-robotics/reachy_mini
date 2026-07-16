@@ -22,7 +22,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
         with:
-          packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0 gstreamer1.0-alsa libasound2-plugins pulseaudio pulseaudio-utils
+          packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gir1.2-gst-plugins-base-1.0 gstreamer1.0-alsa libasound2-plugins pulseaudio pulseaudio-utils
           version: 1.0
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
@@ -41,8 +41,11 @@ jobs:
       # alsasrc/alsasink fast-path (has_reachymini_asoundrc). The null sink's
       # monitor loops playback back to capture, so the play-through test can
       # assert audio reached the sink (REACHY_TEST_AUDIO_LOOPBACK gates it).
-      # Board-bound tests stay excluded via `respeaker`. Ubuntu only.
-      - name: Run audio tests on a virtual sound card (Ubuntu)
+      # Video needs no device: the ipc_video_source fixture feeds
+      # videotestsrc -> unixfdsink (gstreamer1.0-plugins-bad) into the same IPC
+      # socket GStreamerCamera reads. Board/wireless tests stay excluded.
+      # Ubuntu only.
+      - name: Run audio + video tests on a virtual sound card (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
           pulseaudio -D --exit-idle-time=-1 --disable-shm \
@@ -55,7 +58,7 @@ jobs:
           pcm.reachymini_audio_src  { type pulse device "vspeaker.monitor" }
           EOF
           export REACHY_TEST_AUDIO_LOOPBACK=1
-          uv run pytest -vv tests/unit_tests/test_audio.py \
-            -m 'audio and not respeaker and not wireless' --tb=short
+          uv run pytest -vv tests/unit_tests/test_audio.py tests/unit_tests/test_video.py \
+            -m '(audio or video) and not respeaker and not wireless' --tb=short
         env:
           MUJOCO_GL: disable
