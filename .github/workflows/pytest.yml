@@ -43,6 +43,10 @@ jobs:
       - name: Set up dummy ALSA card (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
+          # The Azure runner kernel ships snd-dummy/snd-aloop in the
+          # linux-modules-extra package, which isn't installed by default.
+          sudo apt-get update
+          sudo apt-get install -y "linux-modules-extra-$(uname -r)"
           sudo modprobe snd-dummy id=respeaker
           arecord -l
           uv run python -c "from reachy_mini.media.audio_utils import write_asoundrc_to_home; write_asoundrc_to_home()"
