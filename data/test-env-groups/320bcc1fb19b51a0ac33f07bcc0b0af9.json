@@ -1,0 +1,1 @@
+{"id":"320bcc1fb19b51a0ac33f07bcc0b0af9","fullName":"tests.unit_tests.test_ws_client#test_is_loopback_host_true_for_loopback_addresses","name":"test_is_loopback_host_true_for_loopback_addresses[127.0.0.1]","status":"passed","testResultsByEnv":{"default":"a088e389d4957261eeb654f87d757b06"}}

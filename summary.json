@@ -1,26 +1,130 @@
 {
   "stats": {
-    "total": 310,
-    "passed": 307,
+    "total": 327,
+    "passed": 324,
+    "new": 17,
     "skipped": 3
   },
   "status": "passed",
-  "newTests": [],
+  "newTests": [
+    {
+      "id": "67338370dffa117b72c306005858f3e2",
+      "name": "test_is_loopback_host_true_for_loopback_addresses[127.0.0.1]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "a292b7e2b77b43f7e6533082b6a29dd8",
+      "name": "test_connect_keeps_default_compression_for_remote_host",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "fa199371a51917f55f50a09e3bced727",
+      "name": "test_is_loopback_host_false_for_non_loopback_addresses[reachy.local]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "b8a57fa5c9012622a420ce4ae62e71fc",
+      "name": "test_is_loopback_host_false_for_non_loopback_addresses[0.0.0.0]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "27c6655f21d6a2ccd2ed312612adef1c",
+      "name": "test_is_loopback_host_false_for_non_loopback_addresses[[not-an-ip]]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "b87cc65f2422eb52a9d9e99816981069",
+      "name": "test_connect_disables_compression_for_localhost",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "b446780ca48c2b15a8ed283b68906360",
+      "name": "test_is_loopback_host_true_for_loopback_addresses[127.0.0.2]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "6ecb8d6b3a1e7ce7c495826d1f287444",
+      "name": "test_is_loopback_host_true_for_loopback_addresses[Localhost]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "2a613b2a65eff924147416cb09ff95dc",
+      "name": "test_is_loopback_host_true_for_loopback_addresses[::1]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "ca279df1f9ff4249fe3866e6ee3b132b",
+      "name": "test_is_loopback_host_false_for_non_loopback_addresses[example.com]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "fa5160b45198f0319f054564b484671d",
+      "name": "test_is_loopback_host_true_for_loopback_addresses[ 127.0.0.1 ]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "3eb1e55038cc9b6f9b62dd74eeaa942f",
+      "name": "test_is_loopback_host_false_for_non_loopback_addresses[192.168.1.42]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "0b10871e3ec7c97b1ed1772d850fd371",
+      "name": "test_is_loopback_host_true_for_loopback_addresses[[::1]]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "637b681b09c2da0a6df4e72184e6599e",
+      "name": "test_connect_disables_compression_for_127_0_0_1",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "7ebd22316431fc763e0de4eebd58c9df",
+      "name": "test_is_loopback_host_true_for_loopback_addresses[LOCALHOST]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "0618c6ec53e877e1019eac8fe7c4c087",
+      "name": "test_is_loopback_host_false_for_non_loopback_addresses[]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "a088e389d4957261eeb654f87d757b06",
+      "name": "test_is_loopback_host_true_for_loopback_addresses[localhost]",
+      "status": "passed",
+      "duration": 0
+    }
+  ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 40090,
-  "createdAt": 1784216068625,
+  "duration": 39893,
+  "createdAt": 1784216095971,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "16e55fc3-9486-4211-8843-e274233604f0",
+    "reportId": "78bab031-548a-4792-9aed-21ee8e04aba2",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/29511653653",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/29511692766",
   "href": "awesome/",
-  "coverage": 34
+  "coverage": 35
 }
