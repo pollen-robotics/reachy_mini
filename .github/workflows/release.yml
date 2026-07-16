@@ -129,13 +129,9 @@ jobs:
           RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
         run: |
           echo "### Release-notes model" >> "$GITHUB_STEP_SUMMARY"
+          # Validate OPENCODE_VERSION installs and the model name exists in the catalog.
           curl -fsSL https://opencode.ai/install | bash -s -- --version "${{ vars.OPENCODE_VERSION }}"
           export PATH="$HOME/.opencode/bin:$PATH"
-          # OpenCode reads the huggingface provider credential from its auth store, not from
-          # HF_TOKEN env. On a fresh runner that file is absent, so `opencode run` would hang
-          # waiting for interactive login. Write it non-interactively from the token.
-          mkdir -p "$HOME/.local/share/opencode"
-          jq -n --arg k "$HF_TOKEN" '{huggingface:{type:"api",key:$k}}' > "$HOME/.local/share/opencode/auth.json"
           if opencode models | grep -qx "$RELEASE_NOTES_MODEL"; then
             echo "✅ model '$RELEASE_NOTES_MODEL' is available"
             echo "- ✅ model \`$RELEASE_NOTES_MODEL\` available" >> "$GITHUB_STEP_SUMMARY"
@@ -144,17 +140,37 @@ jobs:
             echo "- ❌ model \`$RELEASE_NOTES_MODEL\` not found" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          # Tiny live call to prove the HF token authenticates against the model.
-          OUT=$(timeout 180 opencode run --auto -m "$RELEASE_NOTES_MODEL" "Reply with exactly: PREFLIGHT_OK" 2>&1 || true)
-          if echo "$OUT" | grep -q "PREFLIGHT_OK"; then
-            echo "✅ HF token authenticates and inference works"
-            echo "- ✅ HF token + inference OK" >> "$GITHUB_STEP_SUMMARY"
+          # Hard check: the HF token is valid (fast, always warm).
+          WHO=$(curl -s -o /tmp/who.json -w '%{http_code}' --max-time 20 \
+            -H "Authorization: Bearer $HF_TOKEN" https://huggingface.co/api/whoami-v2 || echo 000)
+          if [ "$WHO" = "200" ]; then
+            USER=$(python3 -c "import json;print(json.load(open('/tmp/who.json')).get('name','?'))" 2>/dev/null || echo "?")
+            echo "✅ HF token is valid (account: $USER)"
+            echo "- ✅ HF token valid (account: \`$USER\`)" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "❌ inference call failed — check RELEASE_NOTES_HF_TOKEN / provider access"
-            echo "$OUT" | tail -20
-            echo "- ❌ inference failed (see logs)" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
+            echo "❌ HF token rejected by whoami ($WHO) — check RELEASE_NOTES_HF_TOKEN"
+            echo "- ❌ HF token invalid ($WHO)" >> "$GITHUB_STEP_SUMMARY"; exit 1
           fi
+          # Best-effort: minimal Inference-Providers call. GLM cold-starts can exceed a minute,
+          # so a timeout/5xx is a warning, not a failure — only an auth rejection is fatal.
+          # The real release-notes job exercises the full path with a 30-min budget.
+          MODEL_ID="${RELEASE_NOTES_MODEL#huggingface/}"
+          CODE=$(curl -s -o /tmp/hf_resp.json -w '%{http_code}' --max-time 120 \
+            -H "Authorization: Bearer $HF_TOKEN" -H 'content-type: application/json' \
+            -d "{\"model\":\"${MODEL_ID}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":1}" \
+            https://router.huggingface.co/v1/chat/completions || echo 000)
+          case "$CODE" in
+            200)
+              echo "✅ Inference Providers reachable for $MODEL_ID"
+              echo "- ✅ inference call OK" >> "$GITHUB_STEP_SUMMARY" ;;
+            401|403)
+              echo "❌ token lacks Inference-Providers access ($CODE)"
+              head -c 400 /tmp/hf_resp.json
+              echo "- ❌ no Inference-Providers access ($CODE)" >> "$GITHUB_STEP_SUMMARY"; exit 1 ;;
+            *)
+              echo "⚠️ provider returned $CODE (likely cold start / transient) — token is valid, not failing preflight"
+              echo "- ⚠️ inference call returned $CODE (transient; real run has a 30-min budget)" >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
 
       - name: Preview the versions each mode would produce
         run: |
