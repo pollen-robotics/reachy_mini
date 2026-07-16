@@ -123,6 +123,7 @@ jobs:
           python-version: "3.12"
 
       - name: Check OpenCode installs, model is available, and HF token works
+        timeout-minutes: 5
         env:
           HF_TOKEN: ${{ secrets.RELEASE_NOTES_HF_TOKEN }}
           RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
@@ -130,6 +131,11 @@ jobs:
           echo "### Release-notes model" >> "$GITHUB_STEP_SUMMARY"
           curl -fsSL https://opencode.ai/install | bash -s -- --version "${{ vars.OPENCODE_VERSION }}"
           export PATH="$HOME/.opencode/bin:$PATH"
+          # OpenCode reads the huggingface provider credential from its auth store, not from
+          # HF_TOKEN env. On a fresh runner that file is absent, so `opencode run` would hang
+          # waiting for interactive login. Write it non-interactively from the token.
+          mkdir -p "$HOME/.local/share/opencode"
+          jq -n --arg k "$HF_TOKEN" '{huggingface:{type:"api",key:$k}}' > "$HOME/.local/share/opencode/auth.json"
           if opencode models | grep -qx "$RELEASE_NOTES_MODEL"; then
             echo "✅ model '$RELEASE_NOTES_MODEL' is available"
             echo "- ✅ model \`$RELEASE_NOTES_MODEL\` available" >> "$GITHUB_STEP_SUMMARY"
@@ -139,7 +145,7 @@ jobs:
             exit 1
           fi
           # Tiny live call to prove the HF token authenticates against the model.
-          OUT=$(opencode run --auto -m "$RELEASE_NOTES_MODEL" "Reply with exactly: PREFLIGHT_OK" 2>&1 || true)
+          OUT=$(timeout 180 opencode run --auto -m "$RELEASE_NOTES_MODEL" "Reply with exactly: PREFLIGHT_OK" 2>&1 || true)
           if echo "$OUT" | grep -q "PREFLIGHT_OK"; then
             echo "✅ HF token authenticates and inference works"
             echo "- ✅ HF token + inference OK" >> "$GITHUB_STEP_SUMMARY"
@@ -420,12 +426,17 @@ jobs:
 
       - name: Generate release notes with OpenCode
         if: ${{ inputs.release_type != 'minor-release' && steps.check_draft.outputs.skip != 'true' }}
+        timeout-minutes: 30
         env:
           HF_TOKEN: ${{ secrets.RELEASE_NOTES_HF_TOKEN }}
           GITHUB_TOKEN_RELEASE_NOTES: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
           RELEASE_NOTES_HEAD: ${{ needs.prepare.outputs.tag }}
         run: |
+          # OpenCode reads the huggingface provider credential from its auth store, not from
+          # HF_TOKEN env — write it non-interactively so `opencode run` doesn't hang on login.
+          mkdir -p "$HOME/.local/share/opencode"
+          jq -n --arg k "$HF_TOKEN" '{huggingface:{type:"api",key:$k}}' > "$HOME/.local/share/opencode/auth.json"
           python -m utils.release_notes.generate_release_notes \
             --since "${{ needs.prepare.outputs.since_tag }}" \
             --${{ needs.prepare.outputs.bump_type }}
