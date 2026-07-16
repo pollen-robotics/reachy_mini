@@ -37,13 +37,11 @@ jobs:
         env:
           MUJOCO_GL: disable
       # Simulate the Reachy Mini Audio card with a PulseAudio null sink + an
-      # ALSA `type pulse` .asoundrc, so the media tests exercise the real
-      # alsasrc/alsasink fast-path (has_reachymini_asoundrc). Pure userspace —
-      # the GitHub Azure kernel doesn't ship snd-dummy/snd-aloop. The null
-      # sink's monitor is a loopback, so the play-through test can assert real
-      # audio reached the sink (REACHY_TEST_AUDIO_LOOPBACK gates it). Board-bound
-      # tests stay excluded via `respeaker`. Ubuntu only — macOS has no easy
-      # virtual audio.
+      # ALSA `type pulse` .asoundrc, so the tests exercise the real
+      # alsasrc/alsasink fast-path (has_reachymini_asoundrc). The null sink's
+      # monitor loops playback back to capture, so the play-through test can
+      # assert audio reached the sink (REACHY_TEST_AUDIO_LOOPBACK gates it).
+      # Board-bound tests stay excluded via `respeaker`. Ubuntu only.
       - name: Run audio tests on a virtual sound card (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |

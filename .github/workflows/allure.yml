@@ -21,7 +21,7 @@ jobs:
       - name: Install system dependencies
         uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
         with:
-          packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0
+          packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0 gstreamer1.0-alsa libasound2-plugins pulseaudio pulseaudio-utils
           version: 1.0
 
       - name: Install uv
@@ -33,11 +33,27 @@ jobs:
       - name: Install the project
         run: uv sync --frozen --all-extras --group dev
 
+      # Virtual sound card (PulseAudio null sink + ALSA `type pulse` .asoundrc)
+      # so the audio tests run and count toward coverage. Its monitor loops
+      # playback back to capture (REACHY_TEST_AUDIO_LOOPBACK gates the
+      # play-through test). See .github/workflows/pytest.yml.
+      - name: Set up virtual sound card
+        run: |
+          pulseaudio -D --exit-idle-time=-1 --disable-shm \
+            --load="module-native-protocol-unix socket=/tmp/pulse.sock" \
+            --load="module-null-sink sink_name=vspeaker"
+          cat > ~/.asoundrc <<'EOF'
+          pcm.reachymini_audio_sink { type pulse device "vspeaker" }
+          pcm.reachymini_audio_src  { type pulse device "vspeaker.monitor" }
+          EOF
+
       - name: Run tests (Allure results)
         continue-on-error: true
-        run: uv run --with allure-pytest --with pytest-cov pytest -m 'not audio and not video and not wireless' --tb=short --alluredir=allure-results --cov=reachy_mini --cov-report=json:coverage.json --cov-report=html
+        run: uv run --with allure-pytest --with pytest-cov pytest -m 'not respeaker and not video and not wireless' --tb=short --alluredir=allure-results --cov=reachy_mini --cov-report=json:coverage.json --cov-report=html
         env:
           MUJOCO_GL: disable
+          PULSE_SERVER: unix:/tmp/pulse.sock
+          REACHY_TEST_AUDIO_LOOPBACK: "1"
 
       - uses: actions/setup-node@v4
         if: always()
