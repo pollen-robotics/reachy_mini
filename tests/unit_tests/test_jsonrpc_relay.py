@@ -16,8 +16,15 @@ import pytest
 from reachy_mini.daemon import jsonrpc_relay
 from reachy_mini.daemon.jsonrpc_relay import JsonRpcRelay
 from reachy_mini.io.jsonrpc import (
+    JsonRpcError,
+    RpcErrorResponse,
+    RpcRequest,
+    RpcSuccess,
     looks_like_jsonrpc,
     make_error,
+    make_notification,
+    make_result,
+    parse_inbound,
     parse_request,
 )
 
@@ -45,6 +52,47 @@ def test_error_reason_lives_in_data() -> None:
     err = make_error(None, message="busy", reason="robot_busy", code=-32000)
     assert err["error"]["code"] == -32000
     assert err["error"]["data"]["reason"] == "robot_busy"
+
+
+def test_builders_emit_the_expected_wire_shape() -> None:
+    # The dict builders are model-backed but must keep their exact JSON shape
+    # (including id:null on responses, which the spec requires present).
+    assert make_result("1", {"ok": True}) == {
+        "jsonrpc": "2.0",
+        "id": "1",
+        "result": {"ok": True},
+    }
+    assert make_result(None, 7) == {"jsonrpc": "2.0", "id": None, "result": 7}
+    assert make_notification("conversation.turn", {"state": "speaking"}) == {
+        "jsonrpc": "2.0",
+        "method": "conversation.turn",
+        "params": {"state": "speaking"},
+    }
+
+
+def test_parse_inbound_classifies_each_frame() -> None:
+    # The TypeAdapter union disambiguates on required fields (result / error /
+    # method) instead of hand-rolled dict.get sniffing.
+    assert isinstance(
+        parse_inbound('{"jsonrpc":"2.0","id":"1","result":{"ok":true}}'), RpcSuccess
+    )
+    err = parse_inbound(
+        '{"jsonrpc":"2.0","id":"1","error":{"code":-32000,"message":"x",'
+        '"data":{"reason":"busy"}}}'
+    )
+    assert isinstance(err, RpcErrorResponse)
+    assert err.error.data["reason"] == "busy"
+    call = parse_inbound('{"jsonrpc":"2.0","id":"1","method":"conversation.say"}')
+    assert isinstance(call, RpcRequest) and not call.is_notification
+    note = parse_inbound('{"jsonrpc":"2.0","method":"conversation.turn"}')
+    assert isinstance(note, RpcRequest) and note.is_notification
+
+
+def test_parse_inbound_rejects_malformed() -> None:
+    with pytest.raises(JsonRpcError):
+        parse_inbound("not json at all")
+    with pytest.raises(JsonRpcError):
+        parse_inbound('{"jsonrpc":"2.0"}')  # neither result/error nor method
 
 
 # ------------------------------------------------------------------ fakes
