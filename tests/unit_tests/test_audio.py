@@ -225,12 +225,12 @@ def test_DoA(backend: MediaBackend) -> None:
 
 @pytest.mark.audio
 @pytest.mark.loopback
-def test_play_sound_reaches_sink(loopback_asoundrc: None) -> None:
+def test_play_sound_reaches_sink(audio_loopback: None) -> None:
     """Play a sound and confirm real, non-silent audio reaches the sink.
 
-    Unlike test_play_sound (which only checks no-exception on a discard-only
-    card), this records the other end of an snd-aloop loopback while playing,
-    so silence means playback never reached the speaker path.
+    Unlike test_play_sound (which only checks no-exception, and on a
+    discard-only sink can't tell), this records a virtual loopback of the sink
+    while playing, so silence means playback never reached the speaker path.
     """
     media = MediaManager(backend=MediaBackend.LOCAL)
     samples = []

@@ -2,9 +2,7 @@
 
 import os
 import platform
-import subprocess
 import time
-from pathlib import Path
 from typing import Generator, cast
 
 import pytest
@@ -152,66 +150,18 @@ def ipc_video_source(
         os.remove(CAMERA_SOCKET_PATH)
 
 
-# dmix/dsnoop over the two ends of the snd-aloop loopback: audio played to
-# hw:Loopback,0,0 comes back on hw:Loopback,1,0. dmix/dsnoop (not plain plug)
-# because MediaManager keeps a persistent playback pipeline AND play_sound opens
-# its own playbin — both open the sink, so it must be multi-client.
-_LOOPBACK_ASOUNDRC = """\
-pcm.reachymini_audio_sink {
-    type dmix
-    ipc_key 4251
-    slave {
-        pcm "hw:Loopback,0,0"
-        rate 16000
-        channels 2
-        format S16_LE
-        period_size 256
-        buffer_size 1024
-    }
-}
-pcm.reachymini_audio_src {
-    type dsnoop
-    ipc_key 4252
-    slave {
-        pcm "hw:Loopback,1,0"
-        rate 16000
-        channels 2
-        format S16_LE
-        period_size 256
-        buffer_size 1024
-    }
-}
-"""
-
-
 @pytest.fixture()
-def loopback_asoundrc() -> Generator[None, None, None]:
-    """Point the media sink/src at the two ends of an snd-aloop loopback.
+def audio_loopback() -> None:
+    """Gate tests that need the capture side to loop back the playback side.
 
-    Writes a dmix/dsnoop ``~/.asoundrc`` so audio played through the LOCAL
-    media path loops back to the capture side (letting a test assert real,
-    non-silent audio reached the sink). Skips when the loopback card is
-    absent, and restores any pre-existing ``~/.asoundrc`` on teardown.
+    The CI/docker harness sets up a PulseAudio null sink whose ``.monitor``
+    captures whatever is played (via the ``type pulse`` ``~/.asoundrc``), so a
+    play -> record round-trip can assert real audio reached the sink. It signals
+    that by exporting ``REACHY_TEST_AUDIO_LOOPBACK=1``. Skip otherwise — on real
+    hardware the mic is not a loopback of the speaker.
     """
-    # Detect via `aplay -l` (ALSA lib), not /proc/asound/cards, which is absent
-    # inside a container even when the card is usable via /dev/snd.
-    try:
-        listing = subprocess.run(["aplay", "-l"], capture_output=True, text=True).stdout
-    except FileNotFoundError:
-        listing = ""
-    if "Loopback" not in listing:
-        pytest.skip("snd-aloop loopback card not present (modprobe snd-aloop)")
-
-    asoundrc = Path.home() / ".asoundrc"
-    backup = Path(f"{asoundrc}.bak")
-    had_backup = asoundrc.exists()
-    if had_backup:
-        asoundrc.replace(backup)
-    asoundrc.write_text(_LOOPBACK_ASOUNDRC)
-    try:
-        yield
-    finally:
-        if had_backup:
-            backup.replace(asoundrc)
-        else:
-            asoundrc.unlink(missing_ok=True)
+    if os.environ.get("REACHY_TEST_AUDIO_LOOPBACK") != "1":
+        pytest.skip(
+            "no virtual audio loopback (set REACHY_TEST_AUDIO_LOOPBACK=1 via the "
+            "CI/docker harness)"
+        )
