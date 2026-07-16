@@ -1,1 +1,1 @@
-{"id":"54c6a8762b5b2932bec9c9fbcb7e9744","fullName":"tests.unit_tests.test_daemon#test_cors_origin_regex","name":"test_cors_origin_regex","status":"passed","testResultsByEnv":{"default":"56a9230fdc2d01216c7c5ad1b5314190"}}
+{"id":"54c6a8762b5b2932bec9c9fbcb7e9744","fullName":"tests.unit_tests.test_daemon#test_cors_origin_regex","name":"test_cors_origin_regex","status":"passed","testResultsByEnv":{"default":"52d660480a55132a9a5cbb99dfd23542"}}
