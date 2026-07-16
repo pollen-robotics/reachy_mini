@@ -2,10 +2,16 @@
 
 import os
 import platform
+import struct
 import time
+import types
+from array import array
 from typing import Generator, cast
 
 import pytest
+import usb.util
+
+from reachy_mini.media.audio_control_utils import CONTROL_SUCCESS, ReSpeaker
 
 try:
     # Hack: import placo before reachy mini to fix an error with the Ubuntu CI
@@ -165,3 +171,41 @@ def audio_loopback() -> None:
             "no virtual audio loopback (set REACHY_TEST_AUDIO_LOOPBACK=1 via the "
             "CI/docker harness)"
         )
+
+
+class _FakeXVF3800:
+    """In-memory stand-in for the ReSpeaker/XMOS USB device (no hardware).
+
+    The whole board is reached through one ``ctrl_transfer`` seam, so a register
+    file keyed by ``(resid, cmdid)`` reproduces the vendor protocol: an OUT
+    stores the raw payload, an IN returns a success status byte + the stored
+    payload (zeros if never written). Writes therefore round-trip through reads,
+    which is what ``apply_audio_config``'s verify step relies on.
+    """
+
+    def __init__(self) -> None:
+        self.regs: dict[tuple[int, int], bytes] = {}
+        # ReSpeaker.close() -> usb.util.dispose_resources(dev) -> dev._ctx.dispose
+        self._ctx = types.SimpleNamespace(dispose=lambda dev: None)
+
+    def ctrl_transfer(
+        self, bmRequestType, bRequest, wValue=0, wIndex=0, data_or_wLength=None, timeout=0
+    ):
+        key = (wIndex, wValue & 0x7F)  # (resid, cmdid); read sets 0x80 on cmdid
+        if bmRequestType & usb.util.CTRL_IN:
+            length = int(data_or_wLength)
+            payload = self.regs.get(key, b"")[: length - 1].ljust(length - 1, b"\x00")
+            return array("B", bytes([CONTROL_SUCCESS]) + payload)
+        self.regs[key] = bytes(data_or_wLength)  # OUT: store the written payload
+        return len(self.regs[key])
+
+
+@pytest.fixture()
+def fake_respeaker() -> ReSpeaker:
+    """A ``ReSpeaker`` backed by a fake XVF3800 — exercises the DoA/config/USB
+    protocol logic with no board. DOA_VALUE_RADIANS is seeded with a known
+    ``(angle, speech)`` (resid 20, cmdid 19); rw params round-trip on write.
+    """
+    dev = _FakeXVF3800()
+    dev.regs[(20, 19)] = struct.pack("<ff", 1.57, 1.0)  # angle=1.57 rad, speech=True
+    return ReSpeaker(dev)
