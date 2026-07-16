@@ -149,6 +149,16 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _state: 'disconnected' | 'connected' | 'streaming' = 'disconnected';
     private _robots: RobotInfo[] = [];
     private _robotState: RobotState = {};
+    // Highest `seq` seen on the unordered `pose` channel. Frames that arrive
+    // out of order (older seq) are dropped so a late packet can't rewind the
+    // live mirror. `null` until the first pose frame.
+    private _lastPoseSeq: number | null = null;
+    // Local refcount of pose-stream consumers (the 3D mirror, the wizard's
+    // move-end watcher, ...). The daemon's subscription is a per-peer boolean
+    // (not refcounted), so we only send `unsubscribe_pose` once the LAST local
+    // consumer releases - otherwise one consumer's cleanup would kill the
+    // stream for the others.
+    private _poseSubRefs = 0;
     private readonly _preselectedRobotId: string | null;
 
     // ─── Auth ────────────────────────────────────────────────────────────
@@ -677,7 +687,32 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             };
 
             this._pc!.ondatachannel = (e) => {
-                this._dc = e.channel;
+                const ch = e.channel;
+                // The daemon opens a second, unreliable/unordered channel
+                // labelled "pose" that *pushes* the robot state at ~30 Hz
+                // (see media_server `_setup_pose_channel`). It carries the
+                // same `{state:{...}}` envelope as a get_state reply, so we
+                // route it through the same handler - but it must NOT gate
+                // session readiness (that's the reliable control channel's
+                // job) nor become `_dc` (commands must never ride the lossy
+                // channel).
+                if (ch.label === 'pose') {
+                    // Fresh channel (new session or daemon restart): the
+                    // daemon's seq counter may have reset, so forget the old
+                    // high-water mark or we'd drop every new frame.
+                    this._lastPoseSeq = null;
+                    ch.onmessage = (ev) => {
+                        const msg = JSON.parse(ev.data);
+                        // Drop stale/reordered frames (unordered channel).
+                        if (typeof msg.seq === 'number') {
+                            if (this._lastPoseSeq !== null && msg.seq <= this._lastPoseSeq) return;
+                            this._lastPoseSeq = msg.seq;
+                        }
+                        this._handleRobotMessage(msg);
+                    };
+                    return;
+                }
+                this._dc = ch;
                 this._dc.onopen = () => {
                     this._dcOpen = true;
                     this._checkSessionReady();
@@ -1367,8 +1402,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     /**
      * Set and persist the robot display name on the robot. Resolves with the
-     * stored (trimmed) name, or `null` on error / channel-closed. Takes effect
-     * on the next daemon restart (the persisted name overrides --robot-name).
+     * stored (trimmed) name, or `null` on error / channel-closed. Applied live
+     * by the daemon (status + central relay + mDNS), so it takes effect right
+     * away without a restart; the persisted name also overrides --robot-name
+     * on the next start.
      */
     setRobotName(name: string): Promise<string | null> {
         return this._slotRoundtrip(
@@ -1475,6 +1512,30 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     requestState(): boolean {
         return this._sendCommand({ type: 'get_state' });
+    }
+
+    /**
+     * Ask the daemon to *push* the robot state (~30 Hz) over the dedicated
+     * unreliable/unordered `pose` data channel instead of polling get_state.
+     * Fires `state` events as frames arrive. No-op against an older daemon (no
+     * pose channel) - fall back to `requestState()` polling there.
+     *
+     * Refcounted: pair every `subscribePose()` with exactly one
+     * `unsubscribePose()`. Multiple consumers share a single daemon-side
+     * subscription; the daemon only stops pushing once the last one releases.
+     * If the channel isn't open yet (or the session later reconnects), the
+     * subscription is (re-)asserted from `_checkSessionReady`.
+     */
+    subscribePose(): boolean {
+        this._poseSubRefs++;
+        return this._sendCommand({ type: 'subscribe_pose' });
+    }
+
+    /** Release one pose-stream consumer; sends `unsubscribe_pose` on the last. */
+    unsubscribePose(): boolean {
+        if (this._poseSubRefs > 0) this._poseSubRefs--;
+        if (this._poseSubRefs > 0) return true; // still wanted by another consumer
+        return this._sendCommand({ type: 'unsubscribe_pose' });
     }
 
     // ─── Audio ───────────────────────────────────────────────────────────
@@ -1831,6 +1892,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._iceConnected && this._dcOpen && this._sessionResolve) {
             this._state = 'streaming';
             this.requestState();
+            // Re-assert a pose subscription that was requested before the data
+            // channel was open, or lost on reconnect (a fresh peer starts
+            // unsubscribed on the daemon). Sent raw so it doesn't touch the
+            // local refcount, which already reflects the live consumer count.
+            if (this._poseSubRefs > 0) this._sendCommand({ type: 'subscribe_pose' });
             this._stateRefreshInterval = setInterval(() => this.requestState(), 500);
             this._emit('streaming', { sessionId: this._sessionId!, robotId: this._selectedRobotId! });
             this._sessionResolve();

@@ -9,7 +9,8 @@ Client->Server command types:
     set_gravity_compensation, set_automatic_body_yaw,
     get_state, get_version, start_recording, stop_recording, append_record,
     get_robot_name, set_robot_name, delete_hf_token,
-    subscribe_logs, unsubscribe_logs, restart_daemon, start_update,
+    subscribe_logs, unsubscribe_logs, subscribe_pose, unsubscribe_pose,
+    restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
     play_uploaded_move, cancel_move,
@@ -319,7 +320,8 @@ class SetFirstWakeUpCmd(BaseModel):
 # Robot display name. A persistent, robot-wide string (not per-session):
 # advertised to the central relay / mDNS and shown in the apps' robot list.
 # Defaults to the daemon's --robot-name; a client rename is stored on the
-# robot and wins over the default at the next daemon start.
+# robot and applied live (status + central relay + mDNS) without a restart,
+# and also wins over the default at the next daemon start.
 class GetRobotNameCmd(BaseModel):
     """Query the persisted robot display name (null if unset)."""
 
@@ -389,6 +391,26 @@ class UnsubscribeLogsCmd(BaseModel):
     """Stop the calling peer's log subscription. No-op if no stream."""
 
     type: Literal["unsubscribe_logs"] = "unsubscribe_logs"
+
+
+class SubscribePoseCmd(BaseModel):
+    """Subscribe the calling peer to the pushed pose stream.
+
+    While subscribed, the daemon pushes the robot's present state (same
+    envelope as ``get_state``, plus a monotonic ``seq``) to this peer over
+    the dedicated unreliable/unordered ``pose`` data channel at ~30 Hz. This
+    replaces polling ``get_state`` for a live mirror: pushing is immune to
+    the Wi-Fi round-trip latency and head-of-line blocking that make polling
+    lag. Idempotent - safe to send again on reconnect.
+    """
+
+    type: Literal["subscribe_pose"] = "subscribe_pose"
+
+
+class UnsubscribePoseCmd(BaseModel):
+    """Stop the calling peer's pose stream. No-op if not subscribed."""
+
+    type: Literal["unsubscribe_pose"] = "unsubscribe_pose"
 
 
 # XVF3800 audio-board configuration over the DataChannel.
@@ -798,6 +820,8 @@ AnyCommand = Annotated[
     | DeleteHfTokenCmd
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
+    | SubscribePoseCmd
+    | UnsubscribePoseCmd
     | RestartDaemonCmd
     | StartUpdateCmd
     | UploadMoveStartCmd

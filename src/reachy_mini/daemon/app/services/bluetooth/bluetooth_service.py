@@ -1322,8 +1322,15 @@ def _daemon_request(
 # APIRouter, unlike the /wifi and /update routes.
 #
 # NOTE: this file runs under the SYSTEM python (stdlib-only), so it can't import
-# reachy_mini.motion.recorded_move.DEFAULT_EMOTIONS_DATASET — keep this in sync.
-_EMOTIONS_DATASET = "pollen-robotics/reachy-mini-emotions-library"
+# reachy_mini.motion.recorded_move — keep this dataset in sync with the app's
+# ONBOARDING_MOVES_DATASET.
+#
+# The BLE onboarding cues (toc-toc-toc / waiting / mini-deep-sleep) all ship in
+# this dataset, NOT the default emotions library. TEMPORARY until they're merged
+# into pollen-robotics/reachy-mini-emotions-library. It must be preloaded at
+# daemon startup (see recorded_move.DEFAULT_DATASETS) so the first BLE PLAY
+# doesn't block on a network download.
+_EMOTIONS_DATASET = "Anne-Charlotte/new-emotions"
 # Move played on IDENTIFY (the BLE scan-list "make a noise so I know it's you").
 _IDENTIFY_MOVE = "toc-toc-toc"
 

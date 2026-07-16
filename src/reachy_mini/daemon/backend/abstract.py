@@ -74,7 +74,9 @@ from reachy_mini.io.protocol import (
     StartUpdateCmd,
     StopRecordingCmd,
     SubscribeLogsCmd,
+    SubscribePoseCmd,
     UnsubscribeLogsCmd,
+    UnsubscribePoseCmd,
     UploadAudioChunkCmd,
     UploadAudioFinishCmd,
     UploadAudioStartCmd,
@@ -325,6 +327,12 @@ class Backend:
         # sends `subscribe_logs`, cancelled on `unsubscribe_logs` or
         # peer disconnect (the latter is wired in setup_media_server).
         self._log_tasks: dict[str, "asyncio.Task[None]"] = {}
+        # Monotonic sequence number stamped on every pushed pose frame so the
+        # client can drop out-of-order/stale frames that arrive on the
+        # unordered `pose` data channel (see `build_state_json`). Bumped only
+        # from the media server's GLib thread (single writer), so a plain int
+        # is safe.
+        self._pose_seq = 0
         # Asyncio loop on which the log-streaming tasks run. Captured
         # in setup_media_server alongside the WebRTC handler loop, so
         # cross-thread cleanup (peer disconnect fires from gstreamer's
@@ -1120,6 +1128,58 @@ class Backend:
         }
 
     # ------------------------------------------------------------------
+    # State snapshot (shared by get_state replies and the pose push)
+    # ------------------------------------------------------------------
+
+    def build_state_dict(self) -> dict[str, Any]:
+        """Build the present-state snapshot sent to clients.
+
+        Single source of truth for both the polled ``get_state`` reply and
+        the pushed pose stream (see :meth:`build_state_json`). All getters
+        read cached motor values (``get_last_position``), so this is cheap
+        and safe to call from a thread other than the motor loop.
+        """
+        return {
+            "head_pose": self.get_present_head_pose().tolist()
+            if self.current_head_pose is not None
+            else None,
+            "antennas": self.get_present_antenna_joint_positions().tolist()
+            if self.current_antenna_joint_positions is not None
+            else None,
+            # Per-motor joint positions (7 head incl. body yaw at [0], 2
+            # antennas), so WebRTC clients can check the physical pose motor
+            # by motor without the LAN /ws/sdk stream.
+            "head_joint_positions": self.get_present_head_joint_positions().tolist()
+            if self.current_head_joint_positions is not None
+            else None,
+            "antennas_joint_positions": self.get_present_antenna_joint_positions().tolist()
+            if self.current_antenna_joint_positions is not None
+            else None,
+            "body_yaw": self.get_present_body_yaw(),
+            "motor_mode": self.get_motor_control_mode().value,
+            "is_recording": self.is_recording,
+            "is_move_running": self.is_move_running,
+        }
+
+    def build_state_json(self) -> Optional[str]:
+        """Serialize the present state as the client-facing envelope.
+
+        Returns the ``{"state": ...}`` payload, or ``None`` if it can't be
+        built yet. Wired into the media server as the pose-stream provider
+        (``set_pose_provider``) so the daemon can *push* pose over the
+        unreliable/unordered ``pose`` data channel at a steady rate instead
+        of the client round-tripping ``get_state`` over Wi-Fi. Returning
+        ``None`` (e.g. before the first kinematics update, or during
+        shutdown) simply skips that tick.
+        """
+        try:
+            state = self.build_state_dict()
+        except Exception:
+            return None
+        self._pose_seq += 1
+        return json.dumps({"state": state, "seq": self._pose_seq})
+
+    # ------------------------------------------------------------------
     # Transport-agnostic command processing
     # ------------------------------------------------------------------
 
@@ -1265,28 +1325,7 @@ class Backend:
             send_response({"status": "ok", "command": "set_automatic_body_yaw"})
 
         elif isinstance(cmd, GetStateCmd):
-            state = {
-                "head_pose": self.get_present_head_pose().tolist()
-                if self.current_head_pose is not None
-                else None,
-                "antennas": self.get_present_antenna_joint_positions().tolist()
-                if self.current_antenna_joint_positions is not None
-                else None,
-                # Per-motor joint positions (7 head incl. body yaw at [0], 2
-                # antennas), so WebRTC clients can check the physical pose motor
-                # by motor without the LAN /ws/sdk stream.
-                "head_joint_positions": self.get_present_head_joint_positions().tolist()
-                if self.current_head_joint_positions is not None
-                else None,
-                "antennas_joint_positions": self.get_present_antenna_joint_positions().tolist()
-                if self.current_antenna_joint_positions is not None
-                else None,
-                "body_yaw": self.get_present_body_yaw(),
-                "motor_mode": self.get_motor_control_mode().value,
-                "is_recording": self.is_recording,
-                "is_move_running": self.is_move_running,
-            }
-            send_response({"state": state})
+            send_response({"state": self.build_state_dict()})
 
         elif isinstance(cmd, GetVersionCmd):
             from importlib.metadata import version
@@ -1331,8 +1370,10 @@ class Backend:
         elif isinstance(cmd, (GetRobotNameCmd, SetRobotNameCmd)):
             # Robot display name is a persistent, robot-wide string stored on
             # disk (same fail-safe helpers as the first-wake-up flag). A rename
-            # takes effect on the next daemon start, where the persisted value
-            # overrides the --robot-name default.
+            # is applied live below (status + central relay + mDNS) via the
+            # set-robot-name callback, so no daemon restart is needed; the
+            # persisted value also overrides the --robot-name default on the
+            # next start.
             from reachy_mini.utils.robot_name import get_robot_name, set_robot_name
 
             if isinstance(cmd, SetRobotNameCmd):
@@ -1504,6 +1545,13 @@ class Backend:
             self._start_log_subscription(peer_id, send_response)
         elif isinstance(cmd, UnsubscribeLogsCmd):
             self._cancel_log_subscription(peer_id)
+
+        elif isinstance(cmd, SubscribePoseCmd):
+            self._set_pose_subscription(peer_id, True)
+            send_response({"status": "ok", "command": "subscribe_pose"})
+        elif isinstance(cmd, UnsubscribePoseCmd):
+            self._set_pose_subscription(peer_id, False)
+            send_response({"status": "ok", "command": "unsubscribe_pose"})
 
         elif isinstance(cmd, RestartDaemonCmd):
             # Ack BEFORE triggering the restart: the WebRTC transport
@@ -1968,6 +2016,18 @@ class Backend:
         if task is not None and not task.done():
             task.cancel()
 
+    def _set_pose_subscription(self, peer_id: Optional[str], enabled: bool) -> None:
+        """Enable/disable the pushed pose stream for a peer.
+
+        Delegated to the media server, which owns the per-peer ``pose`` data
+        channels and the push timer. No-op without a peer id (non-multiplexed
+        transports) or on an older media server lacking the hook.
+        """
+        if peer_id is None or self._media_server is None:
+            return
+        if hasattr(self._media_server, "set_pose_subscription"):
+            self._media_server.set_pose_subscription(peer_id, enabled)
+
     def _on_peer_disconnect(self, peer_id: str) -> None:
         """Cancel any per-peer state when the WebRTC peer goes away.
 
@@ -2364,6 +2424,13 @@ class Backend:
         if hasattr(media_server, "set_peer_disconnect_handler"):
             media_server.set_peer_disconnect_handler(self._on_peer_disconnect)
         self._send_message_to_webrtc = media_server.send_data_message
+        # Feed the media server the present-state snapshot so it can *push*
+        # pose over the unreliable/unordered `pose` data channel at a steady
+        # rate (immune to Wi-Fi jitter), instead of the client polling
+        # `get_state` on the reliable-ordered channel. No-op on older media
+        # servers that don't expose the hook (falls back to polling).
+        if hasattr(media_server, "set_pose_provider"):
+            media_server.set_pose_provider(self.build_state_json)
 
     def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
         def send(resp: dict[str, Any]) -> None:

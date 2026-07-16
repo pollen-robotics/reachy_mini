@@ -146,6 +146,13 @@ class GstMediaServer:
     # end-to-end latency is the metric we watch closest.
     RX_JITTER_LATENCY_MS = 300
 
+    # Pose push cadence (ms) over the unreliable/unordered `pose` data
+    # channel. ~30 Hz gives the 3D mirror fresh targets to interpolate
+    # without flooding the SCTP send queue; because the channel drops
+    # (max-retransmits=0) rather than retransmits, a lost frame is simply
+    # superseded by the next one 33 ms later instead of stalling the stream.
+    POSE_PUSH_INTERVAL_MS = 33
+
     # Send-side Opus loss resilience for the robot mic -> phone leg (the
     # audio that feeds the realtime backend / STT). webrtcsink builds the
     # opusenc with defaults (inband-fec off, packet-loss-percentage 0), so
@@ -212,6 +219,19 @@ class GstMediaServer:
 
         self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
         self._on_data_message: Optional[Callable[[str, str], None]] = None
+        # Second, unreliable/unordered data channel per peer used to *push*
+        # the robot pose at a steady rate (see `_setup_pose_channel` /
+        # `_push_pose`). Kept separate from `_data_channels` so a stale pose
+        # frame is never head-of-line-blocking a reliable control message.
+        self._pose_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
+        # Peers that have opted into the pose stream via `subscribe_pose`. We
+        # only build+push a frame while this set is non-empty, so an idle
+        # session (no 3D mirror on screen) costs nothing.
+        self._pose_subscribers: set[str] = set()
+        # Callback returning the JSON pose frame to push (set by the backend
+        # via `set_pose_provider`), and the GLib source id of the push timer.
+        self._pose_provider: Optional[Callable[[], Optional[str]]] = None
+        self._pose_push_source_id: Optional[int] = None
         # Optional callback fired on the GStreamer thread when a peer
         # leaves; used by the backend to free per-peer resources such
         # as the journalctl subprocess for a `subscribe_logs` stream.
@@ -262,6 +282,9 @@ class GstMediaServer:
     def close(self) -> None:
         """Release GStreamer resources (MainLoop, bus watch)."""
         self._logger.debug("Cleaning up GstMediaServer")
+        if self._pose_push_source_id is not None:
+            GLib.source_remove(self._pose_push_source_id)
+            self._pose_push_source_id = None
         self._loop.quit()
         self._bus_sender.remove_watch()
 
@@ -1711,6 +1734,93 @@ class GstMediaServer:
             channel.connect("on-error", self._on_data_channel_error, peer_id)
         else:
             self._logger.error(f"Failed to create data channel for peer {peer_id}")
+
+        # Second channel for the pushed pose stream. Created right after the
+        # control channel (before the SDP offer) so it rides the same SCTP
+        # association; additional data channels are negotiated in-band via
+        # DCEP, so this needs no separate renegotiation.
+        self._setup_pose_channel(peer_id, webrtcbin)
+
+    def set_pose_provider(
+        self, provider: Optional[Callable[[], Optional[str]]]
+    ) -> None:
+        """Register the callback that yields the JSON pose frame to push.
+
+        The backend passes ``build_state_json`` here. The provider is polled
+        on the GLib main loop at :attr:`POSE_PUSH_INTERVAL_MS`; returning
+        ``None`` skips a tick (e.g. before the first kinematics update).
+        """
+        self._pose_provider = provider
+
+    def set_pose_subscription(self, peer_id: str, enabled: bool) -> None:
+        """Add/remove a peer from the pushed pose stream (see `_push_pose`).
+
+        Driven by the backend's `subscribe_pose`/`unsubscribe_pose` handling.
+        Idempotent.
+        """
+        if enabled:
+            self._pose_subscribers.add(peer_id)
+            self._logger.info(f"Pose stream subscribed by peer {peer_id}")
+        else:
+            self._pose_subscribers.discard(peer_id)
+            self._logger.info(f"Pose stream unsubscribed by peer {peer_id}")
+
+    def _setup_pose_channel(self, peer_id: str, webrtcbin: Gst.Element) -> None:
+        # Unreliable + unordered: pose is a "latest value wins" stream, so we
+        # never want a lost frame to be retransmitted (it'd already be stale)
+        # nor to head-of-line-block the frames behind it.
+        options = Gst.Structure.from_string("options,ordered=false,max-retransmits=0")[
+            0
+        ]
+        channel = webrtcbin.emit("create-data-channel", "pose", options)
+        if not channel:
+            self._logger.error(f"Failed to create pose channel for peer {peer_id}")
+            return
+        self._logger.debug(f"Pose channel created for peer {peer_id}")
+        self._pose_channels[peer_id] = channel
+        channel.connect("on-open", self._on_pose_channel_open, peer_id)
+        channel.connect("on-close", self._on_pose_channel_close, peer_id)
+        channel.connect("on-error", self._on_data_channel_error, peer_id)
+        self._ensure_pose_push_started()
+
+    def _ensure_pose_push_started(self) -> None:
+        """Arm the periodic pose-push timer once (idempotent)."""
+        if self._pose_push_source_id is not None:
+            return
+        self._pose_push_source_id = GLib.timeout_add(
+            self.POSE_PUSH_INTERVAL_MS, self._push_pose
+        )
+
+    def _push_pose(self) -> bool:
+        """Broadcast the latest pose frame to every open pose channel.
+
+        Runs on the GLib main loop. Returns ``True`` to stay scheduled;
+        it's a cheap no-op while nobody is subscribed or no provider is set,
+        so we keep it alive for the media server's lifetime rather than
+        churning the timer as peers come and go.
+        """
+        if not self._pose_subscribers or self._pose_provider is None:
+            return True
+        message = self._pose_provider()
+        if message is None:
+            return True
+        for peer_id in list(self._pose_subscribers):
+            channel = self._pose_channels.get(peer_id)
+            if channel is None:
+                continue
+            try:
+                channel.emit("send-string", message)
+            except Exception as e:
+                self._logger.debug(f"Pose push to {peer_id} failed: {e}")
+        return True
+
+    def _on_pose_channel_open(self, channel: Gst.Element, peer_id: str) -> None:
+        self._logger.info(f"Pose channel opened for peer {peer_id}")
+
+    def _on_pose_channel_close(self, channel: Gst.Element, peer_id: str) -> None:
+        self._logger.info(f"Pose channel closed for peer {peer_id}")
+        self._pose_channels.pop(peer_id, None)
+        self._pose_subscribers.discard(peer_id)
 
     def _on_data_channel_open(self, channel: Gst.Element, peer_id: str) -> None:
         self._logger.info(f"Data channel opened for peer {peer_id}")

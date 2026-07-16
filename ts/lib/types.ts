@@ -365,8 +365,9 @@ export interface ReachyMiniInstance extends EventTarget {
      */
     getRobotName(): Promise<string | null>;
     /**
-     * Set and persist the robot display name (takes effect on the next daemon
-     * restart). Resolves with the stored name, or `null` on error.
+     * Set and persist the robot display name. Applied live by the daemon
+     * (status + central relay + mDNS), so it takes effect right away without a
+     * restart. Resolves with the stored name, or `null` on error.
      */
     setRobotName(name: string): Promise<string | null>;
 
