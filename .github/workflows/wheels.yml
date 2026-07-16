@@ -41,13 +41,6 @@ on:
           - minor-release
           - patch-release
 
-  # TEMP(remove-before-merge): run the read-only `preflight` job automatically on this
-  # PR so we can validate secrets/vars/access without merging. Only `preflight` reacts to
-  # this event (see its `if:`); every mutating job requires workflow_dispatch. Delete this
-  # whole `pull_request:` block before merging.
-  pull_request:
-    branches: [main]
-
 permissions: {}
 
 jobs:
@@ -56,9 +49,7 @@ jobs:
   #    tagging, publishing, or opening any PR. Nothing here mutates anything.
   # ============================================================
   preflight:
-    # The `|| github.event_name == 'pull_request'` is TEMP(remove-before-merge), paired
-    # with the pull_request trigger above. Reverting to just the dry-run check is harmless.
-    if: ${{ inputs.release_type == 'dry-run' || github.event_name == 'pull_request' }}
+    if: ${{ inputs.release_type == 'dry-run' }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -194,8 +185,7 @@ jobs:
   # 1. PREPARE — detect version, create branch, bump, commit, tag, push
   # ============================================================
   prepare:
-    # Only ever runs on a manual dispatch (never on push/PR), and never for dry-run.
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_type != 'dry-run' }}
+    if: ${{ inputs.release_type != 'dry-run' }}
     permissions:
       contents: write
     runs-on: ubuntu-latest
