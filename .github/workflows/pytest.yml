@@ -22,7 +22,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
         with:
-          packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0
+          packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0 gstreamer1.0-alsa alsa-utils
           version: 1.0
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
@@ -34,5 +34,33 @@ jobs:
       - name: Run tests
         run: |
           uv run pytest -vv -m 'not audio and not video and not wireless' --tb=short
+        env:
+          MUJOCO_GL: disable
+      # Simulate the Reachy Mini Audio card with an ALSA dummy card + the real
+      # production .asoundrc, so the media tests exercise the alsasrc/alsasink
+      # path (same as the Wireless CM4). Board-bound tests stay excluded via the
+      # `respeaker` marker. Ubuntu only — macOS has no easy virtual audio.
+      - name: Set up dummy ALSA card (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo modprobe snd-dummy id=respeaker
+          arecord -l
+          uv run python -c "from reachy_mini.media.audio_utils import write_asoundrc_to_home; write_asoundrc_to_home()"
+          cat ~/.asoundrc
+      - name: Run audio media tests (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          uv run pytest -vv tests/unit_tests/test_audio.py \
+            -m 'audio and not respeaker and not loopback and not wireless' --tb=short
+        env:
+          MUJOCO_GL: disable
+      # Prove real audio actually reaches the sink: an snd-aloop loopback lets us
+      # play a WAV and capture it back (snd-dummy discards playback, so it can't).
+      # The loopback_asoundrc fixture writes the dmix/dsnoop .asoundrc.
+      - name: Verify audio playback via loopback (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo modprobe snd-aloop
+          uv run pytest -vv tests/unit_tests/test_audio.py -m 'loopback' --tb=short
         env:
           MUJOCO_GL: disable

@@ -199,6 +199,7 @@ def test_push_audio_sample_without_start_playing(backend: MediaBackend) -> None:
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 @pytest.mark.parametrize("backend", [MediaBackend.LOCAL])
 def test_DoA(backend: MediaBackend) -> None:
     """Test Direction of Arrival (DoA) estimation."""
@@ -220,6 +221,37 @@ def test_DoA(backend: MediaBackend) -> None:
     assert doa_proxy == doa, "Proxy DoA is not equal to direct DoA"
 
     media.close()
+
+
+@pytest.mark.audio
+@pytest.mark.loopback
+def test_play_sound_reaches_sink(loopback_asoundrc: None) -> None:
+    """Play a sound and confirm real, non-silent audio reaches the sink.
+
+    Unlike test_play_sound (which only checks no-exception on a discard-only
+    card), this records the other end of an snd-aloop loopback while playing,
+    so silence means playback never reached the speaker path.
+    """
+    media = MediaManager(backend=MediaBackend.LOCAL)
+    samples = []
+    try:
+        media.start_recording()
+        media.play_sound("wake_up.wav")
+        t0 = time.time()
+        while time.time() - t0 < 3.0:
+            sample = media.get_audio_sample()
+            if sample is not None:
+                samples.append(sample)
+        media.stop_recording()
+    finally:
+        media.close()
+
+    assert samples, "No audio captured from the loopback."
+    audio = np.concatenate(samples, axis=0)
+    peak = float(np.abs(audio).max())
+    assert peak > 1e-3, (
+        f"Captured audio is silent (peak={peak}); playback did not reach the sink."
+    )
 
 
 def test_no_media() -> None:

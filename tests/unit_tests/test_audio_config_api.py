@@ -1,7 +1,8 @@
 """Tests for the REST audio-config router.
 
 Hits the real ReSpeaker USB board, so each test is gated behind
-`@pytest.mark.audio` like the helpers in `test_audio_control_utils.py`.
+`@pytest.mark.audio` + `@pytest.mark.respeaker` like the helpers in
+`test_audio_control_utils.py` — a simulated sound card can't stand in for it.
 """
 
 import pytest
@@ -21,6 +22,7 @@ def client() -> TestClient:
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 def test_read_audio_parameter_round_trip(client: TestClient) -> None:
     """The REST route should return a JSON-decoded view of a board parameter."""
     response = client.get("/audio/config/parameter/AUDIO_MGR_MIC_GAIN")
@@ -32,6 +34,7 @@ def test_read_audio_parameter_round_trip(client: TestClient) -> None:
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 def test_apply_audio_config_identity_write(client: TestClient) -> None:
     """Identity write (read → apply → verify) must succeed on the real board."""
     respeaker = init_respeaker_usb()

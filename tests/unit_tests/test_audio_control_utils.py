@@ -9,6 +9,7 @@ AUDIO_CONFIG_PARAMETER_NAMES = ("PP_MIN_NS", "PP_NLATTENONOFF", "PP_MGSCALE")
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 def test_respeaker_read_values_reads_board_parameters() -> None:
     """Numeric readback should be normalized from the real audio board."""
     respeaker = init_respeaker_usb()
@@ -24,6 +25,7 @@ def test_respeaker_read_values_reads_board_parameters() -> None:
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 def test_respeaker_apply_audio_config_writes_current_board_values() -> None:
     """Custom config writes should be verified against real board readback."""
     respeaker = init_respeaker_usb()
@@ -43,6 +45,7 @@ def test_respeaker_apply_audio_config_writes_current_board_values() -> None:
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 def test_respeaker_apply_audio_config_changes_value_and_restores_it() -> None:
     """Custom config writes should change a real value and restore it."""
     parameter_name = "PP_NLATTENONOFF"
@@ -65,6 +68,7 @@ def test_respeaker_apply_audio_config_changes_value_and_restores_it() -> None:
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 def test_media_audio_apply_audio_config_uses_real_board() -> None:
     """Media audio should apply caller-provided config through the real board."""
     respeaker = init_respeaker_usb()
