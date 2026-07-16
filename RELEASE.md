@@ -1,6 +1,6 @@
 # Releasing `reachy_mini`
 
-Releases are driven by the **Release** workflow (`.github/workflows/release.yml`),
+Releases are driven by the **Release** workflow (`.github/workflows/wheels.yml`),
 a single `workflow_dispatch` with a `release_type` dropdown. The version lives
 statically in `pyproject.toml` (single source of truth): `main` carries
 `X.Y.Z.dev0`; each `vX.Y-release` branch carries its released `X.Y.Z`.
@@ -42,7 +42,10 @@ No re-tagging needed. If the tag/branch are wrong and you must start over, delet
 ## One-time setup
 
 - **PyPI Trusted Publisher** for project `reachy-mini`: repo `pollen-robotics/reachy_mini`,
-  workflow `release.yml`, environment `pypi`. (OIDC — no token stored.)
+  workflow `wheels.yml`. (OIDC — no token stored.) The workflow is intentionally named
+  `wheels.yml` to reuse the pre-existing Trusted Publisher (which has no environment
+  restriction), so no PyPI change is needed. If you later rename it to `release.yml`, add a
+  matching Trusted Publisher entry on PyPI first.
 - **`pypi` GitHub Environment** in repo settings; add required reviewers to gate publishing.
 - **Secret `RELEASE_PAT`** — PAT or GitHub App token with `contents:write` +
   `pull_requests:write` on **both** `reachy_mini` and `reachy_mini_conversation_app`
