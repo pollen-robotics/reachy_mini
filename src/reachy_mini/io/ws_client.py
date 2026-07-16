@@ -4,6 +4,7 @@ Connects to the daemon's /ws/sdk endpoint and provides cached state,
 fire-and-forget commands, and task request/progress tracking.
 """
 
+import ipaddress
 import logging
 import threading
 import time
@@ -34,6 +35,16 @@ from reachy_mini.io.protocol import (
 )
 
 logger = logging.getLogger(__name__)
+
+def _is_loopback_host(host: str) -> bool:
+    """Return True if `host` is localhost or a loopback IP address."""
+    normalized_host = host.strip().strip("[]").lower()
+    if normalized_host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(normalized_host).is_loopback
+    except ValueError:
+        return False
 
 
 class WSClient(AbstractClient):
@@ -72,8 +83,11 @@ class WSClient(AbstractClient):
         self._heartbeat = threading.Event()
 
         uri = f"ws://{host}:{port}/ws/sdk"
+        # permessage-deflate buys nothing on loopback (no network to save
+        # bandwidth on) and costs CPU at the daemon's 50 Hz state stream rate.
+        compression = None if _is_loopback_host(host) else "deflate"
         try:
-            self._ws = ws_sync.connect(uri)
+            self._ws = ws_sync.connect(uri, compression=compression)
         except (OSError, websockets.exceptions.InvalidHandshake, TimeoutError) as e:
             raise ConnectionError(f"Failed to connect to {uri}: {e}") from e
 
