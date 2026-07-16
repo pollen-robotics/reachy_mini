@@ -296,3 +296,36 @@ async def test_apps_install(monkeypatch: pytest.MonkeyPatch) -> None:
         '{"jsonrpc":"2.0","id":"3","method":"apps.install"}', replies.append
     )
     assert replies[-1]["error"]["data"]["reason"] == "invalid_params"
+
+
+@pytest.mark.asyncio
+async def test_original_id_recorded_before_send(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The caller's id must be recorded before the frame leaves the relay.
+
+    Regression: the reader task runs on this loop and can deliver the app's
+    reply *during* ``ws.send``. If the original-id mapping is only written
+    after the await, that reply restores id=None and the caller hangs. Assert
+    the mapping is already present at send time.
+    """
+    relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None)
+    snapshot: dict[str, bool] = {}
+
+    class RacingWs(FakeAppWs):
+        async def send(self, text: str) -> None:
+            relay_id = json.loads(text)["id"]
+            snapshot["present"] = relay_id in relay._pending_original_id
+            await super().send(text)
+
+    ws = RacingWs()
+
+    async def fake_connect(url: str) -> RacingWs:
+        return ws
+
+    monkeypatch.setattr(jsonrpc_relay, "connect", fake_connect)
+
+    await relay.handle(
+        '{"jsonrpc":"2.0","id":"caller-1","method":"conversation.say"}',
+        lambda _r: None,
+    )
+    assert snapshot["present"] is True
+    await relay.aclose()

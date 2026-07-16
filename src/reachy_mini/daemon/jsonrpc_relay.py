@@ -172,8 +172,13 @@ class JsonRpcRelay:
 
         self._counter += 1
         relay_id = f"relay-{self._counter}"
-        original_id = req.id
+        # Record both correlation entries BEFORE the await: the reader task runs
+        # on this same loop and can process the app's reply *during*
+        # ``ws.send`` (a fast reply on the loopback WS). If `original_id` were
+        # set after the await, that reply would restore id=None and the caller
+        # would hang until timeout.
         self._pending[relay_id] = reply
+        self._pending_original_id[relay_id] = req.id
         # Forward the request under a relay-assigned id (model_copy keeps every
         # other field intact); the reader restores `original_id` on the reply.
         outgoing = req.model_copy(update={"id": relay_id})
@@ -181,8 +186,8 @@ class JsonRpcRelay:
             await ws.send(outgoing.model_dump_json())
         except Exception as e:
             self._pending.pop(relay_id, None)
+            self._pending_original_id.pop(relay_id, None)
             raise JsonRpcError(f"app unavailable: {e}", reason="app_unavailable") from e
-        self._pending_original_id[relay_id] = original_id
 
     async def _ensure_app_ws(self) -> ClientConnection:
         async with self._app_ws_lock:
