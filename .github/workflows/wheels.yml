@@ -1,26 +1,605 @@
-name: Publish
+# Unified release workflow for reachy_mini.
+#
+# Adapted (trimmed) from huggingface/huggingface_hub's release.yml. One workflow_dispatch
+# trigger, three release types:
+#   - minor-prerelease : cut a release candidate (e.g. 1.10.0rc1) from main, create the
+#                        v1.10-release branch, publish to PyPI, draft AI release notes, and
+#                        open an RC-test PR in reachy_mini_conversation_app.
+#   - minor-release    : promote the latest RC to the final version (e.g. 1.10.0), publish,
+#                        promote the draft release, and open a PR bumping main to the next
+#                        .dev0 (e.g. 1.11.0.dev0).
+#   - patch-release    : bump the patch on an existing vX.Y-release branch (e.g. 1.10.1) and
+#                        publish. Not marked "latest" on GitHub.
+#
+# Trigger from `main` for minor-prerelease / minor-release; trigger from the vX.Y-release
+# branch for patch-release.
+#
+# The version lives statically in pyproject.toml (single source of truth). main carries an
+# X.Y.Z.dev0 version; release branches carry the released X.Y.Z.
+#
+# Required (see RELEASE.md):
+#   - PyPI Trusted Publisher for `reachy_mini` matching this workflow + the `pypi` environment
+#   - `pypi` GitHub Environment (add required reviewers to gate publishing)
+#   - secret RELEASE_PAT           : PAT/App token with contents+pull-requests write on
+#                                    reachy_mini AND reachy_mini_conversation_app (for the PRs)
+#   - secret RELEASE_NOTES_HF_TOKEN: HF token scoped to Inference Providers (release notes)
+#   - var    RELEASE_NOTES_MODEL   : provider/model for notes (e.g. huggingface/zai-org/GLM-5.2)
+#   - var    OPENCODE_VERSION      : pinned OpenCode version
+
+name: Release
 
 on:
-  release:
-    types:
-      - created
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: "Type of release"
+        required: true
+        type: choice
+        options:
+          - dry-run
+          - minor-prerelease
+          - minor-release
+          - patch-release
+
+permissions: {}
 
 jobs:
-  publish:
-    runs-on: ubuntu-latest
+  # ============================================================
+  # 0. PREFLIGHT (dry-run) — verify all secrets/vars/access are set, WITHOUT
+  #    tagging, publishing, or opening any PR. Nothing here mutates anything.
+  # ============================================================
+  preflight:
+    if: ${{ inputs.release_type == 'dry-run' }}
     permissions:
-      id-token: write
+      contents: read
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
-          lfs: true
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+          fetch-depth: 0
+
+      - name: Check secrets and variables are set
+        env:
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+          RELEASE_NOTES_HF_TOKEN: ${{ secrets.RELEASE_NOTES_HF_TOKEN }}
+          RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
+          OPENCODE_VERSION: ${{ vars.OPENCODE_VERSION }}
+        run: |
+          fail=0
+          check() { if [ -z "${!1:-}" ]; then echo "❌ $1 is NOT set"; fail=1; else echo "✅ $1 is set"; fi; }
+          echo "### Secrets & variables" >> "$GITHUB_STEP_SUMMARY"
+          for v in RELEASE_PAT RELEASE_NOTES_HF_TOKEN RELEASE_NOTES_MODEL OPENCODE_VERSION; do
+            check "$v"
+            if [ -z "${!v:-}" ]; then echo "- ❌ \`$v\` missing" >> "$GITHUB_STEP_SUMMARY"; else echo "- ✅ \`$v\`" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+          exit $fail
+
+      - name: Check RELEASE_PAT can write both repos
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          fail=0
+          echo "### RELEASE_PAT access" >> "$GITHUB_STEP_SUMMARY"
+          for repo in "${{ github.repository }}" "pollen-robotics/reachy_mini_conversation_app"; do
+            PUSH=$(gh api "repos/${repo}" --jq '.permissions.push' 2>/dev/null || echo "error")
+            if [ "$PUSH" = "true" ]; then
+              echo "✅ RELEASE_PAT can push to ${repo}"
+              echo "- ✅ push \`${repo}\`" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "❌ RELEASE_PAT cannot push to ${repo} (permissions.push=${PUSH})"
+              echo "- ❌ push \`${repo}\` (got: ${PUSH})" >> "$GITHUB_STEP_SUMMARY"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Check the pypi environment exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "### PyPI publishing" >> "$GITHUB_STEP_SUMMARY"
+          if gh api "repos/${{ github.repository }}/environments/pypi" --jq '.name' >/dev/null 2>&1; then
+            echo "✅ 'pypi' GitHub Environment exists"
+            echo "- ✅ \`pypi\` environment exists" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ 'pypi' GitHub Environment is missing — create it (Settings → Environments)"
+            echo "- ❌ \`pypi\` environment missing" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "ℹ️  Note: the PyPI Trusted Publisher config itself can only be verified by a real publish."
+          echo "- ℹ️ Trusted Publisher not checkable in dry-run (verified on first real publish)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
-          python-version: "3.10"
-      - name: Install build dependencies
+          python-version: "3.12"
+
+      - name: Check OpenCode installs, model is available, and HF token works
+        timeout-minutes: 5
+        env:
+          HF_TOKEN: ${{ secrets.RELEASE_NOTES_HF_TOKEN }}
+          RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
+        run: |
+          echo "### Release-notes model" >> "$GITHUB_STEP_SUMMARY"
+          # Validate OPENCODE_VERSION installs and the model name exists in the catalog.
+          curl -fsSL https://opencode.ai/install | bash -s -- --version "${{ vars.OPENCODE_VERSION }}"
+          export PATH="$HOME/.opencode/bin:$PATH"
+          if opencode models | grep -qx "$RELEASE_NOTES_MODEL"; then
+            echo "✅ model '$RELEASE_NOTES_MODEL' is available"
+            echo "- ✅ model \`$RELEASE_NOTES_MODEL\` available" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ model '$RELEASE_NOTES_MODEL' not in \`opencode models\`"
+            echo "- ❌ model \`$RELEASE_NOTES_MODEL\` not found" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          # Hard check: the HF token is valid (fast, always warm).
+          WHO=$(curl -s -o /tmp/who.json -w '%{http_code}' --max-time 20 \
+            -H "Authorization: Bearer $HF_TOKEN" https://huggingface.co/api/whoami-v2 || echo 000)
+          if [ "$WHO" = "200" ]; then
+            USER=$(python3 -c "import json;print(json.load(open('/tmp/who.json')).get('name','?'))" 2>/dev/null || echo "?")
+            echo "✅ HF token is valid (account: $USER)"
+            echo "- ✅ HF token valid (account: \`$USER\`)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ HF token rejected by whoami ($WHO) — check RELEASE_NOTES_HF_TOKEN"
+            echo "- ❌ HF token invalid ($WHO)" >> "$GITHUB_STEP_SUMMARY"; exit 1
+          fi
+          # Best-effort: minimal Inference-Providers call. GLM cold-starts can exceed a minute,
+          # so a timeout/5xx is a warning, not a failure — only an auth rejection is fatal.
+          # The real release-notes job exercises the full path with a 30-min budget.
+          MODEL_ID="${RELEASE_NOTES_MODEL#huggingface/}"
+          CODE=$(curl -s -o /tmp/hf_resp.json -w '%{http_code}' --max-time 120 \
+            -H "Authorization: Bearer $HF_TOKEN" -H 'content-type: application/json' \
+            -d "{\"model\":\"${MODEL_ID}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":1}" \
+            https://router.huggingface.co/v1/chat/completions || echo 000)
+          case "$CODE" in
+            200)
+              echo "✅ Inference Providers reachable for $MODEL_ID"
+              echo "- ✅ inference call OK" >> "$GITHUB_STEP_SUMMARY" ;;
+            401|403)
+              echo "❌ token lacks Inference-Providers access ($CODE)"
+              head -c 400 /tmp/hf_resp.json
+              echo "- ❌ no Inference-Providers access ($CODE)" >> "$GITHUB_STEP_SUMMARY"; exit 1 ;;
+            *)
+              echo "⚠️ provider returned $CODE (likely cold start / transient) — token is valid, not failing preflight"
+              echo "- ⚠️ inference call returned $CODE (transient; real run has a 30-min budget)" >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
+
+      - name: Preview the versions each mode would produce
+        run: |
+          set -euo pipefail
+          RAW=$(grep -oP '^version = "\K[^"]+' pyproject.toml)
+          BASE=$(echo "$RAW" | sed -E 's/\.dev[0-9]+$//')
+          LATEST_RC=$(git tag --sort=-v:refname | grep -E "^v${BASE}rc[0-9]+$" | head -1 || echo "")
+          if [ -n "$LATEST_RC" ]; then NEXT_RC=$(( $(echo "$LATEST_RC" | grep -oP 'rc\K[0-9]+') + 1 )); else NEXT_RC=1; fi
+          MINOR=$(echo "$BASE" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
+          {
+            echo "### Version preview (from pyproject \`$RAW\`)"
+            echo "| Mode | Would produce | Branch |"
+            echo "|------|---------------|--------|"
+            echo "| minor-prerelease | \`v${BASE}rc${NEXT_RC}\` | \`v${MINOR}-release\` |"
+            echo "| minor-release | \`v${BASE}\` (needs an existing RC) | \`v${MINOR}-release\` |"
+            echo "| patch-release | \`v<minor>.<patch+1>\` (run from the release branch) | \`v<minor>-release\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================
+  # 1. PREPARE — detect version, create branch, bump, commit, tag, push
+  # ============================================================
+  prepare:
+    if: ${{ inputs.release_type != 'dry-run' }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      branch: ${{ steps.version.outputs.branch }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+      since_tag: ${{ steps.version.outputs.since_tag }}
+      bump_type: ${{ steps.version.outputs.bump_type }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Detect version
+        id: version
+        env:
+          RELEASE_TYPE: ${{ inputs.release_type }}
+        run: |
+          set -euo pipefail
+
+          # Base version from pyproject.toml (single source of truth), minus any .dev0
+          RAW_VERSION=$(grep -oP '^version = "\K[^"]+' pyproject.toml)
+          BASE_VERSION=$(echo "$RAW_VERSION" | sed -E 's/\.dev[0-9]+$//')
+
+          case "$RELEASE_TYPE" in
+            minor-prerelease)
+              # Next RC number for this base version. Tags are vX.Y.ZrcN (no dot, PEP 440), starting at rc1.
+              LATEST_RC=$(git tag --sort=-v:refname | grep -E "^v${BASE_VERSION}rc[0-9]+$" | head -1 || echo "")
+              if [[ -n "$LATEST_RC" ]]; then
+                RC_NUM=$(echo "$LATEST_RC" | grep -oP 'rc\K[0-9]+')
+                RC_NUM=$((RC_NUM + 1))
+              else
+                RC_NUM=1
+              fi
+              VERSION="${BASE_VERSION}rc${RC_NUM}"
+              ;;
+            minor-release)
+              # Require at least one RC for this base version.
+              LATEST_RC=$(git tag --sort=-v:refname | grep -E "^v${BASE_VERSION}rc[0-9]+$" | head -1 || echo "")
+              if [[ -z "$LATEST_RC" ]]; then
+                echo "::error::No RC tag found for v${BASE_VERSION}. Run a minor-prerelease first."
+                exit 1
+              fi
+              VERSION="${BASE_VERSION}"
+              ;;
+            patch-release)
+              # BASE_VERSION here is the currently released X.Y.Z on the vX.Y-release branch.
+              MINOR=$(echo "$BASE_VERSION" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
+              LATEST_PATCH=$(git tag --sort=-v:refname | grep -E "^v${MINOR}\.[0-9]+$" | head -1 || echo "")
+              if [[ -z "$LATEST_PATCH" ]]; then
+                echo "::error::No stable tag found for v${MINOR}. Run a minor-release first."
+                exit 1
+              fi
+              CURRENT=$(echo "$LATEST_PATCH" | sed 's/^v//')
+              IFS='.' read -r MAJOR MINOR_NUM PATCH_NUM <<< "$CURRENT"
+              PATCH_NUM=$((PATCH_NUM + 1))
+              VERSION="${MAJOR}.${MINOR_NUM}.${PATCH_NUM}"
+              ;;
+          esac
+
+          TAG="v${VERSION}"
+          MINOR=$(echo "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
+          BRANCH="v${MINOR}-release"
+
+          if [[ "$VERSION" == *rc* ]]; then
+            IS_PRERELEASE=true
+          else
+            IS_PRERELEASE=false
+          fi
+
+          # since_tag drives release notes: patch = last tag on this minor; otherwise last stable.
+          if [[ "$RELEASE_TYPE" == "patch-release" ]]; then
+            SINCE_TAG=$(git tag --sort=-v:refname | grep -E "^v${MINOR}\.[0-9]+$" | head -1 || echo "")
+            BUMP_TYPE="patch"
+          else
+            SINCE_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || echo "")
+            BUMP_TYPE="minor"
+          fi
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists!"
+            exit 1
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+            echo "branch=$BRANCH"
+            echo "is_prerelease=$IS_PRERELEASE"
+            echo "since_tag=$SINCE_TAG"
+            echo "bump_type=$BUMP_TYPE"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Release Summary"
+            echo "| Key | Value |"
+            echo "|-----|-------|"
+            echo "| Type | \`$RELEASE_TYPE\` |"
+            echo "| Version | \`$VERSION\` |"
+            echo "| Tag | \`$TAG\` |"
+            echo "| Branch | \`$BRANCH\` |"
+            echo "| Since tag | \`$SINCE_TAG\` |"
+            echo "| Prerelease | \`$IS_PRERELEASE\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create or checkout release branch
+        env:
+          BRANCH: ${{ steps.version.outputs.branch }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_TYPE" == "minor-prerelease" ]]; then
+            if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+              git fetch origin "$BRANCH"
+              git checkout "$BRANCH"
+              git pull origin "$BRANCH"
+            else
+              git checkout -b "$BRANCH"
+            fi
+          else
+            if ! git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+              echo "::error::Branch $BRANCH does not exist. Run a minor-prerelease first."
+              exit 1
+            fi
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+            git pull origin "$BRANCH"
+          fi
+
+      - name: Bump version in pyproject.toml and uv.lock
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          sed -i -E "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+          # Root package entry in uv.lock (dist name uses a hyphen)
+          sed -i "/^name = \"reachy-mini\"/,/^version = /s/^version = \".*\"\$/version = \"${VERSION}\"/" uv.lock
+          echo "pyproject:"; grep -m1 '^version = ' pyproject.toml
+
+      - name: Commit, tag, and push
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          BRANCH: ${{ steps.version.outputs.branch }}
+          IS_PRERELEASE: ${{ steps.version.outputs.is_prerelease }}
+        run: |
+          set -euo pipefail
+          git add pyproject.toml uv.lock
+          git commit -m "Release: ${TAG}"
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            git tag "$TAG" -m "${TAG} pre-release"
+          else
+            git tag "$TAG" -m "${TAG} release"
+          fi
+          git push -u --tags origin "$BRANCH"
+
+  # ============================================================
+  # 2. PUBLISH — PyPI via OIDC Trusted Publishing (no stored token)
+  # ============================================================
+  publish-pypi:
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    environment:
+      name: pypi
+      url: https://pypi.org/project/reachy-mini/
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          lfs: true
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Install build frontend
         run: pip install build
-      - name: Build distribution
+      - name: Build package
         run: python -m build
-      - name: Publish
+      - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
+        with:
+          attestations: true
+          print-hash: true
+
+  # ============================================================
+  # 3. RELEASE NOTES — AI-drafted, one draft GitHub release per minor
+  #
+  #   - minor-prerelease : if no release exists for this minor, generate notes with OpenCode
+  #                        and create a draft prerelease. Subsequent RCs are no-ops.
+  #   - minor-release    : promote the existing draft to the final tag (removes prerelease).
+  #   - patch-release    : generate notes for the patch range and create a release.
+  # ============================================================
+  release-notes:
+    permissions:
+      contents: write
+    # Gate on publish so we never draft/promote a GitHub release for a version that
+    # failed to reach PyPI (a failed publish must stop the pipeline here).
+    needs: [prepare, publish-pypi]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          fetch-depth: 0
+
+      # --- Prerelease / patch: skip if a release already exists for this minor ---
+      - name: Check for existing release
+        if: ${{ inputs.release_type != 'minor-release' }}
+        id: check_draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          MINOR=$(echo "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
+          EXISTING=$(gh release list --json tagName --limit 100 \
+            | jq -r ".[] | select(.tagName | startswith(\"v${MINOR}.\")) | .tagName" | head -1)
+          if [[ -n "$EXISTING" && "${{ inputs.release_type }}" == "minor-prerelease" ]]; then
+            echo "Release already exists for v${MINOR}: $EXISTING — skipping notes"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        if: ${{ inputs.release_type != 'minor-release' && steps.check_draft.outputs.skip != 'true' }}
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        if: ${{ inputs.release_type != 'minor-release' && steps.check_draft.outputs.skip != 'true' }}
+        run: pip install PyGithub
+
+      - name: Install OpenCode
+        if: ${{ inputs.release_type != 'minor-release' && steps.check_draft.outputs.skip != 'true' }}
+        run: curl -fsSL https://opencode.ai/install | bash -s -- --version ${{ vars.OPENCODE_VERSION }}
+
+      - name: Generate release notes with OpenCode
+        if: ${{ inputs.release_type != 'minor-release' && steps.check_draft.outputs.skip != 'true' }}
+        timeout-minutes: 30
+        env:
+          HF_TOKEN: ${{ secrets.RELEASE_NOTES_HF_TOKEN }}
+          GITHUB_TOKEN_RELEASE_NOTES: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
+          RELEASE_NOTES_HEAD: ${{ needs.prepare.outputs.tag }}
+        run: |
+          # OpenCode reads the huggingface provider credential from its auth store, not from
+          # HF_TOKEN env — write it non-interactively so `opencode run` doesn't hang on login.
+          mkdir -p "$HOME/.local/share/opencode"
+          jq -n --arg k "$HF_TOKEN" '{huggingface:{type:"api",key:$k}}' > "$HOME/.local/share/opencode/auth.json"
+          python -m utils.release_notes.generate_release_notes \
+            --since "${{ needs.prepare.outputs.since_tag }}" \
+            --${{ needs.prepare.outputs.bump_type }}
+
+      - name: Create GitHub release
+        if: ${{ inputs.release_type != 'minor-release' && steps.check_draft.outputs.skip != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+        run: |
+          set -euo pipefail
+          NOTES_FILE=""
+          for f in .release-notes/RELEASE_NOTES_*.md; do
+            if [[ -f "$f" && -s "$f" ]]; then NOTES_FILE="$f"; break; fi
+          done
+          if [[ -z "$NOTES_FILE" ]]; then
+            echo "::error::No generated release notes found in .release-notes/. Fix the notes step and re-run."
+            exit 1
+          fi
+          TITLE=$(head -1 "$NOTES_FILE" | sed 's/^# //')
+          tail -n +2 "$NOTES_FILE" > "${NOTES_FILE}.body"
+          # Prerelease → draft (reviewed, then promoted by minor-release).
+          # Patch → publish directly but NOT "latest" (keeps the current minor highlighted).
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            gh release create "$TAG" --draft --prerelease --title "$TITLE" --notes-file "${NOTES_FILE}.body"
+          else
+            gh release create "$TAG" --latest=false --title "$TITLE" --notes-file "${NOTES_FILE}.body"
+          fi
+
+      # --- Minor release: promote the existing draft to the final tag ---
+      - name: Promote draft release to final version
+        if: ${{ inputs.release_type == 'minor-release' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          MINOR=$(echo "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
+          EXISTING_TAG=$(gh release list --json tagName --limit 100 \
+            | jq -r ".[] | select(.tagName | startswith(\"v${MINOR}.\")) | .tagName" | head -1)
+          if [[ -n "$EXISTING_TAG" ]]; then
+            gh release edit "$EXISTING_TAG" --tag "$TAG" --prerelease=false --latest --draft=false
+          else
+            echo "::warning::No draft release for v${MINOR}. Creating one with auto-generated notes."
+            gh release create "$TAG" --title "v${VERSION}" --generate-notes --latest
+          fi
+
+  # ============================================================
+  # 4. DOWNSTREAM RC TESTING — open a PR in reachy_mini_conversation_app pinning the RC
+  # ============================================================
+  test-downstream:
+    permissions:
+      contents: read
+    needs: [prepare, publish-pypi]
+    if: ${{ needs.prepare.outputs.is_prerelease == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Wait for the RC to be available on PyPI
+        run: |
+          echo "Waiting for reachy-mini==${VERSION} on PyPI..."
+          for i in $(seq 1 20); do
+            if pip download --no-deps --pre --dest /tmp/rc-check "reachy-mini==${VERSION}" 2>/dev/null; then
+              echo "Available on PyPI!"; exit 0
+            fi
+            echo "Not available yet, retrying in 15s... ($i/20)"; sleep 15
+          done
+          echo "::error::reachy-mini==${VERSION} not on PyPI after 5 minutes"; exit 1
+
+      - name: Checkout reachy_mini_conversation_app
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          repository: pollen-robotics/reachy_mini_conversation_app
+          token: ${{ secrets.RELEASE_PAT }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+
+      - name: Create RC-test branch, pin the RC, open PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          set -euo pipefail
+          git config user.name "reachy-mini-bot"
+          git config user.email "bot@pollen-robotics.com"
+          BRANCH="ci-test-reachy-mini-${VERSION}"
+          git checkout -b "$BRANCH"
+
+          # Pin reachy-mini to the exact RC and refresh the lock so its wheel/hash is captured.
+          # An exact ==rcN pin is honoured by uv without a global --prerelease flag, so we
+          # don't risk pulling unrelated prereleases of other deps.
+          sed -i -E "s/\"reachy-mini(>=|==)[^\"]*\"/\"reachy-mini==${VERSION}\"/" pyproject.toml
+          uv lock
+          git add pyproject.toml uv.lock
+          git --no-pager diff --staged
+          git commit -m "Test reachy-mini ${VERSION}"
+          git push --set-upstream origin "$BRANCH"
+
+          gh pr create \
+            --base main \
+            --title "[RC test] reachy-mini ${VERSION}" \
+            --body "Automated RC test: pins \`reachy-mini==${VERSION}\` so this app's CI validates the release candidate. Close without merging once validated." \
+            --label rc-testing || echo "::warning::PR creation failed (label may not exist); branch pushed."
+
+  # ============================================================
+  # 5. POST-RELEASE — open PR bumping main to the next .dev0
+  # ============================================================
+  post-release:
+    permissions:
+      contents: read
+    needs: [prepare, publish-pypi]
+    if: ${{ inputs.release_type == 'minor-release' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          ref: main
+          token: ${{ secrets.RELEASE_PAT }}
+
+      - name: Create version bump PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "reachy-mini-bot"
+          git config user.email "bot@pollen-robotics.com"
+
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          NEXT_MINOR=$((MINOR + 1))
+          DEV_VERSION="${MAJOR}.${NEXT_MINOR}.0.dev0"
+
+          CURRENT_RAW=$(grep -oP '^version = "\K[^"]+' pyproject.toml)
+          CURRENT_MINOR=$(echo "$CURRENT_RAW" | cut -d. -f2)
+          if [[ "$CURRENT_MINOR" -ge "$NEXT_MINOR" ]]; then
+            echo "::warning::main is already at ${CURRENT_RAW} (>= ${DEV_VERSION}). Skipping bump."
+            exit 0
+          fi
+
+          PR_BRANCH="post-release-v${VERSION}"
+          git checkout -b "$PR_BRANCH"
+          sed -i -E "s/^version = \".*\"/version = \"${DEV_VERSION}\"/" pyproject.toml
+          sed -i "/^name = \"reachy-mini\"/,/^version = /s/^version = \".*\"\$/version = \"${DEV_VERSION}\"/" uv.lock
+          git add pyproject.toml uv.lock
+          git commit -m "Post-release: bump version to ${DEV_VERSION}"
+          git push -u origin "$PR_BRANCH"
+          gh pr create \
+            --base main \
+            --title "Post-release: bump version to ${DEV_VERSION}" \
+            --body "Automated version bump after v${VERSION} release."
+
+      - name: Trigger documentation build
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: gh workflow run build_documentation.yml -f version="${TAG}" --ref main

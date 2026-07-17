@@ -108,19 +108,7 @@ From a JS app, the SDK exposes `robot.applyAudioConfig(config)` and
 `robot.readAudioParameter(name)` (same trusted transport that carries
 `setVolume` / `getVolume`).
 
-The microphone array outputs a stereo channel, so it is not possible to get the raw output of all 4 mics at once. However, you can output two raw microphones at a time:
-
-```bash
-# mic 0 - left channel
-python audio_control_utils.py AUDIO_MGR_OP_L --values 3 0
-# mic 1 - right channel
-python audio_control_utils.py AUDIO_MGR_OP_R --values 3 1
-
-# mic 2 - left channel
-python audio_control_utils.py AUDIO_MGR_OP_L --values 3 2
-# mic 3 - right channel
-python audio_control_utils.py AUDIO_MGR_OP_R --values 3 3
-```
+The microphone array outputs a stereo channel. If you need the raw output of all 4 mics at once, install the [6-channel firmware](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/firmware).
 
 The layout of the linear array is as follows:
 

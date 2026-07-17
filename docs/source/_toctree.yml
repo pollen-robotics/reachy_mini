@@ -82,6 +82,8 @@
       title: Minimal demo
     - local: examples/look_at
       title: Look at
+    - local: examples/head_tracking
+      title: Head Tracking
     - local: examples/sequence
       title: Sequence
     - local: examples/goto_interpolation_playground

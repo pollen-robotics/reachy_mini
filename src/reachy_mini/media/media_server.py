@@ -82,6 +82,9 @@ ICE_NEGOTIATION_DEADLINE_S = 12
 SESSION_FAILED_REASON_ICE_TIMEOUT = "ice_negotiation_timeout"
 SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 
+# Cap the local IPC feed below the capture rate; it also paces every client, face tracker included.
+IPC_FPS = 10
+
 
 @dataclass
 class _PeerWebRTCState:
@@ -822,6 +825,7 @@ class GstMediaServer:
         capsfilter.set_property("caps", caps_mjpeg)
 
         queue = Gst.ElementFactory.make("queue")
+        # Decode MJPEG to raw so all platforms share one IPC/WebRTC pipeline.
         jpegdec = Gst.ElementFactory.make("jpegdec")
         videoconvert = Gst.ElementFactory.make("videoconvert")
 
@@ -928,6 +932,13 @@ class GstMediaServer:
         pipeline.add(queue_ipc)
         tee.link(queue_ipc)
 
+        # max-rate (not a capsfilter) caps the rate without a caps constraint, so unixfdsink's FD path survives.
+        videorate_ipc = Gst.ElementFactory.make("videorate", "ipc_videorate")
+        videorate_ipc.set_property("drop-only", True)
+        videorate_ipc.set_property("max-rate", IPC_FPS)
+        pipeline.add(videorate_ipc)
+        queue_ipc.link(videorate_ipc)
+
         if platform.system() == "Windows":
             ipc_sink = Gst.ElementFactory.make("win32ipcvideosink")
             if ipc_sink is None:
@@ -955,7 +966,7 @@ class GstMediaServer:
         # identity + videoconvert workaround described above.
         if is_rpi:
             pipeline.add(ipc_sink)
-            queue_ipc.link(ipc_sink)
+            videorate_ipc.link(ipc_sink)
         else:
             identity = Gst.ElementFactory.make("identity", "ipc_identity")
             identity.set_property("drop-allocation", True)
@@ -968,7 +979,7 @@ class GstMediaServer:
                 f"video/x-raw,format=BGR,"
                 f"width={self.resolution[0]},"
                 f"height={self.resolution[1]},"
-                f"framerate={self.framerate}/1"
+                f"framerate={IPC_FPS}/1"
             )
             capsfilter_ipc = Gst.ElementFactory.make("capsfilter", "ipc_capsfilter")
             capsfilter_ipc.set_property("caps", caps_bgr)
@@ -976,7 +987,7 @@ class GstMediaServer:
             for elem in [identity, videoconvert_ipc, capsfilter_ipc, ipc_sink]:
                 pipeline.add(elem)
 
-            queue_ipc.link(identity)
+            videorate_ipc.link(identity)
             identity.link(videoconvert_ipc)
             videoconvert_ipc.link(capsfilter_ipc)
             capsfilter_ipc.link(ipc_sink)

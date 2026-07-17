@@ -32,6 +32,7 @@ import type {
     AutoConnectOptions,
     AutoConnectResult,
     AutoConnectRobotChoice,
+    FaceTarget,
     MotionAwaitOptions,
     MoveData,
     PlayMoveOptions,
@@ -181,6 +182,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _hardwareIdResolve: ((v: string | null) => void) | null = null;
     private _volumeResolve: ((v: number | null) => void) | null = null;
     private _micVolumeResolve: ((v: number | null) => void) | null = null;
+    private _trackedFaceResolve: ((v: FaceTarget | null) => void) | null = null;
     // applyAudioConfig() / readAudioParameter() share the same single-slot
     // pattern as the volume helpers. Separate slots so the two can be
     // in-flight concurrently without collision.
@@ -738,6 +740,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         this._logSubscribers.clear();
@@ -786,6 +789,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         this._logSubscribers.clear();
@@ -1157,6 +1161,30 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     clearIncomingAudio(): boolean {
         return this._sendCommand({ type: 'clear_incoming_audio' });
+    }
+
+    startHeadTracking(weight = 1.0): boolean {
+        if (!Number.isFinite(weight)) {
+            throw new TypeError(`startHeadTracking: weight must be a finite number; got ${weight}`);
+        }
+        const clampedWeight = Math.min(Math.max(weight, 0), 1);
+        return this._sendCommand({
+            type: 'set_head_tracking',
+            enabled: true,
+            weight: clampedWeight,
+        });
+    }
+
+    stopHeadTracking(): boolean {
+        return this._sendCommand({ type: 'set_head_tracking', enabled: false });
+    }
+
+    getTrackedFace(): Promise<FaceTarget | null> {
+        return this._slotRoundtrip(
+            () => this._trackedFaceResolve,
+            (next) => { this._trackedFaceResolve = next; },
+            { type: 'get_tracked_face' },
+        );
     }
 
     /**
@@ -2020,6 +2048,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             }
             return;
         }
+        if (data.command === 'get_tracked_face') {
+            if (this._trackedFaceResolve) {
+                this._trackedFaceResolve(
+                    (data.face_target as FaceTarget | undefined) ?? null,
+                );
+                this._trackedFaceResolve = null;
+            }
+            return;
+        }
         if (
             (data.command === 'wake_up' || data.command === 'goto_sleep')
             && this._pendingMotionCompletions
@@ -2091,12 +2128,14 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 body_yaw?: number;
                 motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';
                 is_move_running?: boolean;
+                face_target?: FaceTarget;
             };
             if (s.head_pose) this._robotState.head = s.head_pose.flat();
             if (s.antennas) this._robotState.antennas = [s.antennas[0], s.antennas[1]];
             if (typeof s.body_yaw === 'number') this._robotState.body_yaw = s.body_yaw;
             if (s.motor_mode) this._robotState.motor_mode = s.motor_mode;
             if (typeof s.is_move_running === 'boolean') this._robotState.is_move_running = s.is_move_running;
+            if (s.face_target) this._robotState.face_target = s.face_target;
             this._emit('state', { ...this._robotState });
         }
         if (data.error) {
