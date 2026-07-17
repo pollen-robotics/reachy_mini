@@ -1,1 +1,1 @@
-{"id":"4c630d5580c97070770e0409a9e95d9c","fullName":"tests.unit_tests.test_autostart_app#test_antenna_watcher_starts_app_on_touch","name":"test_antenna_watcher_starts_app_on_touch","status":"passed","testResultsByEnv":{"default":"22cf6499007d9666747720b52aec7ca4"}}
+{"id":"4c630d5580c97070770e0409a9e95d9c","fullName":"tests.unit_tests.test_autostart_app#test_antenna_watcher_starts_app_on_touch","name":"test_antenna_watcher_starts_app_on_touch","status":"passed","testResultsByEnv":{"default":"599bcfb4b496e911a1f4ee81fc2ade7c"}}

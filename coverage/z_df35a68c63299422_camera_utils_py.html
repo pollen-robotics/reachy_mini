@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/reachy_mini/media/camera_utils.py: 72%</title>
+    <title>Coverage for src/reachy_mini/media/camera_utils.py: 95%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src<span class="sep">/</span>reachy_mini<span class="sep">/</span>media<span class="sep">/</span>camera_utils.py</b>:
-            <span class="pc_cov">72%</span>
+            <span class="pc_cov">95%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">78 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">56<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">22<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">74<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">4<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_df35a68c63299422_central_signaling_relay_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.0">coverage.py v7.15.0</a>,
-            created at 2026-07-17 08:17 +0000
+            created at 2026-07-17 08:50 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -277,38 +277,38 @@
     <p class="pln"><span class="n"><a id="t195" href="#t195">195</a></span><span class="t"><span class="str">        K_scaled: Adjusted camera matrix for target resolution</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t196" href="#t196">196</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t197" href="#t197">197</a></span><span class="t"><span class="str">    """</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t198" href="#t198">198</a></span><span class="t">    <span class="nam">K_scaled</span><span class="op">:</span> <span class="nam">npt</span><span class="op">.</span><span class="nam">NDArray</span><span class="op">[</span><span class="nam">np</span><span class="op">.</span><span class="nam">float64</span><span class="op">]</span> <span class="op">=</span> <span class="nam">K_original</span><span class="op">.</span><span class="nam">copy</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t198" href="#t198">198</a></span><span class="t">    <span class="nam">K_scaled</span><span class="op">:</span> <span class="nam">npt</span><span class="op">.</span><span class="nam">NDArray</span><span class="op">[</span><span class="nam">np</span><span class="op">.</span><span class="nam">float64</span><span class="op">]</span> <span class="op">=</span> <span class="nam">K_original</span><span class="op">.</span><span class="nam">copy</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t199" href="#t199">199</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t200" href="#t200">200</a></span><span class="t">    <span class="nam">orig_w</span><span class="op">,</span> <span class="nam">orig_h</span> <span class="op">=</span> <span class="nam">original_size</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t201" href="#t201">201</a></span><span class="t">    <span class="nam">target_w</span><span class="op">,</span> <span class="nam">target_h</span> <span class="op">=</span> <span class="nam">target_size</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t200" href="#t200">200</a></span><span class="t">    <span class="nam">orig_w</span><span class="op">,</span> <span class="nam">orig_h</span> <span class="op">=</span> <span class="nam">original_size</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t201" href="#t201">201</a></span><span class="t">    <span class="nam">target_w</span><span class="op">,</span> <span class="nam">target_h</span> <span class="op">=</span> <span class="nam">target_size</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t202" href="#t202">202</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t203" href="#t203">203</a></span><span class="t">    <span class="com"># Extract original parameters</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t204" href="#t204">204</a></span><span class="t">    <span class="nam">fx</span> <span class="op">=</span> <span class="nam">K_original</span><span class="op">[</span><span class="num">0</span><span class="op">,</span> <span class="num">0</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t205" href="#t205">205</a></span><span class="t">    <span class="nam">fy</span> <span class="op">=</span> <span class="nam">K_original</span><span class="op">[</span><span class="num">1</span><span class="op">,</span> <span class="num">1</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t206" href="#t206">206</a></span><span class="t">    <span class="nam">cx</span> <span class="op">=</span> <span class="nam">K_original</span><span class="op">[</span><span class="num">0</span><span class="op">,</span> <span class="num">2</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t207" href="#t207">207</a></span><span class="t">    <span class="nam">cy</span> <span class="op">=</span> <span class="nam">K_original</span><span class="op">[</span><span class="num">1</span><span class="op">,</span> <span class="num">2</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t204" href="#t204">204</a></span><span class="t">    <span class="nam">fx</span> <span class="op">=</span> <span class="nam">K_original</span><span class="op">[</span><span class="num">0</span><span class="op">,</span> <span class="num">0</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t205" href="#t205">205</a></span><span class="t">    <span class="nam">fy</span> <span class="op">=</span> <span class="nam">K_original</span><span class="op">[</span><span class="num">1</span><span class="op">,</span> <span class="num">1</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t206" href="#t206">206</a></span><span class="t">    <span class="nam">cx</span> <span class="op">=</span> <span class="nam">K_original</span><span class="op">[</span><span class="num">0</span><span class="op">,</span> <span class="num">2</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t207" href="#t207">207</a></span><span class="t">    <span class="nam">cy</span> <span class="op">=</span> <span class="nam">K_original</span><span class="op">[</span><span class="num">1</span><span class="op">,</span> <span class="num">2</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t208" href="#t208">208</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t209" href="#t209">209</a></span><span class="t">    <span class="com"># Focal length scaling has two components:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t210" href="#t210">210</a></span><span class="t">    <span class="com"># 1. Resolution scaling: focal length in pixels scales with image dimensions</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t211" href="#t211">211</a></span><span class="t">    <span class="com"># 2. Crop/zoom scaling: cropping increases effective focal length</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t212" href="#t212">212</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t213" href="#t213">213</a></span><span class="t">    <span class="nam">resolution_scale_x</span> <span class="op">=</span> <span class="nam">target_w</span> <span class="op">/</span> <span class="nam">orig_w</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t214" href="#t214">214</a></span><span class="t">    <span class="nam">resolution_scale_y</span> <span class="op">=</span> <span class="nam">target_h</span> <span class="op">/</span> <span class="nam">orig_h</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t213" href="#t213">213</a></span><span class="t">    <span class="nam">resolution_scale_x</span> <span class="op">=</span> <span class="nam">target_w</span> <span class="op">/</span> <span class="nam">orig_w</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t214" href="#t214">214</a></span><span class="t">    <span class="nam">resolution_scale_y</span> <span class="op">=</span> <span class="nam">target_h</span> <span class="op">/</span> <span class="nam">orig_h</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t215" href="#t215">215</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t216" href="#t216">216</a></span><span class="t">    <span class="nam">fx_scaled</span> <span class="op">=</span> <span class="nam">fx</span> <span class="op">*</span> <span class="nam">resolution_scale_x</span> <span class="op">*</span> <span class="nam">crop_scale</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t217" href="#t217">217</a></span><span class="t">    <span class="nam">fy_scaled</span> <span class="op">=</span> <span class="nam">fy</span> <span class="op">*</span> <span class="nam">resolution_scale_y</span> <span class="op">*</span> <span class="nam">crop_scale</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t216" href="#t216">216</a></span><span class="t">    <span class="nam">fx_scaled</span> <span class="op">=</span> <span class="nam">fx</span> <span class="op">*</span> <span class="nam">resolution_scale_x</span> <span class="op">*</span> <span class="nam">crop_scale</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t217" href="#t217">217</a></span><span class="t">    <span class="nam">fy_scaled</span> <span class="op">=</span> <span class="nam">fy</span> <span class="op">*</span> <span class="nam">resolution_scale_y</span> <span class="op">*</span> <span class="nam">crop_scale</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t218" href="#t218">218</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t219" href="#t219">219</a></span><span class="t">    <span class="com"># Principal point scales with resolution</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t220" href="#t220">220</a></span><span class="t">    <span class="com"># For centered crop, it stays at the image center after scaling</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t221" href="#t221">221</a></span><span class="t">    <span class="nam">cx_scaled</span> <span class="op">=</span> <span class="op">(</span><span class="nam">cx</span> <span class="op">/</span> <span class="nam">orig_w</span><span class="op">)</span> <span class="op">*</span> <span class="nam">target_w</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t222" href="#t222">222</a></span><span class="t">    <span class="nam">cy_scaled</span> <span class="op">=</span> <span class="op">(</span><span class="nam">cy</span> <span class="op">/</span> <span class="nam">orig_h</span><span class="op">)</span> <span class="op">*</span> <span class="nam">target_h</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t221" href="#t221">221</a></span><span class="t">    <span class="nam">cx_scaled</span> <span class="op">=</span> <span class="op">(</span><span class="nam">cx</span> <span class="op">/</span> <span class="nam">orig_w</span><span class="op">)</span> <span class="op">*</span> <span class="nam">target_w</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t222" href="#t222">222</a></span><span class="t">    <span class="nam">cy_scaled</span> <span class="op">=</span> <span class="op">(</span><span class="nam">cy</span> <span class="op">/</span> <span class="nam">orig_h</span><span class="op">)</span> <span class="op">*</span> <span class="nam">target_h</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t223" href="#t223">223</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t224" href="#t224">224</a></span><span class="t">    <span class="nam">K_scaled</span><span class="op">[</span><span class="num">0</span><span class="op">,</span> <span class="num">0</span><span class="op">]</span> <span class="op">=</span> <span class="nam">fx_scaled</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t225" href="#t225">225</a></span><span class="t">    <span class="nam">K_scaled</span><span class="op">[</span><span class="num">1</span><span class="op">,</span> <span class="num">1</span><span class="op">]</span> <span class="op">=</span> <span class="nam">fy_scaled</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t226" href="#t226">226</a></span><span class="t">    <span class="nam">K_scaled</span><span class="op">[</span><span class="num">0</span><span class="op">,</span> <span class="num">2</span><span class="op">]</span> <span class="op">=</span> <span class="nam">cx_scaled</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t227" href="#t227">227</a></span><span class="t">    <span class="nam">K_scaled</span><span class="op">[</span><span class="num">1</span><span class="op">,</span> <span class="num">2</span><span class="op">]</span> <span class="op">=</span> <span class="nam">cy_scaled</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t224" href="#t224">224</a></span><span class="t">    <span class="nam">K_scaled</span><span class="op">[</span><span class="num">0</span><span class="op">,</span> <span class="num">0</span><span class="op">]</span> <span class="op">=</span> <span class="nam">fx_scaled</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t225" href="#t225">225</a></span><span class="t">    <span class="nam">K_scaled</span><span class="op">[</span><span class="num">1</span><span class="op">,</span> <span class="num">1</span><span class="op">]</span> <span class="op">=</span> <span class="nam">fy_scaled</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t226" href="#t226">226</a></span><span class="t">    <span class="nam">K_scaled</span><span class="op">[</span><span class="num">0</span><span class="op">,</span> <span class="num">2</span><span class="op">]</span> <span class="op">=</span> <span class="nam">cx_scaled</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t227" href="#t227">227</a></span><span class="t">    <span class="nam">K_scaled</span><span class="op">[</span><span class="num">1</span><span class="op">,</span> <span class="num">2</span><span class="op">]</span> <span class="op">=</span> <span class="nam">cy_scaled</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t228" href="#t228">228</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t229" href="#t229">229</a></span><span class="t">    <span class="key">return</span> <span class="nam">K_scaled</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t229" href="#t229">229</a></span><span class="t">    <span class="key">return</span> <span class="nam">K_scaled</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t230" href="#t230">230</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t231" href="#t231">231</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t232" href="#t232">232</a></span><span class="t"><span class="com"># The Reachy Mini K is calibrated at the full sensor resolution.</span>&nbsp;</span><span class="r"></span></p>
@@ -337,7 +337,7 @@
             <a class="nav" href="z_df35a68c63299422_central_signaling_relay_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.0">coverage.py v7.15.0</a>,
-            created at 2026-07-17 08:17 +0000
+            created at 2026-07-17 08:50 +0000
         </p>
     </div>
 </footer>

@@ -1,0 +1,3 @@
+INFO     reachy_mini.media.gstreamer_udp_camera:gstreamer_udp_camera.py:167 UDP sender started
+INFO     reachy_mini.media.gstreamer_udp_camera:gstreamer_udp_camera.py:210 UDP sender closed
+INFO     reachy_mini.media.gstreamer_udp_camera:gstreamer_udp_camera.py:210 UDP sender closed
