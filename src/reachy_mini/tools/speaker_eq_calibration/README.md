@@ -63,6 +63,26 @@ uv run --with matplotlib python \
     -o docs/assets/speaker_eq_calibration.png
 ```
 
+### 4. Verify by re-measuring (recommended)
+
+The band gains are derived by averaging the measured coloration into each
+octave band, which is an **approximation**: the `equalizer-10bands` filter is
+IIR, so adjacent bands overlap and *sum*, and the curve it actually applies is
+not exactly the per-band numbers. So confirm the result empirically rather than
+trusting the derivation:
+
+1. Apply the gains (`speaker_eq_gains` in the daemon config) and restart the
+   daemon.
+2. Re-run hifiscan on the assembled robot **with the EQ active** → `corr_on_eq.pkl`.
+3. Compare against the shell-off reference — e.g. reuse the plot with
+   `corr_on_eq.pkl` in place of `corr_on.pkl`; the residual coloration should be
+   measurably flatter than before.
+4. If a band is over/under-corrected, nudge that gain and repeat.
+
+A closed-loop fit (solving for gains against the element's real summed response
+instead of the naive per-band average) would remove the manual iteration; it is
+a possible future improvement, not implemented here.
+
 ## Caveats
 
 - A 10-band graphic EQ has fixed octave bands, so a narrow resonance may fall
@@ -71,5 +91,4 @@ uv run --with matplotlib python \
   mechanical buzz.
 - On the 16 kHz voice path only bands ≤ 8 kHz carry signal.
 
-Verify by ear and re-measure with the EQ active; the residual coloration should
-be measurably flatter.
+Verify by ear as well; the EQ reduces "boxy," it won't fully eliminate it.
