@@ -8,7 +8,6 @@ be set over the REST API instead of only via a CLI flag.
 
 import json
 import logging
-import math
 from pathlib import Path
 
 import platformdirs
@@ -22,11 +21,15 @@ _EQ_GAIN_MIN, _EQ_GAIN_MAX = -24.0, 12.0
 
 
 def _is_valid_gain(value: object) -> bool:
-    """Return True for a finite real number within the equalizer dB range."""
+    """Return True for a real number within the equalizer dB range.
+
+    The range comparison also rejects NaN and infinities (they compare False)
+    and oversized ints (exact int/float compare, so no OverflowError) without
+    converting the value.
+    """
     return (
         isinstance(value, (int, float))
         and not isinstance(value, bool)
-        and math.isfinite(value)
         and _EQ_GAIN_MIN <= value <= _EQ_GAIN_MAX
     )
 

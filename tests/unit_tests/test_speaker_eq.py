@@ -76,6 +76,10 @@ def test_config_gains_validation(
     cfg.write_text(json.dumps({"speaker_eq_gains": [-30.0] + [0.0] * 9}))  # < -24 dB
     assert startup_app_config.get_speaker_eq_gains() is None
 
+    # A JSON int too large to fit a float must be rejected, not crash.
+    cfg.write_text(json.dumps({"speaker_eq_gains": [10**400] + [0.0] * 9}))
+    assert startup_app_config.get_speaker_eq_gains() is None
+
 
 def test_invalid_config_warns(
     tmp_path: object, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
