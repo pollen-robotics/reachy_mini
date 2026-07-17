@@ -30,7 +30,11 @@ from reachy_mini.media.audio_control_utils import (
     init_respeaker_usb,
 )
 from reachy_mini.media.audio_doa import AudioDoA
-from reachy_mini.media.audio_utils import resolve_speaker_eq_gains
+from reachy_mini.media.audio_utils import (
+    has_reachymini_asoundrc,
+    resolve_speaker_eq_gains,
+)
+from reachy_mini.media.device_detection import get_audio_device
 from reachy_mini.media.gstreamer_utils import get_sample, handle_default_bus_message
 
 gi.require_version("Gst", "1.0")
@@ -47,13 +51,19 @@ AEC_PROBE_NAME = "reachymini_aec_probe"
 def make_speaker_eq(logger: logging.Logger) -> Optional[Gst.Element]:
     """Build an ``equalizer-10bands`` from the configured gains, or ``None``.
 
-    Returns ``None`` (caller keeps the direct link) when all gains are zero or
-    the element is unavailable, so uncalibrated robots stay byte-identical.
-    Callers insert it on the speaker branch only, after the wobbler tee, so head
-    motion is driven by the uncorrected signal.
+    Returns ``None`` (caller keeps the direct link) when all gains are zero,
+    the resolved output is not the Reachy Mini Audio device, or the element is
+    unavailable — so uncalibrated robots (and fallback outputs) stay
+    byte-identical. Callers insert it on the speaker branch only, after the
+    wobbler tee, so head motion is driven by the uncorrected signal.
     """
     gains = resolve_speaker_eq_gains()
     if not any(gains):
+        return None
+    # The correction is tuned for the Reachy head shell + its speaker; skip it
+    # when playback falls back to a different output (autoaudiosink).
+    if not (has_reachymini_asoundrc() or get_audio_device("Sink") is not None):
+        logger.info("Speaker EQ skipped: output is not the Reachy Mini Audio device")
         return None
     eq = Gst.ElementFactory.make("equalizer-10bands")
     if eq is None:

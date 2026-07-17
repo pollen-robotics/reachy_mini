@@ -87,10 +87,28 @@ def test_invalid_config_warns(
 def test_make_speaker_eq_default_active(monkeypatch: pytest.MonkeyPatch) -> None:
     """With no config the tested default is applied (EQ active out of the box)."""
     monkeypatch.setattr(startup_app_config, "get_speaker_eq_gains", lambda: None)
+    # Pretend the Reachy Mini Audio output is present so the device gate passes.
+    monkeypatch.setattr(
+        "reachy_mini.media.audio_base.has_reachymini_asoundrc", lambda: True
+    )
     eq = make_speaker_eq(_LOG)
     assert eq is not None
     assert eq.get_factory().get_name() == "equalizer-10bands"
     assert eq.get_property("band1") == pytest.approx(DEFAULT_SPEAKER_EQ_GAINS[1])
+
+
+def test_make_speaker_eq_skipped_off_reachy_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EQ is skipped when the output is not the Reachy Mini Audio device."""
+    monkeypatch.setattr(startup_app_config, "get_speaker_eq_gains", lambda: None)
+    monkeypatch.setattr(
+        "reachy_mini.media.audio_base.has_reachymini_asoundrc", lambda: False
+    )
+    monkeypatch.setattr(
+        "reachy_mini.media.audio_base.get_audio_device", lambda _kind: None
+    )
+    assert make_speaker_eq(_LOG) is None
 
 
 def test_make_speaker_eq_noop_when_all_zero(monkeypatch: pytest.MonkeyPatch) -> None:
