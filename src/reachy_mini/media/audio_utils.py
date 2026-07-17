@@ -30,9 +30,7 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 
-# Speaker EQ gains (dB) correcting the head-shell "boxy" resonance, derived
-# offline by tools/speaker_eq_calibration/. Overridable via the daemon config
-# (speaker_eq_gains); see resolve_speaker_eq_gains and the tool's README.
+# Head-shell "boxy" resonance correction; see tools/speaker_eq_calibration/.
 DEFAULT_SPEAKER_EQ_GAINS = [
     0.0,
     -13.21,
