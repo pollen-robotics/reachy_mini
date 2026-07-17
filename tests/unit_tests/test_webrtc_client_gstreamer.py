@@ -21,10 +21,10 @@ from gi.repository import Gst  # noqa: E402
 
 import reachy_mini.media.webrtc_client_gstreamer as mod  # noqa: E402
 from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient  # noqa: E402
-from webrtc_support import require_webrtc_plugin  # noqa: E402
 
-require_webrtc_plugin("webrtcsrc")
-
+Gst.init([])
+# Missing-plugin handling (skip vs fail) is centralised in conftest's
+# pytest_collection_modifyitems, keyed on whether `-m webrtc` was selected.
 pytestmark = pytest.mark.webrtc
 
 

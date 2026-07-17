@@ -20,15 +20,9 @@ import time
 import numpy as np
 import pytest
 
-from webrtc_support import require_webrtc_plugin
-
-require_webrtc_plugin("webrtcsrc", "webrtcsink")
-
-from reachy_mini.media.camera_constants import ReachyMiniLiteCamSpecs  # noqa: E402
-from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient  # noqa: E402
-from reachy_mini.media.webrtc_utils import (  # noqa: E402
-    find_producer_peer_id_by_name,
-)
+from reachy_mini.media.camera_constants import ReachyMiniLiteCamSpecs
+from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
+from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
 
 pytestmark = pytest.mark.webrtc
 

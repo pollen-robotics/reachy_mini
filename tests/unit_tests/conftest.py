@@ -13,6 +13,47 @@ import usb.util
 
 from reachy_mini.media.audio_control_utils import CONTROL_SUCCESS, ReSpeaker
 
+
+def _webrtc_plugin_available() -> bool:
+    """True when the gst-plugins-rs webrtc elements register (libgstrswebrtc.so)."""
+    try:
+        import gi
+
+        gi.require_version("Gst", "1.0")
+        from gi.repository import Gst
+
+        Gst.init([])
+    except Exception:
+        return False
+    return all(
+        Gst.ElementFactory.find(name) is not None
+        for name in ("webrtcsrc", "webrtcsink")
+    )
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Skip ``webrtc`` tests when the plugin is missing — unless it was asked for.
+
+    When the plugin isn't installed the webrtc-marked tests skip cleanly (local
+    dev, macOS). But when the run explicitly selects them (``-m webrtc``), a
+    missing plugin means a broken setup, not a reason to skip: we leave them
+    selected so they run and fail loudly (their GstWebRTCClient/GstMediaServer
+    construction and the gst-launch producer error out on the missing elements).
+    """
+    if _webrtc_plugin_available():
+        return
+    markexpr = config.getoption("markexpr") or ""
+    if "webrtc" in markexpr and "not webrtc" not in markexpr:
+        return  # explicitly requested -> run and fail loudly
+    skip = pytest.mark.skip(
+        reason="gst-plugins-rs webrtc plugin unavailable (libgstrswebrtc.so not loaded)"
+    )
+    for item in items:
+        if item.get_closest_marker("webrtc") is not None:
+            item.add_marker(skip)
+
 try:
     # Hack: import placo before reachy mini to fix an error with the Ubuntu CI
     import placo

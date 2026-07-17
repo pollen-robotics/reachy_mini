@@ -12,12 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from webrtc_support import require_webrtc_plugin
-
-require_webrtc_plugin("webrtcsink")
-
-from reachy_mini.media.camera_constants import MujocoCameraSpecs  # noqa: E402
-from reachy_mini.media.media_server import GstMediaServer, SimulationMode  # noqa: E402
+from reachy_mini.media.camera_constants import MujocoCameraSpecs
+from reachy_mini.media.media_server import GstMediaServer, SimulationMode
 
 pytestmark = pytest.mark.webrtc
 

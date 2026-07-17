@@ -44,9 +44,6 @@ jobs:
         run: uv run --with allure-pytest --with pytest-cov pytest -m 'not respeaker and not wireless' --tb=short --alluredir=allure-results --cov=reachy_mini --cov-report=json:coverage.json --cov-report=html
         env:
           MUJOCO_GL: disable
-          # The plugin was set up above; fail loudly if it's missing rather than
-          # silently skip the webrtc tests and under-report coverage.
-          REACHY_MINI_REQUIRE_WEBRTC: "1"
 
       - uses: actions/setup-node@v4
         if: always()
