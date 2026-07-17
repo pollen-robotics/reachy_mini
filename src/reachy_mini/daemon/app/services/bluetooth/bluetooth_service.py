@@ -67,28 +67,6 @@ def get_hardware_id() -> str | None:
     return hashlib.sha256(raw.encode("ascii")).hexdigest()[:16]
 
 
-# Constant BLE name prefix + per-robot suffix — mirrors
-# `reachy_mini.utils.hardware_id.BLE_NAME_PREFIX` / `get_ble_name`; see the
-# inline-import note at the top of this file for why we don't share them.
-BLE_NAME_PREFIX = "Reachy Mini"
-
-
-def get_ble_name() -> str:
-    """Advertised BLE name — ``Reachy Mini #XXXX`` (or ``Reachy Mini``).
-
-    The 4-char suffix is the last 4 hex chars of the public hardware ID
-    (see ``get_hardware_id``), uppercased: stable across reboots and unique
-    per robot, so two Reachy Minis in BLE range are told apart at a glance.
-    Falls back to the bare prefix on a dev workstation with no Reachy. This
-    is only the scan-time display label; the canonical identity is the full
-    hardware ID, read post-connect over the GATT characteristic.
-    """
-    hw = get_hardware_id()
-    if not hw:
-        return BLE_NAME_PREFIX
-    return f"{BLE_NAME_PREFIX} #{hw[-4:].upper()}"
-
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -706,11 +684,9 @@ class BluetoothCommandService:
     PIN_LOCKOUT_BASE_S = 5
     PIN_LOCKOUT_MAX_S = 300
 
-    def __init__(self, device_name=None, pin_code="00000"):
+    def __init__(self, device_name="ReachyMini", pin_code="00000"):
         """Initialize the Bluetooth Command Service."""
-        # Default to the hardware-derived advertised name ("Reachy Mini #XXXX")
-        # so multiple robots are distinguishable in a BLE scan.
-        self.device_name = device_name or get_ble_name()
+        self.device_name = device_name
         self.pin_code = pin_code
         self.connected = False
         # monotonic deadline for the TTL-bounded WiFi session (see _is_authed).
@@ -1677,7 +1653,7 @@ def main():
     """Run the Bluetooth Command Service."""
     pin = get_pin()
 
-    bt_service = BluetoothCommandService(device_name=get_ble_name(), pin_code=pin)
+    bt_service = BluetoothCommandService(device_name="ReachyMini", pin_code=pin)
     bt_service.run()
 
 

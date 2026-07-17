@@ -37,12 +37,8 @@ SHARED_LITERALS = [
     # Pollen audio device USB ids (the hardware-id source of truth).
     'POLLEN_AUDIO_VID = "38fb"',
     'POLLEN_AUDIO_PID = "1001"',
-    # Advertised BLE name prefix.
-    'BLE_NAME_PREFIX = "Reachy Mini"',
     # get_hardware_id: SHA-256 of the raw serial, truncated to 16 hex chars.
     'hashlib.sha256(raw.encode("ascii")).hexdigest()[:16]',
-    # get_ble_name: prefix + uppercased last-4-hex suffix ("Reachy Mini #XXXX").
-    'return f"{BLE_NAME_PREFIX} #{hw[-4:].upper()}"',
     # get_pin: last 5 chars of the raw serial, with a fixed dev-workstation fallback.
     'default_pin = "46879"',
     "return raw[-5:]",
@@ -58,7 +54,7 @@ def test_shared_literal_present_in_both(literal: str) -> None:
     assert literal in inlined, f"missing from inlined bluetooth_service.py: {literal!r}"
 
 
-@pytest.mark.parametrize("func", ["_read_raw_audio_serial", "get_hardware_id", "get_ble_name", "get_pin"])
+@pytest.mark.parametrize("func", ["_read_raw_audio_serial", "get_hardware_id", "get_pin"])
 def test_shared_function_defined_in_both(func: str) -> None:
     """Both files must define the same set of hardware-id helpers."""
     canonical = CANONICAL.read_text(encoding="utf-8")
