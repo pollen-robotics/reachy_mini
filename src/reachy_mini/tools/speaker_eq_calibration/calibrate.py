@@ -38,8 +38,6 @@ ringing or mechanical buzz); and on the 16 kHz voice path only bands <= 8 kHz
 carry signal (top bands are zeroed via ``--zero-above``).
 """
 
-from __future__ import annotations
-
 import argparse
 
 import numpy as np
