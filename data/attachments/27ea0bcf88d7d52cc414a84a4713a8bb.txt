@@ -1,0 +1,1 @@
+WARNING  reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1356 [Central Relay] Rejecting session cs2: a session is already active/pending

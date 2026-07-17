@@ -1,0 +1,1 @@
+ERROR    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1307 [Central Relay] Failed to send message to local GStreamer: ws send boom

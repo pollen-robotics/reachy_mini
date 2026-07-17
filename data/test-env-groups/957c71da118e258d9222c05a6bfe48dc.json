@@ -1,0 +1,1 @@
+{"id":"957c71da118e258d9222c05a6bfe48dc","fullName":"tests.unit_tests.test_webrtc_client_gstreamer#test_stop_playing_resets_pts_and_stops_daemon_sound","name":"test_stop_playing_resets_pts_and_stops_daemon_sound","status":"passed","testResultsByEnv":{"default":"5f1f7b6311ea2ad1ed84db7a6f668e1a"}}

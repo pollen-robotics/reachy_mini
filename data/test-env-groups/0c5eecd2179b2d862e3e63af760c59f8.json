@@ -1,0 +1,1 @@
+{"id":"0c5eecd2179b2d862e3e63af760c59f8","fullName":"tests.unit_tests.test_central_signaling_relay#test_set_state_notifies_callback_and_swallows_its_errors","name":"test_set_state_notifies_callback_and_swallows_its_errors","status":"passed","testResultsByEnv":{"default":"4b54bcb952b3eb8b27ada92622ca2537"}}

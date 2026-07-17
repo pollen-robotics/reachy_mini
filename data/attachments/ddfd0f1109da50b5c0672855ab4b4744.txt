@@ -1,0 +1,2 @@
+WARNING  reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1265 [Central Relay] _send_to_central skipped (type=x, http_session=False, hf_token=True)
+WARNING  reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1265 [Central Relay] _send_to_central skipped (type=x, http_session=True, hf_token=False)
