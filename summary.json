@@ -2,237 +2,25 @@
   "stats": {
     "total": 363,
     "passed": 348,
-    "new": 35,
     "skipped": 15
   },
   "status": "passed",
-  "newTests": [
-    {
-      "id": "d4fac70d6bc8f5604007f7d5d59a04ec",
-      "name": "test_get_frame_exists_all_resolutions",
-      "status": "passed",
-      "duration": 1079
-    },
-    {
-      "id": "70f03eecade0ff35a8456df90b88af03",
-      "name": "test_find_producer_peer_id_by_name",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "a9be42a21e9eec6affa263cb290994f7",
-      "name": "test_get_producer_list_parses_producers",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "322662abd484a92054cd9a7e7ef1e7e5",
-      "name": "test_simulated_apply_identity_write",
-      "status": "passed",
-      "duration": 103
-    },
-    {
-      "id": "1afaa5c27d12bb26e0d13203dd927cc1",
-      "name": "test_doa_simulated",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "7e997223cf75d0ea9e13fd438020bd01",
-      "name": "test_set_and_restore_output_volume[alsa]",
-      "status": "skipped",
-      "duration": 0
-    },
-    {
-      "id": "460655788166b18ec7ba34ae9c8c2045",
-      "name": "test_set_and_restore_output_volume[pulsectl]",
-      "status": "skipped",
-      "duration": 0
-    },
-    {
-      "id": "be427a4f7d72b52ddb965333ea7fa05c",
-      "name": "test_find_producer_peer_id_by_name_missing_raises",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "1ed9b166fc7499c5dc8499dd90496327",
-      "name": "test_simulated_read_values_decode",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "5423d58a5d061c6c7dafca0c1c220f4e",
-      "name": "test_get_output_volume[pulsectl]",
-      "status": "skipped",
-      "duration": 0
-    },
-    {
-      "id": "b91ddd736c89f304d3301b7f68034f54",
-      "name": "test_set_output_volume_clamps[pulsectl]",
-      "status": "skipped",
-      "duration": 0
-    },
-    {
-      "id": "6ded89e45cb4844beb19fa8a2338a5da",
-      "name": "test_factory_raises_on_unsupported_platform",
-      "status": "passed",
-      "duration": 2
-    },
-    {
-      "id": "a4a6436704009b739e68329aa1bed028",
-      "name": "test_simulated_apply_audio_config_round_trip",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "b17d69ce56a51764b13687b0e46813da",
-      "name": "test_play_sound_reaches_sink",
-      "status": "passed",
-      "duration": 5084
-    },
-    {
-      "id": "1ba13b7ef2a2bc6eb0ac7aa188a08405",
-      "name": "test_is_local_camera_available",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "4d425c417a61770ac9b02f18786aaed7",
-      "name": "test_factory_returns_correct_subclass[pulsectl]",
-      "status": "skipped",
-      "duration": 0
-    },
-    {
-      "id": "458d3ac8c0cca886257215eaf1cbd6be",
-      "name": "test_stop_play_sound[MediaBackend.LOCAL]",
-      "status": "passed",
-      "duration": 4446
-    },
-    {
-      "id": "2934a7da55ec7796e9cf04c2bfdc2b4c",
-      "name": "test_udp_camera_frame_round_trip",
-      "status": "passed",
-      "duration": 9
-    },
-    {
-      "id": "95004ad6e91b8f5f5aa20fd70ce0b4e2",
-      "name": "test_record_audio_and_file_exists[MediaBackend.LOCAL]",
-      "status": "passed",
-      "duration": 6162
-    },
-    {
-      "id": "3f9305ded1b0dcebee29eb27e7225e1a",
-      "name": "test_change_resolution_errors[MediaBackend.LOCAL]",
-      "status": "passed",
-      "duration": 2051
-    },
-    {
-      "id": "91f581b84ee7597411bd46aa30e1aad9",
-      "name": "test_push_audio_sample_without_start_playing[MediaBackend.LOCAL]",
-      "status": "passed",
-      "duration": 3050
-    },
-    {
-      "id": "b6581d9bdaab4b609d53c76b93266007",
-      "name": "test_set_output_volume_clamps[alsa]",
-      "status": "skipped",
-      "duration": 0
-    },
-    {
-      "id": "8d32063270eb3d72ba34d36d498e0fc4",
-      "name": "test_get_output_volume[alsa]",
-      "status": "skipped",
-      "duration": 0
-    },
-    {
-      "id": "0cfddd5e171c5cd081e6cedd48479433",
-      "name": "test_play_sound[MediaBackend.LOCAL]",
-      "status": "passed",
-      "duration": 4267
-    },
-    {
-      "id": "8bb27a1a0476dbe2ca8bae7f3867d7b2",
-      "name": "test_read_jpeg_encodes_bgr_frame",
-      "status": "passed",
-      "duration": 14
-    },
-    {
-      "id": "295f38f13467c9709c7449ad6a8fca83",
-      "name": "test_push_audio_sample[MediaBackend.LOCAL]",
-      "status": "passed",
-      "duration": 8113
-    },
-    {
-      "id": "2310466c0d34a10c0bcfe3700406bc50",
-      "name": "test_set_and_restore_input_volume[alsa]",
-      "status": "skipped",
-      "duration": 0
-    },
-    {
-      "id": "d91825cf43f4478dcbae1cd2914308dd",
-      "name": "test_get_producer_list_unknown_type_returns_empty",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "36be6467f2e16b1e02c5125bb5cabc2c",
-      "name": "test_get_input_volume[pulsectl]",
-      "status": "skipped",
-      "duration": 0
-    },
-    {
-      "id": "b729d0cc16dd43d3bf69c7592644cd7e",
-      "name": "test_simulated_read_parameter_round_trip",
-      "status": "passed",
-      "duration": 3
-    },
-    {
-      "id": "e876166496f208a342bcdd5227365a20",
-      "name": "test_get_frame_exists",
-      "status": "passed",
-      "duration": 1080
-    },
-    {
-      "id": "edd9736e44bb0c762be481a86ee1193b",
-      "name": "test_factory_returns_correct_subclass[alsa]",
-      "status": "skipped",
-      "duration": 0
-    },
-    {
-      "id": "cca53c34628b99d60d7c1ac60c052874",
-      "name": "test_set_and_restore_input_volume[pulsectl]",
-      "status": "skipped",
-      "duration": 0
-    },
-    {
-      "id": "3bc84bd9bed4d19c189ff050b24450f0",
-      "name": "test_get_input_volume[alsa]",
-      "status": "skipped",
-      "duration": 0
-    },
-    {
-      "id": "b8751d0606509bedb7a2e13e350bebb9",
-      "name": "test_record_audio_without_start_recording[MediaBackend.LOCAL]",
-      "status": "passed",
-      "duration": 2050
-    }
-  ],
+  "newTests": [],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 77419,
-  "createdAt": 1784278202448,
+  "duration": 77114,
+  "createdAt": 1784290116079,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "e5ce322c-1ddf-4d63-9b46-6edbe603c839",
+    "reportId": "c37269c9-e506-4589-8ca1-ba3453f7855f",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/29567626806",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/29579006913",
   "href": "awesome/",
   "coverage": 40
 }
