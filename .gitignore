@@ -288,6 +288,3 @@ ts/*.d.ts
 ts/*.d.ts.map
 ts/host/src/**/*.d.ts.map
 !ts/host/src/assets/svg.d.ts
-
-# Speaker EQ calibration measurements (hifiscan exports)
-corr_*
