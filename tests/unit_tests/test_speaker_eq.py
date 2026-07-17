@@ -49,6 +49,19 @@ def test_config_gains_validation(
     cfg.write_text(json.dumps({"speaker_eq_gains": "nope"}))  # not a list
     assert startup_app_config.get_speaker_eq_gains() is None
 
+    # NaN / Infinity (json parses these) and out-of-range are rejected.
+    cfg.write_text(json.dumps({"speaker_eq_gains": [0.0] * 9 + [float("nan")]}))
+    assert startup_app_config.get_speaker_eq_gains() is None
+
+    cfg.write_text(json.dumps({"speaker_eq_gains": [0.0] * 9 + [float("inf")]}))
+    assert startup_app_config.get_speaker_eq_gains() is None
+
+    cfg.write_text(json.dumps({"speaker_eq_gains": [0.0] * 9 + [13.0]}))  # > +12 dB
+    assert startup_app_config.get_speaker_eq_gains() is None
+
+    cfg.write_text(json.dumps({"speaker_eq_gains": [-30.0] + [0.0] * 9}))  # < -24 dB
+    assert startup_app_config.get_speaker_eq_gains() is None
+
 
 def test_make_speaker_eq_default_active(monkeypatch: pytest.MonkeyPatch) -> None:
     """With no config the tested default is applied (EQ active out of the box)."""

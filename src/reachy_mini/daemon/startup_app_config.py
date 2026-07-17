@@ -8,6 +8,7 @@ be set over the REST API instead of only via a CLI flag.
 
 import json
 import logging
+import math
 from pathlib import Path
 
 import platformdirs
@@ -16,6 +17,18 @@ logger = logging.getLogger(__name__)
 
 _KEY = "startup_app"
 _EQ_KEY = "speaker_eq_gains"
+# equalizer-10bands accepts per-band gains in [-24, +12] dB.
+_EQ_GAIN_MIN, _EQ_GAIN_MAX = -24.0, 12.0
+
+
+def _is_valid_gain(value: object) -> bool:
+    """Return True for a finite real number within the equalizer dB range."""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and _EQ_GAIN_MIN <= value <= _EQ_GAIN_MAX
+    )
 
 
 def _config_path() -> Path:
@@ -46,14 +59,15 @@ def get_startup_app() -> str | None:
 def get_speaker_eq_gains() -> list[float] | None:
     """Return the 10 speaker-EQ band gains (dB), or None if unset/invalid.
 
-    Invalid values (wrong length, non-numeric) are treated as unset so the
-    caller falls back to its built-in default.
+    Invalid values (wrong length, non-numeric, NaN/inf, or outside the
+    equalizer-10bands [-24, +12] dB range) are treated as unset so the caller
+    falls back to its built-in default.
     """
     value = _read().get(_EQ_KEY)
     if (
         isinstance(value, list)
         and len(value) == 10
-        and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in value)
+        and all(_is_valid_gain(x) for x in value)
     ):
         return [float(x) for x in value]
     return None
