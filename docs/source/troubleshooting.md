@@ -97,6 +97,8 @@ If your cable is plugged properly and you still have issues, it is likely that t
 For more details, see the documentation:  
 [Getting Started](./platforms/reachy_mini/get_started.md)
 
+- Update the firmware to version 2.1.4 or later. Run the [update script](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/firmware/update.sh).
+
 </details>
 
 <details>
@@ -737,7 +739,7 @@ If the period is much higher than 20ms, it means the control loop is not running
 
 To make it permanent:
 ```bash
-CARD=$(aplay -l | grep -i "reSpeaker" | head -n1 | sed -n 's/^card \([0-9]*\):.*/\1/p')
+CARD=$(aplay -l | grep -i "Reachy Mini Audio" | head -n1 | sed -n 's/^card \([0-9]*\):.*/\1/p')
 amixer -c "$CARD" set PCM,1 100%
 sudo alsactl store "$CARD"
 ```
@@ -769,6 +771,13 @@ sample = mini.media.get_audio_sample()
 # Play audio
 mini.media.push_audio_sample(numpy_chunk)
 ```
+
+</details>
+
+<details>
+<summary><strong>Can I get the raw microphone output?</strong></summary>
+
+Yes — install the [6-channel firmware](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/firmware).
 
 </details>
 

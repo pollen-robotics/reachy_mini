@@ -1,5 +1,11 @@
 # Changelog of Reachy Mini Audio Firmware
 
+## 2.1.4
+
+Adds +6dB gain on the audio input.
+Fixes the microphone not outputting sound after a usb reset.
+
+Note: most users want *reachymini_ua_io16_lin_v2.1.4.bin*. *reachymini_ua_io16_6ch_lin_v2.1.4.bin* contains 6 channels: the first two are the processed microphone inputs, while the other four are the raw microphone inputs.
 
 ## 2.1.3
 
