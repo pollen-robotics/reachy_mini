@@ -1,14 +1,32 @@
 import os
 import tempfile
 import time
+import wave
 
 import numpy as np
 import pytest
+from scipy.signal import resample_poly
 
 from reachy_mini.media.audio_utils import _process_card_number_output, save_audio_to_wav
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
+from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 SIGNALING_HOST = "reachy-mini.local"
+
+
+def _spectral_cosine(a: np.ndarray, b: np.ndarray, n: int = 8192) -> float:
+    """Cosine similarity of the Hann-windowed magnitude spectra of two signals.
+
+    Frequency-domain so it's timing-invariant — a partial capture or a start
+    offset doesn't matter, only whether the same sound is present.
+    """
+
+    def spectrum(x: np.ndarray) -> np.ndarray:
+        x = np.asarray(x, dtype=np.float64)
+        mag = np.abs(np.fft.rfft(x * np.hanning(len(x)), n))
+        return mag / (np.linalg.norm(mag) + 1e-9)
+
+    return float(np.dot(spectrum(a), spectrum(b)))
 
 # Audio-capable backends to test
 AUDIO_BACKENDS = [
@@ -235,6 +253,7 @@ def test_play_sound_reaches_sink(audio_loopback: None) -> None:
     media = MediaManager(backend=MediaBackend.LOCAL)
     samples = []
     try:
+        rate = media.get_input_audio_samplerate()
         media.start_recording()
         media.play_sound("wake_up.wav")
         t0 = time.time()
@@ -251,6 +270,23 @@ def test_play_sound_reaches_sink(audio_loopback: None) -> None:
     peak = float(np.abs(audio).max())
     assert peak > 1e-3, (
         f"Captured audio is silent (peak={peak}); playback did not reach the sink."
+    )
+
+    # Confirm it's actually the wake_up sound (not just any audio): compare the
+    # captured spectrum to the source file resampled to the capture rate.
+    captured = audio.astype(np.float64).mean(axis=1)
+    with wave.open(f"{ASSETS_ROOT_PATH}/wake_up.wav") as wav:
+        channels = wav.getnchannels()
+        src_rate = wav.getframerate()
+        raw = wav.readframes(wav.getnframes())
+    reference = np.frombuffer(raw, dtype=np.int16).astype(np.float64)
+    reference = reference.reshape(-1, channels).mean(axis=1)
+    reference = resample_poly(reference, rate, src_rate)
+
+    similarity = _spectral_cosine(captured, reference)
+    # Measured ~0.75-0.84 for the real sound vs ~0.10 for unrelated noise.
+    assert similarity > 0.5, (
+        f"Captured audio does not match wake_up.wav (spectral cosine={similarity:.2f})."
     )
 
 
