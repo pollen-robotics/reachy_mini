@@ -19,6 +19,17 @@ Gst.init([])
 _LOG = logging.getLogger(__name__)
 
 
+def _find_element(bin_: Gst.Bin, factory_name: str) -> Gst.Element | None:
+    """Return the first child element built from ``factory_name``, or None."""
+    it = bin_.iterate_recurse()
+    while True:
+        result, elem = it.next()
+        if result != Gst.IteratorResult.OK:
+            return None
+        if elem.get_factory().get_name() == factory_name:
+            return elem
+
+
 def test_resolve_gains_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """Falls back to the tested default when the config has no entry."""
     monkeypatch.setattr(startup_app_config, "get_speaker_eq_gains", lambda: None)
@@ -91,10 +102,12 @@ def test_make_speaker_eq_default_active(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(
         "reachy_mini.media.audio_base.has_reachymini_asoundrc", lambda: True
     )
-    eq = make_speaker_eq(_LOG)
+    eq_bin = make_speaker_eq(_LOG)
+    assert eq_bin is not None
+    eq = _find_element(eq_bin, "equalizer-10bands")
     assert eq is not None
-    assert eq.get_factory().get_name() == "equalizer-10bands"
     assert eq.get_property("band1") == pytest.approx(DEFAULT_SPEAKER_EQ_GAINS[1])
+    assert _find_element(eq_bin, "audiodynamic") is not None  # limiter present
 
 
 def test_make_speaker_eq_skipped_off_reachy_output(

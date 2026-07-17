@@ -71,7 +71,32 @@ def make_speaker_eq(logger: logging.Logger) -> Optional[Gst.Element]:
         return None
     for i, gain in enumerate(gains):
         eq.set_property(f"band{i}", float(gain))
-    return eq
+
+    # Wrap eq + a limiter in a float-internal bin. The EQ boosts must run in
+    # F32 and be limited *before* the final int conversion, otherwise a boosted
+    # peak clips when the sink quantizes it. audiodynamic is memoryless so it
+    # cannot overshoot, guaranteeing no digital clipping for any gains. If it is
+    # unavailable, fall back to the bare EQ (pre-limiter behavior).
+    in_caps = Gst.ElementFactory.make("capsfilter")
+    limiter = Gst.ElementFactory.make("audiodynamic")
+    out_conv = Gst.ElementFactory.make("audioconvert")
+    if in_caps is None or limiter is None or out_conv is None:
+        logger.warning("audiodynamic unavailable; speaker EQ runs without a limiter")
+        return eq
+    in_caps.set_property("caps", Gst.Caps.from_string("audio/x-raw,format=F32LE"))
+    # Hard-knee compressor with a low ratio near full scale = a brickwall limiter.
+    limiter.set_property("threshold", 0.9)
+    limiter.set_property("ratio", 0.05)
+
+    eq_bin = Gst.Bin.new("speaker_eq")
+    for el in (in_caps, eq, limiter, out_conv):
+        eq_bin.add(el)
+    in_caps.link(eq)
+    eq.link(limiter)
+    limiter.link(out_conv)
+    eq_bin.add_pad(Gst.GhostPad.new("sink", in_caps.get_static_pad("sink")))
+    eq_bin.add_pad(Gst.GhostPad.new("src", out_conv.get_static_pad("src")))
+    return eq_bin
 
 
 class AudioBase(ABC):
