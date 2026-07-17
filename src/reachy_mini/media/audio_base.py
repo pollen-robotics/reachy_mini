@@ -84,9 +84,10 @@ def make_speaker_eq(logger: logging.Logger) -> Optional[Gst.Element]:
         logger.warning("audiodynamic unavailable; speaker EQ runs without a limiter")
         return eq
     in_caps.set_property("caps", Gst.Caps.from_string("audio/x-raw,format=F32LE"))
-    # Hard-knee compressor with a low ratio near full scale = a brickwall limiter.
+    # Hard-knee compressor, ratio 0 = a brickwall limiter that clamps anything
+    # above the threshold to it, so the output never exceeds full scale.
     limiter.set_property("threshold", 0.9)
-    limiter.set_property("ratio", 0.05)
+    limiter.set_property("ratio", 0.0)
 
     eq_bin = Gst.Bin.new("speaker_eq")
     for el in (in_caps, eq, limiter, out_conv):
