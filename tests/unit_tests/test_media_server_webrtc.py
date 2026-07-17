@@ -10,18 +10,11 @@ Skipped where the plugin is absent.
 
 from __future__ import annotations
 
-import gi
 import pytest
 
-gi.require_version("Gst", "1.0")
-from gi.repository import Gst  # noqa: E402
+from webrtc_support import require_webrtc_plugin
 
-Gst.init([])
-if Gst.ElementFactory.find("webrtcsink") is None:
-    pytest.skip(
-        "webrtcsink (gst-plugins-rs / libgstrswebrtc.so) not available",
-        allow_module_level=True,
-    )
+require_webrtc_plugin("webrtcsink")
 
 from reachy_mini.media.camera_constants import MujocoCameraSpecs  # noqa: E402
 from reachy_mini.media.media_server import GstMediaServer, SimulationMode  # noqa: E402

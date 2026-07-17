@@ -63,3 +63,6 @@ jobs:
           uv run pytest -vv -m 'webrtc and not wireless' --tb=short
         env:
           MUJOCO_GL: disable
+          # This job set up the plugin, so a missing element is a broken setup,
+          # not a reason to skip — fail loudly instead of dropping coverage.
+          REACHY_MINI_REQUIRE_WEBRTC: "1"

@@ -17,22 +17,12 @@ import shutil
 import subprocess
 import time
 
-import gi
 import numpy as np
 import pytest
 
-gi.require_version("Gst", "1.0")
-from gi.repository import Gst  # noqa: E402
+from webrtc_support import require_webrtc_plugin
 
-Gst.init([])
-if (
-    Gst.ElementFactory.find("webrtcsrc") is None
-    or Gst.ElementFactory.find("webrtcsink") is None
-):
-    pytest.skip(
-        "gst-plugins-rs webrtc (libgstrswebrtc.so) not available",
-        allow_module_level=True,
-    )
+require_webrtc_plugin("webrtcsrc", "webrtcsink")
 
 from reachy_mini.media.camera_constants import ReachyMiniLiteCamSpecs  # noqa: E402
 from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient  # noqa: E402

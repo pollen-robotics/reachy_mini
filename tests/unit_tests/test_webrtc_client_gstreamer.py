@@ -21,13 +21,9 @@ from gi.repository import Gst  # noqa: E402
 
 import reachy_mini.media.webrtc_client_gstreamer as mod  # noqa: E402
 from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient  # noqa: E402
+from webrtc_support import require_webrtc_plugin  # noqa: E402
 
-Gst.init([])
-if Gst.ElementFactory.find("webrtcsrc") is None:
-    pytest.skip(
-        "webrtcsrc (gst-plugins-rs / libgstrswebrtc.so) not available",
-        allow_module_level=True,
-    )
+require_webrtc_plugin("webrtcsrc")
 
 pytestmark = pytest.mark.webrtc
 
