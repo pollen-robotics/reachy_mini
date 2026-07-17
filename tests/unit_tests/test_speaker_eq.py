@@ -1,8 +1,10 @@
 """Unit tests for the runtime speaker-EQ gains resolution and element builder."""
 
 import logging
+import types
 
 import gi
+import numpy as np
 import pytest
 
 gi.require_version("Gst", "1.0")
@@ -10,6 +12,7 @@ from gi.repository import Gst  # noqa: E402
 
 from reachy_mini.daemon import startup_app_config  # noqa: E402
 from reachy_mini.media.audio_base import make_speaker_eq  # noqa: E402
+from reachy_mini.media.audio_gstreamer import GStreamerAudio  # noqa: E402
 from reachy_mini.media.audio_utils import (  # noqa: E402
     DEFAULT_SPEAKER_EQ_GAINS,
     resolve_speaker_eq_gains,
@@ -128,3 +131,83 @@ def test_make_speaker_eq_noop_when_all_zero(monkeypatch: pytest.MonkeyPatch) -> 
     """All-zero gains disable the EQ (returns None, direct link kept)."""
     monkeypatch.setattr(startup_app_config, "get_speaker_eq_gains", lambda: [0.0] * 10)
     assert make_speaker_eq(_LOG) is None
+
+
+def _force_reachy_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(startup_app_config, "get_speaker_eq_gains", lambda: None)
+    monkeypatch.setattr(
+        "reachy_mini.media.audio_base.has_reachymini_asoundrc", lambda: True
+    )
+
+
+def test_eq_bin_prevents_clipping(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A full-scale tone in a boosted band comes out of the EQ bin without clipping."""
+    _force_reachy_output(monkeypatch)
+    eq_bin = make_speaker_eq(_LOG)
+    assert eq_bin is not None
+
+    pipeline = Gst.Pipeline.new("clip-test")
+    appsrc = Gst.ElementFactory.make("appsrc")
+    appsink = Gst.ElementFactory.make("appsink")
+    caps = Gst.Caps.from_string(
+        "audio/x-raw,format=F32LE,rate=16000,channels=1,layout=interleaved"
+    )
+    appsrc.set_property("caps", caps)
+    appsink.set_property("caps", caps)
+    appsink.set_property("sync", False)
+    for el in (appsrc, eq_bin, appsink):
+        pipeline.add(el)
+    appsrc.link(eq_bin)
+    eq_bin.link(appsink)
+
+    pipeline.set_state(Gst.State.PLAYING)
+    # Full-scale sine at 3770 Hz — the band the reviewer measured boosting ~+8 dB,
+    # so without the limiter the output would exceed full scale and clip.
+    n = 8192
+    t = np.arange(n) / 16000.0
+    sine = np.sin(2 * np.pi * 3770.0 * t).astype(np.float32)
+    appsrc.emit("push-buffer", Gst.Buffer.new_wrapped(sine.tobytes()))
+    appsrc.emit("end-of-stream")
+
+    peak = 0.0
+    while True:
+        sample = appsink.emit("try-pull-sample", Gst.SECOND)
+        if sample is None:
+            break
+        buf = sample.get_buffer()
+        ok, info = buf.map(Gst.MapFlags.READ)
+        if ok:
+            out = np.frombuffer(info.data, dtype=np.float32)
+            if out.size:
+                peak = max(peak, float(np.abs(out).max()))
+            buf.unmap(info)
+    pipeline.set_state(Gst.State.NULL)
+
+    assert peak > 0.0  # audio actually flowed through the bin
+    assert peak <= 1.0  # limiter kept the boosted tone from clipping
+
+
+def _build_tee_bin(monkeypatch: pytest.MonkeyPatch) -> Gst.Bin:
+    monkeypatch.setattr(
+        "reachy_mini.media.audio_base.has_reachymini_asoundrc", lambda: True
+    )
+    inst = object.__new__(GStreamerAudio)
+    inst.logger = _LOG
+    # Satisfy the wobbler callback and __del__/cleanup on this half-built instance.
+    inst._head_wobbler = None
+    inst._doa = types.SimpleNamespace(close=lambda: None)
+    inst._loop = types.SimpleNamespace(quit=lambda: None)
+    inst._bus = types.SimpleNamespace(remove_watch=lambda: None)
+    return GStreamerAudio._build_audiosink_tee_bin(inst)
+
+
+def test_playback_path_includes_eq(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The real speaker branch carries the EQ when gains are non-zero."""
+    monkeypatch.setattr(startup_app_config, "get_speaker_eq_gains", lambda: None)
+    assert _find_element(_build_tee_bin(monkeypatch), "equalizer-10bands") is not None
+
+
+def test_playback_path_skips_eq_when_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The real speaker branch has no EQ when all gains are zero."""
+    monkeypatch.setattr(startup_app_config, "get_speaker_eq_gains", lambda: [0.0] * 10)
+    assert _find_element(_build_tee_bin(monkeypatch), "equalizer-10bands") is None
