@@ -1,1 +1,1 @@
-{"id":"e52e2e68f46bd6c0ae9c5792f4734b32","fullName":"tests.unit_tests.test_autostart_app#test_set_startup_app_endpoint_rejects_uninstalled","name":"test_set_startup_app_endpoint_rejects_uninstalled","status":"passed","testResultsByEnv":{"default":"f8079a4fc0e44f4bf3e29618eed619b7"}}
+{"id":"e52e2e68f46bd6c0ae9c5792f4734b32","fullName":"tests.unit_tests.test_autostart_app#test_set_startup_app_endpoint_rejects_uninstalled","name":"test_set_startup_app_endpoint_rejects_uninstalled","status":"passed","testResultsByEnv":{"default":"a1dabd9a255c3492894fe745fc0c461b"}}

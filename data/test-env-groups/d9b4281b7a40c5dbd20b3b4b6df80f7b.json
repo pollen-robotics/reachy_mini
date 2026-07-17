@@ -1,1 +1,1 @@
-{"id":"d9b4281b7a40c5dbd20b3b4b6df80f7b","fullName":"tests.unit_tests.test_device_detection.TestParser#test_pipewire_device_count","name":"test_pipewire_device_count","status":"passed","testResultsByEnv":{"default":"60d9182e3f97ea5dc6cb95151a72d4a9"}}
+{"id":"d9b4281b7a40c5dbd20b3b4b6df80f7b","fullName":"tests.unit_tests.test_device_detection.TestParser#test_pipewire_device_count","name":"test_pipewire_device_count","status":"passed","testResultsByEnv":{"default":"7006273020d7c85220c2f73b2318fe60"}}

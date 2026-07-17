@@ -1,1 +1,1 @@
-{"id":"630943d01274a282c9d5f5b2349101f8","fullName":"tests.unit_tests.test_ws_client#test_connect_disables_compression_for_localhost","name":"test_connect_disables_compression_for_localhost","status":"passed","testResultsByEnv":{"default":"b87cc65f2422eb52a9d9e99816981069"}}
+{"id":"630943d01274a282c9d5f5b2349101f8","fullName":"tests.unit_tests.test_ws_client#test_connect_disables_compression_for_localhost","name":"test_connect_disables_compression_for_localhost","status":"passed","testResultsByEnv":{"default":"c95646fcdec7f9c73c4f82ffef4e1083"}}
