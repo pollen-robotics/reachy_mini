@@ -53,7 +53,7 @@ def make_speaker_eq(logger: logging.Logger) -> Optional[Gst.Element]:
 
     Returns ``None`` (caller keeps the direct link) when all gains are zero,
     the resolved output is not the Reachy Mini Audio device, or the element is
-    unavailable — so uncalibrated robots (and fallback outputs) stay
+    unavailable, so uncalibrated robots (and fallback outputs) stay
     byte-identical. Callers insert it on the speaker branch only, after the
     wobbler tee, so head motion is driven by the uncorrected signal.
     """

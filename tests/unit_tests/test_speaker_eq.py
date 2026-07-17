@@ -161,7 +161,7 @@ def test_eq_bin_prevents_clipping(monkeypatch: pytest.MonkeyPatch) -> None:
     eq_bin.link(appsink)
 
     pipeline.set_state(Gst.State.PLAYING)
-    # Full-scale sine at 3770 Hz — the band the reviewer measured boosting ~+8 dB,
+    # Full-scale sine at 3770 Hz, the band the reviewer measured boosting ~+8 dB,
     # so without the limiter the output would exceed full scale and clip.
     n = 8192
     t = np.arange(n) / 16000.0

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Derive Reachy Mini speaker-EQ gains from hifiscan measurements.
 
-The plastic head shell colors the speaker output ("boxy" — low-mid resonances +
+The plastic head shell colors the speaker output ("boxy": low-mid resonances +
 comb peaks). A GStreamer ``equalizer-10bands`` on the daemon's speaker branch
 corrects it; this offline tool computes the 10 per-band gains (dB) to put under
 ``speaker_eq_gains`` in the daemon config (``daemon_config.json``). It is not
@@ -10,9 +10,9 @@ used at runtime and users are unlikely to need it. See ``README.md``.
 Workflow:
 
 1. ``uv pip install hifiscan`` and connect an *external* mic at a fixed
-   listening position (not the robot's own mic — its XVF3800 DSP colors the
+   listening position (not the robot's own mic; its XVF3800 DSP colors the
    measurement). Because we take a *differential*, the mic/amp/room coloration
-   cancels, so a calibrated mic is not required — only that nothing moves.
+   cancels, so a calibrated mic is not required, only that nothing moves.
 2. Run hifiscan and sweep the robot speaker twice, same volume/position,
    averaging several sweeps each (a single sweep is noisy):
      - shell **on**  (assembled robot) -> hifiscan "save" -> ``corr_on.pkl``
