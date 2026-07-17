@@ -577,9 +577,6 @@ class _FakeLock:
     def release_remote(self) -> None:
         self.released += 1
 
-    def set_remote_eviction_handler(self, handler: Any) -> None:  # pragma: no cover
-        pass
-
 
 def _make_relay_with_journals(
     *, robot_app_lock: Any = None
