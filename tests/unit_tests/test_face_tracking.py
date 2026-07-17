@@ -7,12 +7,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import pytest
 
-from reachy_mini.vision.face_tracking import (
-    AdaptiveCenterFilter,
-    FaceTracker,
-    Tracker,
-    to_observation,
-)
+from reachy_mini.vision.face_tracking import FaceTracker, Tracker, to_observation
 
 if TYPE_CHECKING:
     from reachy_mini.media.camera_constants import CameraSpecs
@@ -49,49 +44,63 @@ def test_to_observation_normalizes_nose_and_roll() -> None:
     assert obs.roll == float(np.arctan2(2.0, 2.0))
 
 
-def test_adaptive_filter_smooths_ordinary_motion() -> None:
-    """Ordinary motion uses the slow EMA coefficient."""
-    center_filter = AdaptiveCenterFilter(
-        alpha=0.25, fast_alpha=0.8, movement_threshold=1.0, dead_zone=0.0
+def test_face_tracker_filters_emitted_detection_sequence() -> None:
+    """FaceTracker applies its slow, fast, and dead-zone paths to emitted observations."""
+    face_tracker = FaceTracker()
+    camera_matrix = np.eye(3)
+    distortion = np.zeros(5)
+
+    def emit(nose_x: float, timestamp: float) -> tuple[float, float] | None:
+        face = _face(
+            (nose_x - 5.0, 45.0, 10.0, 10.0),
+            (nose_x - 2.0, 48.0),
+            (nose_x + 2.0, 48.0),
+            (nose_x, 50.0),
+        )
+        face_tracker._process_detections(
+            [face], 101, 101, camera_matrix, distortion, timestamp
+        )
+        observation = face_tracker.latest()
+        assert observation is not None
+        return observation.center
+
+    assert emit(50.0, 1.0) == (0.0, 0.0)
+    assert emit(50.5, 2.0) == (0.0, 0.0)  # radial dead zone
+    assert emit(55.0, 3.0) == pytest.approx((0.03, 0.0))  # slow EMA
+    assert emit(75.0, 4.0) == pytest.approx((0.312, 0.0))  # fast EMA
+
+
+def test_face_tracker_resets_filter_after_target_loss() -> None:
+    """A reacquired face is emitted immediately instead of blending with stale aim."""
+    face_tracker = FaceTracker()
+    camera_matrix = np.eye(3)
+    distortion = np.zeros(5)
+    old_face = _face(
+        (45.0, 45.0, 10.0, 10.0),
+        (48.0, 48.0),
+        (52.0, 48.0),
+        (50.0, 50.0),
+    )
+    new_face = _face(
+        (5.0, 45.0, 10.0, 10.0),
+        (8.0, 48.0),
+        (12.0, 48.0),
+        (10.0, 50.0),
+    )
+    face_tracker._process_detections(
+        [old_face], 101, 101, camera_matrix, distortion, 1.0
+    )
+    for timestamp in range(2, 23):
+        face_tracker._process_detections(
+            [], 101, 101, camera_matrix, distortion, float(timestamp)
+        )
+    face_tracker._process_detections(
+        [new_face], 101, 101, camera_matrix, distortion, 23.0
     )
 
-    assert center_filter.update((0.0, 0.0)) == (0.0, 0.0)
-    assert center_filter.update((0.4, -0.4)) == pytest.approx((0.1, -0.1))
-    assert center_filter.update((0.4, -0.4)) == pytest.approx((0.175, -0.175))
-
-
-def test_adaptive_filter_uses_fast_alpha_for_large_motion() -> None:
-    """A large frame-to-frame jump selects the responsive EMA coefficient."""
-    center_filter = AdaptiveCenterFilter(
-        alpha=0.25, fast_alpha=0.75, movement_threshold=0.5, dead_zone=0.0
-    )
-    center_filter.update((0.0, 0.0))
-
-    assert center_filter.update((0.8, 0.0)) == pytest.approx((0.6, 0.0))
-
-
-def test_adaptive_filter_holds_motion_inside_dead_zone() -> None:
-    """Sub-threshold target jitter keeps the last filtered center unchanged."""
-    center_filter = AdaptiveCenterFilter(
-        alpha=0.5, fast_alpha=0.5, movement_threshold=1.0, dead_zone=0.05
-    )
-    center_filter.update((0.0, 0.0))
-
-    assert center_filter.update((0.03, 0.02)) == (0.0, 0.0)
-    assert center_filter.update((0.06, 0.0)) == pytest.approx((0.03, 0.0))
-
-
-def test_adaptive_filter_reset_accepts_next_center_immediately() -> None:
-    """Reset removes EMA history rather than blending a reacquired face with stale aim."""
-    center_filter = AdaptiveCenterFilter(
-        alpha=0.1, fast_alpha=0.1, movement_threshold=1.0, dead_zone=0.0
-    )
-    center_filter.update((0.0, 0.0))
-    center_filter.update((0.5, 0.0))
-
-    center_filter.reset()
-
-    assert center_filter.update((-0.5, 0.25)) == (-0.5, 0.25)
+    observation = face_tracker.latest()
+    assert observation is not None
+    assert observation.center == pytest.approx((-0.8, 0.0))
 
 
 def test_tracker_acquires_largest_above_min_size() -> None:
