@@ -33,27 +33,16 @@ jobs:
       - name: Install the project
         run: uv sync --frozen --all-extras --group dev
 
-      # Virtual sound card (PulseAudio null sink + ALSA `type pulse` .asoundrc)
-      # so the audio tests run and count toward coverage. Its monitor loops
-      # playback back to capture (REACHY_TEST_AUDIO_LOOPBACK gates the
-      # play-through test). See .github/workflows/pytest.yml.
+      # Virtual sound card so the audio/video tests run and count toward
+      # coverage (exports PULSE_SERVER + REACHY_TEST_AUDIO_LOOPBACK).
       - name: Set up virtual sound card
-        run: |
-          pulseaudio -D --exit-idle-time=-1 --disable-shm \
-            --load="module-native-protocol-unix socket=/tmp/pulse.sock" \
-            --load="module-null-sink sink_name=vspeaker"
-          cat > ~/.asoundrc <<'EOF'
-          pcm.reachymini_audio_sink { type pulse device "vspeaker" }
-          pcm.reachymini_audio_src  { type pulse device "vspeaker.monitor" }
-          EOF
+        uses: ./.github/actions/virtual-sound-card
 
       - name: Run tests (Allure results)
         continue-on-error: true
         run: uv run --with allure-pytest --with pytest-cov pytest -m 'not respeaker and not wireless' --tb=short --alluredir=allure-results --cov=reachy_mini --cov-report=json:coverage.json --cov-report=html
         env:
           MUJOCO_GL: disable
-          PULSE_SERVER: unix:/tmp/pulse.sock
-          REACHY_TEST_AUDIO_LOOPBACK: "1"
 
       - uses: actions/setup-node@v4
         if: always()
