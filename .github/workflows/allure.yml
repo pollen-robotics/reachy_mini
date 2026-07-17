@@ -21,7 +21,7 @@ jobs:
       - name: Install system dependencies
         uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
         with:
-          packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0
+          packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gir1.2-gst-plugins-base-1.0 gstreamer1.0-alsa libasound2-plugins pulseaudio pulseaudio-utils
           version: 1.0
 
       - name: Install uv
@@ -33,9 +33,14 @@ jobs:
       - name: Install the project
         run: uv sync --frozen --all-extras --group dev
 
+      # Virtual sound card so the audio/video tests run and count toward
+      # coverage (exports PULSE_SERVER + REACHY_TEST_AUDIO_LOOPBACK).
+      - name: Set up virtual sound card
+        uses: ./.github/actions/virtual-sound-card
+
       - name: Run tests (Allure results)
         continue-on-error: true
-        run: uv run --with allure-pytest --with pytest-cov pytest -m 'not audio and not video and not wireless' --tb=short --alluredir=allure-results --cov=reachy_mini --cov-report=json:coverage.json --cov-report=html
+        run: uv run --with allure-pytest --with pytest-cov pytest -m 'not respeaker and not wireless' --tb=short --alluredir=allure-results --cov=reachy_mini --cov-report=json:coverage.json --cov-report=html
         env:
           MUJOCO_GL: disable
 

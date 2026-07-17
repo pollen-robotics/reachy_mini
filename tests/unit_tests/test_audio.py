@@ -1,14 +1,32 @@
 import os
 import tempfile
 import time
+import wave
 
 import numpy as np
 import pytest
+from scipy.signal import resample_poly
 
 from reachy_mini.media.audio_utils import _process_card_number_output, save_audio_to_wav
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
+from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 SIGNALING_HOST = "reachy-mini.local"
+
+
+def _spectral_cosine(a: np.ndarray, b: np.ndarray, n: int = 8192) -> float:
+    """Cosine similarity of the Hann-windowed magnitude spectra of two signals.
+
+    Frequency-domain so it's timing-invariant — a partial capture or a start
+    offset doesn't matter, only whether the same sound is present.
+    """
+
+    def spectrum(x: np.ndarray) -> np.ndarray:
+        x = np.asarray(x, dtype=np.float64)
+        mag = np.abs(np.fft.rfft(x * np.hanning(len(x)), n))
+        return mag / (np.linalg.norm(mag) + 1e-9)
+
+    return float(np.dot(spectrum(a), spectrum(b)))
 
 # Audio-capable backends to test
 AUDIO_BACKENDS = [
@@ -199,6 +217,7 @@ def test_push_audio_sample_without_start_playing(backend: MediaBackend) -> None:
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 @pytest.mark.parametrize("backend", [MediaBackend.LOCAL])
 def test_DoA(backend: MediaBackend) -> None:
     """Test Direction of Arrival (DoA) estimation."""
@@ -220,6 +239,78 @@ def test_DoA(backend: MediaBackend) -> None:
     assert doa_proxy == doa, "Proxy DoA is not equal to direct DoA"
 
     media.close()
+
+
+@pytest.mark.audio
+@pytest.mark.loopback
+def test_play_sound_reaches_sink(audio_loopback: None) -> None:
+    """Play a sound and confirm real, non-silent audio reaches the sink.
+
+    Unlike test_play_sound (which only checks no-exception, and on a
+    discard-only sink can't tell), this records a virtual loopback of the sink
+    while playing, so silence means playback never reached the speaker path.
+    """
+    media = MediaManager(backend=MediaBackend.LOCAL)
+    samples = []
+    try:
+        rate = media.get_input_audio_samplerate()
+        media.start_recording()
+        media.play_sound("wake_up.wav")
+        t0 = time.time()
+        while time.time() - t0 < 3.0:
+            sample = media.get_audio_sample()
+            if sample is not None:
+                samples.append(sample)
+        media.stop_recording()
+    finally:
+        media.close()
+
+    assert samples, "No audio captured from the loopback."
+    audio = np.concatenate(samples, axis=0)
+    peak = float(np.abs(audio).max())
+    assert peak > 1e-3, (
+        f"Captured audio is silent (peak={peak}); playback did not reach the sink."
+    )
+
+    # Confirm it's actually the wake_up sound (not just any audio): compare the
+    # captured spectrum to the source file resampled to the capture rate.
+    captured = audio.astype(np.float64).mean(axis=1)
+    with wave.open(f"{ASSETS_ROOT_PATH}/wake_up.wav") as wav:
+        channels = wav.getnchannels()
+        src_rate = wav.getframerate()
+        raw = wav.readframes(wav.getnframes())
+    reference = np.frombuffer(raw, dtype=np.int16).astype(np.float64)
+    reference = reference.reshape(-1, channels).mean(axis=1)
+    reference = resample_poly(reference, rate, src_rate)
+
+    similarity = _spectral_cosine(captured, reference)
+    # Measured ~0.75-0.84 for the real sound vs ~0.10 for unrelated noise.
+    assert similarity > 0.5, (
+        f"Captured audio does not match wake_up.wav (spectral cosine={similarity:.2f})."
+    )
+
+
+def test_doa_simulated(fake_respeaker, monkeypatch) -> None:
+    """DoA read path works against a fake board (no ReSpeaker hardware).
+
+    Patches init_respeaker_usb so AudioDoA wraps the seeded fake, then checks
+    get_DoA decodes DOA_VALUE_RADIANS into the (angle, speech) tuple.
+    """
+    monkeypatch.setattr(
+        "reachy_mini.media.audio_doa.init_respeaker_usb", lambda: fake_respeaker
+    )
+    from reachy_mini.media.audio_doa import AudioDoA
+
+    doa = AudioDoA()
+    try:
+        result = doa.get_DoA()
+    finally:
+        doa.close()
+
+    assert result is not None
+    angle, speech = result
+    assert isinstance(angle, float) and angle == pytest.approx(1.57)
+    assert speech is True
 
 
 def test_no_media() -> None:
