@@ -18,6 +18,7 @@ import subprocess
 import time
 
 import gi
+import numpy as np
 import pytest
 
 gi.require_version("Gst", "1.0")
@@ -54,6 +55,12 @@ def fake_robot():
     if shutil.which("gst-launch-1.0") is None:
         pytest.skip("gst-launch-1.0 not available")
 
+    # A subprocess, not Gst.parse_launch in-process: keep the producer's
+    # webrtcsink + signalling server + libnice/DTLS stack isolated from the
+    # client-under-test's stack. That mirrors the real robot<->client process
+    # split, gives clean port/teardown, and contains crashes (a plugin segfault
+    # fails the fixture instead of killing pytest). gst-launch also runs the bus
+    # + main loop for us, so it's less code than driving the pipeline by hand.
     proc = subprocess.Popen(
         [
             "gst-launch-1.0",
@@ -108,8 +115,13 @@ def fake_robot():
         proc.kill()
 
 
-def test_client_receives_video_over_webrtc(fake_robot) -> None:
-    """GstWebRTCClient negotiates with the producer and pulls a real frame."""
+def test_client_receives_video_and_audio_over_webrtc(fake_robot) -> None:
+    """GstWebRTCClient negotiates with the producer and receives real media.
+
+    Pulls a video frame (BGR ndarray) and confirms the audio receive path
+    yields non-silent samples — the producer sends audiotestsrc (a tone) over
+    Opus, which the client decodes to its audio appsink.
+    """
     client = GstWebRTCClient(
         peer_id=fake_robot,
         signaling_host="127.0.0.1",
@@ -117,18 +129,26 @@ def test_client_receives_video_over_webrtc(fake_robot) -> None:
         camera_specs=ReachyMiniLiteCamSpecs(),
     )
     frame = None
+    audio_chunks: list[np.ndarray] = []
     try:
         client.open()
-        deadline = time.time() + 25  # ICE/DTLS + first frame
-        while time.time() < deadline:
+        deadline = time.time() + 25  # ICE/DTLS + first media
+        while time.time() < deadline and (frame is None or len(audio_chunks) < 5):
             f = client.read()
-            if f is not None:
+            if f is not None and frame is None:
                 frame = f
-                break
-            time.sleep(0.2)
+            sample = client.get_audio_sample()
+            if sample is not None:
+                audio_chunks.append(sample)
+            time.sleep(0.1)
     finally:
         client.close()
         client._loop.quit()
 
     assert frame is not None, "no video frame received over the WebRTC loopback"
     assert frame.ndim == 3 and frame.shape[2] == 3
+
+    assert audio_chunks, "no audio received over the WebRTC loopback"
+    audio = np.concatenate(audio_chunks, axis=0).astype(np.float64)
+    rms = float(np.sqrt(np.mean(audio**2)))
+    assert rms > 1e-3, f"received audio is silent (rms={rms})"
