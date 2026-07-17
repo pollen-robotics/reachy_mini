@@ -67,6 +67,28 @@ def get_hardware_id() -> str | None:
     return hashlib.sha256(raw.encode("ascii")).hexdigest()[:16]
 
 
+# Constant BLE name prefix + per-robot suffix — mirrors
+# `reachy_mini.utils.hardware_id.BLE_NAME_PREFIX` / `get_ble_name`; see the
+# inline-import note at the top of this file for why we don't share them.
+BLE_NAME_PREFIX = "Reachy Mini"
+
+
+def get_ble_name() -> str:
+    """Advertised BLE name — ``Reachy Mini #XXXX`` (or ``Reachy Mini``).
+
+    The 4-char suffix is the last 4 hex chars of the public hardware ID
+    (see ``get_hardware_id``), uppercased: stable across reboots and unique
+    per robot, so two Reachy Minis in BLE range are told apart at a glance.
+    Falls back to the bare prefix on a dev workstation with no Reachy. This
+    is only the scan-time display label; the canonical identity is the full
+    hardware ID, read post-connect over the GATT characteristic.
+    """
+    hw = get_hardware_id()
+    if not hw:
+        return BLE_NAME_PREFIX
+    return f"{BLE_NAME_PREFIX} #{hw[-4:].upper()}"
+
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -684,9 +706,11 @@ class BluetoothCommandService:
     PIN_LOCKOUT_BASE_S = 5
     PIN_LOCKOUT_MAX_S = 300
 
-    def __init__(self, device_name="ReachyMini", pin_code="00000"):
+    def __init__(self, device_name=None, pin_code="00000"):
         """Initialize the Bluetooth Command Service."""
-        self.device_name = device_name
+        # Default to the hardware-derived advertised name ("Reachy Mini #XXXX")
+        # so multiple robots are distinguishable in a BLE scan.
+        self.device_name = device_name or get_ble_name()
         self.pin_code = pin_code
         self.connected = False
         # monotonic deadline for the TTL-bounded WiFi session (see _is_authed).
@@ -898,6 +922,16 @@ class BluetoothCommandService:
             # the mainloop because it proxies to the daemon over HTTP.
             move_name = command_str[len("PLAY ") :].strip()
             self._run_async(lambda: _play_recorded_move(move_name))
+            return "OK: working"
+        elif upper == "SLEEP":
+            # Play the daemon's canonical goto-sleep trajectory: interpolate to
+            # the EXACT sleep pose (SLEEP_HEAD_POSE / SLEEP_ANTENNAS) + go_sleep
+            # sound, then release torque. Public (no PIN) like PLAY - it's the
+            # end-of-setup "settle to sleep" cue. Unlike the old 'mini-deep-
+            # sleep' recorded anim (which finishes a few degrees off), this
+            # lands the robot exactly where the first-wake-up wizard's "Tuck Me
+            # In" ghost expects it. Runs OFF the mainloop (proxies over HTTP).
+            self._run_async(_goto_sleep)
             return "OK: working"
         elif command_str.upper() == "JOURNAL_START":
             return self._start_journal()
@@ -1361,6 +1395,28 @@ def _play_recorded_move(move_name: str) -> str:
         return f"ERROR: {e}"
 
 
+def _goto_sleep() -> str:
+    """Play the daemon's canonical goto-sleep trajectory on the robot.
+
+    Proxies to the daemon's /api/move/play/goto_sleep route, which interpolates
+    the head/antennas to the exact SLEEP pose (+ go_sleep sound) and releases
+    torque at the end - so the robot lands precisely on the sleep pose the
+    first-wake-up wizard expects, rather than the few-degrees-off finish of the
+    'mini-deep-sleep' recorded anim.
+    """
+    try:
+        _daemon_request("POST", "/api/move/play/goto_sleep")
+        return "OK: Going to sleep"
+    except urllib.error.HTTPError as e:
+        if e.code == 503:
+            return "ERROR: Robot not ready"
+        return "ERROR: Sleep failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
 # --- Daemon software update proxy (reuses _daemon_request above) -------------
 # Relays to the daemon's /update/* routes. /update/available hits PyPI, so
 # these use a longer timeout than the WiFi calls. /update/start-from-ref
@@ -1621,7 +1677,7 @@ def main():
     """Run the Bluetooth Command Service."""
     pin = get_pin()
 
-    bt_service = BluetoothCommandService(device_name="ReachyMini", pin_code=pin)
+    bt_service = BluetoothCommandService(device_name=get_ble_name(), pin_code=pin)
     bt_service.run()
 
 

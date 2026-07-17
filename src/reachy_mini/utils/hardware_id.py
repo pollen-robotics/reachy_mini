@@ -60,6 +60,30 @@ def get_hardware_id() -> str | None:
     return hashlib.sha256(raw.encode("ascii")).hexdigest()[:16]
 
 
+# Constant, human-readable base for the BLE advertised name. Every robot
+# shares this prefix; the per-robot suffix below is what disambiguates them
+# in a crowded scan (they'd otherwise all show the same label).
+BLE_NAME_PREFIX = "Reachy Mini"
+
+
+def get_ble_name() -> str:
+    """Advertised BLE name — ``Reachy Mini #XXXX`` (or ``Reachy Mini``).
+
+    The 4-char suffix is the last 4 hex chars of the public hardware ID
+    (see :func:`get_hardware_id`), uppercased. It's stable across reboots
+    and unique per robot without any coordination between units, so two
+    Reachy Minis in BLE range are told apart at a glance. Falls back to the
+    bare prefix on a dev workstation with no Reachy attached.
+
+    This is only the scan-time display label; the canonical identity is the
+    full hardware ID, read post-connect over the GATT characteristic.
+    """
+    hw = get_hardware_id()
+    if not hw:
+        return BLE_NAME_PREFIX
+    return f"{BLE_NAME_PREFIX} #{hw[-4:].upper()}"
+
+
 def get_pin() -> str:
     """Return the 5-digit BLE pairing PIN derived from the raw serial.
 
