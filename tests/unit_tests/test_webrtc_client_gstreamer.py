@@ -2,9 +2,10 @@
 
 Requires the gst-plugins-rs `webrtcsrc` element (from `libgstrswebrtc.so`), so
 the client constructs for real; the module is skipped where it's absent. Real
-negotiation / frame flow needs a live peer (covered by the Phase-3 loopback and
-the on-robot `wireless` path); here we unit-test the hardware-free surface on a
-real instance: the daemon REST helpers, the signal callbacks, and small helpers.
+negotiation / frame flow needs a live peer (covered by `test_webrtc_loopback`
+and the on-robot `wireless` path); here we unit-test the hardware-free surface
+on a real instance: the daemon REST helpers, the signal callbacks, and small
+helpers.
 """
 
 from __future__ import annotations
