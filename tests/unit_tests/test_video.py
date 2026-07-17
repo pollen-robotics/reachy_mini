@@ -1,5 +1,4 @@
 import time
-from typing import cast
 
 import numpy as np
 import numpy.typing as npt
@@ -9,7 +8,6 @@ from reachy_mini.daemon.utils import is_local_camera_available
 from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
-    MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.media_manager import MediaBackend, MediaManager

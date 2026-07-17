@@ -15,7 +15,6 @@ import pytest
 
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
-    CameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.device_detection import (
