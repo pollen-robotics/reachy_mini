@@ -63,13 +63,24 @@ def get_speaker_eq_gains() -> list[float] | None:
     equalizer-10bands [-24, +12] dB range) are treated as unset so the caller
     falls back to its built-in default.
     """
-    value = _read().get(_EQ_KEY)
+    config = _read()
+    if _EQ_KEY not in config:
+        return None
+    value = config[_EQ_KEY]
     if (
         isinstance(value, list)
         and len(value) == 10
         and all(_is_valid_gain(x) for x in value)
     ):
         return [float(x) for x in value]
+    # Present but malformed: warn so the user knows their values were ignored.
+    logger.warning(
+        "Ignoring invalid '%s' in daemon config (need 10 finite dB gains in "
+        "[%g, %g]); using the built-in defaults.",
+        _EQ_KEY,
+        _EQ_GAIN_MIN,
+        _EQ_GAIN_MAX,
+    )
     return None
 
 

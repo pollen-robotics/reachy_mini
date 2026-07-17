@@ -63,6 +63,27 @@ def test_config_gains_validation(
     assert startup_app_config.get_speaker_eq_gains() is None
 
 
+def test_invalid_config_warns(
+    tmp_path: object, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A present-but-invalid entry logs a warning; an absent key stays silent."""
+    import json
+    from pathlib import Path
+
+    cfg = Path(str(tmp_path)) / "daemon_config.json"
+    monkeypatch.setattr(startup_app_config, "_config_path", lambda: cfg)
+
+    cfg.write_text(json.dumps({"other": 1}))  # key absent
+    with caplog.at_level(logging.WARNING):
+        assert startup_app_config.get_speaker_eq_gains() is None
+    assert not caplog.records
+
+    cfg.write_text(json.dumps({"speaker_eq_gains": [99.0] * 10}))  # present, invalid
+    with caplog.at_level(logging.WARNING):
+        assert startup_app_config.get_speaker_eq_gains() is None
+    assert any("speaker_eq_gains" in r.message for r in caplog.records)
+
+
 def test_make_speaker_eq_default_active(monkeypatch: pytest.MonkeyPatch) -> None:
     """With no config the tested default is applied (EQ active out of the box)."""
     monkeypatch.setattr(startup_app_config, "get_speaker_eq_gains", lambda: None)
