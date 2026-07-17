@@ -1,12 +1,12 @@
 """Utilities for local common venv apps source."""
 
 import asyncio
-import importlib.util
 import logging
 import os
 import platform
 import re
 import shutil
+import subprocess
 import sys
 from importlib.metadata import entry_points
 from pathlib import Path
@@ -162,13 +162,14 @@ def _find_app_main_file(
     """Locate an app's ``main.py`` without importing it.
 
     Tries the app venv's ``site-packages/<app>/main.py`` first (a regular
-    copy install, works across venvs). Falls back to ``importlib`` spec
-    resolution, which is what makes **editable installs** work: an ``-e``
-    install leaves no physical ``main.py`` under site-packages (the ``.pth``
-    redirects imports to the source tree), so the file-path probe misses and
-    only the spec knows the real location. The fallback only resolves when the
-    app is importable from *this* interpreter, i.e. SDK / shared-venv mode;
-    separate-venv apps still rely on the copy-install file path above.
+    copy install, no subprocess). For an **editable** (``-e``) install there is
+    no physical ``main.py`` under site-packages (the ``.pth`` redirects imports
+    to the source tree), so we resolve the package origin with the app's **own**
+    python (``get_app_python`` — the ``apps_venv`` interpreter on wireless /
+    desktop, ``sys.executable`` in SDK mode). Doing it out-of-process is what
+    makes editable installs work in a *separate* venv: the daemon interpreter
+    can't ``find_spec`` an app it can't import. Same subprocess idiom as
+    ``check_and_sync_apps_venv_sdk``; bounded and fail-open to ``None``.
     """
     site_packages = _get_app_site_packages(
         app_name, wireless_version, desktop_app_daemon
@@ -178,12 +179,24 @@ def _find_app_main_file(
         if main_file.exists():
             return main_file
 
+    app_python = get_app_python(app_name, wireless_version, desktop_app_daemon)
     try:
-        spec = importlib.util.find_spec(app_name)
-    except (ImportError, ValueError):
-        spec = None
-    if spec and spec.origin:
-        main_file = Path(spec.origin).parent / "main.py"
+        result = subprocess.run(
+            [
+                str(app_python),
+                "-c",
+                f"import importlib.util as u; s = u.find_spec({app_name!r}); "
+                f"print((s.origin or '') if s else '')",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    origin = result.stdout.strip()
+    if origin:
+        main_file = Path(origin).parent / "main.py"
         if main_file.exists():
             return main_file
     return None

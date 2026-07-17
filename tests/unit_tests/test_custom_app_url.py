@@ -5,9 +5,12 @@ _get_custom_app_url_from_file. It used to only probe site-packages/<app>/main.py
 which is absent for an editable (-e) install (the .pth redirects imports), so the
 relay returned "no app is running" for every relayed request while apps.status
 (daemon-local) still reported running.
+
+The editable resolution runs the *app's own* python (get_app_python) in a
+subprocess, so it works even when the app lives in a separate venv (apps_venv on
+wireless) that the daemon interpreter cannot import.
 """
 
-import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -31,23 +34,39 @@ def test_copy_install_reads_site_packages(monkeypatch, tmp_path):
     assert lcv._get_custom_app_url_from_file("some_app") == "http://0.0.0.0:7860/"
 
 
-def test_editable_install_falls_back_to_importlib(monkeypatch, tmp_path):
-    """Editable install: nothing under site-packages; importlib spec finds it."""
+def test_editable_install_resolves_via_app_python(monkeypatch, tmp_path):
+    """Editable install: the app's own python resolves the origin out-of-process."""
     pkg = _write_app(tmp_path, "some_app")
-    # site-packages exists but has no <app>/main.py (the -e case).
     empty_sp = tmp_path / "site-packages"
     empty_sp.mkdir()
     monkeypatch.setattr(lcv, "_get_app_site_packages", lambda *a, **k: empty_sp)
+    # The app's python (e.g. apps_venv) prints the package origin; the daemon
+    # interpreter could not have found this in-process.
     monkeypatch.setattr(
-        importlib.util,
-        "find_spec",
-        lambda name: SimpleNamespace(origin=str(pkg / "__init__.py")),
+        lcv, "get_app_python", lambda *a, **k: Path("/venvs/apps_venv/bin/python")
     )
-    assert lcv._get_custom_app_url_from_file("some_app") == "http://0.0.0.0:7860/"
+    monkeypatch.setattr(
+        lcv.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(
+            stdout=f"{pkg / '__init__.py'}\n", returncode=0
+        ),
+    )
+    assert (
+        lcv._get_custom_app_url_from_file("some_app", wireless_version=True)
+        == "http://0.0.0.0:7860/"
+    )
 
 
 def test_missing_everywhere_returns_none(monkeypatch, tmp_path):
-    """Neither the file path nor importlib finds it -> None (no crash)."""
+    """Neither the file path nor the app-python resolution finds it -> None."""
     monkeypatch.setattr(lcv, "_get_app_site_packages", lambda *a, **k: tmp_path)
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
+    monkeypatch.setattr(
+        lcv, "get_app_python", lambda *a, **k: Path("/nonexistent/python")
+    )
+    monkeypatch.setattr(
+        lcv.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(stdout="\n", returncode=0),
+    )
     assert lcv._get_custom_app_url_from_file("nope_app") is None
