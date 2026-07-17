@@ -1,0 +1,22 @@
+name: gst-plugins-rs webrtc plugin
+description: >
+  Download the prebuilt libgstrswebrtc.so (webrtcsrc/webrtcsink) from the public
+  reachy-mini-desktop-app repo and put it on GST_PLUGIN_PATH for later steps.
+  Pinned to a commit + sha256 for reproducibility. Needs gstreamer1.0-nice /
+  libnice10 (ICE) and gstreamer1.0-plugins-bad (dtls/srtp) installed.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        dir="$RUNNER_TEMP/gst-plugins-rs"
+        mkdir -p "$dir"
+        # Pinned to reachy-mini-desktop-app@c6ea61a5 (2026-04-08). Bump the ref
+        # and the sha256 together when the plugin is rebuilt.
+        curl -sSfL -o "$dir/libgstrswebrtc.so" \
+          "https://github.com/pollen-robotics/reachy-mini-desktop-app/raw/c6ea61a5d57dc069e01aab07c723402b3d8263f5/src-tauri/linux/gstreamer-plugins/x86_64/libgstrswebrtc.so"
+        echo "3045989c437be6f7859262f1970c550d6fc92d9ea9b59e49a05d5ec7bc4afbe9  $dir/libgstrswebrtc.so" | sha256sum -c -
+        export GST_PLUGIN_PATH="$dir"
+        gst-inspect-1.0 webrtcsrc > /dev/null && echo "webrtcsrc registered"
+        echo "GST_PLUGIN_PATH=$dir" >> "$GITHUB_ENV"
