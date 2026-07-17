@@ -5,6 +5,12 @@ a single `workflow_dispatch` with a `release_type` dropdown. The version lives
 statically in `pyproject.toml` (single source of truth): `main` carries
 `X.Y.Z.dev0`; each `vX.Y-release` branch carries its released `X.Y.Z`.
 
+> **Note:** `main` intentionally carries a [PEP 440](https://peps.python.org/pep-0440/)
+> `.dev0` version (e.g. `1.10.0.dev0`), which is **not** valid semver. Any tooling that
+> reads the version out of `pyproject.toml` must handle non-semver PEP 440 forms
+> (`.devN`, `rcN`, etc.) — e.g. the npm-publish CI normalizes the version to semver
+> before calling `npm version`.
+
 ## The three modes
 
 | Mode | Trigger from | What it does |
