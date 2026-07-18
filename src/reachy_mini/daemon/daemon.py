@@ -247,6 +247,25 @@ class Daemon:
         except Exception as e:
             self.logger.warning(f"Failed to update relay robot name: {e}")
 
+    def _on_robot_slot_free(self) -> None:
+        """Return the robot to a clean idle state when the app slot frees.
+
+        Wired into ``robot_app_lock`` so that when a remote session ends/drops
+        or a local app exits, the daemon - not the client - guarantees the robot
+        doesn't stay parked awake (enabled / gravity_compensation) across
+        sessions. Best-effort, non-blocking; the actual work is scheduled
+        threadsafely on the backend's loop. Fires on both graceful and abnormal
+        teardown (crash, killed tab, lost Wi-Fi), which is the whole point:
+        those paths run no client-side cleanup.
+        """
+        backend = self.backend
+        if backend is None:
+            return
+        try:
+            backend.request_idle_reset()
+        except Exception as e:
+            self.logger.warning(f"Idle reset request failed: {e}")
+
     async def start(
         self,
         sim: bool = False,
@@ -370,6 +389,13 @@ class Daemon:
                 # Start central signaling relay for remote WebRTC access
                 await self._start_central_signaling_relay()
 
+            # Reset the robot to a clean idle state whenever the managed app
+            # slot becomes free (remote session end/drop or local app exit), so
+            # no client can leave it parked awake across sessions. Registered
+            # after the backend loop is up (setup_media_server) so
+            # `request_idle_reset()` has a loop to hop onto.
+            self.robot_app_lock.set_on_became_free_handler(self._on_robot_slot_free)
+
             # Wire the wake-up hook before any wake can fire (on-start below, or
             # later via button/REST on the wireless unit, which boots asleep).
             if on_wake_up_callback is not None:
@@ -439,6 +465,12 @@ class Daemon:
             self._status.state = DaemonState.STOPPING
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
+
+            # Unwire the idle-reset hook before tearing down the relay: stopping
+            # the relay releases the remote hold on `robot_app_lock`, which would
+            # otherwise fire `_on_robot_slot_free` and race the explicit
+            # goto_sleep below with a second one.
+            self.robot_app_lock.set_on_became_free_handler(None)
 
             if self._media_server and not self._media_released:
                 # Stop pipeline (NULL) to release camera/audio hardware so

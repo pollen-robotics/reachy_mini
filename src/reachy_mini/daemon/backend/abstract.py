@@ -370,6 +370,12 @@ class Backend:
         # restart. Receives the stored (trimmed) name and must return promptly.
         self._set_robot_name_callback: Optional[Callable[[str], None]] = None
 
+        # In-flight "return to a clean idle state" task, scheduled by
+        # request_idle_reset() when the managed app slot becomes free. Kept so a
+        # fast reconnect (or a local app grabbing the robot) can cancel it
+        # instead of letting a stale goto_sleep fight the new session.
+        self._idle_reset_task: Optional["asyncio.Task[None]"] = None
+
     # Life cycle methods
     def wrapped_run(self) -> None:
         """Run the backend in a try-except block to store errors."""
@@ -2433,6 +2439,11 @@ class Backend:
             media_server.set_pose_provider(self.build_state_json)
 
     def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
+        # A fresh command means someone owns the robot again: cancel any pending
+        # idle-reset goto_sleep so it doesn't fight the new session. Runs on the
+        # same loop as the task, so the cancel is race-free.
+        self._cancel_idle_reset()
+
         def send(resp: dict[str, Any]) -> None:
             self._send_webrtc_response(peer_id, resp)
 
@@ -2451,3 +2462,72 @@ class Backend:
     def _send_webrtc_response(self, peer_id: str, response: dict[str, Any]) -> None:
         if self._send_message_to_webrtc:
             self._send_message_to_webrtc(peer_id, json.dumps(response))
+
+    # ------------------------------------------------------------------
+    # Idle reset (clean state when no managed app owns the robot)
+    # ------------------------------------------------------------------
+
+    def request_idle_reset(self) -> None:
+        """Return the robot to a clean idle state when no managed app owns it.
+
+        Called by the daemon when the shared ``RobotAppLock`` transitions to
+        ``free`` (a remote WebRTC session ended or dropped, or a local app
+        exited). The daemon never resets motor state on session teardown, and
+        clients are not guaranteed to run a clean leave sequence: a crash, a
+        buggy app, or a lost Wi-Fi link all skip it. Without this, whatever
+        motor mode the last app left behind - notably ``gravity_compensation`` -
+        survives into the next session, where the client's ``ensureAwake()``
+        sees ``isAwake() == true`` and skips the wake animation, leaving the
+        robot parked in a weird state.
+
+        Threadsafe and non-blocking: hops onto the backend's own event loop (the
+        one that also handles data-channel commands) and returns immediately.
+        No-op when that loop isn't up yet (e.g. ``--no-media`` daemons, which
+        have no remote sessions anyway).
+        """
+        loop = getattr(self, "_log_loop", None)
+        if loop is None:
+            return
+        loop.call_soon_threadsafe(self._maybe_start_idle_reset)
+
+    def _cancel_idle_reset(self) -> None:
+        """Cancel an in-flight idle reset. Must run on the backend loop."""
+        task = self._idle_reset_task
+        if task is not None and not task.done():
+            task.cancel()
+        self._idle_reset_task = None
+
+    def _maybe_start_idle_reset(self) -> None:
+        """Kick off a goto_sleep if the robot is still awake. Runs on the loop."""
+        try:
+            if not self.ready.is_set() or self.is_shutting_down:
+                return
+            # Already limp / asleep: a well-behaved client (e.g. the mobile app,
+            # which sleeps + disables on leave) leaves nothing to do, so we skip
+            # the redundant trajectory + sound.
+            if self.get_motor_control_mode() == MotorControlMode.Disabled:
+                return
+            self._cancel_idle_reset()
+            self._idle_reset_task = asyncio.create_task(self._async_idle_reset())
+        except Exception:
+            self.logger.warning("Idle reset scheduling failed", exc_info=True)
+
+    async def _async_idle_reset(self) -> None:
+        """Graceful return to the sleep pose, which ends with motors disabled.
+
+        Mirrors the reference leave behaviour clients already run by hand
+        (gotoSleep -> motors off). ``goto_sleep()`` finishes with
+        ``set_motor_control_mode(Disabled)``, which also clears
+        ``gravity_compensation_mode`` - so the next session's ``ensureAwake()``
+        correctly triggers a fresh wake.
+        """
+        try:
+            await self.goto_sleep()
+        except asyncio.CancelledError:
+            # A new session (or local app) grabbed the robot mid-reset: let it
+            # take over without noise.
+            raise
+        except Exception:
+            self.logger.warning("Idle reset goto_sleep failed", exc_info=True)
+        finally:
+            self._idle_reset_task = None

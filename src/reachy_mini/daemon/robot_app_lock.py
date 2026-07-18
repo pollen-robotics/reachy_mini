@@ -84,6 +84,14 @@ class RobotAppLock:
         # different thread, add a mutex here.
         self._on_remote_evicted: Optional[Callable[[], Awaitable[None]]] = None
 
+        # Synchronous callback invoked whenever the slot transitions to FREE
+        # (a remote session ended / disconnected, or a local app exited).
+        # Registered by the daemon to reset the robot to a clean idle state so
+        # no app leaves it parked awake (enabled / gravity_compensation) across
+        # sessions. Called *outside* the mutex, must return promptly and MUST
+        # NOT re-enter the lock (would deadlock).
+        self._on_became_free: Optional[Callable[[], None]] = None
+
     # ------------------------------------------------------------------
     # Registration
     # ------------------------------------------------------------------
@@ -98,6 +106,26 @@ class RobotAppLock:
         Pass ``None`` to clear.
         """
         self._on_remote_evicted = handler
+
+    def set_on_became_free_handler(self, handler: Optional[Callable[[], None]]) -> None:
+        """Register (or clear) the callback fired when the slot becomes FREE.
+
+        Fired once per FREE transition, from either ``release_local`` or
+        ``release_remote``, *after* the internal mutex is released. The handler
+        must return promptly and must not call back into this lock. Pass
+        ``None`` to clear.
+        """
+        self._on_became_free = handler
+
+    def _fire_became_free(self) -> None:
+        """Invoke the FREE-transition handler outside the mutex. Best-effort."""
+        handler = self._on_became_free
+        if handler is None:
+            return
+        try:
+            handler()
+        except Exception:
+            logger.warning("RobotAppLock: on_became_free handler raised", exc_info=True)
 
     # ------------------------------------------------------------------
     # Introspection
@@ -211,6 +239,8 @@ class RobotAppLock:
             self._holder_name = None
             logger.info("RobotAppLock: released by local app %r", released_name)
 
+        self._fire_became_free()
+
     # ------------------------------------------------------------------
     # Remote acquire / release
     # ------------------------------------------------------------------
@@ -252,3 +282,5 @@ class RobotAppLock:
             self._state = RobotAppLockState.FREE
             self._holder_name = None
             logger.info("RobotAppLock: released by remote session %r", released_name)
+
+        self._fire_became_free()
