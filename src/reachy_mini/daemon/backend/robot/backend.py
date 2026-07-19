@@ -321,6 +321,8 @@ class RobotBackend(Backend):
 
     def get_status(self) -> "RobotBackendStatus":
         """Get the current status of the robot backend."""
+        self._status.ready = self.ready.is_set() and not self.should_stop.is_set()
+        self._status.last_alive = self.last_alive
         self._status.error = self.error
         self._status.motor_control_mode = self.motor_control_mode
         return self._status
