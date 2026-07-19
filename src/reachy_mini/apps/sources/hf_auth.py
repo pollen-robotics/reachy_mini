@@ -6,10 +6,12 @@ import os
 import secrets
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional
 
 import aiohttp
 from huggingface_hub import HfApi, get_token, login, logout, whoami
+from huggingface_hub.constants import HF_TOKEN_PATH
 from huggingface_hub.errors import HfHubHTTPError
 
 logger = logging.getLogger(__name__)
@@ -287,11 +289,10 @@ async def exchange_code_for_token(
     # Save token directly to HuggingFace token file
     # (login() doesn't work well with OAuth tokens)
     try:
-        from pathlib import Path
-
-        token_path = Path.home() / ".cache" / "huggingface" / "token"
+        token_path = Path(HF_TOKEN_PATH)
         token_path.parent.mkdir(parents=True, exist_ok=True)
         token_path.write_text(access_token)
+        token_path.chmod(0o600)
     except Exception as e:
         session.status = "error"
         session.error_message = f"Failed to save token: {type(e).__name__}: {e}"
