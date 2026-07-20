@@ -1,17 +1,21 @@
 import time
+from typing import cast
+from unittest.mock import MagicMock, call
 
 import numpy as np
 import numpy.typing as npt
 import pytest
 
 from reachy_mini.daemon.utils import is_local_camera_available
+from reachy_mini.media import camera_gstreamer
+from reachy_mini.media.camera_base import CameraBase
 from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
+from reachy_mini.media.camera_gstreamer import GStreamerCamera
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
-from reachy_mini.media.camera_base import CameraBase
 
 SIGNALING_HOST = "reachy-mini.local"
 
@@ -20,6 +24,38 @@ VIDEO_BACKENDS = [
     pytest.param(MediaBackend.LOCAL),
     pytest.param(MediaBackend.WEBRTC, marks=pytest.mark.wireless),
 ]
+
+
+def test_open_defers_initial_frame_wait_until_first_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Camera readiness waits on first use instead of startup."""
+    camera = cast(GStreamerCamera, object.__new__(GStreamerCamera))
+    camera.logger = MagicMock()
+    camera.pipeline = MagicMock()
+    camera._appsink_video = MagicMock()
+    camera._loop = MagicMock()
+    camera._jpeg_pipeline = None
+
+    monkeypatch.setattr(camera_gstreamer, "Thread", MagicMock())
+    monkeypatch.setattr(
+        camera_gstreamer.GLib,
+        "timeout_add_seconds",
+        MagicMock(),
+    )
+
+    camera.open()
+
+    camera._appsink_video.emit.assert_not_called()
+    assert camera.read() is None
+    assert camera.read() is None
+    assert camera._appsink_video.try_pull_sample.call_args_list == [
+        call(camera.INITIAL_FRAME_TIMEOUT_NS),
+        call(20_000_000),
+    ]
+
+    camera.close()
+    assert not camera._initial_frame_pending
 
 
 @pytest.mark.video
