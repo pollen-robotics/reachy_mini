@@ -1,0 +1,4 @@
+INFO     reachy_mini.media.media_manager:media_manager.py:163 Using LOCAL backend (GStreamer IPC camera + GStreamer audio).
+ERROR    reachy_mini.media.audio_control_utils:audio_control_utils.py:556 No USB backend was found! Make sure libusb_package is correctly installed with `pip install libusb_package`.
+INFO     reachy_mini.media.audio_gstreamer:audio_gstreamer.py:152 Using .asoundrc audio source: reachymini_audio_src
+INFO     reachy_mini.media.audio_gstreamer:audio_gstreamer.py:234 Using .asoundrc audio sink: reachymini_audio_sink

@@ -1,0 +1,3 @@
+ERROR    reachy_mini.media.audio_control_utils:audio_control_utils.py:556 No USB backend was found! Make sure libusb_package is correctly installed with `pip install libusb_package`.
+WARNING  reachy_mini.media.media_server:media_server.py:1156 Reachy Mini Audio USB device not found — skipping audio capture to keep the video pipeline alive.
+WARNING  reachy_mini.media.media_server:media_server.py:1055 No audio source available. Streaming video only; audio will be unavailable.

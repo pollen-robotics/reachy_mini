@@ -1,0 +1,1 @@
+WARNING  reachy_mini.daemon.startup_app_config:startup_app_config.py:80 Ignoring invalid 'speaker_eq_gains' in daemon config (need 10 finite dB gains in [-24, 12]); using the built-in defaults.

@@ -1,346 +1,100 @@
 {
   "stats": {
-    "total": 416,
-    "passed": 401,
-    "new": 53,
+    "total": 428,
+    "new": 12,
+    "passed": 413,
     "skipped": 15
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "01aa33dff143d5bd02c33dd6e3816a26",
-      "name": "test_notify_token_change_noop_without_instance",
+      "id": "6a5deb7a6b8c6ad78d22dae16e4efb56",
+      "name": "test_resolve_gains_defaults",
       "status": "passed",
       "duration": 0
     },
     {
-      "id": "d16b7e38aa9c2edaf43c253b09cb4900",
-      "name": "test_central_start_session_rejected_when_lock_held",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "87d2bbee5ecd6a87a66eb994783eba33",
-      "name": "test_start_central_relay_returns_existing_instance",
+      "id": "a19319543a8f583f16faf398ecf041c1",
+      "name": "test_shell_bump_becomes_matching_cut",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "c644a3cd6d6f5dc9a3b7a2f6360f1c3e",
-      "name": "test_get_relay_status_reports_connected_instance",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "0f361479d6042a443b0f6d2372286357",
-      "name": "test_upload_sound_missing_file_raises",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "5cd53496b6b9b125b9a74f2f044cf3a1",
-      "name": "test_central_end_session_cleans_up_and_releases_lock",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "634830840637deed3e589cf4ecbb6268",
-      "name": "test_send_to_local_no_ws_is_noop",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "83a7cc8c37ac47b9f4a919a68fa27992",
-      "name": "test_clear_player_without_send_chain_warns_and_flushes_daemon",
+      "id": "94737fc8ad511a1ad1ecd87d575ea9e9",
+      "name": "test_config_gains_validation",
       "status": "passed",
       "duration": 2
     },
     {
-      "id": "d61964d20a8230b15ebd35d3e9ffd275",
-      "name": "test_delete_sound_reports_ok",
+      "id": "b8fb45db2df53c9fb6554b525dbec544",
+      "name": "test_make_speaker_eq_skipped_off_reachy_output",
       "status": "passed",
       "duration": 0
     },
     {
-      "id": "dff3d7d6c4012bfc63c548a1cf144ef6",
-      "name": "test_delete_sound_returns_false_without_daemon_url",
+      "id": "d118a9b717a226dc3d6f4bc91beb098d",
+      "name": "test_make_speaker_eq_noop_when_all_zero",
       "status": "passed",
       "duration": 0
     },
     {
-      "id": "c430e5f49ce1a7e271da58a40189b548",
-      "name": "test_local_welcome_registers_as_listener",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "9ada773b2b754802dfc9cb7303ce3b9b",
-      "name": "test_central_start_session_requests_local_list",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "6ae7538593ea0760e52e8e9d64133e33",
-      "name": "test_configure_webrtcsrc_sets_signaller_properties",
+      "id": "4555636b5d20e949fbbbb42af52c3317",
+      "name": "test_eq_bin_prevents_clipping",
       "status": "passed",
       "duration": 3
     },
     {
-      "id": "b74dfa419358fe35f948d11c573280a2",
-      "name": "test_send_to_central_posts_with_bearer_token",
+      "id": "f39642a98b323b5686271af7eb45d2e3",
+      "name": "test_out_of_range_is_clamped",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "5cd0f3a821299a83cb05fd458a662499",
-      "name": "test_local_peer_translates_session_id_to_central",
+      "id": "4180679cefb287f085a161c39dfac089",
+      "name": "test_playback_path_skips_eq_when_zero",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "f0c8adb7c30c614d69e5f0ba55243c4c",
+      "name": "test_playback_path_includes_eq",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "a3668b808c3f296842c9b4e56bdf2f4c",
+      "name": "test_invalid_config_warns",
       "status": "passed",
       "duration": 0
     },
     {
-      "id": "5f1f7b6311ea2ad1ed84db7a6f668e1a",
-      "name": "test_stop_playing_resets_pts_and_stops_daemon_sound",
+      "id": "4e5783c75a82fe176c9777c8e98f33bb",
+      "name": "test_make_speaker_eq_default_active",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "117ec4b3e6caa68d12dbc7b26351c218",
-      "name": "test_list_sounds_returns_files",
+      "id": "1b914c7a36809fd32b973023025687ae",
+      "name": "test_zero_above_and_max_boost",
       "status": "passed",
       "duration": 1
-    },
-    {
-      "id": "9838e7f4ebc4c70ab55379d49c0085b1",
-      "name": "test_central_welcome_registers_producer_and_connects",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "4eb304da5d81e694ba8da28957e3f5a0",
-      "name": "test_on_new_transceiver_sendrecv_when_no_caps",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "3ae748e22b41e51dd9cef9fa7b1dc68e",
-      "name": "test_list_sounds_empty_without_daemon_url",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "bee2a5c50c38f7c18e4bcd40f9faa3c7",
-      "name": "test_client_receives_video_and_audio_over_webrtc",
-      "status": "passed",
-      "duration": 1143
-    },
-    {
-      "id": "920b0531f01ecbf61899e231919987bd",
-      "name": "test_on_deep_element_added_captures_webrtcbin",
-      "status": "passed",
-      "duration": 3
-    },
-    {
-      "id": "4b0d70fc70669c9431b13dc8277dddf0",
-      "name": "test_close_connections_reentrant_guard_short_circuits",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "c790066feb43fddabe529fe3ff42acb7",
-      "name": "test_on_new_transceiver_skips_known_video",
-      "status": "passed",
-      "duration": 2
-    },
-    {
-      "id": "0910fad4fe223963c6b3327c4b944cd9",
-      "name": "test_local_list_starts_pending_sessions",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "a1e746042940e1ec5a281b1f8a005c48",
-      "name": "test_close_connections_closes_and_clears",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "bdea27023e9af55283b350e9dc550fc9",
-      "name": "test_central_peer_dropped_when_no_mapping",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "74b75d9f67311a9fb7a377004ea02827",
-      "name": "test_configure_webrtcsrc_raises_without_plugin",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "47b276fe9310af91703243256555d445",
-      "name": "test_upload_sound_returns_daemon_path",
-      "status": "passed",
-      "duration": 2
-    },
-    {
-      "id": "a883cb1f6c31c72b68343c2ff32d0248",
-      "name": "test_stop_central_relay_stops_and_clears",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "79932bbac7ae0806d7136c163efb30fb",
-      "name": "test_get_relay_returns_the_singleton",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "8271636fd6e78955d6e129856a39fdba",
-      "name": "test_media_server_constructs_in_mujoco_sim",
-      "status": "passed",
-      "duration": 55
-    },
-    {
-      "id": "fa8c293b2fb881addc77873376dee1f7",
-      "name": "test_on_bus_message_latency_recalculates",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "ae4e1115a97675adf58c54f07be38c12",
-      "name": "test_central_peer_translates_session_id_to_local",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "2ec2a229895e627ffb04f4d776ed112b",
-      "name": "test_central_start_session_rejected_when_busy",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "789fe555b798bc722afe2c1d08e8fd6e",
-      "name": "test_play_sound_posts_to_daemon",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "b1669aad127052e22f87b84402978523",
-      "name": "test_on_new_transceiver_sendrecv_for_audio",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "1de7f48c50475948ee8b2e46b7da951b",
-      "name": "test_central_start_session_acquires_lock_then_proceeds",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "d9f17ccee595de2fb84af6e403b55658",
-      "name": "test_notify_token_change_forwards_to_instance",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "922a2379dcbeae9d9f3e659546020726",
-      "name": "test_play_sound_without_daemon_url_makes_no_request",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "6d5c82593df4ab4753306a5323e58ea5",
-      "name": "test_send_to_central_skips_without_session_or_token",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "0cb9981d758fed9a6520ff8f7397f7b8",
-      "name": "test_local_end_session_forwards_to_central_and_releases_lock",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "c283ba3cc8ef9bfa53fad31a049d2a03",
-      "name": "test_send_to_central_non_200_does_not_raise",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "b42146dd73bac96924e2692b93e76bb2",
-      "name": "test_send_to_local_sends_json_over_ws",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "4b54bcb952b3eb8b27ada92622ca2537",
-      "name": "test_set_state_notifies_callback_and_swallows_its_errors",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "89014d87ef8025774b0d6da8c6fc5c6e",
-      "name": "test_apply_resolution_raises_while_playing",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "c63d21342f3ee64be8a84d28c8741d7d",
-      "name": "test_iterate_gst_yields_ok_and_resyncs",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "39f280f9d8bdc3b49a1e9002f1247dda",
-      "name": "test_on_bus_message_ignores_appsrc_not_negotiated",
-      "status": "passed",
-      "duration": 2
-    },
-    {
-      "id": "c4eb8538f6954ede1c6c1ddc0ec139cd",
-      "name": "test_get_relay_status_reports_stopped_without_instance",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "642a27224eb6049633be0338b62206da",
-      "name": "test_on_deep_element_added_ignores_other_elements",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "7bcdd2f6ca69a93953187b31c84cd9d9",
-      "name": "test_send_to_local_swallows_send_errors",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "c8cbc5945a598dbc23f6284217f584af",
-      "name": "test_tear_down_active_sessions_notifies_both_and_clears",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "a89a94cad9c6ac1f8e025244c99563a2",
-      "name": "test_local_session_started_maps_ids",
-      "status": "passed",
-      "duration": 0
     }
   ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 74021,
-  "createdAt": 1784298079505,
+  "duration": 77416,
+  "createdAt": 1784531416168,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "cdadc9f5-2f68-4723-bd56-3d8409b2ab98",
+    "reportId": "ec7f6c63-7ce9-4be9-9b58-5940513ed776",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/29587382574",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/29723577076",
   "href": "awesome/",
   "coverage": 44
 }

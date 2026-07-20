@@ -1,1 +1,0 @@
-WARNING  root:audio_utils.py:71 Reachy Mini Audio sound card not found. Returning default card
