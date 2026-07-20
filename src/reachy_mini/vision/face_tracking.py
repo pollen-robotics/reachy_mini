@@ -41,6 +41,42 @@ class FaceObservation:
     timestamp: float
 
 
+class _AdaptiveCenterFilter:
+    """Internal face-center smoother with fixed tracking parameters."""
+
+    _ALPHA = 0.3
+    _FAST_ALPHA = 0.6
+    _MOVEMENT_THRESHOLD = 0.15
+    _DEAD_ZONE = 0.02
+
+    def __init__(self) -> None:
+        self._value: NDArray[np.float64] | None = None
+        self._previous_input: NDArray[np.float64] | None = None
+
+    def update(self, center: tuple[float, float]) -> tuple[float, float]:
+        """Consume one raw center and return the filtered center."""
+        current = np.asarray(center, dtype=np.float64)
+        if self._value is None or self._previous_input is None:
+            self._value = current.copy()
+            self._previous_input = current.copy()
+            return center
+
+        movement = float(np.linalg.norm(current - self._previous_input))
+        self._previous_input = current.copy()
+        delta = current - self._value
+        if float(np.linalg.norm(delta)) < self._DEAD_ZONE:
+            return (float(self._value[0]), float(self._value[1]))
+
+        alpha = self._FAST_ALPHA if movement > self._MOVEMENT_THRESHOLD else self._ALPHA
+        self._value += alpha * delta
+        return (float(self._value[0]), float(self._value[1]))
+
+    def reset(self) -> None:
+        """Forget filter history so the next observation is accepted immediately."""
+        self._value = None
+        self._previous_input = None
+
+
 def _area(face: Face) -> float:
     return face.bbox[2] * face.bbox[3]
 
@@ -98,6 +134,11 @@ class Tracker:
         if self._misses > self._max_misses:
             self._center = None
 
+    @property
+    def has_target(self) -> bool:
+        """Whether the tracker is still associated with a face."""
+        return self._center is not None
+
 
 def to_observation(
     face: Face | None,
@@ -138,6 +179,8 @@ class FaceTracker:
         self._stop = threading.Event()
         self._active = threading.Event()
         self._observations: queue.SimpleQueue[FaceObservation] = queue.SimpleQueue()
+        self._selector = Tracker()
+        self._center_filter = _AdaptiveCenterFilter()
 
     def start(self, camera_specs: CameraSpecs) -> None:
         """Start the detector thread if it is not already running."""
@@ -146,6 +189,8 @@ class FaceTracker:
         self._stop.clear()
         # Drop observations left over from a previous run.
         self._observations = queue.SimpleQueue()
+        self._selector = Tracker()
+        self._center_filter.reset()
         self._thread = threading.Thread(
             target=self._run, args=(camera_specs,), daemon=True, name="face-tracker"
         )
@@ -176,6 +221,26 @@ class FaceTracker:
             logger.warning("Face tracker thread did not stop in time.")
         else:
             self._thread = None
+
+    def _process_detections(
+        self,
+        faces: list[Face],
+        width: int,
+        height: int,
+        camera_matrix: NDArray[np.float64],
+        distortion: NDArray[np.float64],
+        timestamp: float,
+    ) -> None:
+        """Select, filter, and emit one observation from a detection frame."""
+        face = self._selector.select(faces, width, height)
+        if face is None and not self._selector.has_target:
+            self._center_filter.reset()
+        observation = to_observation(
+            face, width, height, camera_matrix, distortion, timestamp
+        )
+        if observation.center is not None:
+            observation.center = self._center_filter.update(observation.center)
+        self._observations.put(observation)
 
     def _run(self, camera_specs: CameraSpecs) -> None:
         # Lowest priority (Linux-only per-thread nice) so the detector yields CPU to the rest of the daemon.
@@ -235,9 +300,9 @@ class FaceTracker:
         feed_lost = False
         try:
             detector = FaceDetector()
-            tracker = Tracker()
             while not self._stop.is_set():
                 if not self._active.is_set():
+                    self._center_filter.reset()
                     if playing:
                         # Disconnect while paused so the daemon serves nothing to this client.
                         pipeline.set_state(Gst.State.NULL)
@@ -274,16 +339,13 @@ class FaceTracker:
                     camera_matrix = intrinsics_for_size(
                         camera_specs.K, crop_scale, (frame_width, frame_height)
                     )
-                face = tracker.select(detector.detect(frame), frame_width, frame_height)
-                self._observations.put(
-                    to_observation(
-                        face,
-                        frame_width,
-                        frame_height,
-                        camera_matrix,
-                        camera_specs.D,
-                        time.monotonic(),
-                    )
+                self._process_detections(
+                    detector.detect(frame),
+                    frame_width,
+                    frame_height,
+                    camera_matrix,
+                    camera_specs.D,
+                    time.monotonic(),
                 )
         except Exception:
             # With no process boundary left, this is the only place a detector crash gets reported.
