@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import secrets
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -288,15 +289,31 @@ async def exchange_code_for_token(
 
     # Save token directly to HuggingFace token file
     # (login() doesn't work well with OAuth tokens)
+    temporary_path: Optional[Path] = None
     try:
         token_path = Path(HF_TOKEN_PATH)
         token_path.parent.mkdir(parents=True, exist_ok=True)
-        token_path.write_text(access_token)
-        token_path.chmod(0o600)
+        fd, temporary_name = tempfile.mkstemp(
+            dir=token_path.parent,
+            prefix=f".{token_path.name}.",
+            text=True,
+        )
+        temporary_path = Path(temporary_name)
+        os.close(fd)
+        temporary_path.chmod(0o600)
+        with temporary_path.open("w") as token_file:
+            token_file.write(access_token)
+            token_file.flush()
+            os.fsync(token_file.fileno())
+        os.replace(temporary_path, token_path)
+        temporary_path = None
     except Exception as e:
         session.status = "error"
         session.error_message = f"Failed to save token: {type(e).__name__}: {e}"
         return {"status": "error", "message": session.error_message}
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
     # Get username
     username = ""
