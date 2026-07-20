@@ -39,7 +39,12 @@ from reachy_mini.daemon.utils import (
     SimulationMode,
     is_local_camera_available,
 )
-from reachy_mini.media.audio_base import AEC_CHANNELS, AEC_PROBE_NAME, AEC_RATE
+from reachy_mini.media.audio_base import (
+    AEC_CHANNELS,
+    AEC_PROBE_NAME,
+    AEC_RATE,
+    make_speaker_eq,
+)
 from reachy_mini.media.audio_control_utils import init_respeaker_usb
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.camera_constants import (
@@ -489,6 +494,7 @@ class GstMediaServer:
         queue_speaker = Gst.ElementFactory.make("queue")
         ac_speaker = Gst.ElementFactory.make("audioconvert")
         ar_speaker = Gst.ElementFactory.make("audioresample")
+        eq_speaker = make_speaker_eq(self._logger)
         queue_wobbler = Gst.ElementFactory.make("queue")
         ac_wobbler = Gst.ElementFactory.make("audioconvert")
         ar_wobbler = Gst.ElementFactory.make("audioresample")
@@ -517,6 +523,7 @@ class GstMediaServer:
             *([webrtcechoprobe] if webrtcechoprobe is not None else []),
             ac_speaker,
             ar_speaker,
+            *([eq_speaker] if eq_speaker is not None else []),
             audiosink,
             queue_wobbler,
             ac_wobbler,
@@ -534,7 +541,11 @@ class GstMediaServer:
         else:
             queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
-        ar_speaker.link(audiosink)
+        if eq_speaker is not None:
+            ar_speaker.link(eq_speaker)
+            eq_speaker.link(audiosink)
+        else:
+            ar_speaker.link(audiosink)
         tee.link(queue_wobbler)
         queue_wobbler.link(ac_wobbler)
         ac_wobbler.link(ar_wobbler)
@@ -1354,6 +1365,7 @@ class GstMediaServer:
         queue_speaker = Gst.ElementFactory.make("queue")
         ac_speaker = Gst.ElementFactory.make("audioconvert")
         ar_speaker = Gst.ElementFactory.make("audioresample")
+        eq_speaker = make_speaker_eq(self._logger)
         audiosink = self._build_audiosink_element()
         queue_wobbler = Gst.ElementFactory.make("queue")
         ac_wobbler = Gst.ElementFactory.make("audioconvert")
@@ -1376,7 +1388,12 @@ class GstMediaServer:
         tee.link(queue_speaker)
         queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
-        ar_speaker.link(audiosink)
+        if eq_speaker is not None:
+            audio_bin.add(eq_speaker)
+            ar_speaker.link(eq_speaker)
+            eq_speaker.link(audiosink)
+        else:
+            ar_speaker.link(audiosink)
 
         tee.link(queue_wobbler)
         queue_wobbler.link(ac_wobbler)

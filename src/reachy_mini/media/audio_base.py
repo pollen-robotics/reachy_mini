@@ -30,6 +30,11 @@ from reachy_mini.media.audio_control_utils import (
     init_respeaker_usb,
 )
 from reachy_mini.media.audio_doa import AudioDoA
+from reachy_mini.media.audio_utils import (
+    has_reachymini_asoundrc,
+    resolve_speaker_eq_gains,
+)
+from reachy_mini.media.device_detection import get_audio_device
 from reachy_mini.media.gstreamer_utils import get_sample, handle_default_bus_message
 
 gi.require_version("Gst", "1.0")
@@ -41,6 +46,58 @@ from gi.repository import Gst  # noqa: E402
 AEC_RATE = 48_000
 AEC_CHANNELS = 2
 AEC_PROBE_NAME = "reachymini_aec_probe"
+
+
+def make_speaker_eq(logger: logging.Logger) -> Optional[Gst.Element]:
+    """Build an ``equalizer-10bands`` from the configured gains, or ``None``.
+
+    Returns ``None`` (caller keeps the direct link) when all gains are zero,
+    the resolved output is not the Reachy Mini Audio device, or the element is
+    unavailable, so uncalibrated robots (and fallback outputs) stay
+    byte-identical. Callers insert it on the speaker branch only, after the
+    wobbler tee, so head motion is driven by the uncorrected signal.
+    """
+    gains = resolve_speaker_eq_gains()
+    if not any(gains):
+        return None
+    # The correction is tuned for the Reachy head shell + its speaker; skip it
+    # when playback falls back to a different output (autoaudiosink).
+    if not (has_reachymini_asoundrc() or get_audio_device("Sink") is not None):
+        logger.info("Speaker EQ skipped: output is not the Reachy Mini Audio device")
+        return None
+    eq = Gst.ElementFactory.make("equalizer-10bands")
+    if eq is None:
+        logger.warning("equalizer-10bands unavailable; skipping speaker EQ")
+        return None
+    for i, gain in enumerate(gains):
+        eq.set_property(f"band{i}", float(gain))
+
+    # Wrap eq + a limiter in a float-internal bin. The EQ boosts must run in
+    # F32 and be limited *before* the final int conversion, otherwise a boosted
+    # peak clips when the sink quantizes it. audiodynamic is memoryless so it
+    # cannot overshoot, guaranteeing no digital clipping for any gains. If it is
+    # unavailable, fall back to the bare EQ (pre-limiter behavior).
+    in_caps = Gst.ElementFactory.make("capsfilter")
+    limiter = Gst.ElementFactory.make("audiodynamic")
+    out_conv = Gst.ElementFactory.make("audioconvert")
+    if in_caps is None or limiter is None or out_conv is None:
+        logger.warning("audiodynamic unavailable; speaker EQ runs without a limiter")
+        return eq
+    in_caps.set_property("caps", Gst.Caps.from_string("audio/x-raw,format=F32LE"))
+    # Hard-knee compressor, ratio 0 = a brickwall limiter that clamps anything
+    # above the threshold to it, so the output never exceeds full scale.
+    limiter.set_property("threshold", 0.9)
+    limiter.set_property("ratio", 0.0)
+
+    eq_bin = Gst.Bin.new("speaker_eq")
+    for el in (in_caps, eq, limiter, out_conv):
+        eq_bin.add(el)
+    in_caps.link(eq)
+    eq.link(limiter)
+    limiter.link(out_conv)
+    eq_bin.add_pad(Gst.GhostPad.new("sink", in_caps.get_static_pad("sink")))
+    eq_bin.add_pad(Gst.GhostPad.new("src", out_conv.get_static_pad("src")))
+    return eq_bin
 
 
 class AudioBase(ABC):
