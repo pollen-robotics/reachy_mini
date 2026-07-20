@@ -1,1 +1,1 @@
-{"id":"a7bfe611f887693eeb7b7f5d8d7f7e1f","fullName":"tests.unit_tests.test_backend_process_command#test_restart_daemon_ok","name":"test_restart_daemon_ok","status":"passed","testResultsByEnv":{"default":"5404e96df465511afc6cd0284870b757"}}
+{"id":"a7bfe611f887693eeb7b7f5d8d7f7e1f","fullName":"tests.unit_tests.test_backend_process_command#test_restart_daemon_ok","name":"test_restart_daemon_ok","status":"passed","testResultsByEnv":{"default":"6a81be2c83e4c210944378b777f692f5"}}
