@@ -16,6 +16,7 @@ Note:
 """
 
 import logging
+from threading import Lock
 from typing import Optional
 
 from reachy_mini.media.audio_control_utils import ReSpeaker, init_respeaker_usb
@@ -28,7 +29,7 @@ class AudioDoA:
 
     Attributes:
         _respeaker: The underlying ReSpeaker device, or ``None`` if no
-            compatible hardware was detected at init time.
+            compatible hardware was detected on first use.
 
     Example::
 
@@ -42,30 +43,43 @@ class AudioDoA:
     """
 
     def __init__(self) -> None:
-        """Initialize the DoA helper, probing for a ReSpeaker USB device."""
-        self._respeaker: Optional[ReSpeaker] = init_respeaker_usb()
+        """Initialize the DoA helper without probing USB until first use."""
+        self._respeaker: Optional[ReSpeaker] = None
+        self._initialization_attempted = False
+        self._closed = False
+        self._lock = Lock()
 
     def get_DoA(self) -> tuple[float, bool] | None:
         """Read the current Direction of Arrival from the ReSpeaker.
+
+        The USB device is discovered on the first call and reused thereafter.
 
         Returns:
             A tuple ``(angle_radians, speech_detected)`` or ``None`` when
             the device is not available or the read fails.
 
         """
-        if not self._respeaker:
-            return None
+        with self._lock:
+            if self._closed:
+                return None
+            if not self._initialization_attempted:
+                self._respeaker = init_respeaker_usb()
+                self._initialization_attempted = True
+            if self._respeaker is None:
+                return None
 
-        result = self._respeaker.read("DOA_VALUE_RADIANS")
-        if result is None:
-            return None
-        return float(result[0]), bool(result[1])
+            result = self._respeaker.read("DOA_VALUE_RADIANS")
+            if result is None:
+                return None
+            return float(result[0]), bool(result[1])
 
     def close(self) -> None:
         """Release the USB resource."""
-        if self._respeaker:
-            self._respeaker.close()
-            self._respeaker = None
+        with self._lock:
+            self._closed = True
+            if self._respeaker:
+                self._respeaker.close()
+                self._respeaker = None
 
 
 def main() -> None:
@@ -76,6 +90,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     doa = AudioDoA()
+    result = doa.get_DoA()
     if doa._respeaker is None:
         print("No ReSpeaker device found. Exiting.")
         return
@@ -83,7 +98,6 @@ def main() -> None:
     print("Reading DoA — press Ctrl+C to stop.\n")
     try:
         while True:
-            result = doa.get_DoA()
             if result is not None:
                 angle, speech = result
                 print(
@@ -94,6 +108,7 @@ def main() -> None:
             else:
                 print("no reading")
             time.sleep(0.1)
+            result = doa.get_DoA()
     except KeyboardInterrupt:
         print("\nStopped.")
     finally:
