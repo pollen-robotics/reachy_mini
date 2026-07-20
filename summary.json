@@ -1,81 +1,21 @@
 {
   "stats": {
-    "total": 428,
-    "new": 12,
-    "passed": 413,
-    "skipped": 15
+    "total": 429,
+    "passed": 414,
+    "skipped": 15,
+    "new": 2
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "6a5deb7a6b8c6ad78d22dae16e4efb56",
-      "name": "test_resolve_gains_defaults",
+      "id": "07c55644714775da5914319a601902ec",
+      "name": "test_face_tracker_resets_filter_after_target_loss",
       "status": "passed",
       "duration": 0
     },
     {
-      "id": "a19319543a8f583f16faf398ecf041c1",
-      "name": "test_shell_bump_becomes_matching_cut",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "94737fc8ad511a1ad1ecd87d575ea9e9",
-      "name": "test_config_gains_validation",
-      "status": "passed",
-      "duration": 2
-    },
-    {
-      "id": "b8fb45db2df53c9fb6554b525dbec544",
-      "name": "test_make_speaker_eq_skipped_off_reachy_output",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "d118a9b717a226dc3d6f4bc91beb098d",
-      "name": "test_make_speaker_eq_noop_when_all_zero",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "4555636b5d20e949fbbbb42af52c3317",
-      "name": "test_eq_bin_prevents_clipping",
-      "status": "passed",
-      "duration": 3
-    },
-    {
-      "id": "f39642a98b323b5686271af7eb45d2e3",
-      "name": "test_out_of_range_is_clamped",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "4180679cefb287f085a161c39dfac089",
-      "name": "test_playback_path_skips_eq_when_zero",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "f0c8adb7c30c614d69e5f0ba55243c4c",
-      "name": "test_playback_path_includes_eq",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "a3668b808c3f296842c9b4e56bdf2f4c",
-      "name": "test_invalid_config_warns",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "4e5783c75a82fe176c9777c8e98f33bb",
-      "name": "test_make_speaker_eq_default_active",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "1b914c7a36809fd32b973023025687ae",
-      "name": "test_zero_above_and_max_boost",
+      "id": "cbf4f41ee991c3a2710bb53333c5838f",
+      "name": "test_face_tracker_filters_emitted_detection_sequence",
       "status": "passed",
       "duration": 1
     }
@@ -84,17 +24,17 @@
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 77416,
-  "createdAt": 1784531416168,
+  "duration": 79379,
+  "createdAt": 1784532090556,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "ec7f6c63-7ce9-4be9-9b58-5940513ed776",
+    "reportId": "0c18c271-2b60-437f-b38e-59b72250cc71",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/29723577076",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/29724183410",
   "href": "awesome/",
   "coverage": 44
 }

@@ -1,0 +1,1 @@
+WARNING  reachy_mini.vision.face_tracking:face_tracking.py:221 Face tracker thread did not stop in time.
