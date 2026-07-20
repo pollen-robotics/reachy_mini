@@ -15,6 +15,7 @@ Server->Client messages are Pydantic models serialized to JSON, e.g.:
 import asyncio
 import logging
 import threading
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
@@ -25,6 +26,7 @@ from reachy_mini.daemon.backend.abstract import Backend
 from reachy_mini.io.abstract import AbstractServer
 from reachy_mini.io.protocol import (
     AnyCommand,
+    DaemonStatus,
     GotoTaskRequest,
     PlayMoveTaskRequest,
     TaskProgress,
@@ -39,9 +41,14 @@ logger = logging.getLogger(__name__)
 class WSServer(AbstractServer):
     """WebSocket server for Reachy Mini."""
 
-    def __init__(self, backend: Backend) -> None:
+    def __init__(
+        self,
+        backend: Backend,
+        status_provider: Callable[[], DaemonStatus] | None = None,
+    ) -> None:
         """Initialize the WebSocket server."""
         self.backend = backend
+        self._status_provider = status_provider
         self._cmd_event = threading.Event()
 
         # Connected client queues (populated when clients connect via handle_client)
@@ -124,6 +131,12 @@ class WSServer(AbstractServer):
 
         queue: asyncio.Queue[str] = asyncio.Queue(maxsize=100)
         self._clients.add(queue)
+
+        if self._status_provider is not None:
+            try:
+                queue.put_nowait(self._status_provider().model_dump_json())
+            except Exception as e:
+                logger.warning("Could not get initial daemon status: %s", e)
 
         send_task = asyncio.create_task(self._send_loop(websocket, queue))
         try:
