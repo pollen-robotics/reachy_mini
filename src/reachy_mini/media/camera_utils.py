@@ -227,3 +227,22 @@ def scale_intrinsics(
     K_scaled[1, 2] = cy_scaled
 
     return K_scaled
+
+
+# The Reachy Mini K is calibrated at the full sensor resolution.
+_CALIBRATION_SIZE = (3840, 2592)
+
+
+def intrinsics_for_size(
+    K: npt.NDArray[np.float64],
+    crop_scale: float,
+    target_size: Tuple[int, int],
+) -> npt.NDArray[np.float64]:
+    """Return the camera matrix scaled to a streamed frame size.
+
+    Scales the full-sensor calibration to ``target_size`` unless ``K`` already
+    matches that size (e.g. webcams calibrated at their stream resolution).
+    """
+    if crop_scale != 1.0 or K[0, 2] > target_size[0] or K[1, 2] > target_size[1]:
+        return scale_intrinsics(K, _CALIBRATION_SIZE, target_size, crop_scale)
+    return K.copy()

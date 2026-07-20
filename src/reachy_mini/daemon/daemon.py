@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
 from reachy_mini.daemon.utils import (
@@ -27,6 +27,11 @@ from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 from .backend.mockup_sim import MockupSimBackend
 from .backend.mujoco import MujocoBackend
 from .backend.robot import RobotBackend
+from .jsonrpc_relay import JsonRpcRelay
+
+if TYPE_CHECKING:
+    from reachy_mini.apps.manager import AppManager
+    from reachy_mini.daemon.backend.abstract import Backend
 
 # Central signaling relay for WebRTC (optional)
 _central_relay_task: Optional[asyncio.Task[Any]] = None
@@ -86,6 +91,11 @@ class Daemon:
         self.ws_server: "WSServer | None" = None
         self.backend_run_thread: "Thread | None" = None
         self._thread_event_publish_status = Event()
+
+        # Set by the daemon FastAPI factory so `Daemon.start` can wire the
+        # JSON-RPC app relay (apps.* + conversation.* over the DataChannel).
+        self.app_manager: "AppManager | None" = None
+        self._jsonrpc_relay: "JsonRpcRelay | None" = None
 
         # Single source of truth for which managed app (local Python app or
         # remote WebRTC client) currently holds the robot's app slot. Shared
@@ -157,6 +167,26 @@ class Daemon:
         self._media_released = False
         self._status.media_released = False
         self.logger.info("Media hardware re-acquired.")
+
+    def _setup_jsonrpc_relay(
+        self, backend: "Backend", app_manager: "AppManager"
+    ) -> None:
+        """Create the JSON-RPC app relay and wire it into the backend.
+
+        The relay routes ``apps.*`` locally and relays every other namespace
+        (``conversation.*`` ...) to the running app's ``/rpc``. It runs on this
+        loop; the DataChannel handler (which fires on the media thread) hops
+        frames onto it with ``run_coroutine_threadsafe``.
+        """
+        loop = asyncio.get_running_loop()
+        relay = JsonRpcRelay(app_manager, backend.broadcast_to_all_clients)
+        self._jsonrpc_relay = relay
+
+        def handler(raw: str, reply: Callable[[dict[str, Any]], None]) -> None:
+            asyncio.run_coroutine_threadsafe(relay.handle(raw, reply), loop)
+
+        backend.set_jsonrpc_handler(handler)
+        self.logger.info("JSON-RPC app relay wired to the DataChannel")
 
     async def _start_central_signaling_relay(self) -> None:
         """Start the central signaling relay for remote WebRTC access."""
@@ -386,6 +416,12 @@ class Daemon:
                     self.backend.set_start_update_callback(self._spawn_webrtc_update)
                 self._media_server.start()
 
+            # Wire the JSON-RPC app relay now that the backend + broadcast
+            # paths exist. Runs on this (the main) loop; the DataChannel
+            # transport schedules frames onto it.
+            if self.backend is not None and self.app_manager is not None:
+                self._setup_jsonrpc_relay(self.backend, self.app_manager)
+
                 # Start central signaling relay for remote WebRTC access
                 await self._start_central_signaling_relay()
 
@@ -471,6 +507,12 @@ class Daemon:
             # otherwise fire `_on_robot_slot_free` and race the explicit
             # goto_sleep below with a second one.
             self.robot_app_lock.set_on_became_free_handler(None)
+
+            # Close the JSON-RPC app relay (drops the app /rpc connection and
+            # fails any in-flight calls) before tearing the backend down.
+            if self._jsonrpc_relay is not None:
+                await self._jsonrpc_relay.aclose()
+                self._jsonrpc_relay = None
 
             if self._media_server and not self._media_released:
                 # Stop pipeline (NULL) to release camera/audio hardware so
@@ -736,6 +778,7 @@ class Daemon:
         """Get the current status of the Reachy Mini daemon."""
         if self.backend is not None:
             self._status.backend_status = self.backend.get_status()
+            self._status.face_target = self.backend.get_tracked_face()
 
             assert self._status.backend_status is not None, (
                 "Backend status should not be None after backend initialization."

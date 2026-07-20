@@ -263,6 +263,10 @@ For coordinate systems and architecture details, see `docs/source/SDK/core-conce
 
 For platform-specific guides (Lite, Wireless, Simulation), see `docs/source/platforms/`.
 
+**Releasing the package:** see [`RELEASE.md`](RELEASE.md) — the `Release` workflow
+(`workflow_dispatch`, modes `minor-prerelease` / `minor-release` / `patch-release`)
+handles version bump, tag, PyPI publish, AI release notes, and downstream RC testing.
+
 ---
 
 ## Skills Reference

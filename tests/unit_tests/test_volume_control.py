@@ -1,6 +1,8 @@
 """Tests for the volume control module."""
 
 import platform
+import shutil
+import subprocess
 from unittest.mock import patch
 
 import pytest
@@ -10,16 +12,40 @@ from reachy_mini.daemon.app.routers.volume_control import VolumeControl, create_
 _LINUX_BACKENDS = ["pulsectl", "alsa"] if platform.system() == "Linux" else [None]
 
 
+def _alsa_card_available() -> bool:
+    """True when a real ALSA card with a mixer exists (amixer + a card).
+
+    VolumeControlLinux.__post_init__ always resolves a hardware ALSA card
+    (via aplay/arecord + amixer) — even for the pulsectl backend, to set the
+    card's index-1 controls to 100%. A PulseAudio null sink (the CI virtual
+    card) is not an ALSA card, so neither backend can be constructed there;
+    the fixture skips both. On a machine with a real card, both run.
+    """
+    if shutil.which("amixer") is None:
+        return False
+    try:
+        result = subprocess.run(
+            ["amixer", "scontrols"], capture_output=True, text=True, timeout=5
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return bool(result.stdout.strip())
+
+
 @pytest.fixture(params=_LINUX_BACKENDS)
 def volume_control(request):
     """Create a VolumeControl instance.
 
-    On Linux the fixture is parametrized so every test runs against
-    both the pulsectl and ALSA backends.
+    On Linux the fixture is parametrized over the pulsectl and ALSA backends.
+    Both need a real ALSA card at construction (see `_alsa_card_available`), so
+    both params skip when none is present (e.g. CI, where only a PulseAudio
+    null sink exists).
     """
     backend = request.param
 
     if platform.system() == "Linux" and backend is not None:
+        if not _alsa_card_available():
+            pytest.skip("no ALSA card available (volume control needs real audio hardware)")
         force_pulsectl = backend == "pulsectl"
         with patch(
             "reachy_mini.daemon.app.routers.volume_control_linux._PULSECTL_AVAILABLE",

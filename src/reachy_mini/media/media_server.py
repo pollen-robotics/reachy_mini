@@ -39,7 +39,12 @@ from reachy_mini.daemon.utils import (
     SimulationMode,
     is_local_camera_available,
 )
-from reachy_mini.media.audio_base import AEC_CHANNELS, AEC_PROBE_NAME, AEC_RATE
+from reachy_mini.media.audio_base import (
+    AEC_CHANNELS,
+    AEC_PROBE_NAME,
+    AEC_RATE,
+    make_speaker_eq,
+)
 from reachy_mini.media.audio_control_utils import init_respeaker_usb
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.camera_constants import (
@@ -81,6 +86,9 @@ ICE_NEGOTIATION_DEADLINE_S = 12
 # wire-level emission.
 SESSION_FAILED_REASON_ICE_TIMEOUT = "ice_negotiation_timeout"
 SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
+
+# Cap the local IPC feed below the capture rate; it also paces every client, face tracker included.
+IPC_FPS = 10
 
 
 @dataclass
@@ -509,6 +517,7 @@ class GstMediaServer:
         queue_speaker = Gst.ElementFactory.make("queue")
         ac_speaker = Gst.ElementFactory.make("audioconvert")
         ar_speaker = Gst.ElementFactory.make("audioresample")
+        eq_speaker = make_speaker_eq(self._logger)
         queue_wobbler = Gst.ElementFactory.make("queue")
         ac_wobbler = Gst.ElementFactory.make("audioconvert")
         ar_wobbler = Gst.ElementFactory.make("audioresample")
@@ -537,6 +546,7 @@ class GstMediaServer:
             *([webrtcechoprobe] if webrtcechoprobe is not None else []),
             ac_speaker,
             ar_speaker,
+            *([eq_speaker] if eq_speaker is not None else []),
             audiosink,
             queue_wobbler,
             ac_wobbler,
@@ -554,7 +564,11 @@ class GstMediaServer:
         else:
             queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
-        ar_speaker.link(audiosink)
+        if eq_speaker is not None:
+            ar_speaker.link(eq_speaker)
+            eq_speaker.link(audiosink)
+        else:
+            ar_speaker.link(audiosink)
         tee.link(queue_wobbler)
         queue_wobbler.link(ac_wobbler)
         ac_wobbler.link(ar_wobbler)
@@ -952,6 +966,13 @@ class GstMediaServer:
         pipeline.add(queue_ipc)
         tee.link(queue_ipc)
 
+        # max-rate (not a capsfilter) caps the rate without a caps constraint, so unixfdsink's FD path survives.
+        videorate_ipc = Gst.ElementFactory.make("videorate", "ipc_videorate")
+        videorate_ipc.set_property("drop-only", True)
+        videorate_ipc.set_property("max-rate", IPC_FPS)
+        pipeline.add(videorate_ipc)
+        queue_ipc.link(videorate_ipc)
+
         if platform.system() == "Windows":
             ipc_sink = Gst.ElementFactory.make("win32ipcvideosink")
             if ipc_sink is None:
@@ -979,7 +1000,7 @@ class GstMediaServer:
         # identity + videoconvert workaround described above.
         if is_rpi:
             pipeline.add(ipc_sink)
-            queue_ipc.link(ipc_sink)
+            videorate_ipc.link(ipc_sink)
         else:
             identity = Gst.ElementFactory.make("identity", "ipc_identity")
             identity.set_property("drop-allocation", True)
@@ -992,7 +1013,7 @@ class GstMediaServer:
                 f"video/x-raw,format=BGR,"
                 f"width={self.resolution[0]},"
                 f"height={self.resolution[1]},"
-                f"framerate={self.framerate}/1"
+                f"framerate={IPC_FPS}/1"
             )
             capsfilter_ipc = Gst.ElementFactory.make("capsfilter", "ipc_capsfilter")
             capsfilter_ipc.set_property("caps", caps_bgr)
@@ -1000,7 +1021,7 @@ class GstMediaServer:
             for elem in [identity, videoconvert_ipc, capsfilter_ipc, ipc_sink]:
                 pipeline.add(elem)
 
-            queue_ipc.link(identity)
+            videorate_ipc.link(identity)
             identity.link(videoconvert_ipc)
             videoconvert_ipc.link(capsfilter_ipc)
             capsfilter_ipc.link(ipc_sink)
@@ -1367,6 +1388,7 @@ class GstMediaServer:
         queue_speaker = Gst.ElementFactory.make("queue")
         ac_speaker = Gst.ElementFactory.make("audioconvert")
         ar_speaker = Gst.ElementFactory.make("audioresample")
+        eq_speaker = make_speaker_eq(self._logger)
         audiosink = self._build_audiosink_element()
         queue_wobbler = Gst.ElementFactory.make("queue")
         ac_wobbler = Gst.ElementFactory.make("audioconvert")
@@ -1389,7 +1411,12 @@ class GstMediaServer:
         tee.link(queue_speaker)
         queue_speaker.link(ac_speaker)
         ac_speaker.link(ar_speaker)
-        ar_speaker.link(audiosink)
+        if eq_speaker is not None:
+            audio_bin.add(eq_speaker)
+            ar_speaker.link(eq_speaker)
+            eq_speaker.link(audiosink)
+        else:
+            ar_speaker.link(audiosink)
 
         tee.link(queue_wobbler)
         queue_wobbler.link(ac_wobbler)

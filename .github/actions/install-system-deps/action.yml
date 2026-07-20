@@ -1,0 +1,14 @@
+name: Install system dependencies
+description: >
+  Install (and cache) the apt packages the test/coverage jobs need — GStreamer
+  plugins + tools, ALSA/PulseAudio, and the WebRTC ICE runtime (nice). Single
+  source of truth so pytest.yml and allure.yml can't drift and keep sharing the
+  apt cache. Ubuntu only.
+
+runs:
+  using: composite
+  steps:
+    - uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
+      with:
+        packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gir1.2-gst-plugins-base-1.0 gstreamer1.0-alsa gstreamer1.0-tools gstreamer1.0-nice libnice10 libasound2-plugins pulseaudio pulseaudio-utils
+        version: 1.0

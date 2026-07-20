@@ -76,11 +76,40 @@ jobs:
         id: ver
         run: |
           py_ver=$(grep -E '^version' ../pyproject.toml | head -1 | sed -E 's/version *= *"([^"]+)"/\1/')
+          # pyproject.toml uses PEP 440 (e.g. 1.10.0.dev0, 1.9.0rc1); npm
+          # requires semver. Normalize the prerelease/dev suffix into a
+          # single dot-separated semver prerelease before `npm version`:
+          #   1.10.0.dev0    -> 1.10.0-dev.0
+          #   1.9.0rc1       -> 1.9.0-rc.1
+          #   1.9.0rc1.dev0  -> 1.9.0-rc.1.dev.0
+          #   1.10.0         -> 1.10.0 (unchanged)
+          semver=$(python3 - "$py_ver" <<'PY'
+          import re, sys
+          v = sys.argv[1]
+          m = re.match(r'^(\d+\.\d+\.\d+)(?:(a|b|rc)(\d+))?(?:\.dev(\d+))?$', v)
+          if not m:
+              print(v); sys.exit(0)
+          base, pre, pren, dev = m.groups()
+          parts = []
+          if pre:
+              parts += [pre, pren]
+          if dev is not None:
+              parts += ['dev', dev]
+          print(base + ('-' + '.'.join(parts) if parts else ''))
+          PY
+          )
           if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
             sha=$(echo "${{ github.sha }}" | cut -c1-7)
-            ver="${py_ver}-main.${sha}"
+            # semver permits only one '-': when the normalized version
+            # already carries a prerelease, append the build marker as
+            # extra dot-separated identifiers instead of a second '-'.
+            if [[ "$semver" == *-* ]]; then
+              ver="${semver}.main.${sha}"
+            else
+              ver="${semver}-main.${sha}"
+            fi
           else
-            ver="${py_ver}"
+            ver="${semver}"
           fi
           if [[ "$py_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             release_tag="latest"
