@@ -443,6 +443,10 @@ jobs:
           # HF_TOKEN env — write it non-interactively so `opencode run` doesn't hang on login.
           mkdir -p "$HOME/.local/share/opencode"
           jq -n --arg k "$HF_TOKEN" '{huggingface:{type:"api",key:$k}}' > "$HOME/.local/share/opencode/auth.json"
+          # Route Inference-Providers billing to the org (token owner must be a member).
+          mkdir -p "$HOME/.config/opencode"
+          jq -n '{provider:{huggingface:{options:{headers:{"X-HF-Bill-To":"pollen-robotics"}}}}}' \
+            > "$HOME/.config/opencode/opencode.json"
           python -m utils.release_notes.generate_release_notes \
             --since "${{ needs.prepare.outputs.since_tag }}" \
             --${{ needs.prepare.outputs.bump_type }}
@@ -520,6 +524,14 @@ jobs:
         with:
           repository: pollen-robotics/reachy_mini_conversation_app
           token: ${{ secrets.RELEASE_PAT }}
+
+      # `uv lock` builds pycairo/pygobject from sdist to read metadata, which needs the
+      # system cairo/gobject-introspection dev libs (same as conversation_app's own CI).
+      - name: Install system deps for uv lock
+        uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
+        with:
+          packages: libcairo2-dev libgirepository1.0-dev
+          version: 1.0
 
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
