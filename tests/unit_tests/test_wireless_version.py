@@ -119,6 +119,35 @@ def test_semver_unparseable_three_parts_raises():
         update_available._semver_version("1.2.x")
 
 
+def test_semver_pep440_dev():
+    """PEP 440 `.devN` normalizes to a semver pre-release.
+
+    The package's own version on main is `X.Y.Z.dev0` (pyproject), so any
+    from-source / from-git-ref install reports a `.dev0` string to
+    `get_local_version` -> `_semver_version`.
+    """
+    v = update_available._semver_version("1.10.0.dev0")
+    assert (v.major, v.minor, v.patch) == (1, 10, 0)
+    assert v.prerelease == "dev.0"
+
+
+# --- get_local_version ---
+
+
+def test_get_local_version_pep440_dev(monkeypatch):
+    """Regression: a `.dev0` install must not crash the version check.
+
+    `get_local_version` feeds `importlib.metadata.version(...)` straight into
+    `_semver_version`. On a from-ref / from-source install that string is the
+    `1.10.0.dev0` marker, and `_semver_version` raises ValueError today —
+    breaking `/available`, the `/update` gating, and the daemon update flow.
+    """
+    monkeypatch.setattr(update_available, "version", lambda _pkg: "1.10.0.dev0")
+    v = update_available.get_local_version("reachy_mini")
+    assert (v.major, v.minor, v.patch) == (1, 10, 0)
+    assert v.prerelease == "dev.0"
+
+
 # --- get_pypi_version ---
 
 
