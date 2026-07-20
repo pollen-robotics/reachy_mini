@@ -1,1 +1,1 @@
-{"id":"72af7f2762eb634866c950b7c8230877","fullName":"tests.unit_tests.test_autostart_app#test_antenna_touch_start_uses_non_evicting_app_start","name":"test_antenna_touch_start_uses_non_evicting_app_start","status":"passed","testResultsByEnv":{"default":"bb5e45c5f9050d96a56ade92d1e72683"}}
+{"id":"72af7f2762eb634866c950b7c8230877","fullName":"tests.unit_tests.test_autostart_app#test_antenna_touch_start_uses_non_evicting_app_start","name":"test_antenna_touch_start_uses_non_evicting_app_start","status":"passed","testResultsByEnv":{"default":"422ec9edf491eca522d5e4705530b678"}}

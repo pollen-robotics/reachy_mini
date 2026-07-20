@@ -1,0 +1,13 @@
+ERROR    reachy_mini.daemon.app.routers.volume:volume.py:134 Failed to play test sound: boom
+Traceback (most recent call last):
+  File "/home/runner/work/reachy_mini/reachy_mini/src/reachy_mini/daemon/app/routers/volume.py", line 119, in play_test_sound
+    backend.play_sound("impatient1.wav")
+  File "/usr/lib/python3.12/unittest/mock.py", line 1134, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1138, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1193, in _execute_mock_call
+    raise effect
+RuntimeError: boom

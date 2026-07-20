@@ -1,0 +1,1 @@
+ERROR    reachy_mini.daemon.app.routers.cache:cache.py:28 Failed to clear HuggingFace cache: boom

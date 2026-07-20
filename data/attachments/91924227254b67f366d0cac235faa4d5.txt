@@ -1,0 +1,1 @@
+WARNING  reachy_mini.daemon.app.routers.volume:volume.py:125 Test sound request while audio device is busy (likely GStreamer): Device unavailable

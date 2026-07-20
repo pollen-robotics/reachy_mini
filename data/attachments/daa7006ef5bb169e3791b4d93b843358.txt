@@ -1,0 +1,1 @@
+ERROR    reachy_mini.daemon.app.routers.cache:cache.py:55 Failed to clear applications virtual environment: boom
