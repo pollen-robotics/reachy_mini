@@ -1,0 +1,2 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:152 Using AnalyticalKinematics kinematics engine
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:1723 upload_move_chunk: no slot ghost, dropping chunk 0

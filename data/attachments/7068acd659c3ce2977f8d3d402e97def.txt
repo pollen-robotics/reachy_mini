@@ -1,0 +1,2 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:152 Using AnalyticalKinematics kinematics engine
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:1975 upload_move_finish: chunk count mismatch on mm (declared 2, received 1)

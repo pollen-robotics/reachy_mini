@@ -1,0 +1,2 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:152 Using AnalyticalKinematics kinematics engine
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:974 stop_recording called but recording_publisher is not set; dropping data.

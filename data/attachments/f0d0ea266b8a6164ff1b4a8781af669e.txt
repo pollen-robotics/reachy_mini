@@ -1,0 +1,26 @@
+INFO     reachy_mini.daemon.daemon:daemon.py:70 Daemon version: 1.9.0
+INFO     reachy_mini.daemon.daemon:daemon.py:122 Media disabled (--no-media). No camera, audio, or media server.
+INFO     reachy_mini.daemon.daemon:daemon.py:290 Daemon start parameters: sim=True, mockup_sim=False, serialport=auto, scene=empty, wake_up_on_start=False, check_collision=False, kinematics_engine=AnalyticalKinematics, headless=True, hardware_config_filepath=None
+INFO     reachy_mini.daemon.daemon:daemon.py:316 Starting Reachy Mini daemon...
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:152 Using AnalyticalKinematics kinematics engine
+INFO     reachy_mini.daemon.daemon:daemon.py:189 JSON-RPC app relay wired to the DataChannel
+INFO     reachy_mini.daemon.daemon:daemon.py:403 Daemon started successfully.
+INFO     reachy_mini.daemon.daemon:daemon.py:70 Daemon version: 1.9.0
+INFO     reachy_mini.daemon.daemon:daemon.py:122 Media disabled (--no-media). No camera, audio, or media server.
+INFO     reachy_mini.daemon.daemon:daemon.py:290 Daemon start parameters: sim=True, mockup_sim=False, serialport=auto, scene=empty, wake_up_on_start=False, check_collision=False, kinematics_engine=AnalyticalKinematics, headless=True, hardware_config_filepath=None
+INFO     reachy_mini.daemon.daemon:daemon.py:316 Starting Reachy Mini daemon...
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:152 Using AnalyticalKinematics kinematics engine
+INFO     reachy_mini.daemon.daemon:daemon.py:189 JSON-RPC app relay wired to the DataChannel
+INFO     reachy_mini.daemon.daemon:daemon.py:403 Daemon started successfully.
+INFO     reachy_mini.reachy_mini:reachy_mini.py:487 Connection mode selected: localhost_only
+INFO     reachy_mini.reachy_mini:reachy_mini.py:344 No media backend requested by user.
+INFO     reachy_mini.media.media_manager:media_manager.py:161 No media backend selected.
+INFO     reachy_mini.reachy_mini:reachy_mini.py:487 Connection mode selected: localhost_only
+INFO     reachy_mini.reachy_mini:reachy_mini.py:344 No media backend requested by user.
+INFO     reachy_mini.media.media_manager:media_manager.py:161 No media backend selected.
+INFO     reachy_mini.daemon.daemon:daemon.py:447 Stopping Reachy Mini daemon...
+INFO     reachy_mini.daemon.daemon:daemon.py:497 Daemon stopped successfully.
+INFO     reachy_mini.daemon.daemon:daemon.py:447 Stopping Reachy Mini daemon...
+INFO     reachy_mini.daemon.daemon:daemon.py:497 Daemon stopped successfully.
+WARNING  reachy_mini.daemon.daemon:daemon.py:433 Daemon is already stopped.
+WARNING  reachy_mini.daemon.daemon:daemon.py:433 Daemon is already stopped.

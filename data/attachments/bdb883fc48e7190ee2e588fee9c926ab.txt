@@ -1,0 +1,2 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:152 Using AnalyticalKinematics kinematics engine
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:1872 upload_audio_finish: stored 26 bytes at /tmp/pytest-of-runner/pytest-0/test_audio_upload_happy0/a1.wav

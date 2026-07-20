@@ -1,1 +1,1 @@
-{"id":"0d109e6e37513d325c025f43dee95c40","fullName":"tests.unit_tests.test_daemon_utils#test_find_serial_port_found","name":"test_find_serial_port_found","status":"passed","testResultsByEnv":{"default":"c1f4dcf14502e945e42d21749bffe4f0"}}
+{"id":"0d109e6e37513d325c025f43dee95c40","fullName":"tests.unit_tests.test_daemon_utils#test_find_serial_port_found","name":"test_find_serial_port_found","status":"passed","testResultsByEnv":{"default":"f59e07aee970611c7b95e430ab786edc"}}
