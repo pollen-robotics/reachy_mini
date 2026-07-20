@@ -317,11 +317,9 @@ class Backend:
         self._tracking_requested_weight = 1.0
         self._tracking_weight = 0.0
         self._tracking_alpha = 0.15
-        self._tracking_deadband = 0.03
         self._tracking_lost_timeout = 2.0
         self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
         self._tracking_target_pose: Annotated[NDArray[np.float64], (4, 4)] | None = None
-        self._tracking_last_center: tuple[float, float] | None = None
         self._last_face_seen: float | None = None
         self._tracker: FaceTracker | None = None
         self._tracking_lock = threading.Lock()
@@ -641,7 +639,6 @@ class Backend:
         self._tracking_aim = None
         self._tracking_target_pose = None
         self._tracking_weight = 0.0
-        self._tracking_last_center = None
         self._last_face_seen = None
         self._face_target = FaceTarget()
         self.ik_required = True
@@ -714,14 +711,6 @@ class Backend:
             roll=roll,
             ts=timestamp,
         )
-
-        # Deadband sub-threshold jitter so a still person keeps a still head.
-        if self._tracking_last_center is not None and (
-            abs(x_norm - self._tracking_last_center[0]) < self._tracking_deadband
-            and abs(y_norm - self._tracking_last_center[1]) < self._tracking_deadband
-        ):
-            return
-        self._tracking_last_center = (x_norm, y_norm)
 
         u = (x_norm + 1.0) * 0.5 * max(width - 1, 1)
         v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)

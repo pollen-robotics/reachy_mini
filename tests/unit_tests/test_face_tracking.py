@@ -44,6 +44,65 @@ def test_to_observation_normalizes_nose_and_roll() -> None:
     assert obs.roll == float(np.arctan2(2.0, 2.0))
 
 
+def test_face_tracker_filters_emitted_detection_sequence() -> None:
+    """FaceTracker applies its slow, fast, and dead-zone paths to emitted observations."""
+    face_tracker = FaceTracker()
+    camera_matrix = np.eye(3)
+    distortion = np.zeros(5)
+
+    def emit(nose_x: float, timestamp: float) -> tuple[float, float] | None:
+        face = _face(
+            (nose_x - 5.0, 45.0, 10.0, 10.0),
+            (nose_x - 2.0, 48.0),
+            (nose_x + 2.0, 48.0),
+            (nose_x, 50.0),
+        )
+        face_tracker._process_detections(
+            [face], 101, 101, camera_matrix, distortion, timestamp
+        )
+        observation = face_tracker.latest()
+        assert observation is not None
+        return observation.center
+
+    assert emit(50.0, 1.0) == (0.0, 0.0)
+    assert emit(50.5, 2.0) == (0.0, 0.0)  # radial dead zone
+    assert emit(55.0, 3.0) == pytest.approx((0.03, 0.0))  # slow EMA
+    assert emit(75.0, 4.0) == pytest.approx((0.312, 0.0))  # fast EMA
+
+
+def test_face_tracker_resets_filter_after_target_loss() -> None:
+    """A reacquired face is emitted immediately instead of blending with stale aim."""
+    face_tracker = FaceTracker()
+    camera_matrix = np.eye(3)
+    distortion = np.zeros(5)
+    old_face = _face(
+        (45.0, 45.0, 10.0, 10.0),
+        (48.0, 48.0),
+        (52.0, 48.0),
+        (50.0, 50.0),
+    )
+    new_face = _face(
+        (5.0, 45.0, 10.0, 10.0),
+        (8.0, 48.0),
+        (12.0, 48.0),
+        (10.0, 50.0),
+    )
+    face_tracker._process_detections(
+        [old_face], 101, 101, camera_matrix, distortion, 1.0
+    )
+    for timestamp in range(2, 23):
+        face_tracker._process_detections(
+            [], 101, 101, camera_matrix, distortion, float(timestamp)
+        )
+    face_tracker._process_detections(
+        [new_face], 101, 101, camera_matrix, distortion, 23.0
+    )
+
+    observation = face_tracker.latest()
+    assert observation is not None
+    assert observation.center == pytest.approx((-0.8, 0.0))
+
+
 def test_tracker_acquires_largest_above_min_size() -> None:
     """A fresh track picks the largest face once it clears the size gate."""
     tracker = Tracker(min_area_frac=0.0)
