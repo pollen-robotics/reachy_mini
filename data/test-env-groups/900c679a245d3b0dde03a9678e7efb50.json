@@ -1,1 +1,1 @@
-{"id":"900c679a245d3b0dde03a9678e7efb50","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_start_400_maps_to_no_update","name":"test_update_start_400_maps_to_no_update","status":"passed","testResultsByEnv":{"default":"c5d1fb90832828e13246beaba8b7af5e"}}
+{"id":"900c679a245d3b0dde03a9678e7efb50","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_start_400_maps_to_no_update","name":"test_update_start_400_maps_to_no_update","status":"passed","testResultsByEnv":{"default":"72a04675d6d6f4587c45d01c5bf416e1"}}
