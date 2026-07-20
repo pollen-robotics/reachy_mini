@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 
+from reachy_mini.daemon.robot_app_lock import RobotAppLock, RobotAppLockState
 from reachy_mini.media.central_signaling_relay import (
     HEARTBEAT_DEFAULT_INTERVAL,
     HEARTBEAT_MAX_INTERVAL,
@@ -552,6 +553,65 @@ def test_reconnect_delay_grows_and_is_capped() -> None:
 
 
 # ---------------------------------------------------------------------------
+# startSession robot-lock gating (free / local_app control-only / busy)
+# ---------------------------------------------------------------------------
+
+
+def _relay_with_lock(
+    lock: RobotAppLock,
+) -> tuple[CentralSignalingRelay, _SendJournal, _SendJournal]:
+    """Relay wired to a real lock, with central + local sends journaled."""
+    relay = _make_relay()
+    relay._robot_app_lock = lock
+    central, local = _SendJournal(), _SendJournal()
+    relay._send_to_central = central  # type: ignore[method-assign]
+    relay._send_to_local = local  # type: ignore[method-assign]
+    return relay, central, local
+
+
+def _start_session(relay: CentralSignalingRelay) -> None:
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s1"}
+        )
+    )
+
+
+def test_startsession_acquires_lock_when_free() -> None:
+    """A remote peer takes remote_session when the robot is free."""
+    lock = RobotAppLock()
+    relay, central, local = _relay_with_lock(lock)
+    _start_session(relay)
+    assert lock.status().state == RobotAppLockState.REMOTE_SESSION
+    assert not any(m.get("type") == "endSession" for m in central.sent)
+    assert any(m.get("type") == "list" for m in local.sent)  # session proceeds
+
+
+def test_startsession_control_only_while_local_app_runs() -> None:
+    """While a local app holds the robot, a remote peer connects control-only."""
+    lock = RobotAppLock()
+    lock.acquire_local_keeping_remote("reachy_mini_conversation_app")
+    relay, central, local = _relay_with_lock(lock)
+    _start_session(relay)
+    # accepted (session proceeds) WITHOUT taking the lock or ending the session
+    assert lock.status().state == RobotAppLockState.LOCAL_APP
+    assert not any(m.get("type") == "endSession" for m in central.sent)
+    assert any(m.get("type") == "list" for m in local.sent)
+
+
+def test_startsession_refused_when_another_remote_holds() -> None:
+    """A second remote peer is refused while another remote session owns the robot."""
+    lock = RobotAppLock()
+    assert lock.try_acquire_remote("other") is True
+    relay, central, local = _relay_with_lock(lock)
+    _start_session(relay)
+    assert any(
+        m.get("type") == "endSession" and m.get("reason") == "robot_busy"
+        for m in central.sent
+    )
+
+
+# ---------------------------------------------------------------------------
 # Message dispatch: _process_central_message / _process_local_message
 # ---------------------------------------------------------------------------
 #
@@ -650,40 +710,6 @@ def test_central_start_session_rejected_when_busy() -> None:
     assert "cs2" not in relay._session_to_local_peer
 
 
-def test_central_start_session_rejected_when_lock_held() -> None:
-    """When a local app holds the lock, the session is rejected (busy_local_app)."""
-    lock = _FakeLock(acquire=False)
-    relay, central, local = _make_relay_with_journals(robot_app_lock=lock)
-
-    asyncio.run(
-        relay._process_central_message(
-            {"type": "startSession", "peerId": "consumer", "sessionId": "cs3"}
-        )
-    )
-
-    assert lock.acquired == 1
-    assert local.sent == []
-    assert central.sent == [
-        {"type": "endSession", "sessionId": "cs3", "reason": "robot_busy_local_app"}
-    ]
-
-
-def test_central_start_session_acquires_lock_then_proceeds() -> None:
-    """With the lock free, the session is acquired and forwarded to local."""
-    lock = _FakeLock(acquire=True)
-    relay, _central, local = _make_relay_with_journals(robot_app_lock=lock)
-
-    asyncio.run(
-        relay._process_central_message(
-            {"type": "startSession", "peerId": "consumer", "sessionId": "cs4"}
-        )
-    )
-
-    assert lock.acquired == 1
-    assert relay._pending_central_sessions == ["cs4"]
-    assert local.sent == [{"type": "list"}]
-
-
 def test_central_peer_translates_session_id_to_local() -> None:
     """A `peer` message is relayed to local with the local session id + sdp."""
     relay, _central, local = _make_relay_with_journals()
@@ -753,9 +779,7 @@ def test_local_list_starts_pending_sessions() -> None:
     relay._pending_central_sessions.append("cs1")
 
     asyncio.run(
-        relay._process_local_message(
-            {"type": "list", "producers": [{"id": "P1"}]}
-        )
+        relay._process_local_message({"type": "list", "producers": [{"id": "P1"}]})
     )
 
     assert relay._local_producer_id == "P1"
@@ -1103,4 +1127,3 @@ def test_notify_token_change_forwards_to_instance(
     monkeypatch.setattr(m, "_relay_instance", fake)
     asyncio.run(m.notify_token_change("newtok"))
     assert fake.token == "newtok"
-

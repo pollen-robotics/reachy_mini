@@ -288,6 +288,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         desktop_app_daemon=args.desktop_app_daemon,
         daemon=app.state.daemon,
     )
+    # Give the daemon a handle back to the app manager so `Daemon.start` can
+    # wire the JSON-RPC app relay (apps.* + conversation.* over the DataChannel).
+    app.state.daemon.app_manager = app.state.app_manager
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)

@@ -193,6 +193,17 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private readonly _logSubscribers: Set<LogSubscriber> = new Set();
     private readonly _updateProgressSubscribers: Set<UpdateProgressCallback> = new Set();
 
+    // ─── JSON-RPC app control (over the same DataChannel) ────────────────
+    // rpcCall() sends {jsonrpc,id,method,params} and awaits the matching
+    // response; onNotification() subscribes to one-way events (no id) the
+    // robot/app pushes (conversation.phase/turn/transcript, ...).
+    private _rpcCounter = 0;
+    private readonly _pendingRpc = new Map<
+        string,
+        { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }
+    >();
+    private readonly _rpcListeners = new Map<string, Set<(params: Record<string, unknown>) => void>>();
+
     // ─── Broadcast waiters (playMove / playUploadedAudio) ────────────────
     private _broadcastWaiters: BroadcastWaiter[] = [];
 
@@ -735,6 +746,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Session stopped'));
+        this._rejectPendingRpc(new Error('Session stopped'));
         // Tear down resilience plumbing BEFORE closing `_pc` so a
         // queued grace callback can't dereference a dead handle.
         this._clearIceGrace();
@@ -1757,6 +1769,93 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         return true;
     }
 
+    /**
+     * Call a JSON-RPC method on the robot/app over the DataChannel and await
+     * its result. This is the one way to drive an on-robot app (start/stop it
+     * via `apps.*`, or drive a running app via its own namespace, e.g.
+     * `conversation.say`). Rejects on the JSON-RPC error, a closed channel, or
+     * timeout.
+     */
+    rpcCall<T = unknown>(
+        method: string,
+        params: Record<string, unknown> = {},
+        opts: { timeoutMs?: number } = {},
+    ): Promise<T> {
+        const timeoutMs = opts.timeoutMs ?? 20000;
+        const id = `rpc-${++this._rpcCounter}`;
+        if (!this._sendCommand({ jsonrpc: '2.0', id, method, params })) {
+            return Promise.reject(new Error(`rpcCall(${method}): data channel not open`));
+        }
+        return new Promise<T>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                this._pendingRpc.delete(id);
+                reject(new Error(`rpcCall(${method}) timed out after ${timeoutMs}ms`));
+            }, timeoutMs);
+            this._pendingRpc.set(id, {
+                resolve: (v) => resolve(v as T),
+                reject,
+                timer,
+            });
+        });
+    }
+
+    /**
+     * Subscribe to a JSON-RPC notification (one-way event) pushed by the
+     * robot/app, e.g. `conversation.turn`. Returns an unsubscribe function.
+     */
+    onNotification(
+        method: string,
+        cb: (params: Record<string, unknown>) => void,
+    ): () => void {
+        let set = this._rpcListeners.get(method);
+        if (!set) {
+            set = new Set();
+            this._rpcListeners.set(method, set);
+        }
+        set.add(cb);
+        return () => {
+            this._rpcListeners.get(method)?.delete(cb);
+        };
+    }
+
+    private _rejectPendingRpc(err: Error): void {
+        for (const pending of this._pendingRpc.values()) {
+            clearTimeout(pending.timer);
+            pending.reject(err);
+        }
+        this._pendingRpc.clear();
+    }
+
+    private _handleRpcMessage(data: Record<string, unknown>): void {
+        // Response to an rpcCall (correlated by id)...
+        if ('id' in data && data.id != null && ('result' in data || 'error' in data)) {
+            const pending = this._pendingRpc.get(data.id as string);
+            if (!pending) return;
+            this._pendingRpc.delete(data.id as string);
+            clearTimeout(pending.timer);
+            if ('error' in data && data.error) {
+                const err = data.error as { message?: string; data?: { reason?: string } };
+                const e = new Error(err.message ?? 'rpc error');
+                (e as Error & { reason?: string }).reason = err.data?.reason;
+                pending.reject(e);
+            } else {
+                pending.resolve((data as { result?: unknown }).result);
+            }
+            return;
+        }
+        // ...or a one-way notification (event): dispatch to listeners.
+        if (typeof data.method === 'string') {
+            const params = (data.params as Record<string, unknown> | undefined) ?? {};
+            for (const cb of this._rpcListeners.get(data.method) ?? []) {
+                try {
+                    cb(params);
+                } catch (e) {
+                    console.error(`onNotification(${data.method}) threw:`, e);
+                }
+            }
+        }
+    }
+
     private _checkSessionReady(): void {
         if (this._iceConnected && this._dcOpen && this._sessionResolve) {
             this._state = 'streaming';
@@ -1903,6 +2002,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     private _handleRobotMessage(data: Record<string, unknown>): void {
+        // JSON-RPC frames (app control surface) are handled separately from
+        // the legacy {command|type} robot messages that share this channel.
+        if (data.jsonrpc === '2.0') {
+            this._handleRpcMessage(data);
+            return;
+        }
         if ('version' in data && this._versionResolve) {
             this._versionResolve(data.version as string | null);
             this._versionResolve = null;

@@ -22,7 +22,7 @@ import aiohttp
 import websockets
 from websockets.asyncio.client import ClientConnection
 
-from reachy_mini.daemon.robot_app_lock import RobotAppLock
+from reachy_mini.daemon.robot_app_lock import RobotAppLock, RobotAppLockState
 from reachy_mini.utils.hardware_id import get_hardware_id
 
 logger = logging.getLogger(__name__)
@@ -1366,25 +1366,36 @@ class CentralSignalingRelay:
                     )
                 return
 
-            # Gate on the robot lock: if a local Python app is running, the
-            # lock will refuse our acquire. We also acquire proactively here
-            # so a concurrent local-app start can't sneak in between the
-            # check and the session handoff to local GStreamer.
+            # Gate on the robot lock:
+            #  - free            -> acquire remote_session (this peer owns the robot)
+            #  - local_app       -> accept as a CONTROL session: a local app owns
+            #                       the robot, and this peer (e.g. the mobile app)
+            #                       just drives/observes it over the DataChannel.
+            #                       It does NOT take the lock; the app keeps it.
+            #  - remote_session  -> another remote peer owns it -> refuse.
+            # We acquire proactively (from free) so a concurrent local-app start
+            # can't sneak in between the check and the session handoff.
             if self._robot_app_lock is not None:
-                # holder_name is generic because central already tracks the
-                # real consumer app name (via setPeerStatus meta) for its
-                # own rejection messages; the daemon-side lock just needs
-                # to know that *something* remote holds it.
-                if not self._robot_app_lock.try_acquire_remote("remote"):
+                lock = self._robot_app_lock
+                # holder_name is generic because central already tracks the real
+                # consumer app name (via setPeerStatus meta); the daemon-side
+                # lock just needs to know *something* remote holds it.
+                if lock.status().state == RobotAppLockState.LOCAL_APP:
+                    logger.info(
+                        f"[Central Relay] Session {session_id}: local app "
+                        f"{lock.status().holder_name!r} holds the robot; accepting "
+                        f"as a control-only session (no lock acquired)."
+                    )
+                elif not lock.try_acquire_remote("remote"):
                     logger.warning(
-                        f"[Central Relay] Rejecting session {session_id}: robot lock is held locally"
+                        f"[Central Relay] Rejecting session {session_id}: robot lock is held by another remote session"
                     )
                     if session_id:
                         await self._send_to_central(
                             {
                                 "type": "endSession",
                                 "sessionId": session_id,
-                                "reason": "robot_busy_local_app",
+                                "reason": "robot_busy",
                             }
                         )
                     return
