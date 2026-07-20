@@ -4,6 +4,7 @@ For now, this only checks if a new version of "reachy_mini" is available on PyPI
 """
 
 import json
+import re
 from importlib.metadata import distribution, version
 
 import requests
@@ -51,7 +52,7 @@ def get_pypi_version(package_name: str, pre_release: bool) -> semver.Version:
     response.raise_for_status()
     data = response.json()
 
-    version = data["info"]["version"]
+    version = _semver_version(data["info"]["version"])
 
     if pre_release:
         releases = list(data["releases"].keys())
@@ -59,7 +60,7 @@ def get_pypi_version(package_name: str, pre_release: bool) -> semver.Version:
         if pre_version > version:
             return pre_version
 
-    return _semver_version(version)
+    return version
 
 
 def get_local_version(package_name: str) -> semver.Version:
@@ -67,19 +68,30 @@ def get_local_version(package_name: str) -> semver.Version:
     return _semver_version(version(package_name))
 
 
+# PEP 440 pre-release / dev markers that sort *before* the release, matching
+# semver pre-release ordering. `.postN` is intentionally excluded: it sorts
+# after the release, which a semver pre-release token cannot represent.
+_PEP440_SUFFIX = re.compile(
+    r"^(?P<base>\d+\.\d+\.\d+)\.?(?P<kind>a|b|c|rc|alpha|beta|dev)\.?(?P<num>\d+)$"
+)
+
+
 def _semver_version(v: str) -> semver.Version:
-    """Convert a version string to a semver.Version object, handling pypi pre-release formats."""
+    """Convert a version string to a semver.Version object, handling pypi pre-release formats.
+
+    ``semver.Version.parse`` only accepts strict semver, so PEP 440 suffixes
+    such as ``1.2.3rc4`` (attached) and ``1.10.0.dev0`` (dot-separated) are
+    normalized to a semver pre-release (``1.2.3-rc.4`` / ``1.10.0-dev.0``)
+    first. The package ships ``X.Y.Z.dev0`` on main, so this path is hit by
+    ``get_local_version`` on any from-source / from-git-ref install.
+    """
     try:
         return semver.Version.parse(v)
     except ValueError:
-        version_parts = v.split(".")
-        if len(version_parts) < 3:
-            raise ValueError(f"Invalid version string: {v}")
+        pass
 
-        patch_part = version_parts[2]
-        if "rc" in patch_part:
-            patch, rc = patch_part.split("rc", 1)
-            v_clean = f"{version_parts[0]}.{version_parts[1]}.{patch}-rc.{rc}"
-            return semver.Version.parse(v_clean)
+    m = _PEP440_SUFFIX.match(v)
+    if m is None:
+        raise ValueError(f"Invalid version string: {v}")
 
-    raise ValueError(f"Invalid version string: {v}")
+    return semver.Version.parse(f"{m['base']}-{m['kind']}.{m['num']}")

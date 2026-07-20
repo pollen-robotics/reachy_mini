@@ -54,6 +54,7 @@ def pytest_collection_modifyitems(
         if item.get_closest_marker("webrtc") is not None:
             item.add_marker(skip)
 
+
 try:
     # Hack: import placo before reachy mini to fix an error with the Ubuntu CI
     import placo
@@ -230,7 +231,13 @@ class _FakeXVF3800:
         self._ctx = types.SimpleNamespace(dispose=lambda dev: None)
 
     def ctrl_transfer(
-        self, bmRequestType, bRequest, wValue=0, wIndex=0, data_or_wLength=None, timeout=0
+        self,
+        bmRequestType,
+        bRequest,
+        wValue=0,
+        wIndex=0,
+        data_or_wLength=None,
+        timeout=0,
     ):
         key = (wIndex, wValue & 0x7F)  # (resid, cmdid); read sets 0x80 on cmdid
         if bmRequestType & usb.util.CTRL_IN:
@@ -250,3 +257,63 @@ def fake_respeaker() -> ReSpeaker:
     dev = _FakeXVF3800()
     dev.regs[(20, 19)] = struct.pack("<ff", 1.57, 1.0)  # angle=1.57 rad, speech=True
     return ReSpeaker(dev)
+
+
+@pytest.fixture()
+def sim_backend() -> Generator[object, None, None]:
+    """Yield a headless ``MockupSimBackend(use_audio=False)`` — no hardware, no audio.
+
+    Its FK/IK use the pure-Python analytical kinematics; ``_media_server`` is a
+    MagicMock (with ``camera_specs``) so the media-delegating and head-tracking
+    branches are exercisable without a camera. ``current_head_pose`` is seeded so
+    ``get_present_head_pose()`` doesn't assert. This is the shared vehicle for
+    the ``daemon/backend/abstract.py`` tests (replaces the ad-hoc per-file
+    ``_make_backend()`` helpers).
+    """
+    from unittest.mock import MagicMock
+
+    import numpy as np
+
+    from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackend
+
+    backend = MockupSimBackend(use_audio=False)
+    backend._media_server = MagicMock()
+    backend.current_head_pose = np.eye(4)
+    try:
+        yield backend
+    finally:
+        backend.close()
+
+
+@pytest.fixture()
+def router_app():
+    """Build a TestClient with a single router mounted on a bare FastAPI app.
+
+    Removes the need for a real daemon: pass ``backend`` / ``daemon`` stubs and
+    they're wired both via ``app.dependency_overrides`` (for ``Depends`` seams)
+    and on ``app.state.daemon`` (for routers that read it directly). Extra
+    dependency overrides can be passed as ``overrides={dep_fn: provider}``.
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from reachy_mini.daemon.app.dependencies import (
+        get_backend,
+        get_daemon,
+        ws_get_backend,
+    )
+
+    def _make(router, *, backend=None, daemon=None, overrides=None) -> TestClient:
+        app = FastAPI()
+        app.include_router(router)
+        if backend is not None:
+            app.dependency_overrides[get_backend] = lambda: backend
+            app.dependency_overrides[ws_get_backend] = lambda: backend
+        if daemon is not None:
+            app.dependency_overrides[get_daemon] = lambda: daemon
+            app.state.daemon = daemon
+        for dep, provider in (overrides or {}).items():
+            app.dependency_overrides[dep] = provider
+        return TestClient(app)
+
+    return _make
