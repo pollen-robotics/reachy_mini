@@ -181,6 +181,22 @@ def test_get_pypi_version_prerelease(monkeypatch):
     assert (v.major, v.minor, v.patch) == (2, 1, 0)
 
 
+def test_get_pypi_version_prerelease_pep440_info_version(monkeypatch):
+    """Regression: pre-release compare must not crash on a PEP 440 info.version.
+
+    `pre_version > version` compared a parsed Version against the RAW
+    info.version string; semver coerces the RHS with strict parse, so a
+    non-semver info.version (e.g. an rc release) raised ValueError.
+    """
+    payload = {"info": {"version": "2.0.0rc1"}, "releases": {"1.9.0": [], "2.0.0rc2": []}}
+    monkeypatch.setattr(
+        update_available.requests, "get", lambda *a, **k: _FakeResponse(payload)
+    )
+    v = update_available.get_pypi_version("reachy-mini", pre_release=True)
+    assert (v.major, v.minor, v.patch) == (2, 0, 0)  # rc2 is newer -> returned
+    assert v.prerelease == "rc.2"
+
+
 def test_get_pypi_version_http_error(monkeypatch):
     """HTTP errors propagate out of get_pypi_version."""
     resp = _FakeResponse({}, error=requests.HTTPError("boom"))
