@@ -2,195 +2,25 @@
   "stats": {
     "total": 701,
     "passed": 686,
-    "skipped": 15,
-    "new": 28
+    "skipped": 15
   },
   "status": "passed",
-  "newTests": [
-    {
-      "id": "683c6c290921e6bc0d59bb7f33a8129f",
-      "name": "test_builders_emit_the_expected_wire_shape",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "87cf6535a5ba8c542229e70c18828e71",
-      "name": "test_startsession_control_only_while_local_app_runs",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "cff3bd0dcbd4f76861da0fddfbecf6c7",
-      "name": "test_dispatch_result",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "6b792e29570e8c983c64a16a423f1eb0",
-      "name": "test_apps_start_requires_name",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "bd8f623c3bfa5f655df72a1847d41958",
-      "name": "test_parse_inbound_rejects_malformed",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "066004686ce7c2e99b314e8e1a57a769",
-      "name": "test_relay_no_app_running",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "27f4c38a54d8c9232c8f312e5e44855b",
-      "name": "test_apps_install",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "0be27c04401d96a54cb60e4a0cd94c77",
-      "name": "test_relay_forwards_and_restores_id",
-      "status": "passed",
-      "duration": 101
-    },
-    {
-      "id": "d536322bb262ad8a6feff687bf9761d4",
-      "name": "test_keep_remote_acquire_from_free",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "50264c7aedc7c5a59052024b38abb7a9",
-      "name": "test_startsession_acquires_lock_when_free",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "3e70cf2dbb6556f9239b5a9241d3a685",
-      "name": "test_editable_install_resolves_via_app_python",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "80e4018dc39fc82ed6f98021cf625a66",
-      "name": "test_parse_inbound_classifies_each_frame",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "1fd0417b74e25f57470825205cfcd46c",
-      "name": "test_broadcast_reaches_all_clients",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "71845b3da0a1d1071839643eb3af6d58",
-      "name": "test_original_id_recorded_before_send",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "e9916687bd46107b6f5ed602c773c37b",
-      "name": "test_missing_everywhere_returns_none",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "28f57fed378762bb96a597c0971e528a",
-      "name": "test_dispatch_async_handler_and_params",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "6ff36dbeb3bc5714fd58bcb0848eb2fa",
-      "name": "test_error_reason_lives_in_data",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "3114828cfc36ad144aaa22a517ff18dd",
-      "name": "test_parse_request_notification_vs_call",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "18131081daf677b43e1c383b6c8dda3b",
-      "name": "test_handler_raises_jsonrpc_error",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "f334d23bc6048bc92cc9f84c9195d73b",
-      "name": "test_keep_remote_acquire_does_not_evict",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "452aa1760037185f2f43c9e388cb4ea3",
-      "name": "test_startsession_refused_when_another_remote_holds",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "611d5b905f506217bd91193684c9430f",
-      "name": "test_unknown_method",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "c016b9cf3a1c9488d31c01ea5dec12a7",
-      "name": "test_looks_like_jsonrpc",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "99f2805444208e9cd19bda103a17f416",
-      "name": "test_copy_install_reads_site_packages",
-      "status": "passed",
-      "duration": 2
-    },
-    {
-      "id": "2021d8cbf2c55e647ba7a6a57225f7d1",
-      "name": "test_notification_gets_no_response",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "730423109a8be29d62cc86867d2fa193",
-      "name": "test_keep_remote_acquire_raises_if_local_held",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "290c384836e21275b907df9f5b1f935b",
-      "name": "test_apps_status_idle",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "e8e28ad98920619ac25e0441bc99daee",
-      "name": "test_apps_start_and_stop",
-      "status": "passed",
-      "duration": 0
-    }
-  ],
+  "newTests": [],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 80293,
-  "createdAt": 1784554133983,
+  "duration": 79252,
+  "createdAt": 1784555671250,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "e5de79f8-e942-40d0-9ddf-ff83247bd5cf",
+    "reportId": "e9bcfa3d-7f1a-480b-8c5b-a898cb9c87b4",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/29746178346",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/29748015972",
   "href": "awesome/",
   "coverage": 51
 }
