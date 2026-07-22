@@ -53,18 +53,23 @@ def handle_default_bus_message(
     return True
 
 
-def get_sample(appsink: GstApp.AppSink, logger: logging.Logger) -> Optional[bytes]:
-    """Pull a sample from a GStreamer AppSink with a 20 ms timeout.
+def get_sample(
+    appsink: GstApp.AppSink,
+    logger: logging.Logger,
+    timeout_ns: int = 20_000_000,
+) -> Optional[bytes]:
+    """Pull a sample from a GStreamer AppSink with a bounded timeout.
 
     Args:
         appsink: The GStreamer AppSink element to pull from.
         logger: Logger for warnings.
+        timeout_ns: Maximum time to wait for a sample, in nanoseconds.
 
     Returns:
         Raw bytes of the buffer, or ``None`` if no sample was available.
 
     """
-    sample = appsink.try_pull_sample(20_000_000)
+    sample = appsink.try_pull_sample(timeout_ns)
     if sample is None:
         return None
     data = None

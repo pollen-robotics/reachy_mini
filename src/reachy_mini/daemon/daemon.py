@@ -330,7 +330,7 @@ class Daemon:
                 hardware_config_filepath=hardware_config_filepath,
             )
 
-            self.ws_server = WSServer(backend=self.backend)
+            self.ws_server = WSServer(backend=self.backend, status_provider=self.status)
             self.ws_server.start()
             self._thread_publish_status = Thread(
                 target=self._publish_status, daemon=True

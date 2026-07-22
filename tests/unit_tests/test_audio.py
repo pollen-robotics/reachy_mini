@@ -291,26 +291,33 @@ def test_play_sound_reaches_sink(audio_loopback: None) -> None:
 
 
 def test_doa_simulated(fake_respeaker, monkeypatch) -> None:
-    """DoA read path works against a fake board (no ReSpeaker hardware).
+    """DoA probes lazily and reuses the board for subsequent reads."""
+    initialization_calls = 0
 
-    Patches init_respeaker_usb so AudioDoA wraps the seeded fake, then checks
-    get_DoA decodes DOA_VALUE_RADIANS into the (angle, speech) tuple.
-    """
+    def initialize_respeaker():
+        nonlocal initialization_calls
+        initialization_calls += 1
+        return fake_respeaker
+
     monkeypatch.setattr(
-        "reachy_mini.media.audio_doa.init_respeaker_usb", lambda: fake_respeaker
+        "reachy_mini.media.audio_doa.init_respeaker_usb", initialize_respeaker
     )
     from reachy_mini.media.audio_doa import AudioDoA
 
     doa = AudioDoA()
+    assert initialization_calls == 0
     try:
         result = doa.get_DoA()
+        second_result = doa.get_DoA()
     finally:
         doa.close()
 
+    assert initialization_calls == 1
     assert result is not None
     angle, speech = result
     assert isinstance(angle, float) and angle == pytest.approx(1.57)
     assert speech is True
+    assert second_result == result
 
 
 def test_no_media() -> None:

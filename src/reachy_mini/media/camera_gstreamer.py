@@ -40,7 +40,6 @@ Example usage::
 """
 
 import platform
-import time
 from threading import Thread
 from typing import Optional
 
@@ -90,6 +89,8 @@ class GStreamerCamera(CameraBase):
 
     """
 
+    INITIAL_FRAME_TIMEOUT_NS = 2_000_000_000
+
     def __init__(
         self,
         log_level: str = "INFO",
@@ -111,6 +112,7 @@ class GStreamerCamera(CameraBase):
 
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
+        self._initial_frame_pending = False
 
         if camera_specs is not None:
             self.camera_specs: CameraSpecs = camera_specs
@@ -243,15 +245,7 @@ class GStreamerCamera(CameraBase):
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
         GLib.timeout_add_seconds(5, self._dump_latency)
-        # Best-effort wait for the first frame before returning, so callers can
-        # read immediately without getting None.
-        deadline = time.monotonic() + 2.0
-        try:
-            while time.monotonic() < deadline:
-                if self._appsink_video.emit("try-pull-sample", 100_000_000) is not None:
-                    break
-        except Exception:
-            pass
+        self._initial_frame_pending = True
 
     def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Pull the latest BGR frame from the IPC endpoint.
@@ -261,7 +255,15 @@ class GStreamerCamera(CameraBase):
             or ``None`` if no frame is available within the timeout.
 
         """
-        data = get_sample(self._appsink_video, self.logger)
+        if self._initial_frame_pending:
+            self._initial_frame_pending = False
+            data = get_sample(
+                self._appsink_video,
+                self.logger,
+                timeout_ns=self.INITIAL_FRAME_TIMEOUT_NS,
+            )
+        else:
+            data = get_sample(self._appsink_video, self.logger)
         if data is None:
             return None
         return np.frombuffer(data, dtype=np.uint8).reshape(
@@ -270,6 +272,7 @@ class GStreamerCamera(CameraBase):
 
     def close(self) -> None:
         """Stop the pipeline and release resources."""
+        self._initial_frame_pending = False
         self._release_jpeg_encoder()
         self._loop.quit()
         self.pipeline.set_state(Gst.State.NULL)

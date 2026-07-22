@@ -251,6 +251,7 @@ class GstMediaServer:
         self._webrtcechoprobe: Optional[Gst.Element] = None
 
         self._build_pipeline()
+        self._pipeline_needs_rebuild = False
 
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
@@ -1197,12 +1198,15 @@ class GstMediaServer:
         return handle_default_bus_message(self._logger, msg, pipeline)
 
     def start(self) -> None:
-        """Rebuild the pipeline from scratch and start it.
+        """Start the pipeline, rebuilding it after hardware was released."""
+        if self._pipeline_needs_rebuild:
+            self._logger.debug("Starting WebRTC (rebuilding pipeline)")
+            self._bus_sender.remove_watch()
+            self._build_pipeline()
+            self._pipeline_needs_rebuild = False
+        else:
+            self._logger.debug("Starting WebRTC")
 
-        Rebuilding ensures a clean state after stop() released all hardware.
-        """
-        self._logger.debug("Starting WebRTC (rebuilding pipeline)")
-        self._build_pipeline()
         self._pipeline_sender.set_state(Gst.State.PLAYING)
         GLib.timeout_add_seconds(5, self._dump_latency)
 
@@ -1210,6 +1214,7 @@ class GstMediaServer:
         """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
         self._pipeline_sender.set_state(Gst.State.NULL)
+        self._pipeline_needs_rebuild = True
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker.
