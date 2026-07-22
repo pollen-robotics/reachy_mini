@@ -5,15 +5,15 @@ import sys
 import textwrap
 
 
-def test_import_defers_daemon_server() -> None:
-    """The public SDK import excludes daemon-only modules until requested."""
+def test_import_defers_daemon_backend() -> None:
+    """The public SDK import excludes the daemon backend module."""
     script = textwrap.dedent(
         """
         import sys
 
         import reachy_mini
 
-        assert "reachy_mini.io.ws_server" not in sys.modules
+        assert "reachy_mini.daemon.backend.abstract" not in sys.modules
 
         from reachy_mini import ReachyMini, ReachyMiniApp
         from reachy_mini.io import WSServer

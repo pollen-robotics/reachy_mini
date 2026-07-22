@@ -17,12 +17,11 @@ import logging
 import threading
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from fastapi import WebSocket, WebSocketDisconnect
 
-from reachy_mini.daemon.backend.abstract import Backend
 from reachy_mini.io.abstract import AbstractServer
 from reachy_mini.io.protocol import (
     AnyCommand,
@@ -35,6 +34,9 @@ from reachy_mini.io.protocol import (
 )
 from reachy_mini.io.publisher import Publisher
 
+if TYPE_CHECKING:
+    from reachy_mini.daemon.backend.abstract import Backend
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,7 +45,7 @@ class WSServer(AbstractServer):
 
     def __init__(
         self,
-        backend: Backend,
+        backend: "Backend",
         status_provider: Callable[[], DaemonStatus] | None = None,
     ) -> None:
         """Initialize the WebSocket server."""
@@ -177,6 +179,7 @@ class WSServer(AbstractServer):
 
     def _handle_command(self, cmd: AnyCommand) -> None:
         """Dispatch a validated command through Backend.process_command."""
+
         def send(resp: dict[str, Any]) -> None:
             pass  # SDK commands are fire-and-forget
 
