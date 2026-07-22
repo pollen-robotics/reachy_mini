@@ -1,1 +1,1 @@
-{"id":"91c96b787008b887713c7f50d0b6d6d9","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_info_non_dict_is_unknown_job","name":"test_update_info_non_dict_is_unknown_job","status":"passed","testResultsByEnv":{"default":"f358d6d098d795a53eb27b054d92468c"}}
+{"id":"91c96b787008b887713c7f50d0b6d6d9","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_info_non_dict_is_unknown_job","name":"test_update_info_non_dict_is_unknown_job","status":"passed","testResultsByEnv":{"default":"41b2b4e3d095a438887b460dead49646"}}

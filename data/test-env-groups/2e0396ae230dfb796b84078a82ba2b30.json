@@ -1,1 +1,1 @@
-{"id":"2e0396ae230dfb796b84078a82ba2b30","fullName":"tests.unit_tests.test_face_tracking#test_tracker_sticks_to_track_and_rejects_far_jump","name":"test_tracker_sticks_to_track_and_rejects_far_jump","status":"passed","testResultsByEnv":{"default":"5f5de330998e63c68d744a1ba43adf32"}}
+{"id":"2e0396ae230dfb796b84078a82ba2b30","fullName":"tests.unit_tests.test_face_tracking#test_tracker_sticks_to_track_and_rejects_far_jump","name":"test_tracker_sticks_to_track_and_rejects_far_jump","status":"passed","testResultsByEnv":{"default":"ba661c28b9f6c446b994293ac78fe960"}}
