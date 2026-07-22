@@ -27,6 +27,14 @@ logger = logging.getLogger(__name__)
 # Detector input width; smaller trades recall for CPU.
 _TRACKING_WIDTH = 320
 
+# FaceTracker's own detection-rate cap, enforced with a videorate element in the
+# GStreamer graph so surplus frames are dropped before colour-convert and the pull.
+# The local IPC feed already caps at 10 FPS today, so this is currently redundant;
+# it becomes load-bearing once the IPC rate is configurable
+# (see https://github.com/pollen-robotics/reachy_mini/issues/1263), at which point
+# this constant should read that config instead of being hardcoded.
+_DETECTION_FPS = 10
+
 
 @dataclass
 class FaceObservation:
@@ -250,6 +258,11 @@ class FaceTracker:
         windows = platform.system() == "Windows"
         source = Gst.ElementFactory.make("win32ipcvideosrc" if windows else "unixfdsrc")
         queue_frames = Gst.ElementFactory.make("queue")
+        # Cap the detection rate here, before colour-convert, so frames above
+        # _DETECTION_FPS are dropped ahead of the (possibly hardware) convert and
+        # the appsink pull rather than detected on.
+        videorate = Gst.ElementFactory.make("videorate")
+        framerate_caps = Gst.ElementFactory.make("capsfilter")
         # Prefer v4l2convert: on the RPi the ISP does the scale + convert in hardware.
         convert_chain = [Gst.ElementFactory.make("v4l2convert")]
         if convert_chain[0] is None:
@@ -259,7 +272,15 @@ class FaceTracker:
             ]
         capsfilter = Gst.ElementFactory.make("capsfilter")
         appsink = Gst.ElementFactory.make("appsink")
-        chain = [source, queue_frames, *convert_chain, capsfilter, appsink]
+        chain = [
+            source,
+            queue_frames,
+            videorate,
+            framerate_caps,
+            *convert_chain,
+            capsfilter,
+            appsink,
+        ]
         if any(element is None for element in chain):
             logger.warning("Face tracking unavailable: missing GStreamer plugins.")
             return
@@ -269,6 +290,13 @@ class FaceTracker:
             source.set_property("socket-path", CAMERA_SOCKET_PATH)
         queue_frames.set_property("leaky", 2)
         queue_frames.set_property("max-size-buffers", 1)
+        # drop-only so a feed slower than _DETECTION_FPS passes straight through
+        # instead of videorate duplicating frames to hit the target rate.
+        videorate.set_property("drop-only", True)
+        framerate_caps.set_property(
+            "caps",
+            Gst.Caps.from_string(f"video/x-raw,framerate={_DETECTION_FPS}/1"),
+        )
         src_w, src_h = camera_specs.default_resolution.value[:2]
         width = min(_TRACKING_WIDTH, src_w)
         height = max(2, round(width * src_h / src_w / 2) * 2)
