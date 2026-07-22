@@ -251,8 +251,10 @@ class FaceTracker:
         source = Gst.ElementFactory.make("win32ipcvideosrc" if windows else "unixfdsrc")
         queue_frames = Gst.ElementFactory.make("queue")
         # Prefer v4l2convert: on the RPi the ISP does the scale + convert in hardware.
-        convert_chain = [Gst.ElementFactory.make("v4l2convert")]
-        if convert_chain[0] is None:
+        # Probe first because the bundled bindings raise when an optional factory is missing.
+        if Gst.ElementFactory.find("v4l2convert") is not None:
+            convert_chain = [Gst.ElementFactory.make("v4l2convert")]
+        else:
             convert_chain = [
                 Gst.ElementFactory.make("videoscale"),
                 Gst.ElementFactory.make("videoconvert"),
