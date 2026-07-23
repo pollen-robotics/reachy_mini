@@ -4,8 +4,9 @@ The backend's control loop calls _broadcast() 2-3 times per tick through the
 publishers. Each call used to unconditionally schedule a callback on the
 uvicorn event loop via call_soon_threadsafe once self._loop had been captured
 (i.e. after the first client ever connected). With zero connected clients that
-meant thousands of cross-thread wakeups per second for nothing - an idle
-daemon pinned ~1 CPU core forever after the first app run.
+meant 100-150 pointless cross-thread wakeups per second (backend thread pays
+the loop lock + self-pipe write, the uvicorn loop pays the wakeup + callback),
+forever after the first app run.
 
 These tests pin the contract: no clients -> no scheduling; a connected client
 still receives broadcast messages.
