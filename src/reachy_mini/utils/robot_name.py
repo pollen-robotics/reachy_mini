@@ -22,8 +22,9 @@ logger = logging.getLogger(__name__)
 _STATE_PATH = Path.home() / ".config" / "reachy_mini" / "robot_name.json"
 
 # Keep names short enough for mDNS / UI labels and free of surrounding
-# whitespace. Empty names are rejected (treated as "no override").
-_MAX_NAME_LENGTH = 64
+# whitespace. Empty names are rejected (treated as "no override"). This is the
+# single source of truth for the cap; the SetRobotNameCmd schema imports it.
+MAX_ROBOT_NAME_LENGTH = 64
 
 
 def get_robot_name() -> str | None:
@@ -51,7 +52,7 @@ def set_robot_name(name: str) -> str | None:
     Returns the stored (trimmed, length-capped) name on success, or None on
     empty/invalid input or a write error.
     """
-    sanitized = name.strip()[:_MAX_NAME_LENGTH] if isinstance(name, str) else ""
+    sanitized = name.strip()[:MAX_ROBOT_NAME_LENGTH] if isinstance(name, str) else ""
     if not sanitized:
         return None
     try:

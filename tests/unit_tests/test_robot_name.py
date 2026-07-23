@@ -44,8 +44,8 @@ def test_set_trims_surrounding_whitespace(state_path: Path):
 def test_set_caps_length_to_max(state_path: Path):
     long_name = "x" * 200
     stored = robot_name.set_robot_name(long_name)
-    assert stored == "x" * robot_name._MAX_NAME_LENGTH
-    assert robot_name.get_robot_name() == "x" * robot_name._MAX_NAME_LENGTH
+    assert stored == "x" * robot_name.MAX_ROBOT_NAME_LENGTH
+    assert robot_name.get_robot_name() == "x" * robot_name.MAX_ROBOT_NAME_LENGTH
 
 
 @pytest.mark.parametrize("value", ["", "   ", "\n\t"])
