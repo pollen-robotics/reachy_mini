@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import pytest
 
+from reachy_mini.media.camera_constants import ReachyMiniLiteCamSpecs
+from reachy_mini.vision import face_tracking
 from reachy_mini.vision.face_tracking import FaceTracker, Tracker, to_observation
 
 if TYPE_CHECKING:
@@ -137,6 +139,49 @@ def test_tracker_drops_track_after_misses_then_reacquires() -> None:
     assert tracker.select([far], 200, 200) is None  # miss 1, track held
     assert tracker.select([far], 200, 200) is None  # miss 2, track dropped
     assert tracker.select([far], 200, 200) is far  # re-acquired
+
+
+def test_face_tracker_falls_back_when_v4l2convert_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing Linux converter falls back to the portable software chain."""
+    pipeline_ready = threading.Event()
+    created_factories: list[str] = []
+    element_factory = face_tracking.Gst.ElementFactory
+    original_find = element_factory.find
+    original_make = element_factory.make
+
+    def fake_find(factory_name: str) -> object | None:
+        if factory_name == "v4l2convert":
+            return None
+        return original_find(factory_name)
+
+    def fake_make(factory_name: str, name: str | None = None) -> object:
+        if factory_name == "v4l2convert":
+            raise RuntimeError("No such element: v4l2convert")
+        created_factories.append(factory_name)
+        return original_make(factory_name, name)
+
+    class FakeFaceDetector:
+        """Signal that the tracker pipeline was built successfully."""
+
+        def __init__(self) -> None:
+            pipeline_ready.set()
+
+    monkeypatch.setattr(element_factory, "find", staticmethod(fake_find))
+    monkeypatch.setattr(element_factory, "make", staticmethod(fake_make))
+    monkeypatch.setattr(face_tracking, "FaceDetector", FakeFaceDetector)
+
+    tracker = FaceTracker()
+    tracker.start(ReachyMiniLiteCamSpecs())
+    try:
+        assert pipeline_ready.wait(5.0)
+    finally:
+        tracker.stop()
+
+    assert "v4l2convert" not in created_factories
+    assert "videoscale" in created_factories
+    assert "videoconvert" in created_factories
 
 
 def test_stuck_stop_never_double_spawns(monkeypatch: pytest.MonkeyPatch) -> None:
