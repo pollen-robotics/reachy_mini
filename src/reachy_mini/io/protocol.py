@@ -31,6 +31,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, TypeAdapter
 
 from reachy_mini.utils.interpolation import InterpolationTechnique
+from reachy_mini.utils.robot_name import MAX_ROBOT_NAME_LENGTH
 
 # ------------------------------------------------------------------
 # Shared enums
@@ -309,7 +310,7 @@ class SetRobotNameCmd(BaseModel):
     """Set and persist the robot display name."""
 
     type: Literal["set_robot_name"] = "set_robot_name"
-    name: str = Field(..., min_length=1, max_length=64)
+    name: str = Field(..., min_length=1, max_length=MAX_ROBOT_NAME_LENGTH)
 
 
 class SetSpeechOffsetsCmd(BaseModel):
