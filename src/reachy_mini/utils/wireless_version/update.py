@@ -19,6 +19,17 @@ async def update_reachy_mini(
         git_ref: If set, install from this GitHub tag/branch instead of PyPI.
 
     """
+    # Invalidate the startup-check stamp before touching any venv, so a crash
+    # mid-update always triggers the full startup checks on the next boot.
+    # (The stamp's dist-info signature would catch this anyway; this makes it
+    # double-covered.)
+    try:
+        from .startup_check import clear_startup_stamp
+
+        clear_startup_stamp()
+    except Exception:
+        logger.warning("Could not clear startup-check stamp before update")
+
     # Update daemon venv
     logger.info("Updating daemon venv...")
     cmd, extra_env = build_install_command(
