@@ -9,10 +9,11 @@ import uvicorn
 from reachy_mini.daemon.app.main import CORS_ORIGIN_REGEX, Args, create_app
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.reachy_mini import ReachyMini
+from reachy_mini.utils.discovery import DiscoveredRobot
 
 
 async def _start_app_server(
-    **daemon_kwargs: object,
+    robot_name: str = "reachy_mini",
 ) -> tuple[Daemon, uvicorn.Server, threading.Thread, int]:
     """Start a full FastAPI + daemon server in a background thread.
 
@@ -24,6 +25,7 @@ async def _start_app_server(
         wake_up_on_start=False,
         no_media=True,
         autostart=True,
+        robot_name=robot_name,
         fastapi_port=0,  # let OS pick a free port
     )
 
@@ -107,6 +109,65 @@ async def test_sdk_warns_on_daemon_version_mismatch() -> None:
         ):
             with ReachyMini(host="localhost", port=port, media_backend="no_media"):
                 pass
+    finally:
+        await daemon.stop(goto_sleep_on_stop=False)
+        await _stop_app_server(server, thread)
+
+
+@pytest.mark.asyncio
+async def test_named_local_daemon_is_validated() -> None:
+    daemon, server, thread, port = await _start_app_server(robot_name="local_robot")
+
+    try:
+        with ReachyMini(
+            robot_name="local_robot",
+            port=port,
+            media_backend="no_media",
+        ) as mini:
+            assert mini.connection_mode == "localhost_only"
+            assert mini.client.host == "localhost"
+            assert mini.robot_name == "local_robot"
+
+        with pytest.raises(
+            ConnectionError,
+            match="local Reachy Mini daemon named 'other_robot'",
+        ):
+            ReachyMini(
+                robot_name="other_robot",
+                port=port,
+                connection_mode="localhost_only",
+                media_backend="no_media",
+            )
+    finally:
+        await daemon.stop(goto_sleep_on_stop=False)
+        await _stop_app_server(server, thread)
+
+
+@pytest.mark.asyncio
+async def test_named_daemon_auto_discovers_and_tries_all_addresses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    daemon, server, thread, port = await _start_app_server(robot_name="remote_robot")
+    discovered = DiscoveredRobot(
+        name="remote_robot",
+        host="",
+        port=port,
+        addresses=["127.0.0.2", "127.0.0.1"],
+    )
+    monkeypatch.setattr(
+        "reachy_mini.reachy_mini.find_robots",
+        lambda timeout: [discovered],
+    )
+
+    try:
+        with ReachyMini(
+            robot_name="remote_robot",
+            port=1,
+            media_backend="no_media",
+        ) as mini:
+            assert mini.connection_mode == "network"
+            assert mini.client.host == "127.0.0.1"
+            assert mini.client.port == port
     finally:
         await daemon.stop(goto_sleep_on_stop=False)
         await _stop_app_server(server, thread)

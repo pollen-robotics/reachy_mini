@@ -42,6 +42,7 @@ from reachy_mini.io.ws_client import WSClient
 from reachy_mini.media.camera_constants import get_camera_specs_by_name
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
+from reachy_mini.utils.discovery import find_robots
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
 from reachy_mini.vision.look_at import (
     default_head_to_camera_transform,
@@ -84,12 +85,10 @@ class ReachyMini:
 
     Args:
         robot_name: Name of the robot, defaults to "reachy_mini". A non-default
-            name is resolved to its daemon via mDNS, to target one robot
-            among several on the same subnet.
+            name is validated locally or resolved via mDNS.
         host: Hostname or IP of the daemon. Defaults to "reachy-mini.local".
             In ``"auto"`` mode this is only used as a fallback when localhost
-            is unreachable, so the default works out of the box for local
-            development.
+            is unreachable.
         port: Port of the daemon's FastAPI server. Defaults to 8000.
         connection_mode: Select how to connect to the daemon. Use
             `"localhost_only"` to restrict connections to daemons running on
@@ -118,9 +117,8 @@ class ReachyMini:
         """Initialize the Reachy Mini robot.
 
         Args:
-            robot_name (str): Name of the robot, defaults to "reachy_mini". A
-                non-default name is resolved to its daemon via mDNS discovery,
-                used to target one robot among several on the same subnet.
+            robot_name: Name of the robot, defaults to "reachy_mini". A
+                non-default name is validated locally or resolved via mDNS.
             host (str): Hostname or IP of the daemon. Defaults to
                 "reachy-mini.local".  In ``"auto"`` mode (the default) the
                 client first tries ``localhost``; *host* is only used as a
@@ -467,9 +465,37 @@ class ReachyMini:
         """Create a client according to the requested mode, adding auto fallback."""
         requested_mode = cast(ConnectionMode, requested_mode.lower())
 
-        # Only mDNS discovery can pick one named daemon out of several on a subnet.
-        if self.robot_name != DEFAULT_ROBOT_NAME and requested_mode != "localhost_only":
-            from reachy_mini.utils.discovery import find_robots
+        if self.robot_name != DEFAULT_ROBOT_NAME:
+            if requested_mode != "network":
+                client = None
+                try:
+                    client = self._connect_single(
+                        host="localhost",
+                        port=self.port,
+                        timeout=timeout,
+                    )
+                    daemon_status = client.get_status(timeout=timeout)
+                    if daemon_status.robot_name != self.robot_name:
+                        raise ConnectionError(
+                            f"Connected daemon is named {daemon_status.robot_name!r}, "
+                            f"expected {self.robot_name!r}."
+                        )
+                except (ConnectionError, TimeoutError) as error:
+                    if client is not None:
+                        client.disconnect()
+                    if requested_mode == "localhost_only":
+                        raise ConnectionError(
+                            f"Could not connect to a local Reachy Mini daemon named "
+                            f"{self.robot_name!r}: {error}"
+                        ) from error
+                    self.logger.info(
+                        "No matching local daemon found (%s). Discovering %r via mDNS.",
+                        error,
+                        self.robot_name,
+                    )
+                else:
+                    self.logger.info("Connection mode selected: localhost_only")
+                    return client, "localhost_only"
 
             matches = [
                 robot
@@ -481,9 +507,25 @@ class ReachyMini:
                     f"No Reachy Mini daemon named {self.robot_name!r} found on the "
                     f"network. Start its daemon with --robot-name {self.robot_name!r}."
                 )
-            host = matches[0].addresses[0] if matches[0].addresses else matches[0].host
-            client = self._connect_single(host, matches[0].port or self.port, timeout)
-            return client, "network"
+
+            robot = matches[0]
+            for host in [*robot.addresses, robot.host]:
+                if not host:
+                    continue
+                try:
+                    client = self._connect_single(
+                        host, robot.port or self.port, timeout
+                    )
+                except (ConnectionError, TimeoutError):
+                    continue
+
+                self.logger.info("Connection mode selected: network")
+                return client, "network"
+
+            raise ConnectionError(
+                f"Found Reachy Mini daemon named {self.robot_name!r}, but could "
+                "not connect to any advertised address."
+            )
 
         if requested_mode == "auto":
             try:
