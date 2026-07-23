@@ -12,10 +12,11 @@ still receives broadcast messages.
 """
 
 import asyncio
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect
 
 from reachy_mini.io.ws_server import WSServer
 
@@ -24,20 +25,24 @@ class FakeWebSocket:
     """Minimal stand-in for fastapi.WebSocket driven by the test."""
 
     def __init__(self) -> None:
+        """Create a connected-looking fake with no messages sent yet."""
         self.sent: list[str] = []
         self._disconnected = asyncio.Event()
 
     async def accept(self) -> None:
-        pass
+        """Accept the connection (no-op)."""
 
     async def send_text(self, msg: str) -> None:
+        """Record an outbound message."""
         self.sent.append(msg)
 
     async def receive_text(self) -> str:
+        """Block until the test disconnects, then raise like a closed socket."""
         await self._disconnected.wait()
         raise WebSocketDisconnect(1000)
 
     def disconnect(self) -> None:
+        """Make receive_text raise WebSocketDisconnect."""
         self._disconnected.set()
 
 
@@ -53,7 +58,7 @@ async def test_broadcast_schedules_nothing_after_last_client_disconnects() -> No
 
     ws = FakeWebSocket()
     ws.disconnect()  # receive_text raises immediately: connect then disconnect
-    await server.handle_client(ws)
+    await server.handle_client(cast(WebSocket, ws))
     await asyncio.sleep(0)  # let the cancelled send task finish
 
     assert not server._clients
@@ -74,7 +79,7 @@ async def test_broadcast_delivers_to_connected_client() -> None:
     server = WSServer(backend=MagicMock())
 
     ws = FakeWebSocket()
-    client_task = asyncio.create_task(server.handle_client(ws))
+    client_task = asyncio.create_task(server.handle_client(cast(WebSocket, ws)))
 
     async with asyncio.timeout(2):
         while not server._clients:
