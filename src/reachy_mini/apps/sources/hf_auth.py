@@ -435,7 +435,7 @@ def _cleanup_expired_device_sessions() -> None:
         _device_code_sessions.pop(sid, None)
 
 
-def _persist_device_oauth_token(response: dict[str, Any]) -> tuple[str, str]:
+def _persist_device_oauth_token(response: Any) -> tuple[str, str]:
     """Persist a device-code token response so `get_token()` can auto-refresh it.
 
     huggingface_hub stores the access token, its `refresh_token` and `expires_at`
@@ -447,7 +447,11 @@ def _persist_device_oauth_token(response: dict[str, Any]) -> tuple[str, str]:
         Tuple of (token_name, username).
 
     """
-    # Private but stable within the pinned huggingface_hub range (>=1.20,<2).
+    # Private but pinned exactly (see pyproject); guarded by the contract test in
+    # tests/unit_tests/test_hf_hub_private_api_contract.py. `response` is typed Any
+    # because it is an opaque huggingface_hub payload (a private OAuthTokenResponse
+    # TypedDict) that we only ever pass straight back to the hub — annotating it as
+    # dict[str, Any] would clash with the hub's TypedDict under mypy --strict.
     from huggingface_hub._login import _save_oauth_token
 
     return _save_oauth_token(response)
@@ -494,9 +498,7 @@ async def start_device_code_login() -> dict[str, Any]:
     }
 
 
-async def _run_device_code_poll(
-    session: DeviceCodeSession, device_info: dict[str, Any]
-) -> None:
+async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) -> None:
     """Poll Hugging Face until the user authorizes the device, then persist the token."""
     from huggingface_hub.errors import DeviceCodeError
     from huggingface_hub.utils._oauth_device import poll_device_token

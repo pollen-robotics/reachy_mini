@@ -1076,6 +1076,113 @@
         }
       }
     },
+    "/api/hf-auth/oauth/device/start": {
+      "post": {
+        "summary": "Start Device Oauth",
+        "description": "Start a device-code OAuth login.\n\nReturns a `user_code` and `verification_uri(_complete)` to show the user, plus\na `session_id` to poll via `/oauth/device/status/{session_id}`.",
+        "operationId": "start_device_oauth_api_hf_auth_oauth_device_start_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Start Device Oauth Api Hf Auth Oauth Device Start Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/device/status/{session_id}": {
+      "get": {
+        "summary": "Get Device Oauth Status",
+        "description": "Poll for device-code login completion.\n\nOn the first poll that reports success, bring the central relay up (a\ntoken-less boot has no relay instance yet), mirroring the OAuth callback.",
+        "operationId": "get_device_oauth_status_api_hf_auth_oauth_device_status__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Device Oauth Status Api Hf Auth Oauth Device Status  Session Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/device/session/{session_id}": {
+      "delete": {
+        "summary": "Cancel Device Oauth Session",
+        "description": "Cancel a pending device-code login session.",
+        "operationId": "cancel_device_oauth_session_api_hf_auth_oauth_device_session__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Cancel Device Oauth Session Api Hf Auth Oauth Device Session  Session Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/hf-auth/oauth/callback": {
       "get": {
         "summary": "Oauth Callback",
