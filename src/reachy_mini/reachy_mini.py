@@ -16,7 +16,6 @@ from typing import Dict, List, Literal, Optional, Union, cast
 import numpy as np
 import numpy.typing as npt
 from asgiref.sync import async_to_sync
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import (
@@ -730,6 +729,10 @@ class ReachyMini:
         self.media.play_sound("wake_up.wav")
 
         # Roll 20° to the left
+        # Imported here so that `import reachy_mini` doesn't pay for scipy (~1s
+        # on the wireless robot). wake_up is a one-shot behavior, not a hot path.
+        from scipy.spatial.transform import Rotation as R
+
         pose = INIT_HEAD_POSE.copy()
         pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
         self.goto_target(pose, duration=0.2)
