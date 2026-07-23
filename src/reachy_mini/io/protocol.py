@@ -211,6 +211,11 @@ class PlayRecordedMoveCmd(BaseModel):
     type: Literal["play_recorded_move"] = "play_recorded_move"
     move_name: str
     dataset_name: Optional[str] = None
+    # Seconds to smoothly interpolate to the move's first frame before playing
+    # (0 = snap instantly, the default). Lets callers ease into a move whose
+    # start pose is far from the robot's current pose (e.g. replaying the
+    # wake-from-sleep move while already awake) instead of jumping.
+    initial_goto_duration: float = 0.0
 
 
 class SetMotorModeCmd(BaseModel):

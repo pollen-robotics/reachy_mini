@@ -2397,7 +2397,7 @@ class Backend:
             }
         )
         try:
-            await self.play_move(move)
+            await self.play_move(move, initial_goto_duration=cmd.initial_goto_duration)
         except Exception as e:
             self.logger.warning(f"play_recorded_move: playback failed: {e}")
 

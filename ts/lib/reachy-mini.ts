@@ -1225,11 +1225,20 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * on the robot; pass it to source a move from another repo. The daemon
      * self-guards against a concurrent move, so a rapid double call is a no-op.
      */
-    playRecordedMove(moveName: string, { dataset }: { dataset?: string } = {}): boolean {
+    playRecordedMove(
+        moveName: string,
+        {
+            dataset,
+            initialGotoDuration,
+        }: { dataset?: string; initialGotoDuration?: number } = {},
+    ): boolean {
         return this._sendCommand({
             type: 'play_recorded_move',
             move_name: moveName,
             ...(dataset ? { dataset_name: dataset } : {}),
+            ...(initialGotoDuration && initialGotoDuration > 0
+                ? { initial_goto_duration: initialGotoDuration }
+                : {}),
         });
     }
 
