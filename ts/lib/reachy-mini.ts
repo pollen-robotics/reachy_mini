@@ -142,12 +142,12 @@ const MAX_VISIBILITY_DEFER_MS = 60_000;
  * a missing reply means the daemon either never got it or - crucially -
  * predates that command entirely: an older daemon silently drops an
  * unknown `type` and sends nothing back, which would otherwise leave the
- * caller's promise pending forever (e.g. `getFirstWakeUp()` against a
- * daemon that has no `get_first_wake_up` handler). Resolving `null` on
- * timeout maps cleanly onto the "unsupported / failed" value every slot
- * caller already handles. 4 s is comfortably above a WebRTC data-channel
- * round trip on a congested phone link while still failing fast enough
- * that a gated UI (wake-up wizard) doesn't feel hung.
+ * caller's promise pending forever (e.g. a newer SDK calling a command a
+ * 1.8.x daemon doesn't implement). Resolving `null` on timeout maps
+ * cleanly onto the "unsupported / failed" value every slot caller already
+ * handles. 4 s is comfortably above a WebRTC data-channel round trip on a
+ * congested phone link while still failing fast enough that a gated UI
+ * doesn't feel hung.
  */
 const SLOT_ROUNDTRIP_TIMEOUT_MS = 4000;
 
@@ -1405,9 +1405,14 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             // Single settle path shared by the daemon response, supersession
             // by a newer call, and the fail-open timeout below. It clears the
             // timer once and detaches itself from the slot only if it's still
-            // the current occupant, so a late reply can't call a newer slot's
-            // resolver. The message handler stores `settle` (not `resolve`),
-            // so every response route funnels through here.
+            // the current occupant, so a stale settle (timed-out or superseded)
+            // can't clear a newer call's slot registration. The message handler
+            // stores `settle` (not `resolve`), so every response route funnels
+            // through here.
+            // Note: slots are keyed by command type, not request id, so this
+            // does not prevent a genuinely late daemon reply from being routed
+            // to a newer same-command caller — that cross-talk is inherent to
+            // the single-flight slot design and unchanged here.
             const settle = (v: T | null): void => {
                 if (timer !== undefined) {
                     clearTimeout(timer);
