@@ -30,6 +30,9 @@ RESTORE_VENV = Path("/restore/venvs/mini_daemon")
 STAMP_PATH = DAEMON_VENV / ".startup_check_stamp.json"
 STAMP_FORMAT = 1
 
+# systemd unit self-healed on every boot (see check_and_update_gpio_shutdown_service).
+GPIO_SHUTDOWN_UNIT_TARGET = Path("/etc/systemd/system/gpio-shutdown-daemon.service")
+
 
 def check_and_fix_venvs_ownership(
     venvs_path: str = "/venvs", custom_logger: logging.Logger | None = None
@@ -274,6 +277,82 @@ def check_and_update_wireless_launcher() -> None:
         print(f"Failed to update service: {e.stderr}")
     except Exception as e:
         print(f"Unexpected error while updating service: {e}")
+
+
+def check_and_update_gpio_shutdown_service() -> None:
+    """Check if the gpio-shutdown systemd unit needs updating and update if different.
+
+    Compares the packaged gpio-shutdown-daemon.service with the installed
+    version at /etc/systemd/system. Older images generated the unit at install
+    time with an ExecStart pointing at wherever the SDK lived back then, so
+    without this sync a stale unit keeps running old launcher code forever.
+    On a difference the packaged unit is copied over and the service is
+    restarted; a missing unit is installed and enabled.
+    """
+    source = (
+        Path(__file__).parent
+        / ".."
+        / ".."
+        / "daemon"
+        / "app"
+        / "services"
+        / "gpio_shutdown"
+        / "gpio-shutdown-daemon.service"
+    )
+    source = source.resolve()
+    target = GPIO_SHUTDOWN_UNIT_TARGET
+
+    if not source.exists():
+        print(f"Source gpio-shutdown service file not found at {source}")
+        return
+
+    target_missing = not target.exists()
+    if not target_missing:
+        try:
+            if filecmp.cmp(str(source), str(target), shallow=False):
+                print("gpio-shutdown service is up to date")
+                return
+            print("gpio-shutdown service has changed, updating...")
+        except Exception as e:
+            print(f"Error comparing gpio-shutdown service files: {e}")
+            return
+    else:
+        print(f"gpio-shutdown service not installed at {target}, installing...")
+
+    try:
+        print(f"Copying {source} to {target}")
+        subprocess.run(
+            ["sudo", "cp", str(source), str(target)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            ["sudo", "systemctl", "daemon-reload"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        if target_missing:
+            # Fresh install: enable so it also starts on subsequent boots.
+            subprocess.run(
+                ["sudo", "systemctl", "enable", "--now", "gpio-shutdown-daemon"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        else:
+            subprocess.run(
+                ["sudo", "systemctl", "restart", "gpio-shutdown-daemon"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        print("Successfully updated gpio-shutdown service")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to update gpio-shutdown service: {e.stderr}")
+    except Exception as e:
+        print(f"Unexpected error while updating gpio-shutdown service: {e}")
 
 
 def check_and_sync_apps_venv_sdk() -> bool:
@@ -533,10 +612,10 @@ def run_wireless_startup_checks(
 ) -> None:
     """Run wireless startup checks, skipping the expensive ones when nothing changed.
 
-    Cheap checks (bluetooth service files, wireless systemd unit) always run:
-    they guard files outside /venvs that a venv-keyed stamp cannot see. The
-    expensive ones (full /venvs ownership scan, apps_venv SDK sync,
-    restore-venv integrity) are skipped only when a stamp written by a
+    Cheap checks (bluetooth service files, wireless and gpio-shutdown systemd
+    units) always run: they guard files outside /venvs that a venv-keyed stamp
+    cannot see. The expensive ones (full /venvs ownership scan, apps_venv SDK
+    sync, restore-venv integrity) are skipped only when a stamp written by a
     previous fully-successful run matches the current install signature.
     Any error reading or matching the stamp falls back to the full checks.
     """
@@ -550,11 +629,13 @@ def run_wireless_startup_checks(
         print("Startup stamp valid, skipping expensive startup checks")
         check_and_update_bluetooth_service()
         check_and_update_wireless_launcher()
+        check_and_update_gpio_shutdown_service()
         return
 
     all_ok = check_and_fix_venvs_ownership(custom_logger=custom_logger)
     check_and_update_bluetooth_service()
     check_and_update_wireless_launcher()
+    check_and_update_gpio_shutdown_service()
     all_ok = check_and_sync_apps_venv_sdk() and all_ok
     all_ok = check_and_fix_restore_venv() and all_ok
 

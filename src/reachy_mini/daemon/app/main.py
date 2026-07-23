@@ -801,7 +801,7 @@ def main() -> None:
         # Startup checks. The expensive ones (full /venvs ownership scan,
         # apps_venv SDK sync probe, restore-venv pip check) are skipped when
         # the startup stamp proves nothing changed since the last full run;
-        # the cheap file checks (bluetooth/systemd unit) run on every boot.
+        # the cheap file checks (bluetooth, systemd units) run on every boot.
         run_wireless_startup_checks(custom_logger=logging.getLogger())
 
         if check_reachymini_asoundrc():
