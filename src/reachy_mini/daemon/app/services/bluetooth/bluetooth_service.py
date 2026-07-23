@@ -883,11 +883,11 @@ class BluetoothCommandService:
                 logger.error(f"Error executing command: {e}")
             return "OK: System running"
         elif upper == "IDENTIFY":
-            # Back-compat alias for the identify move. Now plays a named
-            # recorded move (motion + sound) instead of the old hardcoded
-            # sound; superseded by the generic PLAY command below. Public
-            # (no PIN), see PLAY rationale.
-            self._run_async(lambda: _play_recorded_move(_IDENTIFY_MOVE))
+            # "Make a noise so I know which robot is mine" in the BLE scan list.
+            # Plays a short sound ONLY - no motion here (the robot only starts
+            # moving in the later wizard steps). Public (no PIN), see PLAY
+            # rationale. Runs OFF the mainloop (proxies to the daemon over HTTP).
+            self._run_async(lambda: _play_sound(_IDENTIFY_SOUND))
             return "OK: working"
         elif upper.startswith("PLAY "):
             # Play a named recorded move (emotions library) on the robot:
@@ -1341,8 +1341,10 @@ def _daemon_request(
 # daemon startup (see recorded_move.DEFAULT_DATASETS) so the first BLE PLAY
 # doesn't block on a network download.
 _EMOTIONS_DATASET = "Anne-Charlotte/new-emotions"
-# Move played on IDENTIFY (the BLE scan-list "make a noise so I know it's you").
-_IDENTIFY_MOVE = "toc-toc-toc"
+# Sound played on IDENTIFY (the BLE scan-list "make a noise so I know which
+# robot is mine"). Sound only - NO motion here; the robot only starts moving
+# in the later wizard steps.
+_IDENTIFY_SOUND = "surprise.ogg"
 
 
 def _play_recorded_move(move_name: str) -> str:
@@ -1364,6 +1366,23 @@ def _play_recorded_move(move_name: str) -> str:
             return "ERROR: Unknown move"
         if e.code == 503:
             return "ERROR: Robot not ready"
+        return "ERROR: Play failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _play_sound(sound_file: str) -> str:
+    """Play a built-in sound file on the robot's speaker (no motion)."""
+    if not sound_file:
+        return "ERROR: Missing sound file"
+    try:
+        _daemon_request("POST", "/api/media/play_sound", data={"file": sound_file})
+        return "OK: Playing sound"
+    except urllib.error.HTTPError as e:
+        if e.code == 503:
+            return "ERROR: Audio not ready"
         return "ERROR: Play failed"
     except urllib.error.URLError:
         return "ERROR: Daemon unreachable"
