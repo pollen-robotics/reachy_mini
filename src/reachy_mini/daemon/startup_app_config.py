@@ -15,6 +15,7 @@ import platformdirs
 logger = logging.getLogger(__name__)
 
 _KEY = "startup_app"
+_PREWARM_KEY = "prewarm_app"
 _EQ_KEY = "speaker_eq_gains"
 # equalizer-10bands accepts per-band gains in [-24, +12] dB.
 _EQ_GAIN_MIN, _EQ_GAIN_MAX = -24.0, 12.0
@@ -57,6 +58,20 @@ def get_startup_app() -> str | None:
     """Return the persisted startup app name, or None if unset."""
     value = _read().get(_KEY)
     return value if isinstance(value, str) else None
+
+
+def get_prewarm_app() -> str | None:
+    """App to keep pre-spawned in the parked state, or None to disable.
+
+    ``"prewarm_app": "<name>"`` in daemon_config.json overrides; ``false``
+    disables pre-warming entirely. Defaults to the startup app.
+    """
+    value = _read().get(_PREWARM_KEY)
+    if value is False:
+        return None
+    if isinstance(value, str) and value:
+        return value
+    return get_startup_app()
 
 
 def get_speaker_eq_gains() -> list[float] | None:

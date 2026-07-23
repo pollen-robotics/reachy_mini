@@ -236,6 +236,42 @@ def _get_custom_app_url_from_file(
         return None
 
 
+def app_supports_parking(
+    app_name: str,
+    wireless_version: bool = False,
+    desktop_app_daemon: bool = False,
+) -> bool:
+    """Whether the app opts into parked pre-spawn AND its SDK has the hook.
+
+    Both checks are text scrapes (no import): the app's main.py must declare
+    ``supports_parking = True`` and the app venv's reachy_mini must define
+    ``_park_until_activated``. Fail-closed: any doubt means no pre-spawn — a
+    pre-spawned app that ignored the park flag would boot fully (robot, media,
+    wake move) without holding the robot app lock.
+    """
+    main_file = _find_app_main_file(app_name, wireless_version, desktop_app_daemon)
+    if main_file is None:
+        return False
+    try:
+        content = main_file.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    if not re.search(r"supports_parking\s*(?::\s*[^=]+)?\s*=\s*True", content):
+        return False
+
+    site_packages = get_app_site_packages(
+        app_name, wireless_version, desktop_app_daemon
+    )
+    if site_packages is None:
+        return False
+    sdk_app_py = site_packages / "reachy_mini" / "apps" / "app.py"
+    try:
+        return "_park_until_activated" in sdk_app_py.read_text(encoding="utf-8")
+    except OSError:
+        # e.g. editable SDK install: skip parking, plain spawn still works.
+        return False
+
+
 async def _list_apps_from_separate_venvs(
     wireless_version: bool = False,
     desktop_app_daemon: bool = False,

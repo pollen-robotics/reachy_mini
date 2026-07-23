@@ -4,19 +4,24 @@ import asyncio
 import logging
 import os
 import signal
+import time
+from collections import deque
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
 
 import numpy as np
 import psutil
 from pydantic import BaseModel
 
+from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.backend.robot import RobotBackend
 from reachy_mini.io.protocol import MotorControlMode
 from reachy_mini.utils.interpolation import distance_between_poses
 
 from . import AppInfo, SourceKind
+from .app import PARKED_ENV_VAR, PARKED_READY_SENTINEL
 from .sources import hf_space, local_common_venv
 
 if TYPE_CHECKING:
@@ -53,6 +58,28 @@ class RunningApp:
     status: AppStatus
 
 
+_PARK_KEEPER_POLL_S = 10.0
+_PARKED_READY_TIMEOUT_S = 90.0  # park sentinel must appear within this window
+_PARK_CRASH_WINDOW_S = 600.0  # 3 parked deaths in 10 min => stop trying
+
+
+@dataclass
+class ParkedApp:
+    """A pre-warmed app process blocked before robot/media init.
+
+    Holds NO robot lock, NO media pipelines, NO network sessions — only warm
+    imports. Never stored in ``AppManager.current_app``, so it is invisible to
+    ``is_app_running()``, the status endpoints and the JSON-RPC relay.
+    """
+
+    process: asyncio.subprocess.Process
+    name: str
+    spawned_at: float
+    stderr_tail: "deque[str]"
+    drain_task: "asyncio.Task[None] | None" = None
+    ready: bool = False
+
+
 def _get_catalog_app_key(app: AppInfo) -> str:
     """Return the Hugging Face space id used to deduplicate catalog entries."""
     value = app.extra.get("id")
@@ -75,9 +102,20 @@ class AppManager:
         self.desktop_app_daemon = desktop_app_daemon
         self.running_on_wireless = wireless_version
         self.daemon = daemon
+        self.parked_app: ParkedApp | None = None
+        self._parked_keeper_task: "asyncio.Task[None] | None" = None
+        self._parking_paused = 0
+        self._parking_nudge = asyncio.Event()
+        self._parked_crash_times: "deque[float]" = deque(maxlen=3)
 
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
+        if self._parked_keeper_task is not None:
+            self._parked_keeper_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._parked_keeper_task
+            self._parked_keeper_task = None
+        await self._evict_parked_app("daemon shutting down")
         if self.is_app_running():
             await self.stop_current_app()
 
@@ -120,6 +158,228 @@ class AppManager:
             self.desktop_app_daemon,
         )
 
+    def _build_app_env(self, *, parked: bool) -> "dict[str, str]":
+        """Environment for an app subprocess.
+
+        Scrub GStreamer env vars that the daemon's own `.venv/.../gstreamer_bundle.pth`
+        set pointing at paths inside the daemon's .venv. The app runs in apps_venv and
+        its own gstreamer_bundle.pth will set fresh values at Python startup. Leaving
+        the parent's values in place is actively harmful:
+          * Single-value vars like GST_REGISTRY_1_0 and GST_PLUGIN_SCANNER_1_0 get
+            prepended to (via gstreamer_libs.setup_python_environment) producing a
+            malformed `apps_venv_path:.venv_path` string that GStreamer can't parse.
+          * The app ends up using .venv's plugin scanner binary and registry cache,
+            which can mask issues specific to apps_venv's own gstreamer install.
+        See pollen-robotics/reachy-mini-desktop-app#185.
+        """
+        app_env = os.environ.copy()
+        for key in (
+            "GST_PLUGIN_PATH_1_0",
+            "GST_PLUGIN_SYSTEM_PATH_1_0",
+            "GST_REGISTRY_1_0",
+            "GST_PLUGIN_SCANNER_1_0",
+            "GI_TYPELIB_PATH",
+            "PYGI_DLL_DIRS",
+            "XDG_DATA_DIRS",
+            "XDG_CONFIG_DIRS",
+        ):
+            app_env.pop(key, None)
+        if parked:
+            app_env[PARKED_ENV_VAR] = "1"
+        return app_env
+
+    async def _spawn_app_subprocess(
+        self, app_name: str, *, parked: bool
+    ) -> asyncio.subprocess.Process:
+        """Spawn an app subprocess (unbuffered), optionally in the parked state."""
+        module_name = local_common_venv.get_app_module(
+            app_name, self.wireless_version, self.desktop_app_daemon
+        )
+        python_path = local_common_venv.get_app_python(
+            app_name, self.wireless_version, self.desktop_app_daemon
+        )
+        return await asyncio.create_subprocess_exec(
+            str(python_path),
+            "-u",  # Unbuffered stdout/stderr for real-time logging
+            "-m",
+            module_name,
+            stdin=asyncio.subprocess.PIPE if parked else None,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=self._build_app_env(parked=parked),
+        )
+
+    # ------------------------------------------------------------------
+    # Parked (pre-warmed) app machinery
+    # ------------------------------------------------------------------
+
+    async def _activate_parked_app(self) -> "asyncio.subprocess.Process | None":
+        """Signal the parked process to resume; ``None`` => plain spawn."""
+        parked = self.parked_app
+        assert parked is not None
+        self.parked_app = None
+        if parked.drain_task is not None:
+            parked.drain_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await parked.drain_task
+        if parked.process.returncode is not None:
+            self.logger.warning(
+                f"Parked app '{parked.name}' already exited; falling back to spawn"
+            )
+            return None
+        try:
+            assert parked.process.stdin is not None
+            parked.process.stdin.write(b"activate\n")
+            await parked.process.stdin.drain()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            self._kill_process_tree(parked.process.pid)
+            with suppress(ProcessLookupError):
+                parked.process.kill()
+            await parked.process.wait()
+            return None
+        self._parked_crash_times.clear()
+        return parked.process
+
+    async def _evict_parked_app(self, reason: str) -> None:
+        """Discard the parked instance. Idempotent, never raises."""
+        parked = self.parked_app
+        if parked is None:
+            return
+        self.parked_app = None
+        self.logger.info(f"Discarding parked app '{parked.name}' ({reason})")
+        if parked.drain_task is not None:
+            parked.drain_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await parked.drain_task
+        if parked.process.returncode is None:
+            try:
+                if parked.process.stdin is not None:
+                    parked.process.stdin.close()  # EOF => cooperative exit(0)
+                await asyncio.wait_for(parked.process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                self._kill_process_tree(parked.process.pid)
+                with suppress(ProcessLookupError):
+                    parked.process.kill()
+                await parked.process.wait()
+
+    @asynccontextmanager
+    async def pause_parking(self, reason: str) -> "AsyncIterator[None]":
+        """No parked instance may exist while the apps venv is being mutated.
+
+        Any install/update/remove can change code a parked process already
+        imported (including the SDK itself); a stale parked instance would
+        then activate with old code.
+        """
+        self._parking_paused += 1
+        try:
+            await self._evict_parked_app(reason)
+            yield
+        finally:
+            self._parking_paused -= 1
+            self._parked_crash_times.clear()  # fresh code deserves fresh attempts
+            self._parking_nudge.set()
+
+    def start_parked_app_keeper(self) -> None:
+        """Start the background task that maintains one parked app when idle."""
+        if self._parked_keeper_task is None:
+            self._parked_keeper_task = asyncio.create_task(self._parked_app_keeper())
+
+    def _parking_crash_looping(self) -> bool:
+        return (
+            len(self._parked_crash_times) == self._parked_crash_times.maxlen
+            and time.monotonic() - self._parked_crash_times[0] < _PARK_CRASH_WINDOW_S
+        )
+
+    async def _parked_app_keeper(self) -> None:
+        """Keep exactly one parked instance of the prewarm app alive when idle.
+
+        A single poll/nudge loop instead of respawn hooks scattered over every
+        stop/crash/update path — whatever killed the parked instance, the next
+        iteration restores the invariant.
+        """
+        log = self.logger.getChild("parked")
+        while True:
+            try:
+                self._parking_nudge.clear()
+                parked = self.parked_app
+                if (
+                    parked is not None
+                    and not parked.ready
+                    and time.monotonic() - parked.spawned_at > _PARKED_READY_TIMEOUT_S
+                ):
+                    # Safety backstop: opted in but never parked => misbehaving.
+                    await self._evict_parked_app("never reported parked-ready")
+                    self._parked_crash_times.append(time.monotonic())
+                elif (
+                    parked is None
+                    and self._parking_paused == 0
+                    and not self.is_app_running()
+                    and not self._parking_crash_looping()
+                ):
+                    name = startup_app_config.get_prewarm_app()
+                    if name and local_common_venv.app_supports_parking(
+                        name, self.wireless_version, self.desktop_app_daemon
+                    ):
+                        await self._spawn_parked_app(name)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.warning("parked-app keeper iteration failed", exc_info=True)
+            with suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    self._parking_nudge.wait(), timeout=_PARK_KEEPER_POLL_S
+                )
+
+    async def _spawn_parked_app(self, name: str) -> None:
+        log = self.logger.getChild("parked")
+        log.info(f"Pre-warming app '{name}' (parked until start-app)")
+        try:
+            process = await self._spawn_app_subprocess(name, parked=True)
+        except Exception:
+            log.warning(f"Failed to pre-warm app '{name}'", exc_info=True)
+            self._parked_crash_times.append(time.monotonic())
+            return
+        parked = ParkedApp(
+            process=process,
+            name=name,
+            spawned_at=time.monotonic(),
+            stderr_tail=deque(maxlen=10),
+        )
+        parked.drain_task = asyncio.create_task(self._drain_parked_process(parked))
+        self.parked_app = parked
+
+    async def _drain_parked_process(self, parked: ParkedApp) -> None:
+        """Drain stdout/stderr (pipes must not fill) and notice unexpected death."""
+        log = self.logger.getChild("parked")
+
+        async def drain_stdout() -> None:
+            assert parked.process.stdout is not None
+            async for line in parked.process.stdout:
+                text = line.decode().rstrip()
+                if text == PARKED_READY_SENTINEL:
+                    parked.ready = True
+                    log.info(f"App '{parked.name}' is parked and ready")
+                else:
+                    log.debug(text)
+
+        async def drain_stderr() -> None:
+            assert parked.process.stderr is not None
+            async for line in parked.process.stderr:
+                text = line.decode().rstrip()
+                parked.stderr_tail.append(text)
+                log.debug(text)
+
+        await asyncio.gather(drain_stdout(), drain_stderr())
+        returncode = await parked.process.wait()
+        if self.parked_app is parked:  # died while parked (not evicted/activated)
+            self.parked_app = None
+            self._parked_crash_times.append(time.monotonic())
+            log.warning(
+                f"Parked app '{parked.name}' exited (code {returncode}) before "
+                "activation. Last stderr:\n" + "\n".join(parked.stderr_tail)
+            )
+            self._parking_nudge.set()
+
     async def start_app(
         self,
         app_name: str,
@@ -160,49 +420,22 @@ class AppManager:
                 raise RuntimeError("The robot app slot is already in use")
 
         try:
-            # Get module name and Python path for subprocess execution.
-            module_name = local_common_venv.get_app_module(
-                app_name, self.wireless_version, self.desktop_app_daemon
-            )
-            python_path = local_common_venv.get_app_python(
-                app_name, self.wireless_version, self.desktop_app_daemon
-            )
+            process: "asyncio.subprocess.Process | None" = None
+            if self.parked_app is not None:
+                if self.parked_app.name == app_name:
+                    process = await self._activate_parked_app()
+                    if process is not None:
+                        self.logger.getChild("runner").info(
+                            f"Activated pre-warmed app {app_name}"
+                        )
+                else:
+                    # A different app was requested: the parked instance holds
+                    # no resources, but discard it so it can't linger.
+                    await self._evict_parked_app(f"starting '{app_name}' instead")
 
-            # Launch app as subprocess with unbuffered output.
-            #
-            # Scrub GStreamer env vars that the daemon's own `.venv/.../gstreamer_bundle.pth`
-            # set pointing at paths inside the daemon's .venv. The app runs in apps_venv and
-            # its own gstreamer_bundle.pth will set fresh values at Python startup. Leaving
-            # the parent's values in place is actively harmful:
-            #   * Single-value vars like GST_REGISTRY_1_0 and GST_PLUGIN_SCANNER_1_0 get
-            #     prepended to (via gstreamer_libs.setup_python_environment) producing a
-            #     malformed `apps_venv_path:.venv_path` string that GStreamer can't parse.
-            #   * The app ends up using .venv's plugin scanner binary and registry cache,
-            #     which can mask issues specific to apps_venv's own gstreamer install.
-            # See pollen-robotics/reachy-mini-desktop-app#185.
-            app_env = os.environ.copy()
-            for key in (
-                "GST_PLUGIN_PATH_1_0",
-                "GST_PLUGIN_SYSTEM_PATH_1_0",
-                "GST_REGISTRY_1_0",
-                "GST_PLUGIN_SCANNER_1_0",
-                "GI_TYPELIB_PATH",
-                "PYGI_DLL_DIRS",
-                "XDG_DATA_DIRS",
-                "XDG_CONFIG_DIRS",
-            ):
-                app_env.pop(key, None)
-
-            self.logger.getChild("runner").info(f"Starting app {app_name}")
-            process = await asyncio.create_subprocess_exec(
-                str(python_path),
-                "-u",  # Unbuffered stdout/stderr for real-time logging
-                "-m",
-                module_name,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=app_env,
-            )
+            if process is None:
+                self.logger.getChild("runner").info(f"Starting app {app_name}")
+                process = await self._spawn_app_subprocess(app_name, parked=False)
         except Exception:
             # Release the lock if we failed before the subprocess was created —
             # monitor_process is the normal release path but it depends on
@@ -283,6 +516,8 @@ class AppManager:
                 # release is fine too.
                 if self.daemon is not None:
                     self.daemon.robot_app_lock.release_local(app_name)
+                # Restore the parked instance promptly after any app exit.
+                self._parking_nudge.set()
 
         monitor_task = asyncio.create_task(monitor_process())
 
@@ -445,23 +680,28 @@ class AppManager:
 
     async def install_new_app(self, app: AppInfo, logger: logging.Logger) -> None:
         """Install a new app by name."""
-        success = await local_common_venv.install_package(
-            app,
-            logger,
-            wireless_version=self.wireless_version,
-            desktop_app_daemon=self.desktop_app_daemon,
-        )
+        # Any mutation of the shared apps_venv can change code a parked
+        # process already imported (including the SDK itself) — never leave
+        # a stale parked instance across an install/update/remove.
+        async with self.pause_parking(f"installing '{app.name}'"):
+            success = await local_common_venv.install_package(
+                app,
+                logger,
+                wireless_version=self.wireless_version,
+                desktop_app_daemon=self.desktop_app_daemon,
+            )
         if success != 0:
             raise RuntimeError(f"Failed to install app '{app.name}'")
 
     async def remove_app(self, app_name: str, logger: logging.Logger) -> None:
         """Remove an installed app by name."""
-        success = await local_common_venv.uninstall_package(
-            app_name,
-            logger,
-            wireless_version=self.wireless_version,
-            desktop_app_daemon=self.desktop_app_daemon,
-        )
+        async with self.pause_parking(f"removing '{app_name}'"):
+            success = await local_common_venv.uninstall_package(
+                app_name,
+                logger,
+                wireless_version=self.wireless_version,
+                desktop_app_daemon=self.desktop_app_daemon,
+            )
         if success != 0:
             raise RuntimeError(f"Failed to uninstall app '{app_name}'")
 
@@ -522,26 +762,27 @@ class AppManager:
 
         logger.info(f"Updating app '{app_name}' from {space_id}")
 
-        # First uninstall the old version (handles package name changes)
-        logger.info(f"Uninstalling old version of '{app_name}'")
-        try:
-            await local_common_venv.uninstall_package(
-                app_name,
+        async with self.pause_parking(f"updating '{app_name}'"):
+            # First uninstall the old version (handles package name changes)
+            logger.info(f"Uninstalling old version of '{app_name}'")
+            try:
+                await local_common_venv.uninstall_package(
+                    app_name,
+                    logger,
+                    wireless_version=self.wireless_version,
+                    desktop_app_daemon=self.desktop_app_daemon,
+                )
+            except Exception as e:
+                logger.warning(f"Could not uninstall old version: {e}")
+
+            # Install the new version
+            success = await local_common_venv.install_package(
+                app_info,
                 logger,
                 wireless_version=self.wireless_version,
                 desktop_app_daemon=self.desktop_app_daemon,
+                force_reinstall=True,
             )
-        except Exception as e:
-            logger.warning(f"Could not uninstall old version: {e}")
-
-        # Install the new version
-        success = await local_common_venv.install_package(
-            app_info,
-            logger,
-            wireless_version=self.wireless_version,
-            desktop_app_daemon=self.desktop_app_daemon,
-            force_reinstall=True,
-        )
 
         if success != 0:
             raise RuntimeError(f"Failed to update app '{app_name}'")

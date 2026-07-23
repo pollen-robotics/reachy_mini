@@ -219,6 +219,13 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     f"Startup app antenna watcher started for app: {startup_app}"
                 )
 
+            # Keep a pre-warmed (parked) instance of the prewarm app around so
+            # start-app costs a few seconds instead of a cold ~12s spawn. The
+            # keeper owns spawn/respawn/eviction; AppManager.close() tears it
+            # down. Only apps that opt in (supports_parking) are pre-spawned.
+            if args.autostart and args.wireless_version:
+                app.state.app_manager.start_parked_app_keeper()
+
             # Register mDNS service only after the daemon is ready
             mdns.register()
 

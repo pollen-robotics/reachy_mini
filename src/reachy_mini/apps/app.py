@@ -10,6 +10,8 @@ It uses Jinja2 templates to generate the necessary files for the app project.
 import argparse
 import importlib
 import logging
+import os
+import sys
 import threading
 import traceback
 from abc import ABC, abstractmethod
@@ -22,6 +24,14 @@ from reachy_mini.reachy_mini import ReachyMini
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
+# Set by the daemon when it pre-spawns an app in the parked (pre-warmed)
+# state: the process does its imports and __init__, then blocks before any
+# robot/media/network access until the daemon activates it over stdin.
+PARKED_ENV_VAR = "REACHY_MINI_START_PARKED"
+# Printed on stdout once the app is parked; the daemon uses it to confirm the
+# process actually cooperates (and to time out ones that don't).
+PARKED_READY_SENTINEL = "REACHY_MINI_APP_PARKED_READY"
+
 
 class ReachyMiniApp(ABC):
     """Base class for Reachy Mini applications."""
@@ -29,6 +39,11 @@ class ReachyMiniApp(ABC):
     custom_app_url: str | None = None
     dont_start_webserver: bool = False
     request_media_backend: str | None = None
+    # Apps that are safe to pre-spawn parked (no side effects at import time,
+    # no robot/media access before wrapped_run) opt in with True. The daemon
+    # scrapes this from the app's main.py without importing it, like
+    # custom_app_url.
+    supports_parking: bool = False
 
     def __init__(self, running_on_wireless: bool = False) -> None:
         """Initialize the Reachy Mini app."""
@@ -103,8 +118,35 @@ class ReachyMiniApp(ABC):
         except (socket.timeout, ConnectionRefusedError, OSError):
             return False
 
+    def _park_until_activated(self) -> None:
+        """If pre-spawned by the daemon, block here until activation.
+
+        The daemon writes a line on stdin to activate; EOF means the daemon
+        exited or discarded this instance — exit cleanly without ever touching
+        the robot, media, or network.
+        """
+        if os.environ.get(PARKED_ENV_VAR) != "1":
+            return
+        print(PARKED_READY_SENTINEL, flush=True)
+        self.logger.info("Parked (pre-warmed); waiting for activation on stdin")
+        try:
+            line = sys.stdin.readline()
+        except KeyboardInterrupt:
+            raise SystemExit(0)
+        if not line:
+            self.logger.info("Parked app released without activation; exiting.")
+            raise SystemExit(0)
+        # The daemon's HTTP server was not accepting connections yet when this
+        # process was spawned (daemon boot), so the probe from __init__ is
+        # stale — redo it, otherwise the SDK would pick network/WebRTC mode.
+        self.daemon_on_localhost = self._check_daemon_on_localhost()
+        self.logger.info(
+            f"Activated. Daemon on localhost: {self.daemon_on_localhost}"
+        )
+
     def wrapped_run(self, *args: Any, **kwargs: Any) -> None:
         """Wrap the run method with Reachy Mini context management."""
+        self._park_until_activated()
         settings_app_t: threading.Thread | None = None
         if self.settings_app is not None:
             import uvicorn
