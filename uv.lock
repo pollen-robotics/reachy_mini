@@ -12,7 +12,6 @@ exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
 pollen-bmi088-imu-library = false
-huggingface-hub = false
 
 [[package]]
 name = "absl-py"
@@ -3487,7 +3486,7 @@ requires-dist = [
     { name = "gpiozero", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=2.0.0" },
     { name = "gradio-client", marker = "extra == 'examples'" },
     { name = "gstreamer-bundle", marker = "sys_platform != 'linux'", specifier = "==1.28.3" },
-    { name = "huggingface-hub", specifier = ">=1.20.0,<2.0.0" },
+    { name = "huggingface-hub", specifier = "==1.20.1" },
     { name = "jinja2" },
     { name = "lgpio", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=0.2.2.0" },
     { name = "libusb-package", specifier = ">=1.0.26.3" },

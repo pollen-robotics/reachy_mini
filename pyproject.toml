@@ -21,7 +21,14 @@ dependencies = [
     "python-multipart>=0.0.27",
     "starlette<1.0.0", # TODO: update TemplateResponse(request, name, context) before allowing Starlette 1.x
     "pyserial",
-    "huggingface-hub>=1.20.0,<2.0.0", # >=1.20.0: device-code OAuth login with transparent token refresh (get_token())
+    # Exact pin: the device-code OAuth flow (apps/sources/hf_auth.py) depends on
+    # PRIVATE huggingface_hub internals whose import paths are NOT stable across
+    # releases. The `_oauth_device` module lived at the top level in 1.20.0 and
+    # moved to `utils/` in 1.20.1; `_login._save_oauth_token` (refresh-capable
+    # token persistence backing get_token()) is likewise private. Pinning the
+    # exact version freezes that contract. To bump: re-verify every private
+    # import in hf_auth.py against the new version first.
+    "huggingface-hub==1.20.1",
     "reachy-mini-rust-kinematics>=1.0.3",
     "asgiref",
     "aiohttp>=3.14.0",
@@ -105,9 +112,8 @@ exclude-newer = "7 days"
 
 [tool.uv.exclude-newer-package]
 "pollen_BMI088_imu_library"  = false
-# Opt out of the 7-day cutoff for huggingface-hub: device-code OAuth login with
-# transparent token refresh requires >=1.20.0, released within the window.
-"huggingface_hub" = false
+# huggingface-hub is pinned to an exact version (==1.20.1) in [project.dependencies],
+# released well before the 7-day cutoff, so no opt-out is needed here.
 
 [tool.setuptools]
 package-dir = { "" = "src" }
