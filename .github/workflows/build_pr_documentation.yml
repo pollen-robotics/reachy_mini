@@ -12,10 +12,10 @@ concurrency:
 
 jobs:
   build:
-    uses: huggingface/doc-builder/.github/workflows/build_pr_documentation.yml@main
+    uses: pollen-robotics/doc-builder/.github/workflows/build_pr_documentation.yml@add-python-version-input
     with:
       repo_owner: pollen-robotics
       commit_sha: ${{ github.event.pull_request.head.sha }}
       pr_number: ${{ github.event.number }}
       package: reachy_mini
-      custom_container: pollenrobotics/reachymini_documentation
+      python_version: "3.11"

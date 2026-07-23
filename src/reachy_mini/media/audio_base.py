@@ -10,13 +10,13 @@ Direction of Arrival (``get_DoA()``), and ``cleanup()`` logic so that
 Subclasses must implement:
 - ``start_recording()``, ``stop_recording()``
 - ``start_playing()``, ``stop_playing()``
-- ``push_audio_sample()``
 - ``clear_player()``
 - ``play_sound()``
 
 """
 
 import logging
+import warnings
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -30,10 +30,74 @@ from reachy_mini.media.audio_control_utils import (
     init_respeaker_usb,
 )
 from reachy_mini.media.audio_doa import AudioDoA
+from reachy_mini.media.audio_utils import (
+    has_reachymini_asoundrc,
+    resolve_speaker_eq_gains,
+)
+from reachy_mini.media.device_detection import get_audio_device
 from reachy_mini.media.gstreamer_utils import get_sample, handle_default_bus_message
 
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
+
+# Software AEC (webrtcdsp + webrtcechoprobe) constants shared by the audio
+# backends. The elements only accept S16LE at a fixed set of rates
+# (8000/16000/32000/48000) and must share a probe name to be paired.
+AEC_RATE = 48_000
+AEC_CHANNELS = 2
+AEC_PROBE_NAME = "reachymini_aec_probe"
+
+
+def make_speaker_eq(logger: logging.Logger) -> Optional[Gst.Element]:
+    """Build an ``equalizer-10bands`` from the configured gains, or ``None``.
+
+    Returns ``None`` (caller keeps the direct link) when all gains are zero,
+    the resolved output is not the Reachy Mini Audio device, or the element is
+    unavailable, so uncalibrated robots (and fallback outputs) stay
+    byte-identical. Callers insert it on the speaker branch only, after the
+    wobbler tee, so head motion is driven by the uncorrected signal.
+    """
+    gains = resolve_speaker_eq_gains()
+    if not any(gains):
+        return None
+    # The correction is tuned for the Reachy head shell + its speaker; skip it
+    # when playback falls back to a different output (autoaudiosink).
+    if not (has_reachymini_asoundrc() or get_audio_device("Sink") is not None):
+        logger.info("Speaker EQ skipped: output is not the Reachy Mini Audio device")
+        return None
+    eq = Gst.ElementFactory.make("equalizer-10bands")
+    if eq is None:
+        logger.warning("equalizer-10bands unavailable; skipping speaker EQ")
+        return None
+    for i, gain in enumerate(gains):
+        eq.set_property(f"band{i}", float(gain))
+
+    # Wrap eq + a limiter in a float-internal bin. The EQ boosts must run in
+    # F32 and be limited *before* the final int conversion, otherwise a boosted
+    # peak clips when the sink quantizes it. audiodynamic is memoryless so it
+    # cannot overshoot, guaranteeing no digital clipping for any gains. If it is
+    # unavailable, fall back to the bare EQ (pre-limiter behavior).
+    in_caps = Gst.ElementFactory.make("capsfilter")
+    limiter = Gst.ElementFactory.make("audiodynamic")
+    out_conv = Gst.ElementFactory.make("audioconvert")
+    if in_caps is None or limiter is None or out_conv is None:
+        logger.warning("audiodynamic unavailable; speaker EQ runs without a limiter")
+        return eq
+    in_caps.set_property("caps", Gst.Caps.from_string("audio/x-raw,format=F32LE"))
+    # Hard-knee compressor, ratio 0 = a brickwall limiter that clamps anything
+    # above the threshold to it, so the output never exceeds full scale.
+    limiter.set_property("threshold", 0.9)
+    limiter.set_property("ratio", 0.0)
+
+    eq_bin = Gst.Bin.new("speaker_eq")
+    for el in (in_caps, eq, limiter, out_conv):
+        eq_bin.add(el)
+    in_caps.link(eq)
+    eq.link(limiter)
+    limiter.link(out_conv)
+    eq_bin.add_pad(Gst.GhostPad.new("sink", in_caps.get_static_pad("sink")))
+    eq_bin.add_pad(Gst.GhostPad.new("src", out_conv.get_static_pad("src")))
+    return eq_bin
 
 
 class AudioBase(ABC):
@@ -55,6 +119,7 @@ class AudioBase(ABC):
 
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize shared audio attributes (DoA helper)."""
+        Gst.init([])
         self.logger = logging.getLogger(type(self).__module__)
         self.logger.setLevel(log_level)
         self._doa = AudioDoA()
@@ -62,26 +127,38 @@ class AudioBase(ABC):
         # "no previous buffer, anchor to running-time on next push".
         self._appsrc_pts: int = -1
 
-    def _compute_pts(
-        self,
-        num_samples: int,
-        running_time_ns: int,
-        next_pts_ns: int,
-    ) -> tuple[int, int, int]:
-        """Return ``(pts_ns, duration_ns, next_pts_ns)`` for an appsrc buffer.
+    def _push_appsrc_buffer(
+        self, data: npt.NDArray[np.float32]
+    ) -> Optional[Gst.FlowReturn]:
+        """Stamp and push one F32LE chunk into ``self._appsrc``.
 
-        Anchors PTS to ``running_time_ns`` when ``next_pts_ns`` is
-        negative (sentinel for "no previous") or the gap is larger
-        than ``GAP_RESET_NS``; otherwise continues the previous
-        stream's PTS to keep audio contiguous across consecutive
-        push calls.
+        Gap-aware: the first buffer after a start/flush (``_appsrc_pts < 0``)
+        or after a gap larger than ``GAP_RESET_NS`` carries the ``DISCONT``
+        flag and a PTS anchored to the current running-time, so an
+        ``audiomixer`` downstream can align it on the current timeline.
+        Follow-up buffers leave PTS/DTS as ``CLOCK_TIME_NONE`` so the
+        mixer places them contiguously by byte offset.
+
+        Returns the ``Gst.FlowReturn`` from ``push_buffer``, or ``None``
+        if ``self._appsrc`` is not initialized.
         """
-        duration_ns = (num_samples * 1_000_000_000) // self.SAMPLE_RATE
-        if next_pts_ns < 0 or running_time_ns > next_pts_ns + self.GAP_RESET_NS:
-            pts_ns = running_time_ns
+        appsrc = getattr(self, "_appsrc", None)
+        if appsrc is None:
+            return None
+        running_time = appsrc.get_current_running_time()
+        duration_ns = (int(data.shape[0]) * Gst.SECOND) // self.SAMPLE_RATE
+        new_cue = (
+            self._appsrc_pts < 0 or running_time > self._appsrc_pts + self.GAP_RESET_NS
+        )
+        buf = Gst.Buffer.new_wrapped(data.tobytes())
+        if new_cue:
+            buf.set_flags(Gst.BufferFlags.DISCONT)
+            buf.pts = running_time
+            buf.dts = running_time
+            self._appsrc_pts = running_time + duration_ns
         else:
-            pts_ns = next_pts_ns
-        return pts_ns, duration_ns, pts_ns + duration_ns
+            self._appsrc_pts += duration_ns
+        return appsrc.push_buffer(buf)
 
     def _on_bus_message(
         self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
@@ -214,10 +291,29 @@ class AudioBase(ABC):
         """Stop the playback pipeline."""
         ...
 
-    @abstractmethod
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push audio data to the output."""
-        ...
+        """Push audio data to the output appsrc.
+
+        Args:
+            data: Audio samples as a float32 array.
+
+        """
+        ret = self._push_appsrc_buffer(data)
+        if ret is None:
+            self.logger.warning(
+                "AppSrc is not initialized. Call start_playing() first."
+            )
+        elif ret != Gst.FlowReturn.OK:
+            self.logger.warning(f"push_buffer dropped: {ret}")
+
+    def clear_output_buffer(self) -> None:
+        """Use :meth:`clear_player` instead. Deprecated; does nothing."""
+        warnings.warn(
+            "clear_output_buffer() is deprecated; use clear_player().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.logger.warning("clear_output_buffer() is deprecated; use clear_player().")
 
     @abstractmethod
     def clear_player(self) -> None:

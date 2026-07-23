@@ -2,9 +2,6 @@ import pytest
 
 
 from reachy_mini.reachy_mini import ReachyMini
-import time
-import numpy as np
-from reachy_mini.media.camera_constants import CameraResolution
 
 @pytest.mark.wireless
 def test_daemon_wireless_client_disconnection() -> None:

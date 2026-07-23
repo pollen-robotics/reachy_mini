@@ -1,0 +1,23 @@
+name: Virtual sound card
+description: >
+  Bring up a headless virtual audio card (PulseAudio null sink + an ALSA
+  `type pulse` ~/.asoundrc) so the SDK's alsasrc/alsasink path runs with no
+  hardware. The null sink's monitor loops playback back to capture. Exports
+  PULSE_SERVER and REACHY_TEST_AUDIO_LOOPBACK to later steps.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        pulseaudio -D --exit-idle-time=-1 --disable-shm \
+          --load="module-native-protocol-unix socket=/tmp/pulse.sock" \
+          --load="module-null-sink sink_name=vspeaker"
+        export PULSE_SERVER=unix:/tmp/pulse.sock
+        pactl info | grep "Server Name"
+        cat > ~/.asoundrc <<'EOF'
+        pcm.reachymini_audio_sink { type pulse device "vspeaker" }
+        pcm.reachymini_audio_src  { type pulse device "vspeaker.monitor" }
+        EOF
+        echo "PULSE_SERVER=unix:/tmp/pulse.sock" >> "$GITHUB_ENV"
+        echo "REACHY_TEST_AUDIO_LOOPBACK=1" >> "$GITHUB_ENV"

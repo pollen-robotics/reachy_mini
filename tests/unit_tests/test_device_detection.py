@@ -15,7 +15,6 @@ import pytest
 
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
-    CameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.device_detection import (
@@ -330,6 +329,19 @@ class TestFindVideoDevice:
         path, specs = find_video_device(devices, "Linux")
         assert path == "/dev/video0"
         assert isinstance(specs, ArducamSpecs)
+
+    def test_linux_device_path_fallback(self) -> None:
+        """Linux V4L2 devices may expose device.path instead of api.v4l2.path."""
+        devices = [
+            DeviceInfo(
+                display_name="Reachy Mini Camera",
+                device_class="Video/Source",
+                properties={"device.path": "/dev/video9"},
+            )
+        ]
+        path, specs = find_video_device(devices, "Linux")
+        assert path == "/dev/video9"
+        assert isinstance(specs, ReachyMiniLiteCamSpecs)
 
     def test_empty_device_list(self) -> None:
         path, specs = find_video_device([], "Linux")

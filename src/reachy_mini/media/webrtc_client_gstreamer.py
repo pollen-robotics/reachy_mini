@@ -35,7 +35,6 @@ Example usage via MediaManager::
 """
 
 import os
-import warnings
 from threading import Thread
 from typing import Iterator, Optional
 
@@ -99,7 +98,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
         CameraBase.__init__(self, log_level=log_level)
         AudioBase.__init__(self, log_level=log_level)
 
-        Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
@@ -350,6 +348,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def close(self) -> None:
         """Stop the WebRTC pipeline."""
+        self._release_jpeg_encoder()
         self._pipeline_record.set_state(Gst.State.NULL)
 
     def start_recording(self) -> None:
@@ -549,57 +548,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
                 )
             except Exception as e:
                 self.logger.warning(f"Failed to clear daemon incoming audio: {e}")
-
-    def clear_output_buffer(self) -> None:
-        """Use :meth:`clear_player` instead. Deprecated; does nothing."""
-        warnings.warn(
-            "clear_output_buffer() is deprecated; use clear_player().",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        self.logger.warning("clear_output_buffer() is deprecated; use clear_player().")
-
-    def _push_buffer(self, data: npt.NDArray[np.float32]) -> None:
-        """Push one F32LE chunk into the audiomixer-fed send chain.
-
-        The first buffer of a cue (a fresh utterance, detected via the gap
-        heuristic) carries the ``DISCONT`` flag and the current running-time
-        as PTS; follow-up buffers are left untimestamped so the ``audiomixer``
-        places them contiguously by byte offset.
-        """
-        if self._appsrc is None:
-            return
-
-        running_time = self._appsrc.get_current_running_time()
-        duration_ns = (int(data.shape[0]) * Gst.SECOND) // self.SAMPLE_RATE
-        new_cue = running_time > self._appsrc_pts + self.GAP_RESET_NS
-
-        buf = Gst.Buffer.new_wrapped(data.tobytes())
-        if new_cue:
-            buf.set_flags(Gst.BufferFlags.DISCONT)
-            buf.pts = running_time
-            buf.dts = running_time
-            self._appsrc_pts = running_time + duration_ns
-        else:
-            # Leave pts/dts as CLOCK_TIME_NONE — audiomixer treats the buffer
-            # as contiguous and places it by byte offset.
-            self._appsrc_pts += duration_ns
-        # Do not set buf.duration; the mixer derives it from size + caps.
-
-        ret = self._appsrc.push_buffer(buf)
-        if ret != Gst.FlowReturn.OK:
-            self.logger.warning("push_buffer dropped: %s", ret)
-
-    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push audio data to the remote peer via WebRTC.
-
-        Args:
-            data: Float32 audio samples.
-
-        """
-        if self._appsrc is None:
-            return
-        self._push_buffer(data)
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker via the daemon REST API.

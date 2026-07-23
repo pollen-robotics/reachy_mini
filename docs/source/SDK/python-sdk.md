@@ -44,6 +44,21 @@ with ReachyMini(media_backend="default") as mini:
 ```
 The returned frame is a numpy array with shape `(height, width, 3)` and data type `uint8`.
 
+### Head Tracking 👀
+
+The daemon can track the closest face and turn the head to follow it (aiming at the nose). Detection runs inside the daemon.
+
+```python
+from reachy_mini import ReachyMini
+
+with ReachyMini() as mini:
+    mini.start_head_tracking()
+    face = mini.get_tracked_face()  # detected, x, y in [-1, 1], roll
+    mini.stop_head_tracking()
+```
+
+`start_head_tracking(weight=...)` blends tracking with application motion: `1.0` lets tracking own the head, `0.0` pauses detection (freeing the head and CPU) without stopping the tracker, so applications can toggle it cheaply per turn. See the [Head Tracking example](../examples/head_tracking.md).
+
 ### IMU 🧭
 
 > ⚠️ The IMU is only available with the wireless version of Reachy Mini

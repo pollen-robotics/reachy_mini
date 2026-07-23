@@ -302,6 +302,62 @@
         }
       }
     },
+    "/api/apps/startup-app": {
+      "get": {
+        "summary": "Get Startup App",
+        "description": "Get the app configured to auto-start on wake-up (null if unset).",
+        "operationId": "get_startup_app_api_apps_startup_app_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartupApp"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set Startup App",
+        "description": "Set (or clear, with null) the app that auto-starts on wake-up.\n\nMust already be installed (install via /apps/install first). Applied live, so\nno daemon restart is needed.",
+        "operationId": "set_startup_app_api_apps_startup_app_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartupApp"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartupApp"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/apps/install-private-space": {
       "post": {
         "summary": "Install Private Space",
@@ -1400,6 +1456,114 @@
         }
       }
     },
+    "/api/media/tracking/enable": {
+      "post": {
+        "summary": "Enable Tracking",
+        "description": "Enable daemon-side visual head tracking.",
+        "operationId": "enable_tracking_api_media_tracking_enable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/EnableTrackingRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "title": "Response Enable Tracking Api Media Tracking Enable Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/tracking/disable": {
+      "post": {
+        "summary": "Disable Tracking",
+        "description": "Disable daemon-side visual head tracking.",
+        "operationId": "disable_tracking_api_media_tracking_disable_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "title": "Response Disable Tracking Api Media Tracking Disable Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/tracking/face": {
+      "get": {
+        "summary": "Get Tracked Face",
+        "description": "Return the latest face observed by daemon-side head tracking.",
+        "operationId": "get_tracked_face_api_media_tracking_face_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Tracked Face Api Media Tracking Face Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/media/sounds/upload": {
       "post": {
         "summary": "Upload Sound",
@@ -2269,7 +2433,7 @@
     "/": {
       "get": {
         "summary": "Dashboard",
-        "description": "Render the dashboard.",
+        "description": "Redirect to the desktop app download page.",
         "operationId": "dashboard__get",
         "responses": {
           "200": {
@@ -2686,6 +2850,9 @@
               }
             ],
             "title": "Hardware Id"
+          },
+          "face_target": {
+            "$ref": "#/components/schemas/FaceTarget"
           }
         },
         "type": "object",
@@ -2719,6 +2886,76 @@
         ],
         "title": "DoAInfo",
         "description": "Direction of Arrival info from the microphone array."
+      },
+      "EnableTrackingRequest": {
+        "properties": {
+          "weight": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "default": 1.0
+          }
+        },
+        "type": "object",
+        "title": "EnableTrackingRequest",
+        "description": "Request body for enabling daemon-side head tracking."
+      },
+      "FaceTarget": {
+        "properties": {
+          "detected": {
+            "type": "boolean",
+            "title": "Detected",
+            "default": false
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "roll": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roll"
+          },
+          "ts": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ts"
+          }
+        },
+        "type": "object",
+        "title": "FaceTarget",
+        "description": "Latest daemon-side face target used for head tracking."
       },
       "FullBodyTarget": {
         "properties": {
@@ -3394,6 +3631,24 @@
         ],
         "title": "SourceKind",
         "description": "Kinds of app source."
+      },
+      "StartupApp": {
+        "properties": {
+          "startup_app": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startup App"
+          }
+        },
+        "type": "object",
+        "title": "StartupApp",
+        "description": "The app configured to auto-start on the robot's first wake-up."
       },
       "TestSoundResponse": {
         "properties": {

@@ -214,6 +214,31 @@ reachy-mini-daemon --sim    # Simulation
 
 Then open <a href="http://127.0.0.1:8000/">http://127.0.0.1:8000/</a> — your app appears in the installed list.
 
+### 4. Make an app start on wake-up or antenna touch
+
+Use the daemon's existing `--startup-app` option when you want one installed
+app to be the default experience:
+
+```bash
+reachy-mini-daemon --startup-app reachy_mini_conversation_app
+```
+
+If the app is not installed yet but exists in the app catalog, the daemon
+installs it before the robot wakes up. The app starts after wake-up. On an idle
+robot that is already running the daemon while asleep, touching an antenna also
+wakes the robot and starts the same startup app.
+
+For example, the Wireless flow keeps the daemon running without waking the
+robot immediately:
+
+```bash
+reachy-mini-daemon --wireless-version --no-wake-up-on-start --startup-app reachy_mini_conversation_app
+```
+
+No extra antenna-specific flag is needed: setting `--startup-app <app_name>` is
+the opt-in. The app only starts when the managed app slot is free, so it does
+not replace a running local app or an active remote session.
+
 ---
 
 ## Publishing to Hugging Face
