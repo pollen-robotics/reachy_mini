@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import time
 import types
 from typing import Any
 
@@ -273,3 +274,103 @@ def test_cancel_session_removes_it() -> None:
     assert hf_auth.cancel_device_code_session("s7") is True
     assert "s7" not in hf_auth._device_code_sessions
     assert hf_auth.cancel_device_code_session("s7") is False
+
+
+def test_cancel_signals_the_polling_thread() -> None:
+    """Cancel must set the event the polling thread observes, not just drop it."""
+    session = hf_auth.DeviceCodeSession(
+        session_id="s8",
+        user_code="ABCD-1234",
+        verification_uri="https://hf.co/oauth/device",
+        verification_uri_complete="https://hf.co/oauth/device",
+    )
+    hf_auth._device_code_sessions["s8"] = session
+
+    assert session.cancel_event.is_set() is False
+    assert hf_auth.cancel_device_code_session("s8") is True
+    # We keep the local reference, so we can assert the thread would stop.
+    assert session.cancel_event.is_set() is True
+
+
+def test_poll_aborts_when_cancel_event_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A cancelled session unwinds poll_device_token via its on_pending hook."""
+    calls = {"on_pending": 0}
+
+    def _fake_poll(device_info: Any, *, on_pending: Any = None) -> dict[str, Any]:
+        # Mimic the hub: invoke on_pending each pending cycle. With the event
+        # already set it raises _DeviceCodeCancelled on the first call, so the
+        # (real) blocking loop never runs.
+        for _ in range(1000):
+            if on_pending is not None:
+                calls["on_pending"] += 1
+                on_pending()
+        raise AssertionError("poll should have been cancelled before returning")
+
+    _install_fake_oauth_device(monkeypatch, poll_device_token=_fake_poll)
+
+    session = hf_auth.DeviceCodeSession(
+        session_id="s9",
+        user_code="ABCD-1234",
+        verification_uri="https://hf.co/oauth/device",
+        verification_uri_complete="https://hf.co/oauth/device",
+    )
+    session.cancel_event.set()
+
+    asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
+
+    assert calls["on_pending"] == 1
+    assert session.status == "cancelled"
+
+
+def test_authorized_session_gets_bounded_ttl(
+    monkeypatch: pytest.MonkeyPatch, device_code_error: type[Exception]
+) -> None:
+    """On success the session's expires_at is shortened to the authorized TTL."""
+    token_response = {"access_token": "hf_x", "refresh_token": "r", "expires_in": 10}
+    _install_fake_oauth_device(
+        monkeypatch, poll_device_token=lambda info, **kw: token_response
+    )
+    monkeypatch.setattr(
+        hf_auth, "_persist_device_oauth_token", lambda resp: ("name", "user")
+    )
+
+    session = hf_auth.DeviceCodeSession(
+        session_id="s10",
+        user_code="ABCD-1234",
+        verification_uri="https://hf.co/oauth/device",
+        verification_uri_complete="https://hf.co/oauth/device",
+        expires_at=time.time() + 900,  # original device-code expiry
+    )
+
+    before = time.time()
+    asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
+
+    assert session.status == "authorized"
+    assert session.expires_at <= before + hf_auth._AUTHORIZED_SESSION_TTL_S + 1
+
+
+def test_cleanup_prunes_authorized_after_expiry() -> None:
+    """Authorized sessions are reclaimed once past expires_at (no leak)."""
+    live = hf_auth.DeviceCodeSession(
+        session_id="live",
+        user_code="A",
+        verification_uri="u",
+        verification_uri_complete="u",
+        status="authorized",
+        expires_at=time.time() + 300,
+    )
+    stale = hf_auth.DeviceCodeSession(
+        session_id="stale",
+        user_code="B",
+        verification_uri="u",
+        verification_uri_complete="u",
+        status="authorized",
+        expires_at=time.time() - 1,
+    )
+    hf_auth._device_code_sessions["live"] = live
+    hf_auth._device_code_sessions["stale"] = stale
+
+    hf_auth._cleanup_expired_device_sessions()
+
+    assert "live" in hf_auth._device_code_sessions
+    assert "stale" not in hf_auth._device_code_sessions

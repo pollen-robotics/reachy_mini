@@ -5,6 +5,7 @@ import logging
 import os
 import secrets
 import tempfile
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -404,6 +405,20 @@ def is_oauth_configured() -> bool:
 # In-memory storage for device-code login sessions, polled by the frontend.
 _device_code_sessions: dict[str, "DeviceCodeSession"] = {}
 
+# How long an authorized session is kept so the frontend can read the result and
+# the relay can be started once, after which _cleanup removes it (a token-less
+# boot polls for a few seconds; 5 min is a generous margin).
+_AUTHORIZED_SESSION_TTL_S = 300
+
+
+class _DeviceCodeCancelled(Exception):
+    """Raised inside poll_device_token's on_pending hook to abort a cancelled login.
+
+    poll_device_token runs in a worker thread and blocks for up to ~15 min;
+    raising from its per-poll hook is what actually stops that thread (see
+    cancel_device_code_session), rather than only detaching the asyncio task.
+    """
+
 
 @dataclass
 class DeviceCodeSession:
@@ -413,7 +428,7 @@ class DeviceCodeSession:
     user_code: str
     verification_uri: str
     verification_uri_complete: str
-    status: str = "pending"  # pending, authorized, error, expired
+    status: str = "pending"  # pending, authorized, error, expired, cancelled
     username: Optional[str] = None
     error_message: Optional[str] = None
     relay_started: bool = False  # set once the central relay has been brought up
@@ -421,15 +436,23 @@ class DeviceCodeSession:
     expires_at: float = field(default_factory=lambda: time.time() + 900)
     # Keep a strong reference to the polling task so it is not garbage-collected.
     task: Optional["asyncio.Task[None]"] = None
+    # Set to request cancellation; observed by the polling thread's on_pending hook.
+    cancel_event: threading.Event = field(default_factory=threading.Event)
 
 
 def _cleanup_expired_device_sessions() -> None:
-    """Remove finished or expired device-code sessions."""
+    """Remove finished or expired device-code sessions.
+
+    Authorized sessions are included: without this they would live in memory
+    until the daemon restarts. `start_device_code_login` sets their `expires_at`
+    to a short TTL once authorized so this prunes them shortly after use.
+    """
     now = time.time()
     stale = [
         sid
         for sid, s in _device_code_sessions.items()
-        if s.expires_at < now and s.status in ("pending", "expired", "error")
+        if s.expires_at < now
+        and s.status in ("pending", "authorized", "expired", "error", "cancelled")
     ]
     for sid in stale:
         _device_code_sessions.pop(sid, None)
@@ -503,9 +526,22 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
     from huggingface_hub.errors import DeviceCodeError
     from huggingface_hub.utils._oauth_device import poll_device_token
 
+    def _abort_if_cancelled() -> None:
+        # poll_device_token calls this after each "authorization pending" poll,
+        # just before it sleeps; raising here unwinds it and frees the worker
+        # thread within ~one poll interval instead of blocking to expiry.
+        if session.cancel_event.is_set():
+            raise _DeviceCodeCancelled
+
     try:
         # poll_device_token blocks (time.sleep between polls) — keep it off the loop.
-        response = await asyncio.to_thread(poll_device_token, device_info)
+        response = await asyncio.to_thread(
+            poll_device_token, device_info, on_pending=_abort_if_cancelled
+        )
+    except _DeviceCodeCancelled:
+        logger.info("[HF Auth] Device-code login cancelled: %s", session.session_id)
+        session.status = "cancelled"
+        return
     except DeviceCodeError as e:
         logger.info("[HF Auth] Device-code login failed: %s", e)
         session.status = "expired" if "expired" in str(e).lower() else "error"
@@ -527,6 +563,9 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
 
     session.username = username or ""
     session.status = "authorized"
+    # Bound the authorized session's lifetime so _cleanup reclaims it after the
+    # frontend has read the result (rather than leaking until daemon restart).
+    session.expires_at = time.time() + _AUTHORIZED_SESSION_TTL_S
 
     # Notify a *running* central relay so it reconnects with the new token. A
     # token-less boot has no relay instance yet; the status route starts one.
@@ -571,12 +610,20 @@ def consume_device_session_relay_pending(session_id: str) -> bool:
 
 
 def cancel_device_code_session(session_id: str) -> bool:
-    """Cancel a pending device-code session and stop its polling task."""
+    """Cancel a pending device-code session and stop its polling thread.
+
+    Signals the polling thread via `cancel_event` (observed by `on_pending`),
+    which unwinds `poll_device_token` within ~one poll interval and frees the
+    worker thread. We deliberately do not call `task.cancel()`: cancelling the
+    asyncio task while the worker thread is still running would orphan the
+    thread and surface a stray "Future exception was never retrieved" warning.
+    While awaiting the thread the task stays referenced by the executor, so it
+    is safe to drop the session here and let the poll unwind cooperatively.
+    """
     session = _device_code_sessions.pop(session_id, None)
     if session is None:
         return False
-    if session.task is not None and not session.task.done():
-        session.task.cancel()
+    session.cancel_event.set()
     return True
 
 

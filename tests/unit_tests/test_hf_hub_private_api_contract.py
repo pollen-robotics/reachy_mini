@@ -68,11 +68,17 @@ def test_request_device_code_callable_with_no_args() -> None:
     inspect.signature(request_device_code).bind()
 
 
-def test_poll_device_token_accepts_device_info() -> None:
-    """hf_auth calls ``poll_device_token(device_info)`` — one positional arg."""
+def test_poll_device_token_accepts_device_info_and_on_pending() -> None:
+    """hf_auth calls ``poll_device_token(device_info, on_pending=...)``.
+
+    The ``on_pending`` hook is how ``cancel_device_code_session`` interrupts the
+    blocking poll, so its presence is part of the contract we depend on.
+    """
     from huggingface_hub.utils._oauth_device import poll_device_token
 
-    inspect.signature(poll_device_token).bind({"device_code": "x", "interval": 5})
+    inspect.signature(poll_device_token).bind(
+        {"device_code": "x", "interval": 5}, on_pending=lambda: None
+    )
 
 
 def test_save_oauth_token_accepts_response_and_is_private() -> None:
