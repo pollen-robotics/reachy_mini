@@ -66,6 +66,7 @@ def get_hardware_id() -> str | None:
         return None
     return hashlib.sha256(raw.encode("ascii")).hexdigest()[:16]
 
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -351,7 +352,7 @@ class ResponseCharacteristic(Characteristic):
         self.notifying = False
         logger.info("Response notifications disabled")
         # Stop journal streaming if running (client disconnected without JOURNAL_STOP)
-        if hasattr(self.service, '_bt_service') and self.service._bt_service:
+        if hasattr(self.service, "_bt_service") and self.service._bt_service:
             self.service._bt_service._stop_journal()
 
     def send_notification(self, text: str):
@@ -717,7 +718,17 @@ class BluetoothCommandService:
         try:
             self._journal_buffer = ""
             self._journal_proc = subprocess.Popen(
-                ["stdbuf", "-oL", "journalctl", "-f", "-n", "20", "--no-pager", "-u", "reachy-mini-daemon"],
+                [
+                    "stdbuf",
+                    "-oL",
+                    "journalctl",
+                    "-f",
+                    "-n",
+                    "20",
+                    "--no-pager",
+                    "-u",
+                    "reachy-mini-daemon",
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
             )
@@ -746,7 +757,9 @@ class BluetoothCommandService:
                 if data:
                     text = data.decode("utf-8", errors="replace")
                     self._journal_buffer += text
-                    logger.info(f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}")
+                    logger.info(
+                        f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}"
+                    )
                     # Cap buffer to ~32KB to avoid unbounded growth
                     if len(self._journal_buffer) > 32768:
                         self._journal_buffer = self._journal_buffer[-32768:]
@@ -869,6 +882,36 @@ class BluetoothCommandService:
             except Exception as e:
                 logger.error(f"Error executing command: {e}")
             return "OK: System running"
+        elif upper.startswith("PLAY_SOUND "):
+            # Play a built-in sound asset (no motion) on the robot: the generic
+            # sound cue used for the BLE scan-list "identify" chirp. Public
+            # (no PIN) like PLAY - identification happens BEFORE authenticating,
+            # the action is benign and the BLE range bounds who can trigger it.
+            # File names have no spaces, so the raw tail is the value. Runs OFF
+            # the mainloop because it proxies to the daemon over HTTP.
+            sound_file = command_str[len("PLAY_SOUND ") :].strip()
+            self._run_async(lambda: _play_sound(sound_file))
+            return "OK: working"
+        elif upper.startswith("PLAY "):
+            # Play a named recorded move (emotions library) on the robot:
+            # motion + its bundled sound. Public (no PIN) like PLAY_SOUND -
+            # feedback happens BEFORE authenticating, the action is benign and
+            # the BLE range already bounds who can trigger it. Move names have
+            # no spaces, so the raw tail is the value. Runs OFF the mainloop
+            # because it proxies to the daemon over HTTP.
+            move_name = command_str[len("PLAY ") :].strip()
+            self._run_async(lambda: _play_recorded_move(move_name))
+            return "OK: working"
+        elif upper == "SLEEP":
+            # Play the daemon's canonical goto-sleep trajectory: interpolate to
+            # the EXACT sleep pose (SLEEP_HEAD_POSE / SLEEP_ANTENNAS) + go_sleep
+            # sound, then release torque. Public (no PIN) like PLAY - it's the
+            # end-of-setup "settle to sleep" cue. Unlike the old 'mini-deep-
+            # sleep' recorded anim (which finishes a few degrees off), this
+            # lands the robot exactly where the first-wake-up wizard's "Tuck Me
+            # In" ghost expects it. Runs OFF the mainloop (proxies over HTTP).
+            self._run_async(_goto_sleep)
+            return "OK: working"
         elif command_str.upper() == "JOURNAL_START":
             return self._start_journal()
         elif command_str.upper() == "JOURNAL_READ":
@@ -882,9 +925,7 @@ class BluetoothCommandService:
                 # Locked out: reject WITHOUT comparing the PIN, so a correct
                 # guess landed mid-spree doesn't win and the lockout window is
                 # the real bottleneck. int()+1 rounds up so we never show "0s".
-                return (
-                    f"ERROR: Too many attempts. Try again in {int(remaining) + 1}s."
-                )
+                return f"ERROR: Too many attempts. Try again in {int(remaining) + 1}s."
             pin = command_str[4:].strip()
             if pin == self.pin_code:
                 self._reset_pin_throttle()
@@ -958,6 +999,15 @@ class BluetoothCommandService:
                 return "ERROR: Not connected. Please authenticate first."
             ssid = command_str[len("WIFI_FORGET ") :]
             self._run_async(lambda: _wifi_forget(ssid))
+            return "OK: working"
+        # Set the robot display name over BLE (end of the setup flow). Mutating,
+        # so it requires a live TTL session like the WiFi commands. The name can
+        # contain spaces, so everything after "SET_NAME " is the raw value.
+        elif upper.startswith("SET_NAME "):
+            if not self._is_authed():
+                return "ERROR: Not connected. Please authenticate first."
+            name = command_str[len("SET_NAME ") :].strip()
+            self._run_async(lambda: _set_robot_name(name))
             return "OK: working"
 
         # else if command starts with "CMD_xxxxx" check if  commands directory contains the said named script command xxxx.sh and run its, show output or/and send to read
@@ -1109,7 +1159,9 @@ class BluetoothCommandService:
             self._ad_manager.RegisterAdvertisement(
                 self.adv.get_path(),
                 {},
-                reply_handler=lambda: logger.info("Advertisement re-asserted after disconnect"),
+                reply_handler=lambda: logger.info(
+                    "Advertisement re-asserted after disconnect"
+                ),
                 error_handler=lambda e: logger.warning(
                     f"Re-assert advertisement failed (non-fatal): {e}"
                 ),
@@ -1272,6 +1324,97 @@ def _daemon_request(
             return json.loads(raw.decode("utf-8"))
         except json.JSONDecodeError:
             return raw.decode("utf-8", errors="replace")
+
+
+# --- Named recorded-move playback proxy (reuses _daemon_request above) -------
+# Plays a named move (motion + its bundled sound) so the user gets physical
+# feedback during onboarding (identify in the BLE scan list, waiting/sleep cues
+# during Wi-Fi + naming). Proxies to the daemon's
+# /api/move/play/recorded-move-dataset/{dataset:path}/{move_name} route — note
+# the /api prefix: the media/move routers are mounted under the prefixed
+# APIRouter, unlike the /wifi and /update routes.
+#
+# NOTE: this file runs under the SYSTEM python (stdlib-only), so it can't import
+# reachy_mini.motion.recorded_move — keep this dataset in sync with the app's
+# ONBOARDING_MOVES_DATASET.
+#
+# The BLE onboarding cues (toc-toc-toc / waiting / mini-deep-sleep) all ship in
+# this dataset, NOT the default emotions library. TEMPORARY until they're merged
+# into pollen-robotics/reachy-mini-emotions-library. It must be preloaded at
+# daemon startup (see recorded_move.DEFAULT_DATASETS) so the first BLE PLAY
+# doesn't block on a network download.
+_EMOTIONS_DATASET = "Anne-Charlotte/new-emotions"
+
+
+def _play_recorded_move(move_name: str) -> str:
+    """Play a named recorded move (motion + sound) on the robot."""
+    move_name = move_name.strip()
+    if not move_name:
+        return "ERROR: Missing move name"
+    path = (
+        "/api/move/play/recorded-move-dataset/"
+        + _EMOTIONS_DATASET
+        + "/"
+        + urllib.parse.quote(move_name, safe="")
+    )
+    try:
+        _daemon_request("POST", path)
+        return f"OK: Playing {move_name}"
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return "ERROR: Unknown move"
+        if e.code == 503:
+            return "ERROR: Robot not ready"
+        return "ERROR: Play failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _play_sound(sound_file: str) -> str:
+    """Play a built-in sound asset (no motion) on the robot.
+
+    Proxies to the daemon's /api/media/play_sound route. Used for the BLE
+    scan-list identify chirp - a sound cue with no movement (the robot only
+    animates later, in the wizard steps).
+    """
+    sound_file = sound_file.strip()
+    if not sound_file:
+        return "ERROR: Missing sound file"
+    try:
+        _daemon_request("POST", "/api/media/play_sound", data={"file": sound_file})
+        return f"OK: Playing {sound_file}"
+    except urllib.error.HTTPError as e:
+        if e.code == 503:
+            return "ERROR: Audio not ready"
+        return "ERROR: Play failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _goto_sleep() -> str:
+    """Play the daemon's canonical goto-sleep trajectory on the robot.
+
+    Proxies to the daemon's /api/move/play/goto_sleep route, which interpolates
+    the head/antennas to the exact SLEEP pose (+ go_sleep sound) and releases
+    torque at the end - so the robot lands precisely on the sleep pose the
+    first-wake-up wizard expects, rather than the few-degrees-off finish of the
+    'mini-deep-sleep' recorded anim.
+    """
+    try:
+        _daemon_request("POST", "/api/move/play/goto_sleep")
+        return "OK: Going to sleep"
+    except urllib.error.HTTPError as e:
+        if e.code == 503:
+            return "ERROR: Robot not ready"
+        return "ERROR: Sleep failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
 
 
 # --- Daemon software update proxy (reuses _daemon_request above) -------------
@@ -1475,6 +1618,30 @@ def _wifi_connect_sealed(blob: str) -> str:
         if e.code == 409:
             return "ERROR: Busy"
         return "ERROR: Connect request failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _set_robot_name(name: str) -> str:
+    """Persist + live-apply the robot display name (proxy to the daemon).
+
+    Relays to the daemon's ``/api/daemon/robot-name`` route, which persists
+    the name and applies it live (status + central relay + mDNS) so it takes
+    effect without a restart. Best-effort by design: naming is the last,
+    non-critical step of setup.
+    """
+    name = name.strip()
+    if not name:
+        return "ERROR: Missing name"
+    try:
+        _daemon_request("POST", "/api/daemon/robot-name", data={"name": name})
+        return f"OK: Named {name}"
+    except urllib.error.HTTPError as e:
+        if e.code == 422:
+            return "ERROR: Invalid name"
+        return "ERROR: Set name failed"
     except urllib.error.URLError:
         return "ERROR: Daemon unreachable"
     except Exception as e:

@@ -705,7 +705,11 @@ class CentralSignalingRelay:
                             f"Connection failed after {self._connection_attempts} attempts: {e}",
                         )
 
-                if self._running and not had_exception and self._state == RelayState.ERROR:
+                if (
+                    self._running
+                    and not had_exception
+                    and self._state == RelayState.ERROR
+                ):
                     # Clean return but ERROR (e.g. 401) - back off like a failure.
                     had_exception = True
                     self._connection_attempts += 1
@@ -1730,6 +1734,25 @@ async def notify_token_change(new_token: Optional[str] = None) -> None:
             pass
 
     await _relay_instance.update_token(new_token)
+
+
+def notify_robot_name_change(new_name: str) -> None:
+    """Update the producer name advertised to the central relay.
+
+    The name is read fresh from ``self.robot_name`` on every heartbeat
+    re-emit (see ``_heartbeat_loop`` / ``_producer_status_payload``), so
+    mutating it here is enough for central to pick up the new label at the
+    next heartbeat (a few seconds) with no reconnect. A plain attribute
+    write is atomic under the GIL, so this is safe to call from the
+    backend's command thread. No-op if no relay is running.
+    """
+    if _relay_instance is not None and new_name:
+        _relay_instance.robot_name = new_name
+        logger.info(
+            "[Central Relay] robot name updated to %r "
+            "(propagates to central on next heartbeat)",
+            new_name,
+        )
 
 
 async def notify_force_reconnect() -> bool:

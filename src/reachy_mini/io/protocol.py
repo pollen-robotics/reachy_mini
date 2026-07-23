@@ -4,11 +4,13 @@ All messages use a {"type": "...", ...payload} envelope.
 
 Client->Server command types:
     set_target, set_head_joints, set_body_yaw, set_antennas, set_full_target,
-    goto_target, wake_up, goto_sleep, play_sound,
+    goto_target, wake_up, goto_sleep, play_sound, play_recorded_move,
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
     get_state, get_version, start_recording, stop_recording, append_record,
-    subscribe_logs, unsubscribe_logs, restart_daemon, start_update,
+    get_robot_name, set_robot_name, delete_hf_token,
+    subscribe_logs, unsubscribe_logs, subscribe_pose, unsubscribe_pose,
+    restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
     play_uploaded_move, cancel_move,
@@ -30,6 +32,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, TypeAdapter
 
 from reachy_mini.utils.interpolation import InterpolationTechnique
+from reachy_mini.utils.robot_name import MAX_ROBOT_NAME_LENGTH
 
 # ------------------------------------------------------------------
 # Shared enums
@@ -193,6 +196,28 @@ class PlaySoundCmd(BaseModel):
     file: str
 
 
+class PlayRecordedMoveCmd(BaseModel):
+    """Play a named recorded move (motion + its sidecar sound) from a dataset.
+
+    Daemon-side equivalent of ``POST /api/move/play/recorded-move-dataset``:
+    the backend loads the move from the (cache-first) HF dataset and runs it
+    through ``Backend.play_move``, so the bundled sound plays in lockstep on
+    the robot speaker. Fire-and-forget: the ack only reports that the move was
+    dispatched (or an error like an unknown name / missing dataset), not that
+    playback finished. ``dataset_name`` defaults to the pre-downloaded emotions
+    library; callers can override it to source a move from another repo.
+    """
+
+    type: Literal["play_recorded_move"] = "play_recorded_move"
+    move_name: str
+    dataset_name: Optional[str] = None
+    # Seconds to smoothly interpolate to the move's first frame before playing
+    # (0 = snap instantly, the default). Lets callers ease into a move whose
+    # start pose is far from the robot's current pose (e.g. replaying the
+    # wake-from-sleep move while already awake) instead of jumping.
+    initial_goto_duration: float = 0.0
+
+
 class SetMotorModeCmd(BaseModel):
     """Set the motor control mode (enabled, disabled, gravity_compensation)."""
 
@@ -294,6 +319,55 @@ class GetMicrophoneVolumeCmd(BaseModel):
     type: Literal["get_microphone_volume"] = "get_microphone_volume"
 
 
+# First wake-up setup wizard. A persistent, robot-wide boolean (not
+# per-session): once the owner has run the post-connection hardware
+# diagnostic wizard the daemon remembers it so it only ever shows once.
+class GetFirstWakeUpCmd(BaseModel):
+    """Query whether the first wake-up setup wizard has been completed."""
+
+    type: Literal["get_first_wake_up"] = "get_first_wake_up"
+
+
+class SetFirstWakeUpCmd(BaseModel):
+    """Mark the first wake-up setup wizard completed (or reset it)."""
+
+    type: Literal["set_first_wake_up"] = "set_first_wake_up"
+    is_completed: bool = True
+
+
+# Robot display name. A persistent, robot-wide string (not per-session):
+# advertised to the central relay / mDNS and shown in the apps' robot list.
+# Defaults to the daemon's --robot-name; a client rename is stored on the
+# robot and applied live (status + central relay + mDNS) without a restart,
+# and also wins over the default at the next daemon start.
+class GetRobotNameCmd(BaseModel):
+    """Query the persisted robot display name (null if unset)."""
+
+    type: Literal["get_robot_name"] = "get_robot_name"
+
+
+class SetRobotNameCmd(BaseModel):
+    """Set and persist the robot display name."""
+
+    type: Literal["set_robot_name"] = "set_robot_name"
+    name: str = Field(..., min_length=1, max_length=MAX_ROBOT_NAME_LENGTH)
+
+
+# Hugging Face account sign-out over the DataChannel.
+#
+# Remote counterpart of `DELETE /api/hf-auth/token` (`routers/hf_auth.py`):
+# clears the robot's own stored HF token so it de-registers from the
+# central signaling relay (a null-token notification drops the relay to
+# WAITING_FOR_TOKEN). Exposed over the typed transport so a Central-routed
+# owner can unlink the robot without an LAN HTTP path. The robot stays
+# offline until it is re-provisioned (BLE setup or the robot-side OAuth
+# begin URL).
+class DeleteHfTokenCmd(BaseModel):
+    """Delete the robot's stored Hugging Face token (sign the robot out)."""
+
+    type: Literal["delete_hf_token"] = "delete_hf_token"
+
+
 class SetSpeechOffsetsCmd(BaseModel):
     """Set head-wobbler speech offsets (composed with target pose before IK)."""
 
@@ -349,6 +423,26 @@ class UnsubscribeLogsCmd(BaseModel):
     """Stop the calling peer's log subscription. No-op if no stream."""
 
     type: Literal["unsubscribe_logs"] = "unsubscribe_logs"
+
+
+class SubscribePoseCmd(BaseModel):
+    """Subscribe the calling peer to the pushed pose stream.
+
+    While subscribed, the daemon pushes the robot's present state (same
+    envelope as ``get_state``, plus a monotonic ``seq``) to this peer over
+    the dedicated unreliable/unordered ``pose`` data channel at ~30 Hz. This
+    replaces polling ``get_state`` for a live mirror: pushing is immune to
+    the Wi-Fi round-trip latency and head-of-line blocking that make polling
+    lag. Idempotent - safe to send again on reconnect.
+    """
+
+    type: Literal["subscribe_pose"] = "subscribe_pose"
+
+
+class UnsubscribePoseCmd(BaseModel):
+    """Stop the calling peer's pose stream. No-op if not subscribed."""
+
+    type: Literal["unsubscribe_pose"] = "unsubscribe_pose"
 
 
 # XVF3800 audio-board configuration over the DataChannel.
@@ -753,8 +847,15 @@ AnyCommand = Annotated[
     | GetVolumeCmd
     | SetMicrophoneVolumeCmd
     | GetMicrophoneVolumeCmd
+    | GetFirstWakeUpCmd
+    | SetFirstWakeUpCmd
+    | GetRobotNameCmd
+    | SetRobotNameCmd
+    | DeleteHfTokenCmd
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
+    | SubscribePoseCmd
+    | UnsubscribePoseCmd
     | RestartDaemonCmd
     | StartUpdateCmd
     | UploadMoveStartCmd
@@ -763,6 +864,7 @@ AnyCommand = Annotated[
     | UploadAudioStartCmd
     | UploadAudioChunkCmd
     | UploadAudioFinishCmd
+    | PlayRecordedMoveCmd
     | PlayUploadedMoveCmd
     | CancelMoveCmd
     | PlayUploadedAudioCmd

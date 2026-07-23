@@ -19,9 +19,29 @@ logger = logging.getLogger(__name__)
 # Sidecar audio containers; mirrors media.py ALLOWED_SOUND_EXTENSIONS. .wav wins ties.
 SOUND_EXTENSIONS = (".wav", ".mp3", ".ogg", ".oga", ".opus", ".flac", ".m4a", ".aac")
 
+# Canonical emotions library: motion + optional sidecar sound per move. This is
+# the default source for named-move playback (WebRTC `play_recorded_move` cmd and
+# the BLE `PLAY` command). Pre-downloaded on the robot at daemon startup.
+DEFAULT_EMOTIONS_DATASET = "pollen-robotics/reachy-mini-emotions-library"
+
+# Onboarding cues (wake-mini-up / toc-toc-toc / waiting / mini-deep-sleep) used by
+# the setup + first-wake-up wizards. TEMPORARY: not yet in the official emotions
+# library, so we source (and preload) them from this dataset. Drop once merged
+# into DEFAULT_EMOTIONS_DATASET (also update the app's ONBOARDING_MOVES_DATASET
+# and the BLE service's _EMOTIONS_DATASET).
+ONBOARDING_MOVES_DATASET = "Anne-Charlotte/new-emotions"
+
+# Onboarding-tuned move variants we host ourselves. Currently just `proud2` with
+# its ~1.4 s of leading sound silence trimmed off, so the first-wake-up speaker
+# check is audible immediately. Keep in sync with the app's
+# ONBOARDING_TUNED_DATASET.
+ONBOARDING_TUNED_DATASET = "tfrere/reachy-mini-onboarding-moves"
+
 # Default datasets to preload at daemon startup
 DEFAULT_DATASETS = [
-    "pollen-robotics/reachy-mini-emotions-library",
+    DEFAULT_EMOTIONS_DATASET,
+    ONBOARDING_MOVES_DATASET,
+    ONBOARDING_TUNED_DATASET,
     "pollen-robotics/reachy-mini-dances-library",
 ]
 

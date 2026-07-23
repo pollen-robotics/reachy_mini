@@ -32,10 +32,13 @@ from reachy_mini.io.protocol import (
     CancelAudioCmd,
     CancelMoveCmd,
     ClearIncomingAudioCmd,
+    DeleteHfTokenCmd,
     FaceTarget,
+    GetFirstWakeUpCmd,
     GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
+    GetRobotNameCmd,
     GetStateCmd,
     GetTrackedFaceCmd,
     GetVersionCmd,
@@ -47,6 +50,7 @@ from reachy_mini.io.protocol import (
     MockupSimBackendStatus,
     MotorControlMode,
     MujocoBackendStatus,
+    PlayRecordedMoveCmd,
     PlaySoundCmd,
     PlayUploadedAudioCmd,
     PlayUploadedMoveCmd,
@@ -57,12 +61,14 @@ from reachy_mini.io.protocol import (
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
     SetBodyYawCmd,
+    SetFirstWakeUpCmd,
     SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
     SetHeadTrackingCmd,
     SetMicrophoneVolumeCmd,
     SetMotorModeCmd,
+    SetRobotNameCmd,
     SetSpeechOffsetsCmd,
     SetTargetCmd,
     SetTorqueCmd,
@@ -72,7 +78,9 @@ from reachy_mini.io.protocol import (
     StartUpdateCmd,
     StopRecordingCmd,
     SubscribeLogsCmd,
+    SubscribePoseCmd,
     UnsubscribeLogsCmd,
+    UnsubscribePoseCmd,
     UploadAudioChunkCmd,
     UploadAudioFinishCmd,
     UploadAudioStartCmd,
@@ -349,6 +357,12 @@ class Backend:
         # sends `subscribe_logs`, cancelled on `unsubscribe_logs` or
         # peer disconnect (the latter is wired in setup_media_server).
         self._log_tasks: dict[str, "asyncio.Task[None]"] = {}
+        # Monotonic sequence number stamped on every pushed pose frame so the
+        # client can drop out-of-order/stale frames that arrive on the
+        # unordered `pose` data channel (see `build_state_json`). Bumped only
+        # from the media server's GLib thread (single writer), so a plain int
+        # is safe.
+        self._pose_seq = 0
         # Asyncio loop on which the log-streaming tasks run. Captured
         # in setup_media_server alongside the WebRTC handler loop, so
         # cross-thread cleanup (peer disconnect fires from gstreamer's
@@ -379,6 +393,18 @@ class Backend:
         # in by `Daemon` to auto-start a configured startup app after the robot
         # wakes (however the wake was triggered: on-start, button, or REST).
         self._on_wake_up_callback: Optional[Callable[[], None]] = None
+
+        # Synchronous callback fired after a `set_robot_name` command persists
+        # a new name. Wired in by the app lifespan to apply the rename live
+        # (daemon status + central relay + mDNS) so it takes effect without a
+        # restart. Receives the stored (trimmed) name and must return promptly.
+        self._set_robot_name_callback: Optional[Callable[[str], None]] = None
+
+        # In-flight "return to a clean idle state" task, scheduled by
+        # request_idle_reset() when the managed app slot becomes free. Kept so a
+        # fast reconnect (or a local app grabbing the robot) can cancel it
+        # instead of letting a stale goto_sleep fight the new session.
+        self._idle_reset_task: Optional["asyncio.Task[None]"] = None
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -1277,6 +1303,59 @@ class Backend:
         }
 
     # ------------------------------------------------------------------
+    # State snapshot (shared by get_state replies and the pose push)
+    # ------------------------------------------------------------------
+
+    def build_state_dict(self) -> dict[str, Any]:
+        """Build the present-state snapshot sent to clients.
+
+        Single source of truth for both the polled ``get_state`` reply and
+        the pushed pose stream (see :meth:`build_state_json`). All getters
+        read cached motor values (``get_last_position``), so this is cheap
+        and safe to call from a thread other than the motor loop.
+        """
+        return {
+            "head_pose": self.get_present_head_pose().tolist()
+            if self.current_head_pose is not None
+            else None,
+            "antennas": self.get_present_antenna_joint_positions().tolist()
+            if self.current_antenna_joint_positions is not None
+            else None,
+            # Per-motor joint positions (7 head incl. body yaw at [0], 2
+            # antennas), so WebRTC clients can check the physical pose motor
+            # by motor without the LAN /ws/sdk stream.
+            "head_joint_positions": self.get_present_head_joint_positions().tolist()
+            if self.current_head_joint_positions is not None
+            else None,
+            "antennas_joint_positions": self.get_present_antenna_joint_positions().tolist()
+            if self.current_antenna_joint_positions is not None
+            else None,
+            "body_yaw": self.get_present_body_yaw(),
+            "motor_mode": self.get_motor_control_mode().value,
+            "is_recording": self.is_recording,
+            "is_move_running": self.is_move_running,
+            "face_target": self.get_tracked_face().model_dump(),
+        }
+
+    def build_state_json(self) -> Optional[str]:
+        """Serialize the present state as the client-facing envelope.
+
+        Returns the ``{"state": ...}`` payload, or ``None`` if it can't be
+        built yet. Wired into the media server as the pose-stream provider
+        (``set_pose_provider``) so the daemon can *push* pose over the
+        unreliable/unordered ``pose`` data channel at a steady rate instead
+        of the client round-tripping ``get_state`` over Wi-Fi. Returning
+        ``None`` (e.g. before the first kinematics update, or during
+        shutdown) simply skips that tick.
+        """
+        try:
+            state = self.build_state_dict()
+        except Exception:
+            return None
+        self._pose_seq += 1
+        return json.dumps({"state": state, "seq": self._pose_seq})
+
+    # ------------------------------------------------------------------
     # Transport-agnostic command processing
     # ------------------------------------------------------------------
 
@@ -1358,6 +1437,9 @@ class Backend:
         elif isinstance(cmd, PlaySoundCmd):
             self.play_sound(cmd.file)
             send_response({"status": "ok", "command": "play_sound"})
+
+        elif isinstance(cmd, PlayRecordedMoveCmd):
+            asyncio.create_task(self._async_play_recorded_move(cmd, send_response))
 
         elif isinstance(cmd, ClearIncomingAudioCmd):
             self.clear_incoming_audio()
@@ -1447,20 +1529,7 @@ class Backend:
             send_response({"status": "ok", "command": "set_automatic_body_yaw"})
 
         elif isinstance(cmd, GetStateCmd):
-            state = {
-                "head_pose": self.get_present_head_pose().tolist()
-                if self.current_head_pose is not None
-                else None,
-                "antennas": self.get_present_antenna_joint_positions().tolist()
-                if self.current_antenna_joint_positions is not None
-                else None,
-                "body_yaw": self.get_present_body_yaw(),
-                "motor_mode": self.get_motor_control_mode().value,
-                "is_recording": self.is_recording,
-                "is_move_running": self.is_move_running,
-                "face_target": self.get_tracked_face().model_dump(),
-            }
-            send_response({"state": state})
+            send_response({"state": self.build_state_dict()})
 
         elif isinstance(cmd, GetVersionCmd):
             from importlib.metadata import version
@@ -1471,6 +1540,87 @@ class Backend:
             from reachy_mini.utils.hardware_id import get_hardware_id
 
             send_response({"hardware_id": get_hardware_id()})
+
+        elif isinstance(cmd, (GetFirstWakeUpCmd, SetFirstWakeUpCmd)):
+            # First wake-up wizard completion is a persistent, robot-wide
+            # flag stored on disk so the post-connection setup wizard only
+            # ever shows once, whichever client connects. Read/write helpers
+            # are fail-safe (never raise) so a storage error can't break the
+            # command loop.
+            from reachy_mini.utils.first_wake_up import (
+                get_first_wake_up_completed,
+                set_first_wake_up_completed,
+            )
+
+            if isinstance(cmd, SetFirstWakeUpCmd):
+                ok = set_first_wake_up_completed(cmd.is_completed)
+                send_response(
+                    {
+                        "command": "set_first_wake_up",
+                        "status": "ok" if ok else "error",
+                        "is_completed": cmd.is_completed
+                        if ok
+                        else get_first_wake_up_completed(),
+                    }
+                )
+            else:  # GetFirstWakeUpCmd
+                send_response(
+                    {
+                        "command": "get_first_wake_up",
+                        "is_completed": get_first_wake_up_completed(),
+                    }
+                )
+
+        elif isinstance(cmd, (GetRobotNameCmd, SetRobotNameCmd)):
+            # Robot display name is a persistent, robot-wide string stored on
+            # disk (same fail-safe helpers as the first-wake-up flag). A rename
+            # is applied live below (status + central relay + mDNS) via the
+            # set-robot-name callback, so no daemon restart is needed; the
+            # persisted value also overrides the --robot-name default on the
+            # next start.
+            from reachy_mini.utils.robot_name import get_robot_name, set_robot_name
+
+            if isinstance(cmd, SetRobotNameCmd):
+                stored = set_robot_name(cmd.name)
+                # Apply the rename live (status + central relay + mDNS) so it
+                # takes effect without a daemon restart. Fail-safe: a wiring
+                # error here must not break the persisted rename or the ack.
+                if stored is not None and self._set_robot_name_callback is not None:
+                    try:
+                        self._set_robot_name_callback(stored)
+                    except Exception as e:  # noqa: BLE001 - never break the cmd loop
+                        self.logger.warning(f"set_robot_name live-apply failed: {e}")
+                send_response(
+                    {
+                        "command": "set_robot_name",
+                        "status": "ok" if stored is not None else "error",
+                        "name": stored if stored is not None else get_robot_name(),
+                    }
+                )
+            else:  # GetRobotNameCmd
+                send_response(
+                    {
+                        "command": "get_robot_name",
+                        "name": get_robot_name(),
+                    }
+                )
+
+        elif isinstance(cmd, DeleteHfTokenCmd):
+            # Sign the robot out of Hugging Face: clears the daemon's stored
+            # token and notifies the central relay (drops it to
+            # WAITING_FOR_TOKEN), so the robot de-registers and disappears
+            # from its owner's list until it is set up again. Fail-safe:
+            # delete_hf_token() never raises (returns False on failure), so
+            # a storage/logout error can't break the command loop.
+            from reachy_mini.apps.sources.hf_auth import delete_hf_token
+
+            ok = delete_hf_token()
+            send_response(
+                {
+                    "command": "delete_hf_token",
+                    "status": "ok" if ok else "error",
+                }
+            )
 
         elif isinstance(
             cmd,
@@ -1599,6 +1749,13 @@ class Backend:
             self._start_log_subscription(peer_id, send_response)
         elif isinstance(cmd, UnsubscribeLogsCmd):
             self._cancel_log_subscription(peer_id)
+
+        elif isinstance(cmd, SubscribePoseCmd):
+            self._set_pose_subscription(peer_id, True)
+            send_response({"status": "ok", "command": "subscribe_pose"})
+        elif isinstance(cmd, UnsubscribePoseCmd):
+            self._set_pose_subscription(peer_id, False)
+            send_response({"status": "ok", "command": "unsubscribe_pose"})
 
         elif isinstance(cmd, RestartDaemonCmd):
             # Ack BEFORE triggering the restart: the WebRTC transport
@@ -2063,6 +2220,18 @@ class Backend:
         if task is not None and not task.done():
             task.cancel()
 
+    def _set_pose_subscription(self, peer_id: Optional[str], enabled: bool) -> None:
+        """Enable/disable the pushed pose stream for a peer.
+
+        Delegated to the media server, which owns the per-peer ``pose`` data
+        channels and the push timer. No-op without a peer id (non-multiplexed
+        transports) or on an older media server lacking the hook.
+        """
+        if peer_id is None or self._media_server is None:
+            return
+        if hasattr(self._media_server, "set_pose_subscription"):
+            self._media_server.set_pose_subscription(peer_id, enabled)
+
     def _on_peer_disconnect(self, peer_id: str) -> None:
         """Cancel any per-peer state when the WebRTC peer goes away.
 
@@ -2181,6 +2350,56 @@ class Backend:
             send_response({"status": "ok", "command": "goto_sleep", "completed": True})
         except Exception as e:
             send_response({"error": str(e), "command": "goto_sleep"})
+
+    async def _async_play_recorded_move(
+        self,
+        cmd: PlayRecordedMoveCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Load a named move from a dataset and play it (motion + sound).
+
+        Mirrors the ``/api/move/play/recorded-move-dataset`` route but over the
+        data channel so it works on a remote WebRTC session. Fire-and-forget:
+        the ack reports dispatch success/failure (unknown move, missing
+        dataset), not playback completion. ``RecordedMoves`` reads the local
+        HF cache first, so on a pre-downloaded robot this stays off the
+        network.
+        """
+        from reachy_mini.motion.recorded_move import (
+            DEFAULT_EMOTIONS_DATASET,
+            RecordedMoves,
+        )
+
+        dataset = cmd.dataset_name or DEFAULT_EMOTIONS_DATASET
+        try:
+            move = RecordedMoves(dataset).get(cmd.move_name)
+        except Exception as e:
+            self.logger.warning(
+                f"play_recorded_move: {cmd.move_name!r} from {dataset!r} "
+                f"failed to load: {e}"
+            )
+            send_response(
+                {
+                    "command": "play_recorded_move",
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
+            return
+
+        # Dispatched: ack now (fire-and-forget), then run the move. play_move
+        # self-guards against a concurrent move, so a double-tap is a no-op.
+        send_response(
+            {
+                "command": "play_recorded_move",
+                "status": "ok",
+                "move_name": cmd.move_name,
+            }
+        )
+        try:
+            await self.play_move(move, initial_goto_duration=cmd.initial_goto_duration)
+        except Exception as e:
+            self.logger.warning(f"play_recorded_move: playback failed: {e}")
 
     async def _async_play_uploaded_move(self, cmd: PlayUploadedMoveCmd) -> None:
         """Run Backend.play_move on a previously-uploaded move slot.
@@ -2366,6 +2585,17 @@ class Backend:
         """
         self._on_wake_up_callback = callback
 
+    def set_robot_name_callback(self, callback: Callable[[str], None]) -> None:
+        """Wire the live-apply hook for the ``set_robot_name`` DataChannel cmd.
+
+        The app lifespan injects a callback that refreshes the advertised
+        name in place (daemon status + central relay + mDNS) so a rename
+        takes effect without a daemon restart. It receives the persisted
+        (trimmed) name and MUST return promptly (any slow work is
+        thread-offloaded on its side).
+        """
+        self._set_robot_name_callback = callback
+
     def setup_media_server(self, media_server: Any) -> None:
         """Connect the backend to the media server.
 
@@ -2398,6 +2628,13 @@ class Backend:
         if hasattr(media_server, "set_peer_disconnect_handler"):
             media_server.set_peer_disconnect_handler(self._on_peer_disconnect)
         self._send_message_to_webrtc = media_server.send_data_message
+        # Feed the media server the present-state snapshot so it can *push*
+        # pose over the unreliable/unordered `pose` data channel at a steady
+        # rate (immune to Wi-Fi jitter), instead of the client polling
+        # `get_state` on the reliable-ordered channel. No-op on older media
+        # servers that don't expose the hook (falls back to polling).
+        if hasattr(media_server, "set_pose_provider"):
+            media_server.set_pose_provider(self.build_state_json)
 
     def set_jsonrpc_handler(
         self, handler: Callable[[str, Callable[[dict[str, Any]], None]], None]
@@ -2406,6 +2643,11 @@ class Backend:
         self._jsonrpc_handler = handler
 
     def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
+        # A fresh command means someone owns the robot again: cancel any pending
+        # idle-reset goto_sleep so it doesn't fight the new session. Runs on the
+        # same loop as the task, so the cancel is race-free.
+        self._cancel_idle_reset()
+
         def send(resp: dict[str, Any]) -> None:
             self._send_webrtc_response(peer_id, resp)
 
@@ -2435,3 +2677,72 @@ class Backend:
     def _send_webrtc_response(self, peer_id: str, response: dict[str, Any]) -> None:
         if self._send_message_to_webrtc:
             self._send_message_to_webrtc(peer_id, json.dumps(response))
+
+    # ------------------------------------------------------------------
+    # Idle reset (clean state when no managed app owns the robot)
+    # ------------------------------------------------------------------
+
+    def request_idle_reset(self) -> None:
+        """Return the robot to a clean idle state when no managed app owns it.
+
+        Called by the daemon when the shared ``RobotAppLock`` transitions to
+        ``free`` (a remote WebRTC session ended or dropped, or a local app
+        exited). The daemon never resets motor state on session teardown, and
+        clients are not guaranteed to run a clean leave sequence: a crash, a
+        buggy app, or a lost Wi-Fi link all skip it. Without this, whatever
+        motor mode the last app left behind - notably ``gravity_compensation`` -
+        survives into the next session, where the client's ``ensureAwake()``
+        sees ``isAwake() == true`` and skips the wake animation, leaving the
+        robot parked in a weird state.
+
+        Threadsafe and non-blocking: hops onto the backend's own event loop (the
+        one that also handles data-channel commands) and returns immediately.
+        No-op when that loop isn't up yet (e.g. ``--no-media`` daemons, which
+        have no remote sessions anyway).
+        """
+        loop = getattr(self, "_log_loop", None)
+        if loop is None:
+            return
+        loop.call_soon_threadsafe(self._maybe_start_idle_reset)
+
+    def _cancel_idle_reset(self) -> None:
+        """Cancel an in-flight idle reset. Must run on the backend loop."""
+        task = self._idle_reset_task
+        if task is not None and not task.done():
+            task.cancel()
+        self._idle_reset_task = None
+
+    def _maybe_start_idle_reset(self) -> None:
+        """Kick off a goto_sleep if the robot is still awake. Runs on the loop."""
+        try:
+            if not self.ready.is_set() or self.is_shutting_down:
+                return
+            # Already limp / asleep: a well-behaved client (e.g. the mobile app,
+            # which sleeps + disables on leave) leaves nothing to do, so we skip
+            # the redundant trajectory + sound.
+            if self.get_motor_control_mode() == MotorControlMode.Disabled:
+                return
+            self._cancel_idle_reset()
+            self._idle_reset_task = asyncio.create_task(self._async_idle_reset())
+        except Exception:
+            self.logger.warning("Idle reset scheduling failed", exc_info=True)
+
+    async def _async_idle_reset(self) -> None:
+        """Graceful return to the sleep pose, which ends with motors disabled.
+
+        Mirrors the reference leave behaviour clients already run by hand
+        (gotoSleep -> motors off). ``goto_sleep()`` finishes with
+        ``set_motor_control_mode(Disabled)``, which also clears
+        ``gravity_compensation_mode`` - so the next session's ``ensureAwake()``
+        correctly triggers a fresh wake.
+        """
+        try:
+            await self.goto_sleep()
+        except asyncio.CancelledError:
+            # A new session (or local app) grabbed the robot mid-reset: let it
+            # take over without noise.
+            raise
+        except Exception:
+            self.logger.warning("Idle reset goto_sleep failed", exc_info=True)
+        finally:
+            self._idle_reset_task = None
