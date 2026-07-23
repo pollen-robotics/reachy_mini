@@ -14,5 +14,15 @@ export MALLOC_ARENA_MAX=2
 # Ensure WiFi is not soft-blocked (can happen after a crash or kernel module reload)
 sudo rfkill unblock wifi
 
+# Pre-warm the apps venv while the daemon boots. On a cold boot the first app
+# start spends most of its time reading .pyc/.so files from the SD card; this
+# background import pulls them into the page cache in parallel with daemon
+# init. Idle CPU/IO priority keeps it from competing with the daemon, and any
+# failure is harmless (the first app start is then simply as slow as today).
+if [ -x /venvs/apps_venv/bin/python ]; then
+    nice -n 19 ionice -c 3 /venvs/apps_venv/bin/python -c \
+        "import reachy_mini_conversation_app.main" >/dev/null 2>&1 &
+fi
+
 # Run Python in unbuffered mode (-u) to ensure logs are immediately forwarded to systemd
 python -u -m reachy_mini.daemon.app.main --wireless-version --no-wake-up-on-start
