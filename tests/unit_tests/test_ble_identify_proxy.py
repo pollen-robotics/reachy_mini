@@ -1,8 +1,9 @@
-"""Unit tests for the identify-over-BLE proxy helper.
+"""Unit tests for the recorded-move-over-BLE proxy helper.
 
-These exercise the pure relay/error-mapping logic of ``_identify`` in
-``bluetooth_service`` with ``_daemon_request`` mocked out — no real BLE stack
-or daemon is involved.
+These exercise the pure relay/error-mapping logic of ``_play_recorded_move``
+in ``bluetooth_service`` with ``_daemon_request`` mocked out — no real BLE
+stack or daemon is involved. IDENTIFY is a back-compat alias that plays
+``_IDENTIFY_MOVE`` through this same helper.
 
 The service only runs on Linux, so the suite is skipped elsewhere. Even on
 Linux, ``dbus`` (dbus-python) is not a project dependency — the service runs
@@ -105,46 +106,65 @@ def _patch_daemon(monkeypatch, result):
     monkeypatch.setattr(bt, "_daemon_request", fake)
 
 
-# --- IDENTIFY ---------------------------------------------------------------
+# --- IDENTIFY / PLAY (recorded move) ----------------------------------------
 
 
-def test_identify_success(monkeypatch):
+def test_play_success(monkeypatch):
     _patch_daemon(monkeypatch, {"status": "ok"})
-    assert bt._identify() == "OK: Playing identification sound"
+    assert bt._play_recorded_move("toc-toc-toc") == "OK: Playing toc-toc-toc"
 
 
-def test_identify_posts_builtin_sound_to_media_route(monkeypatch):
-    """The proxy must POST the built-in asset to the /api-prefixed media route."""
+def test_identify_move_plays_via_recorded_move(monkeypatch):
+    """IDENTIFY is a back-compat alias playing ``_IDENTIFY_MOVE``."""
+    _patch_daemon(monkeypatch, {"status": "ok"})
+    assert bt._play_recorded_move(bt._IDENTIFY_MOVE) == f"OK: Playing {bt._IDENTIFY_MOVE}"
+
+
+def test_play_posts_to_recorded_move_route(monkeypatch):
+    """The proxy must POST the move to the /api-prefixed recorded-move route."""
     captured: dict = {}
 
     def fake(method, path, params=None, data=None, timeout=None):
         captured["method"] = method
         captured["path"] = path
-        captured["data"] = data
         return {"status": "ok"}
 
     monkeypatch.setattr(bt, "_daemon_request", fake)
-    bt._identify()
+    bt._play_recorded_move(bt._IDENTIFY_MOVE)
     assert captured["method"] == "POST"
-    assert captured["path"] == "/api/media/play_sound"
-    assert captured["data"] == {"file": bt._IDENTIFY_SOUND_FILE}
+    assert captured["path"] == (
+        "/api/move/play/recorded-move-dataset/"
+        + bt._EMOTIONS_DATASET
+        + "/"
+        + bt._IDENTIFY_MOVE
+    )
 
 
-def test_identify_503_maps_to_audio_not_ready(monkeypatch):
+def test_play_missing_name_is_rejected(monkeypatch):
+    _patch_daemon(monkeypatch, {"status": "ok"})
+    assert bt._play_recorded_move("   ") == "ERROR: Missing move name"
+
+
+def test_play_404_maps_to_unknown_move(monkeypatch):
+    _patch_daemon(monkeypatch, _http_error(404))
+    assert bt._play_recorded_move("toc-toc-toc") == "ERROR: Unknown move"
+
+
+def test_play_503_maps_to_robot_not_ready(monkeypatch):
     _patch_daemon(monkeypatch, _http_error(503))
-    assert bt._identify() == "ERROR: Audio not ready"
+    assert bt._play_recorded_move("toc-toc-toc") == "ERROR: Robot not ready"
 
 
-def test_identify_other_http_error_maps_to_identify_failed(monkeypatch):
+def test_play_other_http_error_maps_to_play_failed(monkeypatch):
     _patch_daemon(monkeypatch, _http_error(500))
-    assert bt._identify() == "ERROR: Identify failed"
+    assert bt._play_recorded_move("toc-toc-toc") == "ERROR: Play failed"
 
 
-def test_identify_daemon_unreachable(monkeypatch):
+def test_play_daemon_unreachable(monkeypatch):
     _patch_daemon(monkeypatch, bt.urllib.error.URLError("boom"))
-    assert bt._identify() == "ERROR: Daemon unreachable"
+    assert bt._play_recorded_move("toc-toc-toc") == "ERROR: Daemon unreachable"
 
 
-def test_identify_unexpected_error_is_reported(monkeypatch):
+def test_play_unexpected_error_is_reported(monkeypatch):
     _patch_daemon(monkeypatch, RuntimeError("kaboom"))
-    assert bt._identify() == "ERROR: kaboom"
+    assert bt._play_recorded_move("toc-toc-toc") == "ERROR: kaboom"
