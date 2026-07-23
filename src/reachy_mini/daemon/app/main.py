@@ -10,6 +10,7 @@ managing the robot's state.
 import argparse
 import asyncio
 import logging
+import threading
 import types
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -230,6 +231,25 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
             # Register mDNS service only after the daemon is ready
             mdns.register()
+
+            # Warm the face-tracking import (onnxruntime, ~1-1.5s of CPU on
+            # the CM4) off the boot path, so the first enable_head_tracking
+            # doesn't stall. The backend imports it lazily either way, so a
+            # failure here only means the first call pays the import (or gets
+            # today's cannot-enable warning if the module is truly broken).
+            def preload_face_tracking() -> None:
+                try:
+                    import reachy_mini.vision.face_tracking  # noqa: F401
+
+                    logger.info("Face-tracking module pre-loaded")
+                except Exception as e:
+                    logger.warning(f"Face-tracking preload failed: {e}")
+
+            threading.Thread(
+                target=preload_face_tracking,
+                name="face-tracking-preload",
+                daemon=True,
+            ).start()
 
             yield
         finally:

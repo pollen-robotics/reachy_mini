@@ -86,6 +86,11 @@ from reachy_mini.io.publisher import Publisher
 
 if typing.TYPE_CHECKING:
     from reachy_mini.kinematics import AnyKinematics
+
+    # Imported lazily inside enable_head_tracking: pulling face_tracking here
+    # drags onnxruntime (~1-1.5s of CPU on the CM4) into every daemon boot
+    # while the tracker is only needed once head tracking is actually enabled.
+    from reachy_mini.vision.face_tracking import FaceTracker
 # MediaManager no longer used here — play_sound delegated to GstMediaServer
 from reachy_mini.media.audio_doa import AudioDoA
 from reachy_mini.motion.goto import GotoMove
@@ -99,7 +104,6 @@ from reachy_mini.utils.interpolation import (
     linear_pose_interpolation,
     time_trajectory,
 )
-from reachy_mini.vision.face_tracking import FaceTracker
 from reachy_mini.vision.look_at import (
     default_head_to_camera_transform,
     look_at_image_pose,
@@ -321,7 +325,7 @@ class Backend:
         self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
         self._tracking_target_pose: Annotated[NDArray[np.float64], (4, 4)] | None = None
         self._last_face_seen: float | None = None
-        self._tracker: FaceTracker | None = None
+        self._tracker: "FaceTracker | None" = None
         self._tracking_lock = threading.Lock()
         self._face_target = FaceTarget()
         self.T_head_cam = default_head_to_camera_transform()
@@ -614,7 +618,19 @@ class Backend:
                 return False
             if self._tracking_requested_weight > 0.0:
                 if self._tracker is None:
-                    self._tracker = FaceTracker()
+                    try:
+                        # Deferred so daemon boot doesn't pay for onnxruntime;
+                        # the lifespan preload thread usually already imported
+                        # this, making the import here instant.
+                        from reachy_mini.vision.face_tracking import FaceTracker
+
+                        self._tracker = FaceTracker()
+                    except Exception as e:
+                        self.logger.warning(
+                            "Cannot enable head tracking: face tracker unavailable (%s)",
+                            e,
+                        )
+                        return False
                 self._tracker.start(self._media_server.camera_specs)
                 self._tracker.set_active(True)
             else:

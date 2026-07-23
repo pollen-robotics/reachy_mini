@@ -1,11 +1,18 @@
-"""Try to import kinematics engines, and provide mockup classes if they are not available."""
+"""Try to import kinematics engines, and provide mockup classes if they are not available.
 
-from typing import Annotated
+``NNKinematics`` is exposed lazily (PEP 562): importing it eagerly pulls
+onnxruntime (~1-1.5s of CPU on the wireless robot) into every process that
+touches this package — including the daemon, which defaults to
+``AnalyticalKinematics`` and would pay for onnxruntime at boot for nothing.
+"""
+
+from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.kinematics.nn_kinematics import NNKinematics  # noqa: F401
+if TYPE_CHECKING:
+    from reachy_mini.kinematics.nn_kinematics import NNKinematics
 
 try:
     from reachy_mini.kinematics.placo_kinematics import PlacoKinematics  # noqa: F401
@@ -39,5 +46,20 @@ from reachy_mini.kinematics.analytical_kinematics import (  # noqa: F401
     AnalyticalKinematics,
 )
 
-AnyKinematics = NNKinematics | PlacoKinematics | AnalyticalKinematics
+if TYPE_CHECKING:
+    AnyKinematics = NNKinematics | PlacoKinematics | AnalyticalKinematics
+
 __all__ = ["NNKinematics", "PlacoKinematics", "AnalyticalKinematics"]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily resolve ``NNKinematics`` so the package import stays onnxruntime-free."""
+    if name == "NNKinematics":
+        from reachy_mini.kinematics.nn_kinematics import NNKinematics
+
+        return NNKinematics
+    if name == "AnyKinematics":
+        from reachy_mini.kinematics.nn_kinematics import NNKinematics
+
+        return NNKinematics | PlacoKinematics | AnalyticalKinematics
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
