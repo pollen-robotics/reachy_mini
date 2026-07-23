@@ -1,0 +1,42 @@
+name: HF Hub private-API contract
+
+# The device-code OAuth flow (src/reachy_mini/apps/sources/hf_auth.py) imports
+# PRIVATE huggingface_hub internals. huggingface-hub is range-pinned
+# (>=1.20.1,<2.0.0), so the normal pytest job only exercises the *locked*
+# version. This job runs the same contract test against the *latest* version
+# the range allows, so an upstream change to those private APIs is caught
+# directly in CI — on every relevant PR and on a weekly schedule (which flags a
+# breaking new release even when no one is touching this code).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "src/reachy_mini/apps/sources/hf_auth.py"
+      - "tests/unit_tests/test_hf_hub_private_api_contract.py"
+      - "pyproject.toml"
+      - ".github/workflows/hf-api-contract.yml"
+  schedule:
+    - cron: "17 4 * * 1" # Mondays 04:17 UTC
+  workflow_dispatch:
+
+jobs:
+  contract-latest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: 3.12
+          enable-cache: true
+      # --isolated ignores the project's uv config (incl. exclude-newer) and
+      # --no-project skips installing reachy_mini; the contract test imports only
+      # huggingface_hub + packaging, so it needs neither the project nor its
+      # system deps. --noconftest avoids loading the reachy_mini test fixtures.
+      - name: Run private-API contract test against the latest allowed huggingface-hub
+        run: >-
+          uv run --isolated --no-project
+          --with "huggingface-hub<2.0.0" --with pytest --with packaging
+          -- pytest -vv --noconftest -p no:cacheprovider
+          tests/unit_tests/test_hf_hub_private_api_contract.py
