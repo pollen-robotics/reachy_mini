@@ -1,1 +1,1 @@
-{"id":"4e74559c9c57da47dd4835668216481b","fullName":"tests.unit_tests.test_apps_hf_auth#test_save_hf_token_invalid","name":"test_save_hf_token_invalid","status":"passed","testResultsByEnv":{"default":"d7a922a4b570fc98a3e1cf8236a6e0f9"}}
+{"id":"4e74559c9c57da47dd4835668216481b","fullName":"tests.unit_tests.test_apps_hf_auth#test_save_hf_token_invalid","name":"test_save_hf_token_invalid","status":"passed","testResultsByEnv":{"default":"782e4810a7d6924c95c64832dc64c128"}}

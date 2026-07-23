@@ -1,1 +1,1 @@
-{"id":"c59c27b3a0a92e2c43b0a69558627eb1","fullName":"tests.unit_tests.test_device_detection.TestFindVideoDevice#test_imx708_rpi_camera","name":"test_imx708_rpi_camera","status":"passed","testResultsByEnv":{"default":"37bd7f5c9ef91607f36f4e0ab4257f94"}}
+{"id":"c59c27b3a0a92e2c43b0a69558627eb1","fullName":"tests.unit_tests.test_device_detection.TestFindVideoDevice#test_imx708_rpi_camera","name":"test_imx708_rpi_camera","status":"passed","testResultsByEnv":{"default":"63fa785c10c99609cd8ec41fb9f73a80"}}
