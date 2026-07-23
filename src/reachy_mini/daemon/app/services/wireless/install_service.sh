@@ -11,8 +11,8 @@ LAUNCHER_PATH="$SCRIPT_DIR/launcher.sh"
 cat <<EOF | sudo tee $SERVICE_FILE > /dev/null
 [Unit]
 Description=Reachy Mini AP Launcher Service
-After=network-online.target
-Wants=network-online.target
+After=NetworkManager.service
+Wants=NetworkManager.service
 
 [Service]
 Type=simple

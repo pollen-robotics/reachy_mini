@@ -500,6 +500,25 @@ def remove_connection(name: str) -> None:
 WIFI_INIT_MAX_RETRIES = 5
 WIFI_INIT_RETRY_DELAY = 3  # seconds
 WIFI_INIT_TIMEOUT = 30  # seconds
+WIFI_ASSOCIATION_GRACE = 20  # seconds
+
+
+def _wait_for_wifi_association(timeout: float = WIFI_ASSOCIATION_GRACE) -> WifiMode:
+    """Give NetworkManager time to activate a known WiFi before giving up.
+
+    The daemon service is ordered after NetworkManager.service, not
+    network-online.target, so it can reach this code while NetworkManager is
+    still associating with a known network. Falling back to the hotspot at
+    that moment would seize wlan0 and strand the robot in AP mode, so when
+    known station profiles exist we poll for the association to complete
+    instead of trusting a single DISCONNECTED snapshot.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        mode = get_current_wifi_mode()
+        if mode != WifiMode.DISCONNECTED or time.monotonic() >= deadline:
+            return mode
+        time.sleep(1)
 
 
 def ensure_wifi_on_startup() -> None:
@@ -514,8 +533,18 @@ def ensure_wifi_on_startup() -> None:
             # Make sure wlan0 is up and running
             scan_available_wifi()
 
+            mode = get_current_wifi_mode()
+            if mode == WifiMode.DISCONNECTED and any(
+                c.name != "Hotspot" for c in get_wifi_connections()
+            ):
+                logger.info(
+                    "Known WiFi networks configured but none active yet; "
+                    "waiting for NetworkManager to associate..."
+                )
+                mode = _wait_for_wifi_association()
+
             # If no WiFi connection is active, set up the default hotspot
-            if get_current_wifi_mode() == WifiMode.DISCONNECTED:
+            if mode == WifiMode.DISCONNECTED:
                 logger.info("No WiFi connection active. Setting up hotspot...")
                 setup_wifi_connection(
                     name="Hotspot",
