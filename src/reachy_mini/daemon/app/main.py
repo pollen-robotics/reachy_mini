@@ -135,6 +135,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             args.fastapi_port,
             wireless_version=args.wireless_version,
         )
+        # Exposed on app.state so the `/api/daemon/robot-name` route can
+        # re-advertise the LAN record live on a rename (BLE setup path).
+        app.state.mdns = mdns
 
         def preload_with_logging() -> None:
             """Download datasets with logging."""
@@ -225,6 +228,23 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
             # Register mDNS service only after the daemon is ready
             mdns.register()
+
+            # Wire the live rename hook now that both the daemon (relay +
+            # status) and the mDNS registration exist. A `set_robot_name`
+            # command then applies without a restart: daemon status + central
+            # relay (via apply_robot_name) and the LAN mDNS record (re-register).
+            daemon_instance = app.state.daemon
+            if daemon_instance.backend is not None:
+
+                def _apply_robot_name_live(
+                    name: str,
+                    _daemon: Daemon = daemon_instance,
+                    _mdns: MdnsServiceRegistration = mdns,
+                ) -> None:
+                    _daemon.apply_robot_name(name)
+                    _mdns.update_name(name)
+
+                daemon_instance.backend.set_robot_name_callback(_apply_robot_name_live)
 
             yield
         finally:

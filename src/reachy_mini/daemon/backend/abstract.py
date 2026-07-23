@@ -382,6 +382,12 @@ class Backend:
         # wakes (however the wake was triggered: on-start, button, or REST).
         self._on_wake_up_callback: Optional[Callable[[], None]] = None
 
+        # Synchronous callback fired after a `set_robot_name` command persists
+        # a new name. Wired in by the app lifespan to apply the rename live
+        # (daemon status + central relay + mDNS) so it takes effect without a
+        # restart. Receives the stored (trimmed) name and must return promptly.
+        self._set_robot_name_callback: Optional[Callable[[str], None]] = None
+
     # Life cycle methods
     def wrapped_run(self) -> None:
         """Run the backend in a try-except block to store errors."""
@@ -1476,13 +1482,22 @@ class Backend:
 
         elif isinstance(cmd, (GetRobotNameCmd, SetRobotNameCmd)):
             # Robot display name is a persistent, robot-wide string stored on
-            # disk (same fail-safe helpers as the first-wake-up flag). A rename
-            # takes effect on the next daemon start, where the persisted value
-            # overrides the --robot-name default.
+            # disk. A rename is applied live below (status + central relay +
+            # mDNS) via the set-robot-name callback, so no daemon restart is
+            # needed; the persisted value also overrides the --robot-name
+            # default on the next start.
             from reachy_mini.utils.robot_name import get_robot_name, set_robot_name
 
             if isinstance(cmd, SetRobotNameCmd):
                 stored = set_robot_name(cmd.name)
+                # Apply the rename live (status + central relay + mDNS) so it
+                # takes effect without a daemon restart. Fail-safe: a wiring
+                # error here must not break the persisted rename or the ack.
+                if stored is not None and self._set_robot_name_callback is not None:
+                    try:
+                        self._set_robot_name_callback(stored)
+                    except Exception as e:  # noqa: BLE001 - never break the cmd loop
+                        self.logger.warning(f"set_robot_name live-apply failed: {e}")
                 send_response(
                     {
                         "command": "set_robot_name",
@@ -2391,6 +2406,17 @@ class Backend:
         any async work as a task).
         """
         self._on_wake_up_callback = callback
+
+    def set_robot_name_callback(self, callback: Callable[[str], None]) -> None:
+        """Wire the live-apply hook for the ``set_robot_name`` DataChannel cmd.
+
+        The app lifespan injects a callback that refreshes the advertised
+        name in place (daemon status + central relay + mDNS) so a rename
+        takes effect without a daemon restart. It receives the persisted
+        (trimmed) name and MUST return promptly (any slow work is
+        thread-offloaded on its side).
+        """
+        self._set_robot_name_callback = callback
 
     def setup_media_server(self, media_server: Any) -> None:
         """Connect the backend to the media server.

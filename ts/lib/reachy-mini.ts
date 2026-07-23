@@ -1359,8 +1359,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     /**
      * Set and persist the robot display name on the robot. Resolves with the
-     * stored (trimmed) name, or `null` on error / channel-closed. Takes effect
-     * on the next daemon restart (the persisted name overrides --robot-name).
+     * stored (trimmed) name, or `null` on error / channel-closed. Applied live
+     * by the daemon (status + central relay + mDNS), so it takes effect right
+     * away without a restart; the persisted name also overrides --robot-name
+     * on the next start.
      */
     setRobotName(name: string): Promise<string | null> {
         return this._slotRoundtrip(
