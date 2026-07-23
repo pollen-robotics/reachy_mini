@@ -1352,10 +1352,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * the robot remotely (no LAN HTTP path required).
      *
      * Resolves `true` when the daemon acked success, `false` on a daemon
-     * error, or `null` when the channel isn't open / the daemon predates
-     * the `delete_hf_token` command. Note the sign-out drops the central
-     * relay, so the session may tear down right after the ack - callers
-     * should treat a post-call session drop as expected.
+     * error, or `null` when no ack arrives before the timeout (e.g. a
+     * daemon that predates the `delete_hf_token` command silently drops
+     * it). Rejects if the data channel isn't open. Note the sign-out
+     * drops the central relay, so the session may tear down right after
+     * the ack - callers should treat a post-call session drop as expected,
+     * and a successful sign-out may surface as `null` if teardown races
+     * ahead of the ack.
      */
     signOut(): Promise<boolean | null> {
         return this._slotRoundtrip(
