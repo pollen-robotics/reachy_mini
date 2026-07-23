@@ -9,8 +9,6 @@ Ported from *reachy_mini_conversation_app*.
 from __future__ import annotations
 
 import math
-from collections import deque
-from itertools import islice
 
 import numpy as np
 from numpy.typing import NDArray
@@ -91,7 +89,11 @@ class SwayRollRT:
         self.sample_rate = int(sample_rate)
         self.frame = int(self.sample_rate * FRAME_MS / 1000)
         self.hop = int(self.sample_rate * HOP_MS / 1000)
-        self.samples: deque[float] = deque(maxlen=10 * self.sample_rate)
+        # Rolling analysis window: only the most recent ``frame`` samples are ever
+        # read, so keep just those as a float32 array instead of a 10 s deque of
+        # Python floats (the per-hop tolist()/fromiter round-trip dominated CPU on
+        # Raspberry Pi CM4 class hardware).
+        self.samples: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
         self.carry: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
 
         self.vad_on = False
@@ -113,7 +115,7 @@ class SwayRollRT:
 
     def reset(self) -> None:
         """Reset state (VAD/env/buffers/time) but keep initial phases/seed."""
-        self.samples.clear()
+        self.samples = np.zeros(0, dtype=np.float32)
         self.carry = np.zeros(0, dtype=np.float32)
         self.vad_on = False
         self.vad_above = 0
@@ -147,16 +149,19 @@ class SwayRollRT:
             hop = self.carry[:self.hop]
             self.carry = self.carry[self.hop:]
 
-            self.samples.extend(hop.tolist())
-            if len(self.samples) < self.frame:
+            # With the default HOP_MS > FRAME_MS, this starts empty on every
+            # iteration; retain the concatenation for future overlapping windows.
+            if self.samples.size:
+                self.samples = np.concatenate([self.samples, hop])[-self.frame :]
+            else:
+                self.samples = hop[-self.frame :].copy()
+            # The default hop already fills a frame; this remains needed if a
+            # future configuration uses overlapping windows.
+            if self.samples.size < self.frame:
                 self.t += HOP_MS / 1000.0
                 continue
 
-            frame = np.fromiter(
-                islice(self.samples, len(self.samples) - self.frame, len(self.samples)),
-                dtype=np.float32,
-                count=self.frame,
-            )
+            frame = self.samples
             db = _rms_dbfs(frame)
 
             # VAD with hysteresis + attack/release

@@ -24,6 +24,7 @@ import {
     bytesToBase64,
     gzipBase64,
     clampVolume,
+    audioUploadEncoding,
 } from './upload-helpers.js';
 import type {
     ApplyAudioConfigOptions,
@@ -31,6 +32,7 @@ import type {
     AutoConnectOptions,
     AutoConnectResult,
     AutoConnectRobotChoice,
+    FaceTarget,
     MotionAwaitOptions,
     MoveData,
     PlayMoveOptions,
@@ -180,6 +182,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _hardwareIdResolve: ((v: string | null) => void) | null = null;
     private _volumeResolve: ((v: number | null) => void) | null = null;
     private _micVolumeResolve: ((v: number | null) => void) | null = null;
+    private _trackedFaceResolve: ((v: FaceTarget | null) => void) | null = null;
     // applyAudioConfig() / readAudioParameter() share the same single-slot
     // pattern as the volume helpers. Separate slots so the two can be
     // in-flight concurrently without collision.
@@ -189,6 +192,17 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     // ─── Log subscribers ─────────────────────────────────────────────────
     private readonly _logSubscribers: Set<LogSubscriber> = new Set();
     private readonly _updateProgressSubscribers: Set<UpdateProgressCallback> = new Set();
+
+    // ─── JSON-RPC app control (over the same DataChannel) ────────────────
+    // rpcCall() sends {jsonrpc,id,method,params} and awaits the matching
+    // response; onNotification() subscribes to one-way events (no id) the
+    // robot/app pushes (conversation.phase/turn/transcript, ...).
+    private _rpcCounter = 0;
+    private readonly _pendingRpc = new Map<
+        string,
+        { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }
+    >();
+    private readonly _rpcListeners = new Map<string, Set<(params: Record<string, unknown>) => void>>();
 
     // ─── Broadcast waiters (playMove / playUploadedAudio) ────────────────
     private _broadcastWaiters: BroadcastWaiter[] = [];
@@ -726,11 +740,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Session stopped'));
+        this._rejectPendingRpc(new Error('Session stopped'));
         // Tear down resilience plumbing BEFORE closing `_pc` so a
         // queued grace callback can't dereference a dead handle.
         this._clearIceGrace();
@@ -773,6 +789,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
         this._logSubscribers.clear();
@@ -1146,6 +1163,30 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         return this._sendCommand({ type: 'clear_incoming_audio' });
     }
 
+    startHeadTracking(weight = 1.0): boolean {
+        if (!Number.isFinite(weight)) {
+            throw new TypeError(`startHeadTracking: weight must be a finite number; got ${weight}`);
+        }
+        const clampedWeight = Math.min(Math.max(weight, 0), 1);
+        return this._sendCommand({
+            type: 'set_head_tracking',
+            enabled: true,
+            weight: clampedWeight,
+        });
+    }
+
+    stopHeadTracking(): boolean {
+        return this._sendCommand({ type: 'set_head_tracking', enabled: false });
+    }
+
+    getTrackedFace(): Promise<FaceTarget | null> {
+        return this._slotRoundtrip(
+            () => this._trackedFaceResolve,
+            (next) => { this._trackedFaceResolve = next; },
+            { type: 'get_tracked_face' },
+        );
+    }
+
     /**
      * Trigger a PyPI update of the daemon over the data channel. Remote
      * counterpart of `POST /update/start`. The daemon acks then restarts
@@ -1508,7 +1549,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 type: 'upload_audio_start',
                 upload_id: uploadId,
                 total_chunks: audioTotal,
-                encoding: 'wav-base64',
+                encoding: audioUploadEncoding(audioBlob),
                 description,
             });
             for (let i = 0; i < audioTotal; i++) {
@@ -1607,7 +1648,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             type: 'upload_audio_start',
             upload_id: uploadId,
             total_chunks: total,
-            encoding: 'wav-base64',
+            encoding: audioUploadEncoding(audioBlob),
             description,
         });
         for (let i = 0; i < total; i++) {
@@ -1726,6 +1767,93 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (!this._dc || this._dc.readyState !== 'open') return false;
         this._dc.send(JSON.stringify(cmd));
         return true;
+    }
+
+    /**
+     * Call a JSON-RPC method on the robot/app over the DataChannel and await
+     * its result. This is the one way to drive an on-robot app (start/stop it
+     * via `apps.*`, or drive a running app via its own namespace, e.g.
+     * `conversation.say`). Rejects on the JSON-RPC error, a closed channel, or
+     * timeout.
+     */
+    rpcCall<T = unknown>(
+        method: string,
+        params: Record<string, unknown> = {},
+        opts: { timeoutMs?: number } = {},
+    ): Promise<T> {
+        const timeoutMs = opts.timeoutMs ?? 20000;
+        const id = `rpc-${++this._rpcCounter}`;
+        if (!this._sendCommand({ jsonrpc: '2.0', id, method, params })) {
+            return Promise.reject(new Error(`rpcCall(${method}): data channel not open`));
+        }
+        return new Promise<T>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                this._pendingRpc.delete(id);
+                reject(new Error(`rpcCall(${method}) timed out after ${timeoutMs}ms`));
+            }, timeoutMs);
+            this._pendingRpc.set(id, {
+                resolve: (v) => resolve(v as T),
+                reject,
+                timer,
+            });
+        });
+    }
+
+    /**
+     * Subscribe to a JSON-RPC notification (one-way event) pushed by the
+     * robot/app, e.g. `conversation.turn`. Returns an unsubscribe function.
+     */
+    onNotification(
+        method: string,
+        cb: (params: Record<string, unknown>) => void,
+    ): () => void {
+        let set = this._rpcListeners.get(method);
+        if (!set) {
+            set = new Set();
+            this._rpcListeners.set(method, set);
+        }
+        set.add(cb);
+        return () => {
+            this._rpcListeners.get(method)?.delete(cb);
+        };
+    }
+
+    private _rejectPendingRpc(err: Error): void {
+        for (const pending of this._pendingRpc.values()) {
+            clearTimeout(pending.timer);
+            pending.reject(err);
+        }
+        this._pendingRpc.clear();
+    }
+
+    private _handleRpcMessage(data: Record<string, unknown>): void {
+        // Response to an rpcCall (correlated by id)...
+        if ('id' in data && data.id != null && ('result' in data || 'error' in data)) {
+            const pending = this._pendingRpc.get(data.id as string);
+            if (!pending) return;
+            this._pendingRpc.delete(data.id as string);
+            clearTimeout(pending.timer);
+            if ('error' in data && data.error) {
+                const err = data.error as { message?: string; data?: { reason?: string } };
+                const e = new Error(err.message ?? 'rpc error');
+                (e as Error & { reason?: string }).reason = err.data?.reason;
+                pending.reject(e);
+            } else {
+                pending.resolve((data as { result?: unknown }).result);
+            }
+            return;
+        }
+        // ...or a one-way notification (event): dispatch to listeners.
+        if (typeof data.method === 'string') {
+            const params = (data.params as Record<string, unknown> | undefined) ?? {};
+            for (const cb of this._rpcListeners.get(data.method) ?? []) {
+                try {
+                    cb(params);
+                } catch (e) {
+                    console.error(`onNotification(${data.method}) threw:`, e);
+                }
+            }
+        }
     }
 
     private _checkSessionReady(): void {
@@ -1874,6 +2002,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     private _handleRobotMessage(data: Record<string, unknown>): void {
+        // JSON-RPC frames (app control surface) are handled separately from
+        // the legacy {command|type} robot messages that share this channel.
+        if (data.jsonrpc === '2.0') {
+            this._handleRpcMessage(data);
+            return;
+        }
         if ('version' in data && this._versionResolve) {
             this._versionResolve(data.version as string | null);
             this._versionResolve = null;
@@ -1911,6 +2045,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     data.error ? null : ((data.values as number[] | undefined) ?? null),
                 );
                 this._readAudioParameterResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'get_tracked_face') {
+            if (this._trackedFaceResolve) {
+                this._trackedFaceResolve(
+                    (data.face_target as FaceTarget | undefined) ?? null,
+                );
+                this._trackedFaceResolve = null;
             }
             return;
         }
@@ -1985,12 +2128,14 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 body_yaw?: number;
                 motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';
                 is_move_running?: boolean;
+                face_target?: FaceTarget;
             };
             if (s.head_pose) this._robotState.head = s.head_pose.flat();
             if (s.antennas) this._robotState.antennas = [s.antennas[0], s.antennas[1]];
             if (typeof s.body_yaw === 'number') this._robotState.body_yaw = s.body_yaw;
             if (s.motor_mode) this._robotState.motor_mode = s.motor_mode;
             if (typeof s.is_move_running === 'boolean') this._robotState.is_move_running = s.is_move_running;
+            if (s.face_target) this._robotState.face_target = s.face_target;
             this._emit('state', { ...this._robotState });
         }
         if (data.error) {

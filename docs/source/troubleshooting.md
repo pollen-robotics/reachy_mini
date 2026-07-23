@@ -97,6 +97,8 @@ If your cable is plugged properly and you still have issues, it is likely that t
 For more details, see the documentation:  
 [Getting Started](./platforms/reachy_mini/get_started.md)
 
+- Update the firmware to version 2.1.4 or later. Run the [update script](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/firmware/update.sh).
+
 </details>
 
 <details>
@@ -737,12 +739,19 @@ If the period is much higher than 20ms, it means the control loop is not running
 
 To make it permanent:
 ```bash
-CARD=$(aplay -l | grep -i "reSpeaker" | head -n1 | sed -n 's/^card \([0-9]*\):.*/\1/p')
+CARD=$(aplay -l | grep -i "Reachy Mini Audio" | head -n1 | sed -n 's/^card \([0-9]*\):.*/\1/p')
 amixer -c "$CARD" set PCM,1 100%
 sudo alsactl store "$CARD"
 ```
 
 This is a [known issue](https://www.xmos.com/documentation/XM-014888-PC/html/modules/fwk_xvf/doc/user_guide/02_setting_up_the_hardware.html#low-volume-of-playback-audio-on-linux-for-project-ua) of the XVF3800 based sound card.
+
+</details>
+
+<details>
+<summary><strong>The sound quality is not great / the speaker sounds "boxy".</strong></summary>
+
+The daemon already applies a default equalizer to compensate for the head shell's acoustic coloration. If the sound still isn't to your liking, the per-band gains can be tuned — or the EQ disabled — via the `speaker_eq_gains` entry in the daemon config file. See [Advanced Media Controls → Speaker equalization](platforms/reachy_mini/media_advanced_controls.md#speaker-equalization).
 
 </details>
 
@@ -769,6 +778,13 @@ sample = mini.media.get_audio_sample()
 # Play audio
 mini.media.push_audio_sample(numpy_chunk)
 ```
+
+</details>
+
+<details>
+<summary><strong>Can I get the raw microphone output?</strong></summary>
+
+Yes — install the [6-channel firmware](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/firmware).
 
 </details>
 

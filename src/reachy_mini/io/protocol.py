@@ -13,7 +13,8 @@ Client->Server command types:
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
     play_uploaded_move, cancel_move,
     play_uploaded_audio, cancel_audio, clear_incoming_audio,
-    apply_audio_config, read_audio_parameter
+    apply_audio_config, read_audio_parameter,
+    set_speech_offsets, set_wobbling, set_head_tracking, get_tracked_face
 
 Server->Client message types:
     joint_positions, head_pose, imu_data, recorded_data,
@@ -83,6 +84,16 @@ class MockupSimBackendStatus(BaseModel):
     error: str | None = None
 
 
+class FaceTarget(BaseModel):
+    """Latest daemon-side face target used for head tracking."""
+
+    detected: bool = False
+    x: float | None = None
+    y: float | None = None
+    roll: float | None = None
+    ts: float | None = None
+
+
 class DaemonStatus(BaseModel):
     """Status of the Reachy Mini daemon."""
 
@@ -103,6 +114,7 @@ class DaemonStatus(BaseModel):
     wlan_ip: Optional[str] = None
     version: Optional[str] = None
     hardware_id: Optional[str] = None
+    face_target: FaceTarget = Field(default_factory=FaceTarget)
 
 
 # ------------------------------------------------------------------
@@ -281,6 +293,7 @@ class GetMicrophoneVolumeCmd(BaseModel):
 
     type: Literal["get_microphone_volume"] = "get_microphone_volume"
 
+
 class SetSpeechOffsetsCmd(BaseModel):
     """Set head-wobbler speech offsets (composed with target pose before IK)."""
 
@@ -293,6 +306,21 @@ class SetWobblingCmd(BaseModel):
 
     type: Literal["set_wobbling"] = "set_wobbling"
     enabled: bool
+
+
+class SetHeadTrackingCmd(BaseModel):
+    """Enable or disable daemon-side visual head tracking."""
+
+    type: Literal["set_head_tracking"] = "set_head_tracking"
+    enabled: bool
+    weight: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class GetTrackedFaceCmd(BaseModel):
+    """Query the latest face seen by daemon-side head tracking."""
+
+    type: Literal["get_tracked_face"] = "get_tracked_face"
+
 
 # ------------------------------------------------------------------
 # Daemon log streaming over the DataChannel.
@@ -526,11 +554,10 @@ class UploadAudioStartCmd(BaseModel):
     matching move is held until either a matching move arrives or
     the TTL expires.
 
-    ``encoding`` is currently always ``"wav-base64"``: raw PCM WAV
-    bytes (any container the GStreamer playbin can decode) sliced
-    into chunks and base64-encoded.  Defined as an enum so a future
-    encoding (raw binary frames, opus, ...) can be added without
-    breaking older clients.
+    ``encoding`` is ``"<container>-base64"``: transport is always
+    base64, the prefix just sets the written file's extension (playbin
+    sniffs content, so playback works regardless).  Defaults to
+    ``"wav-base64"`` for older clients.
     """
 
     type: Literal["upload_audio_start"] = "upload_audio_start"
@@ -541,7 +568,16 @@ class UploadAudioStartCmd(BaseModel):
     # exposing the CM4 to multi-GB allocations on a misbehaving
     # client.
     total_chunks: int = Field(..., ge=1, le=16384)
-    encoding: Literal["wav-base64"] = "wav-base64"
+    encoding: Literal[
+        "wav-base64",
+        "mp3-base64",
+        "ogg-base64",
+        "oga-base64",
+        "opus-base64",
+        "flac-base64",
+        "m4a-base64",
+        "aac-base64",
+    ] = "wav-base64"
     description: str = ""
 
 
@@ -711,6 +747,8 @@ AnyCommand = Annotated[
     | AppendRecordCmd
     | SetSpeechOffsetsCmd
     | SetWobblingCmd
+    | SetHeadTrackingCmd
+    | GetTrackedFaceCmd
     | SetVolumeCmd
     | GetVolumeCmd
     | SetMicrophoneVolumeCmd
