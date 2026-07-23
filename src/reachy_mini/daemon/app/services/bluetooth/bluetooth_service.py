@@ -882,20 +882,23 @@ class BluetoothCommandService:
             except Exception as e:
                 logger.error(f"Error executing command: {e}")
             return "OK: System running"
-        elif upper == "IDENTIFY":
-            # "Make a noise so I know which robot is mine" in the BLE scan list.
-            # Plays a short sound ONLY - no motion here (the robot only starts
-            # moving in the later wizard steps). Public (no PIN), see PLAY
-            # rationale. Runs OFF the mainloop (proxies to the daemon over HTTP).
-            self._run_async(lambda: _play_sound(_IDENTIFY_SOUND))
+        elif upper.startswith("PLAY_SOUND "):
+            # Play a built-in sound asset (no motion) on the robot: the generic
+            # sound cue used for the BLE scan-list "identify" chirp. Public
+            # (no PIN) like PLAY - identification happens BEFORE authenticating,
+            # the action is benign and the BLE range bounds who can trigger it.
+            # File names have no spaces, so the raw tail is the value. Runs OFF
+            # the mainloop because it proxies to the daemon over HTTP.
+            sound_file = command_str[len("PLAY_SOUND ") :].strip()
+            self._run_async(lambda: _play_sound(sound_file))
             return "OK: working"
         elif upper.startswith("PLAY "):
             # Play a named recorded move (emotions library) on the robot:
-            # motion + its bundled sound. Public (no PIN) like IDENTIFY -
-            # identification/feedback happens BEFORE authenticating, the action
-            # is benign and the BLE range already bounds who can trigger it.
-            # Move names have no spaces, so the raw tail is the value. Runs OFF
-            # the mainloop because it proxies to the daemon over HTTP.
+            # motion + its bundled sound. Public (no PIN) like PLAY_SOUND -
+            # feedback happens BEFORE authenticating, the action is benign and
+            # the BLE range already bounds who can trigger it. Move names have
+            # no spaces, so the raw tail is the value. Runs OFF the mainloop
+            # because it proxies to the daemon over HTTP.
             move_name = command_str[len("PLAY ") :].strip()
             self._run_async(lambda: _play_recorded_move(move_name))
             return "OK: working"
@@ -1341,10 +1344,6 @@ def _daemon_request(
 # daemon startup (see recorded_move.DEFAULT_DATASETS) so the first BLE PLAY
 # doesn't block on a network download.
 _EMOTIONS_DATASET = "Anne-Charlotte/new-emotions"
-# Sound played on IDENTIFY (the BLE scan-list "make a noise so I know which
-# robot is mine"). Sound only - NO motion here; the robot only starts moving
-# in the later wizard steps.
-_IDENTIFY_SOUND = "surprise.ogg"
 
 
 def _play_recorded_move(move_name: str) -> str:
@@ -1374,12 +1373,18 @@ def _play_recorded_move(move_name: str) -> str:
 
 
 def _play_sound(sound_file: str) -> str:
-    """Play a built-in sound file on the robot's speaker (no motion)."""
+    """Play a built-in sound asset (no motion) on the robot.
+
+    Proxies to the daemon's /api/media/play_sound route. Used for the BLE
+    scan-list identify chirp - a sound cue with no movement (the robot only
+    animates later, in the wizard steps).
+    """
+    sound_file = sound_file.strip()
     if not sound_file:
         return "ERROR: Missing sound file"
     try:
         _daemon_request("POST", "/api/media/play_sound", data={"file": sound_file})
-        return "OK: Playing sound"
+        return f"OK: Playing {sound_file}"
     except urllib.error.HTTPError as e:
         if e.code == 503:
             return "ERROR: Audio not ready"

@@ -1,7 +1,7 @@
 """Unit tests for the BLE command proxy helpers in ``bluetooth_service``.
 
 These exercise the pure relay/error-mapping logic of ``_play_recorded_move``
-(the PLAY command) and ``_play_sound`` (the IDENTIFY command, sound only) with
+(the PLAY command) and ``_play_sound`` (the PLAY_SOUND command, sound only) with
 ``_daemon_request`` mocked out - no real BLE stack or daemon is involved.
 
 The service only runs on Linux, so the suite is skipped elsewhere. Even on
@@ -105,7 +105,7 @@ def _patch_daemon(monkeypatch, result):
     monkeypatch.setattr(bt, "_daemon_request", fake)
 
 
-# --- IDENTIFY / PLAY (recorded move) ----------------------------------------
+# --- PLAY (recorded move) ---------------------------------------------------
 
 
 def test_play_success(monkeypatch):
@@ -130,17 +130,17 @@ def test_play_posts_to_recorded_move_route(monkeypatch):
     )
 
 
-# --- IDENTIFY (sound only, no motion) ---------------------------------------
+# --- PLAY_SOUND (sound only, no motion) -------------------------------------
 
 
-def test_identify_plays_sound_only(monkeypatch):
-    """IDENTIFY plays the built-in sound file, no motion."""
+def test_play_sound_success(monkeypatch):
+    """PLAY_SOUND plays the given built-in sound file, no motion."""
     _patch_daemon(monkeypatch, {"status": "ok"})
-    assert bt._play_sound(bt._IDENTIFY_SOUND) == "OK: Playing sound"
+    assert bt._play_sound("surprise.ogg") == "OK: Playing surprise.ogg"
 
 
-def test_identify_posts_sound_to_media_route(monkeypatch):
-    """The IDENTIFY sound is POSTed to the /api-prefixed media route."""
+def test_play_sound_posts_to_media_route(monkeypatch):
+    """The sound file is POSTed to the /api-prefixed media route."""
     captured: dict = {}
 
     def fake(method, path, params=None, data=None, timeout=None):
@@ -150,20 +150,25 @@ def test_identify_posts_sound_to_media_route(monkeypatch):
         return {"status": "ok"}
 
     monkeypatch.setattr(bt, "_daemon_request", fake)
-    bt._play_sound(bt._IDENTIFY_SOUND)
+    bt._play_sound("surprise.ogg")
     assert captured["method"] == "POST"
     assert captured["path"] == "/api/media/play_sound"
-    assert captured["data"] == {"file": bt._IDENTIFY_SOUND}
+    assert captured["data"] == {"file": "surprise.ogg"}
 
 
-def test_identify_sound_503_maps_to_audio_not_ready(monkeypatch):
+def test_play_sound_missing_file_is_rejected(monkeypatch):
+    _patch_daemon(monkeypatch, {"status": "ok"})
+    assert bt._play_sound("   ") == "ERROR: Missing sound file"
+
+
+def test_play_sound_503_maps_to_audio_not_ready(monkeypatch):
     _patch_daemon(monkeypatch, _http_error(503))
-    assert bt._play_sound(bt._IDENTIFY_SOUND) == "ERROR: Audio not ready"
+    assert bt._play_sound("surprise.ogg") == "ERROR: Audio not ready"
 
 
-def test_identify_sound_daemon_unreachable(monkeypatch):
+def test_play_sound_daemon_unreachable(monkeypatch):
     _patch_daemon(monkeypatch, bt.urllib.error.URLError("boom"))
-    assert bt._play_sound(bt._IDENTIFY_SOUND) == "ERROR: Daemon unreachable"
+    assert bt._play_sound("surprise.ogg") == "ERROR: Daemon unreachable"
 
 
 def test_play_missing_name_is_rejected(monkeypatch):
