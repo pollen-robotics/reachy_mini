@@ -1,1 +1,1 @@
-{"id":"fd007a7ea06d0540f0b33e854978b5cd","fullName":"tests.unit_tests.test_apps_hf_auth#test_get_oauth_session_and_by_state","name":"test_get_oauth_session_and_by_state","status":"passed","testResultsByEnv":{"default":"f05e26c5eb6c79bd5d337a66df0d4c1a"}}
+{"id":"fd007a7ea06d0540f0b33e854978b5cd","fullName":"tests.unit_tests.test_apps_hf_auth#test_get_oauth_session_and_by_state","name":"test_get_oauth_session_and_by_state","status":"passed","testResultsByEnv":{"default":"f415db3bf0e8d480a9c225eadcc83255"}}
