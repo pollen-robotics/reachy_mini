@@ -15,6 +15,7 @@ import platformdirs
 logger = logging.getLogger(__name__)
 
 _KEY = "startup_app"
+_ON_BOOT_KEY = "startup_app_on_boot"
 _PREWARM_KEY = "prewarm_app"
 _EQ_KEY = "speaker_eq_gains"
 # equalizer-10bands accepts per-band gains in [-24, +12] dB.
@@ -58,6 +59,16 @@ def get_startup_app() -> str | None:
     """Return the persisted startup app name, or None if unset."""
     value = _read().get(_KEY)
     return value if isinstance(value, str) else None
+
+
+def get_startup_app_on_boot() -> bool:
+    """Whether the startup app should launch right at daemon boot.
+
+    ``"startup_app_on_boot": true`` in daemon_config.json starts the startup
+    app as soon as the daemon is up (the app itself wakes the robot), instead
+    of waiting for the first wake-up. Anything else keeps today's behavior.
+    """
+    return _read().get(_ON_BOOT_KEY) is True
 
 
 def get_prewarm_app() -> str | None:

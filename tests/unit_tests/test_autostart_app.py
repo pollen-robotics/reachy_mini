@@ -434,6 +434,22 @@ def test_config_corrupt_file_reads_as_none(config_file: Path) -> None:
     assert startup_app_config.get_startup_app() is None
 
 
+def test_startup_app_on_boot_defaults_to_false(config_file: Path) -> None:
+    assert startup_app_config.get_startup_app_on_boot() is False  # missing file
+    startup_app_config.set_startup_app("foo")  # key absent from existing config
+    assert startup_app_config.get_startup_app_on_boot() is False
+
+
+def test_startup_app_on_boot_reads_true(config_file: Path) -> None:
+    config_file.write_text('{"startup_app": "foo", "startup_app_on_boot": true}')
+    assert startup_app_config.get_startup_app_on_boot() is True
+
+
+def test_startup_app_on_boot_ignores_non_bool_values(config_file: Path) -> None:
+    config_file.write_text('{"startup_app_on_boot": "yes"}')
+    assert startup_app_config.get_startup_app_on_boot() is False
+
+
 def _stub_request(daemon: object) -> object:
     """Minimal Request stand-in exposing app.state.{daemon,watcher task}."""
     state = types.SimpleNamespace(

@@ -229,6 +229,17 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     f"Startup app antenna watcher started for app: {startup_app}"
                 )
 
+            # Opt-in boot auto-start: fire the one-shot wake launcher now
+            # instead of waiting for the first wake-up. The app's own
+            # wake_up_if_sleeping wakes the robot, and the spent launcher
+            # keeps the wake hook from starting the app a second time.
+            if (
+                on_wake_up_callback is not None
+                and startup_app_config.get_startup_app_on_boot()
+            ):
+                logger.info(f"Starting startup app at boot: {startup_app}")
+                on_wake_up_callback()
+
             # Register mDNS service only after the daemon is ready
             mdns.register()
 
