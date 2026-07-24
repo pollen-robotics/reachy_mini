@@ -8,7 +8,8 @@ Client->Server command types:
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
     get_state, get_version, start_recording, stop_recording, append_record,
-    subscribe_logs, unsubscribe_logs, restart_daemon, start_update,
+    subscribe_logs, unsubscribe_logs, subscribe_pose, unsubscribe_pose,
+    restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
     play_uploaded_move, cancel_move,
@@ -349,6 +350,26 @@ class UnsubscribeLogsCmd(BaseModel):
     """Stop the calling peer's log subscription. No-op if no stream."""
 
     type: Literal["unsubscribe_logs"] = "unsubscribe_logs"
+
+
+class SubscribePoseCmd(BaseModel):
+    """Subscribe the calling peer to the pushed pose stream.
+
+    While subscribed, the daemon pushes the robot's present state (same
+    envelope as ``get_state``, plus a monotonic ``seq``) to this peer over
+    the dedicated unreliable/unordered ``pose`` data channel at ~30 Hz. This
+    replaces polling ``get_state`` for a live mirror: pushing is immune to
+    the Wi-Fi round-trip latency and head-of-line blocking that make polling
+    lag. Idempotent - safe to send again on reconnect.
+    """
+
+    type: Literal["subscribe_pose"] = "subscribe_pose"
+
+
+class UnsubscribePoseCmd(BaseModel):
+    """Stop the calling peer's pose stream. No-op if not subscribed."""
+
+    type: Literal["unsubscribe_pose"] = "unsubscribe_pose"
 
 
 # XVF3800 audio-board configuration over the DataChannel.
@@ -755,6 +776,8 @@ AnyCommand = Annotated[
     | GetMicrophoneVolumeCmd
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
+    | SubscribePoseCmd
+    | UnsubscribePoseCmd
     | RestartDaemonCmd
     | StartUpdateCmd
     | UploadMoveStartCmd
