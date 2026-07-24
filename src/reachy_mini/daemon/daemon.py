@@ -216,7 +216,12 @@ class Daemon:
             # Lite variant is plugged into the user's desktop and the
             # daemon runs there, reached over USB. Keyed off
             # ``wireless_version`` so the badging follows the robot SKU.
-            transport = "wifi" if self.wireless_version else "usb"
+            if self._status.simulation_enabled:
+                transport = "sim"
+            elif self.wireless_version:
+                transport = "wifi"
+            else:
+                transport = "usb"
 
             self.logger.info("Starting central signaling relay...")
             relay = await start_central_relay(
