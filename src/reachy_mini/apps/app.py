@@ -146,11 +146,8 @@ class ReachyMiniApp(ABC):
 
     def wrapped_run(self, *args: Any, **kwargs: Any) -> None:
         """Wrap the run method with Reachy Mini context management."""
-        # Build (but do NOT start) the settings web server before parking:
-        # the uvicorn import and server construction are pure CPU a parked
-        # instance can pay in advance — nothing binds until after activation,
-        # so the parked-holds-nothing invariant is preserved.
-        server: Any = None
+        self._park_until_activated()
+        settings_app_t: threading.Thread | None = None
         if self.settings_app is not None:
             import uvicorn
 
@@ -165,18 +162,12 @@ class ReachyMiniApp(ABC):
             )
             server = uvicorn.Server(config)
 
-        self._park_until_activated()
-
-        settings_app_t: threading.Thread | None = None
-        if server is not None:
-            bound_server = server
-
             def _server_run() -> None:
                 """Run the settings FastAPI app."""
-                t = threading.Thread(target=bound_server.run)
+                t = threading.Thread(target=server.run)
                 t.start()
                 self.stop_event.wait()
-                bound_server.should_exit = True
+                server.should_exit = True
                 t.join()
 
             settings_app_t = threading.Thread(target=_server_run)
