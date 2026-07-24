@@ -94,15 +94,23 @@ class RobotNameRequest(BaseModel):
 
 
 class RobotNameResponse(BaseModel):
-    """The persisted robot display name (``null`` when unset)."""
+    """The robot's current display name (``null`` only if none is resolvable)."""
 
     name: str | None = None
 
 
 @router.get("/robot-name")
-async def get_robot_display_name() -> RobotNameResponse:
-    """Return the persisted robot display name (``null`` when unset)."""
-    return RobotNameResponse(name=get_robot_name())
+async def get_robot_display_name(
+    daemon: Daemon = Depends(get_daemon),
+) -> RobotNameResponse:
+    """Return the robot's current display name.
+
+    Reports the effective/advertised name: the persisted override when a
+    client has renamed the robot, otherwise the ``--robot-name`` default the
+    daemon is running with. A client can pre-fill a rename field from this
+    without having to fall back to the daemon status for the default.
+    """
+    return RobotNameResponse(name=get_robot_name() or daemon.robot_name)
 
 
 @router.post("/robot-name")

@@ -717,7 +717,7 @@
     "/api/daemon/robot-name": {
       "get": {
         "summary": "Get Robot Display Name",
-        "description": "Return the persisted robot display name (``null`` when unset).",
+        "description": "Return the robot's current display name.\n\nReports the effective/advertised name: the persisted override when a\nclient has renamed the robot, otherwise the ``--robot-name`` default the\ndaemon is running with. A client can pre-fill a rename field from this\nwithout having to fall back to the daemon status for the default.",
         "operationId": "get_robot_display_name_api_daemon_robot_name_get",
         "responses": {
           "200": {
@@ -3709,7 +3709,7 @@
         },
         "type": "object",
         "title": "RobotNameResponse",
-        "description": "The persisted robot display name (``null`` when unset)."
+        "description": "The robot's current display name (``null`` only if none is resolvable)."
       },
       "SourceKind": {
         "type": "string",
