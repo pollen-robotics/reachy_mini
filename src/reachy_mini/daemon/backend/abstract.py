@@ -2521,6 +2521,14 @@ class Backend:
     # Idle reset (clean state when no managed app owns the robot)
     # ------------------------------------------------------------------
 
+    # Grace period before an idle reset actually moves the robot. A transient
+    # drop (Wi-Fi blip, fast session hand-off, quick app switch) frees the lock
+    # and immediately reschedules a new owner; waiting this long before starting
+    # goto_sleep lets that reconnect cancel the reset *before* any motion, so we
+    # don't start a trajectory only to yank it mid-flight and leave the robot in
+    # an intermediate pose.
+    IDLE_RESET_DEBOUNCE_S: float = 1.5
+
     def request_idle_reset(self) -> None:
         """Return the robot to a clean idle state when no managed app owns it.
 
@@ -2543,6 +2551,20 @@ class Backend:
         if loop is None:
             return
         loop.call_soon_threadsafe(self._maybe_start_idle_reset)
+
+    def cancel_idle_reset(self) -> None:
+        """Cancel a pending/in-flight idle reset from any thread.
+
+        Called when a new owner grabs the robot from a path that doesn't go
+        through the data channel - notably a local Python app acquiring the app
+        slot (``AppManager.start_app``) - so the daemon's teardown goto_sleep
+        doesn't fight the app's own wake/motion. Threadsafe: hops onto the
+        backend loop that owns the reset task. No-op when that loop isn't up yet.
+        """
+        loop = getattr(self, "_log_loop", None)
+        if loop is None:
+            return
+        loop.call_soon_threadsafe(self._cancel_idle_reset)
 
     def _cancel_idle_reset(self) -> None:
         """Cancel an in-flight idle reset. Must run on the backend loop."""
@@ -2569,6 +2591,11 @@ class Backend:
     async def _async_idle_reset(self) -> None:
         """Graceful return to the sleep pose, which ends with motors disabled.
 
+        Starts with a short debounce (``IDLE_RESET_DEBOUNCE_S``): a fast
+        reconnect or a local app grabbing the robot cancels the task during that
+        window, so no motion happens at all on transient drops. Only if the slot
+        stays free past the grace period do we actually goto_sleep.
+
         Mirrors the reference leave behaviour clients already run by hand
         (gotoSleep -> motors off). ``goto_sleep()`` finishes with
         ``set_motor_control_mode(Disabled)``, which also clears
@@ -2576,12 +2603,25 @@ class Backend:
         correctly triggers a fresh wake.
         """
         try:
+            await asyncio.sleep(self.IDLE_RESET_DEBOUNCE_S)
+            # Conditions may have changed during the grace period (shutdown
+            # started, or the robot was already put to sleep by whoever briefly
+            # held the slot). Re-check before committing to the trajectory.
+            if self.is_shutting_down:
+                return
+            if self.get_motor_control_mode() == MotorControlMode.Disabled:
+                return
             await self.goto_sleep()
         except asyncio.CancelledError:
-            # A new session (or local app) grabbed the robot mid-reset: let it
-            # take over without noise.
+            # A new session (or local app) grabbed the robot before/mid-reset:
+            # let it take over without noise.
             raise
         except Exception:
             self.logger.warning("Idle reset goto_sleep failed", exc_info=True)
         finally:
-            self._idle_reset_task = None
+            # Only clear the handle if it still points at *this* task: a
+            # concurrent _cancel_idle_reset()+reschedule may have already
+            # installed a newer task, and blindly nulling would orphan it
+            # (a later cancel would then miss it).
+            if self._idle_reset_task is asyncio.current_task():
+                self._idle_reset_task = None
