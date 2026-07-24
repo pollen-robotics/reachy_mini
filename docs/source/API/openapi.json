@@ -714,6 +714,62 @@
         }
       }
     },
+    "/api/daemon/robot-name": {
+      "get": {
+        "summary": "Get Robot Display Name",
+        "description": "Return the robot's current display name.\n\nReports the effective/advertised name: the persisted override when a\nclient has renamed the robot, otherwise the ``--robot-name`` default the\ndaemon is running with. A client can pre-fill a rename field from this\nwithout having to fall back to the daemon status for the default.",
+        "operationId": "get_robot_display_name_api_daemon_robot_name_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RobotNameResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Set Robot Display Name",
+        "description": "Persist a new robot display name and apply it live (no restart).\n\nPersists the name to disk, then refreshes the advertised copies so the\nrename takes effect immediately: the daemon status + central relay (via\n``Daemon.apply_robot_name``) and the LAN mDNS record. This is the REST\nentry point used by the BLE setup service; the WebRTC ``set_robot_name``\ncommand goes through the same live-apply path on the backend.",
+        "operationId": "set_robot_display_name_api_daemon_robot_name_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RobotNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RobotNameResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/daemon/hardware-id": {
       "get": {
         "summary": "Get Robot Hardware Id",
@@ -3620,6 +3676,40 @@
         ],
         "title": "RobotBackendStatus",
         "description": "Status of the Robot Backend."
+      },
+      "RobotNameRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "RobotNameRequest",
+        "description": "Body for setting the robot display name."
+      },
+      "RobotNameResponse": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "title": "RobotNameResponse",
+        "description": "The robot's current display name (``null`` only if none is resolvable)."
       },
       "SourceKind": {
         "type": "string",
