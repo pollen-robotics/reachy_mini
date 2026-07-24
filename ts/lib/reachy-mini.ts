@@ -198,6 +198,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _volumeResolve: ((v: number | null) => void) | null = null;
     private _micVolumeResolve: ((v: number | null) => void) | null = null;
     private _trackedFaceResolve: ((v: FaceTarget | null) => void) | null = null;
+    private _deleteHfTokenResolve: ((v: boolean | null) => void) | null = null;
     // applyAudioConfig() / readAudioParameter() share the same single-slot
     // pattern as the volume helpers. Separate slots so the two can be
     // in-flight concurrently without collision.
@@ -758,6 +759,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
+        if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Session stopped'));
@@ -807,6 +809,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
+        if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Disconnected'));
@@ -1353,6 +1356,30 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             () => this._micVolumeResolve,
             (next) => { this._micVolumeResolve = next; },
             { type: 'set_microphone_volume', volume: clampVolume(volume) },
+        );
+    }
+
+    /**
+     * Sign this robot out of Hugging Face: asks the daemon to delete its
+     * stored HF token, which de-registers the robot from the central
+     * signaling relay (it disappears from its owner's robot list until it
+     * is set up again). Works over the WebRTC data channel, so it reaches
+     * the robot remotely (no LAN HTTP path required).
+     *
+     * Resolves `true` when the daemon acked success, `false` on a daemon
+     * error, or `null` when no ack arrives before the timeout (e.g. a
+     * daemon that predates the `delete_hf_token` command silently drops
+     * it). Rejects if the data channel isn't open. Note the sign-out
+     * drops the central relay, so the session may tear down right after
+     * the ack - callers should treat a post-call session drop as expected,
+     * and a successful sign-out may surface as `null` if teardown races
+     * ahead of the ack.
+     */
+    signOut(): Promise<boolean | null> {
+        return this._slotRoundtrip(
+            () => this._deleteHfTokenResolve,
+            (next) => { this._deleteHfTokenResolve = next; },
+            { type: 'delete_hf_token' },
         );
     }
 
@@ -2065,6 +2092,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             if (this._micVolumeResolve) {
                 this._micVolumeResolve(data.status === 'error' ? null : (data.volume as number));
                 this._micVolumeResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'delete_hf_token') {
+            if (this._deleteHfTokenResolve) {
+                this._deleteHfTokenResolve(data.status === 'error' ? false : true);
+                this._deleteHfTokenResolve = null;
             }
             return;
         }

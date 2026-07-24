@@ -8,6 +8,7 @@ Client->Server command types:
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
     get_state, get_version, start_recording, stop_recording, append_record,
+    delete_hf_token,
     subscribe_logs, unsubscribe_logs, restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
@@ -292,6 +293,21 @@ class GetMicrophoneVolumeCmd(BaseModel):
     """Query the current input (microphone) volume."""
 
     type: Literal["get_microphone_volume"] = "get_microphone_volume"
+
+
+# Hugging Face account sign-out over the DataChannel.
+#
+# Remote counterpart of `DELETE /api/hf-auth/token` (`routers/hf_auth.py`):
+# clears the robot's own stored HF token so it de-registers from the
+# central signaling relay (a null-token notification drops the relay to
+# WAITING_FOR_TOKEN). Exposed over the typed transport so a Central-routed
+# owner can unlink the robot without an LAN HTTP path. The robot stays
+# offline until it is re-provisioned (BLE setup or the robot-side OAuth
+# begin URL).
+class DeleteHfTokenCmd(BaseModel):
+    """Delete the robot's stored Hugging Face token (sign the robot out)."""
+
+    type: Literal["delete_hf_token"] = "delete_hf_token"
 
 
 class SetSpeechOffsetsCmd(BaseModel):
@@ -753,6 +769,7 @@ AnyCommand = Annotated[
     | GetVolumeCmd
     | SetMicrophoneVolumeCmd
     | GetMicrophoneVolumeCmd
+    | DeleteHfTokenCmd
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
     | RestartDaemonCmd
