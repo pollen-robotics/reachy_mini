@@ -32,6 +32,7 @@ from reachy_mini.io.protocol import (
     CancelAudioCmd,
     CancelMoveCmd,
     ClearIncomingAudioCmd,
+    DeleteHfTokenCmd,
     FaceTarget,
     GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
@@ -1512,6 +1513,23 @@ class Backend:
                         "name": get_robot_name(),
                     }
                 )
+
+        elif isinstance(cmd, DeleteHfTokenCmd):
+            # Sign the robot out of Hugging Face: clears the daemon's stored
+            # token and notifies the central relay (drops it to
+            # WAITING_FOR_TOKEN), so the robot de-registers and disappears
+            # from its owner's list until it is set up again. Fail-safe:
+            # delete_hf_token() never raises (returns False on failure), so
+            # a storage/logout error can't break the command loop.
+            from reachy_mini.apps.sources.hf_auth import delete_hf_token
+
+            ok = delete_hf_token()
+            send_response(
+                {
+                    "command": "delete_hf_token",
+                    "status": "ok" if ok else "error",
+                }
+            )
 
         elif isinstance(
             cmd,
