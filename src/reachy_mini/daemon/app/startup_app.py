@@ -178,6 +178,27 @@ async def start_startup_app_if_idle(
         return False
 
 
+def wake_robot_for_boot_start(daemon: "Daemon") -> "asyncio.Task[None] | None":
+    """Enable torque and schedule the wake move for the boot auto-start path.
+
+    The wireless daemon boots with motors disabled; an app started right at
+    boot would stream its wake move to limp motors (sound plays, nothing
+    moves). Torque is flipped on synchronously so nothing can race a target
+    to a limp robot; the wake move itself runs as a task so app activation
+    proceeds concurrently. Returns the wake task, or None when there is no
+    backend or the robot is already stiff (torque on).
+    """
+    backend = daemon.backend
+    if backend is None:
+        return None
+    if backend.get_motor_control_mode() != MotorControlMode.Disabled:
+        return None
+
+    logger.info("Boot auto-start: enabling torque and waking the robot")
+    backend.set_motor_control_mode(MotorControlMode.Enabled)
+    return asyncio.create_task(backend.wake_up())
+
+
 async def play_awake_startup_cue(backend: Any) -> None:
     """Play the wake sound without running the full wake-up pose."""
     backend.play_sound("wake_up.wav")

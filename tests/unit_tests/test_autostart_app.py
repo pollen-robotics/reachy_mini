@@ -21,6 +21,7 @@ from reachy_mini.daemon.app.startup_app import (
     start_startup_app,
     start_startup_app_if_idle,
     wake_or_start_startup_app_if_idle,
+    wake_robot_for_boot_start,
     watch_antennas_for_startup_app,
 )
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
@@ -404,6 +405,55 @@ async def test_launcher_starts_app_once_across_multiple_wakes() -> None:
     launch()
     await asyncio.sleep(0)  # let the scheduled task(s) run
 
+    assert mgr.started == ["foo"]
+
+
+@pytest.mark.asyncio
+async def test_boot_wake_enables_torque_then_wakes_limp_robot() -> None:
+    daemon = StubDaemon()
+    daemon.backend.motor_control_mode = MotorControlMode.Disabled
+
+    task = wake_robot_for_boot_start(daemon)  # type: ignore[arg-type]
+
+    assert task is not None
+    # Torque must be on synchronously, before any app can stream targets.
+    assert daemon.backend.motor_control_mode == MotorControlMode.Enabled
+    await task
+    assert daemon.backend.wake_up_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_boot_wake_skips_already_awake_robot() -> None:
+    daemon = StubDaemon()
+    daemon.backend.motor_control_mode = MotorControlMode.Enabled
+
+    assert wake_robot_for_boot_start(daemon) is None  # type: ignore[arg-type]
+    assert daemon.backend.wake_up_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_boot_wake_skips_missing_backend() -> None:
+    daemon = StubDaemon()
+    daemon.backend = None  # type: ignore[assignment]
+
+    assert wake_robot_for_boot_start(daemon) is None  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_boot_wake_does_not_double_start_with_spent_launcher() -> None:
+    """Boot path: launcher fired directly + wake-move end callback = one start."""
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    daemon = StubDaemon()
+    daemon.backend.motor_control_mode = MotorControlMode.Disabled
+    launcher = make_startup_app_launcher(mgr, "foo")  # type: ignore[arg-type]
+    daemon.backend.on_wake_up_callback = launcher
+
+    task = wake_robot_for_boot_start(daemon)  # type: ignore[arg-type]
+    launcher()  # main.py fires the app start immediately, wake runs concurrently
+
+    assert task is not None
+    await task  # StubBackend.wake_up fires the (now spent) callback at its end
+    await asyncio.sleep(0)
     assert mgr.started == ["foo"]
 
 

@@ -43,6 +43,7 @@ from reachy_mini.daemon.app.routers import (
 from reachy_mini.daemon.app.startup_app import (
     ensure_startup_app_installed,
     make_startup_app_launcher,
+    wake_robot_for_boot_start,
     watch_antennas_for_startup_app,
 )
 from reachy_mini.daemon.daemon import Daemon
@@ -126,6 +127,8 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         dataset_updater_task: asyncio.Task[None] | None = None
         # Held on app.state so the /apps/startup-app endpoint can re-arm it live.
         app.state.startup_app_antenna_watcher_task = None
+        # Reference to the boot-time wake move so the task isn't GC'd mid-move.
+        app.state.boot_wake_task = None
 
         mdns = MdnsServiceRegistration(
             args.robot_name,
@@ -230,13 +233,20 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                 )
 
             # Opt-in boot auto-start: fire the one-shot wake launcher now
-            # instead of waiting for the first wake-up. The app's own
-            # wake_up_if_sleeping wakes the robot, and the spent launcher
-            # keeps the wake hook from starting the app a second time.
+            # instead of waiting for the first wake-up. The robot boots limp
+            # (--no-wake-up-on-start), so torque must be enabled and the wake
+            # move played daemon-side — the app's wake path assumes torque is
+            # already on. The wake move overlaps app activation; the spent
+            # launcher keeps its end-of-wake hook from starting the app a
+            # second time, and the app skips its own wake move because the
+            # head has left the sleep pose by the time it checks.
             if (
                 on_wake_up_callback is not None
                 and startup_app_config.get_startup_app_on_boot()
             ):
+                app.state.boot_wake_task = wake_robot_for_boot_start(
+                    app.state.daemon
+                )
                 logger.info(f"Starting startup app at boot: {startup_app}")
                 on_wake_up_callback()
 
