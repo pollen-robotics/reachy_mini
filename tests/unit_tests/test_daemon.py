@@ -174,6 +174,56 @@ async def test_named_daemon_auto_discovers_and_tries_all_addresses(
 
 
 @pytest.mark.asyncio
+async def test_named_daemon_falls_back_to_host_when_mdns_misses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    daemon, server, thread, port = await _start_app_server(robot_name="remote_robot")
+    monkeypatch.setattr(
+        "reachy_mini.reachy_mini.find_robots",
+        lambda timeout: [],
+    )
+
+    try:
+        with ReachyMini(
+            robot_name="remote_robot",
+            host="127.0.0.1",
+            port=port,
+            connection_mode="network",
+            media_backend="no_media",
+        ) as mini:
+            assert mini.connection_mode == "network"
+            assert mini.client.host == "127.0.0.1"
+            assert mini.client.port == port
+    finally:
+        await daemon.stop(goto_sleep_on_stop=False)
+        await _stop_app_server(server, thread)
+
+
+@pytest.mark.asyncio
+async def test_named_daemon_host_fallback_rejects_wrong_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    daemon, server, thread, port = await _start_app_server(robot_name="actual_robot")
+    monkeypatch.setattr(
+        "reachy_mini.reachy_mini.find_robots",
+        lambda timeout: [],
+    )
+
+    try:
+        with pytest.raises(ConnectionError, match="via mDNS or host"):
+            ReachyMini(
+                robot_name="wanted_robot",
+                host="127.0.0.1",
+                port=port,
+                connection_mode="network",
+                media_backend="no_media",
+            )
+    finally:
+        await daemon.stop(goto_sleep_on_stop=False)
+        await _stop_app_server(server, thread)
+
+
+@pytest.mark.asyncio
 async def test_daemon_early_stop() -> None:
     daemon, server, thread, port = await _start_app_server()
 

@@ -88,7 +88,8 @@ class ReachyMini:
             name is validated locally or resolved via mDNS.
         host: Hostname or IP of the daemon. Defaults to "reachy-mini.local".
             In ``"auto"`` mode this is only used as a fallback when localhost
-            is unreachable.
+            is unreachable. For a non-default *robot_name* it is also tried as a
+            last resort when mDNS discovery does not locate the robot.
         port: Port of the daemon's FastAPI server. Defaults to 8000.
         connection_mode: Select how to connect to the daemon. Use
             `"localhost_only"` to restrict connections to daemons running on
@@ -122,7 +123,9 @@ class ReachyMini:
             host (str): Hostname or IP of the daemon. Defaults to
                 "reachy-mini.local".  In ``"auto"`` mode (the default) the
                 client first tries ``localhost``; *host* is only used as a
-                fallback or when *connection_mode* is ``"network"``.
+                fallback or when *connection_mode* is ``"network"``. For a
+                non-default *robot_name* it is also tried as a last resort when
+                mDNS discovery does not locate the robot.
             port (int): Port of the daemon's FastAPI server. Defaults to 8000.
             connection_mode: `"auto"` (default), `"localhost_only"` or `"network"`.
                 `"auto"` will first try daemons on localhost and fall back to
@@ -467,22 +470,11 @@ class ReachyMini:
 
         if self.robot_name != DEFAULT_ROBOT_NAME:
             if requested_mode != "network":
-                client = None
                 try:
-                    client = self._connect_single(
-                        host="localhost",
-                        port=self.port,
-                        timeout=timeout,
+                    client = self._connect_and_verify_name(
+                        "localhost", self.port, timeout
                     )
-                    daemon_status = client.get_status(timeout=timeout)
-                    if daemon_status.robot_name != self.robot_name:
-                        raise ConnectionError(
-                            f"Connected daemon is named {daemon_status.robot_name!r}, "
-                            f"expected {self.robot_name!r}."
-                        )
                 except (ConnectionError, TimeoutError) as error:
-                    if client is not None:
-                        client.disconnect()
                     if requested_mode == "localhost_only":
                         raise ConnectionError(
                             f"Could not connect to a local Reachy Mini daemon named "
@@ -502,29 +494,37 @@ class ReachyMini:
                 for robot in find_robots(timeout=timeout)
                 if robot.name == self.robot_name
             ]
-            if not matches:
-                raise ConnectionError(
-                    f"No Reachy Mini daemon named {self.robot_name!r} found on the "
-                    f"network. Start its daemon with --robot-name {self.robot_name!r}."
+            if len(matches) > 1:
+                self.logger.warning(
+                    "Found %d daemons named %r on the network; using the first.",
+                    len(matches),
+                    self.robot_name,
                 )
 
-            robot = matches[0]
-            for host in [*robot.addresses, robot.host]:
-                if not host:
-                    continue
+            candidates = [
+                (host, robot.port or self.port)
+                for robot in matches
+                for host in [*robot.addresses, robot.host]
+                if host
+            ]
+            # mDNS can be blocked, cross-subnet, or over a VPN. Always try the
+            # user-supplied host as a last resort; the name check makes it safe.
+            candidates.append((self.host, self.port))
+
+            last_error: Exception | None = None
+            for host, port in candidates:
                 try:
-                    client = self._connect_single(
-                        host, robot.port or self.port, timeout
-                    )
-                except (ConnectionError, TimeoutError):
+                    client = self._connect_and_verify_name(host, port, timeout)
+                except (ConnectionError, TimeoutError) as error:
+                    last_error = error
                     continue
 
                 self.logger.info("Connection mode selected: network")
                 return client, "network"
 
             raise ConnectionError(
-                f"Found Reachy Mini daemon named {self.robot_name!r}, but could "
-                "not connect to any advertised address."
+                f"Could not connect to a Reachy Mini daemon named "
+                f"{self.robot_name!r} via mDNS or host {self.host!r}: {last_error}"
             )
 
         if requested_mode == "auto":
@@ -583,6 +583,28 @@ class ReachyMini:
         """Connect once with the requested host/port and guard cleanup."""
         client = WSClient(host, port)
         client.wait_for_connection(timeout=timeout)
+        return client
+
+    def _connect_and_verify_name(
+        self, host: str, port: int, timeout: float
+    ) -> WSClient:
+        """Connect to host:port and verify the daemon advertises the expected name.
+
+        Raises ``ConnectionError``/``TimeoutError`` on connection failure, and
+        ``ConnectionError`` on a name mismatch. Never leaks a client.
+        """
+        client = self._connect_single(host=host, port=port, timeout=timeout)
+        try:
+            status = client.get_status(timeout=timeout)
+        except (ConnectionError, TimeoutError):
+            client.disconnect()
+            raise
+        if status.robot_name != self.robot_name:
+            client.disconnect()
+            raise ConnectionError(
+                f"Daemon at {host!r} is named {status.robot_name!r}, "
+                f"expected {self.robot_name!r}."
+            )
         return client
 
     def set_target(
