@@ -292,6 +292,58 @@ async def cancel_oauth_session(session_id: str) -> dict[str, str]:
     raise HTTPException(status_code=404, detail="Session not found")
 
 
+# =============================================================================
+# Device Code OAuth (refresh-capable, redirect-free)
+# =============================================================================
+# The phone displays a short code + URL; the robot polls Hugging Face and stores
+# a refresh-capable token. No redirect URI, so this works regardless of how the
+# robot is addressed (no reachy-mini.local dependency), and the token is renewed
+# automatically by huggingface_hub without further user interaction.
+
+
+@router.post("/oauth/device/start")
+async def start_device_oauth() -> dict[str, Any]:
+    """Start a device-code OAuth login.
+
+    Returns a `user_code` and `verification_uri(_complete)` to show the user, plus
+    a `session_id` to poll via `/oauth/device/status/{session_id}`.
+    """
+    result = await hf_auth.start_device_code_login()
+    if result.get("status") == "error":
+        raise HTTPException(status_code=500, detail=result.get("message"))
+    return result
+
+
+@router.get("/oauth/device/status/{session_id}")
+async def get_device_oauth_status(session_id: str, request: Request) -> dict[str, Any]:
+    """Poll for device-code login completion.
+
+    On the first poll that reports success, bring the central relay up (a
+    token-less boot has no relay instance yet), mirroring the OAuth callback.
+    """
+    result = hf_auth.get_device_code_session_status(session_id)
+
+    if result.get(
+        "status"
+    ) == "authorized" and hf_auth.consume_device_session_relay_pending(session_id):
+        daemon = getattr(request.app.state, "daemon", None)
+        if daemon is not None:
+            try:
+                await daemon._start_central_signaling_relay()
+            except Exception as e:
+                logger.warning("[oauth/device] relay start failed: %r", e)
+
+    return result
+
+
+@router.delete("/oauth/device/session/{session_id}")
+async def cancel_device_oauth_session(session_id: str) -> dict[str, str]:
+    """Cancel a pending device-code login session."""
+    if hf_auth.cancel_device_code_session(session_id):
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="Session not found")
+
+
 @router.get("/oauth/callback")
 async def oauth_callback(
     request: Request,
