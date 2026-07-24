@@ -502,9 +502,7 @@ def run_app(args: Args) -> None:
     root_logger.addHandler(handler)
 
     # Surface a persisted rename so an operator isn't puzzled when the
-    # advertised name differs from the --robot-name they passed. The override
-    # happens earlier in main() (before logging is configured), so we log it
-    # here — right after the stderr handler is installed — where it will show.
+    # advertised name differs from the --robot-name they passed.
     from reachy_mini.utils.robot_name import get_robot_name as _get_persisted_name
 
     if _get_persisted_name():
