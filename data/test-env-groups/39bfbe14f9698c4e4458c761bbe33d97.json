@@ -1,1 +1,1 @@
-{"id":"39bfbe14f9698c4e4458c761bbe33d97","fullName":"tests.unit_tests.test_daemon_utils#test_is_local_camera_available_linux_false","name":"test_is_local_camera_available_linux_false","status":"passed","testResultsByEnv":{"default":"1fd9f07b1d52a52b3c517aec5037d77e"}}
+{"id":"39bfbe14f9698c4e4458c761bbe33d97","fullName":"tests.unit_tests.test_daemon_utils#test_is_local_camera_available_linux_false","name":"test_is_local_camera_available_linux_false","status":"passed","testResultsByEnv":{"default":"eaec1106305b28faf4292e810c74e81a"}}
