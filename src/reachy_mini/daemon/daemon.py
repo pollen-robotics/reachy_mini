@@ -250,6 +250,24 @@ class Daemon:
         except Exception as e:
             self.logger.debug(f"Error stopping central signaling relay: {e}")
 
+    def _on_robot_slot_free(self) -> None:
+        """Return the robot to a clean idle state when the app slot frees.
+
+        Wired into ``robot_app_lock`` so that when a remote session ends/drops
+        or a local app exits, the daemon - not the client - guarantees the robot
+        doesn't stay parked awake (enabled / gravity_compensation) across
+        sessions. Best-effort, non-blocking; the actual work is scheduled
+        threadsafely on the backend's loop. Fires on both graceful and abnormal
+        teardown (crash, killed tab, lost Wi-Fi), which is the whole point:
+        those paths run no client-side cleanup.
+        """
+        backend = self.backend
+        if backend is None:
+            return
+        try:
+            backend.request_idle_reset()
+        except Exception as e:
+            self.logger.warning(f"Idle reset request failed: {e}")
     def apply_robot_name(self, name: str) -> None:
         """Apply a new robot name to the live daemon without a restart.
 
@@ -406,6 +424,13 @@ class Daemon:
                 # Start central signaling relay for remote WebRTC access
                 await self._start_central_signaling_relay()
 
+            # Reset the robot to a clean idle state whenever the managed app
+            # slot becomes free (remote session end/drop or local app exit), so
+            # no client can leave it parked awake across sessions. Registered
+            # after the backend loop is up (setup_media_server) so
+            # `request_idle_reset()` has a loop to hop onto.
+            self.robot_app_lock.set_on_became_free_handler(self._on_robot_slot_free)
+
             # Wire the wake-up hook before any wake can fire (on-start below, or
             # later via button/REST on the wireless unit, which boots asleep).
             if on_wake_up_callback is not None:
@@ -475,6 +500,12 @@ class Daemon:
             self._status.state = DaemonState.STOPPING
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
+
+            # Unwire the idle-reset hook before tearing down the relay: stopping
+            # the relay releases the remote hold on `robot_app_lock`, which would
+            # otherwise fire `_on_robot_slot_free` and race the explicit
+            # goto_sleep below with a second one.
+            self.robot_app_lock.set_on_became_free_handler(None)
 
             # Close the JSON-RPC app relay (drops the app /rpc connection and
             # fails any in-flight calls) before tearing the backend down.
@@ -699,7 +730,9 @@ class Daemon:
 
         backend = self.backend
 
-        def _broadcast(status: str, *, line: str | None = None, error: str | None = None) -> None:
+        def _broadcast(
+            status: str, *, line: str | None = None, error: str | None = None
+        ) -> None:
             if backend is None:
                 return
             payload: dict[str, Any] = {"type": "update_progress", "status": status}
