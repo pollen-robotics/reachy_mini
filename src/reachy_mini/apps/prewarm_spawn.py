@@ -18,6 +18,7 @@ import asyncio
 import logging
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from reachy_mini.apps.sources import local_venv_paths
@@ -100,6 +101,13 @@ def spawn_early_parked_app(
             env=build_app_env(parked=True),
         )
         logger.info(f"Early parked-app spawn: '{name}' (pid {process.pid})")
+        # Logging is not configured yet at daemon entry; stderr still reaches
+        # the journal, so measurements get a timestamped spawn marker.
+        print(
+            f"[early-prewarm] spawned '{name}' (pid {process.pid})",
+            file=sys.stderr,
+            flush=True,
+        )
         return process, name
     except Exception:
         logger.warning("Early parked-app spawn failed; keeper will spawn later",

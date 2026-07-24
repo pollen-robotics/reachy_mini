@@ -110,9 +110,12 @@ def test_spawn_failure_returns_none(spawnable, monkeypatch) -> None:
     assert prewarm_spawn.spawn_early_parked_app(WIRELESS_ARGV) is None
 
 
-def test_spawn_returns_parked_popen(spawnable) -> None:
+def test_spawn_returns_parked_popen(spawnable, capsys) -> None:
     """The spawned process parks (sentinel on stdout) and exits 0 on EOF."""
     result = prewarm_spawn.spawn_early_parked_app(WIRELESS_ARGV)
+    # Logging is not configured yet at daemon entry; the spawn must announce
+    # itself on stderr so the journal gets a timestamped line anyway.
+    assert "early-prewarm" in capsys.readouterr().err
     assert result is not None
     process, name = result
     assert name == "fakeapp"
