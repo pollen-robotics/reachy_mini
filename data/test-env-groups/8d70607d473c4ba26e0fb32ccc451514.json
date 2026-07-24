@@ -1,1 +1,1 @@
-{"id":"8d70607d473c4ba26e0fb32ccc451514","fullName":"tests.unit_tests.test_device_detection.TestParser#test_parser_extracts_properties","name":"test_parser_extracts_properties","status":"passed","testResultsByEnv":{"default":"35d6a2cd9c7f2afaab8a1f0c083af230"}}
+{"id":"8d70607d473c4ba26e0fb32ccc451514","fullName":"tests.unit_tests.test_device_detection.TestParser#test_parser_extracts_properties","name":"test_parser_extracts_properties","status":"passed","testResultsByEnv":{"default":"bffaf32db499ebc01bf1e848c8d8680d"}}

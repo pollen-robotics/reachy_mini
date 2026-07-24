@@ -1,0 +1,1 @@
+INFO     reachy_mini.media.camera_gstreamer:camera_gstreamer.py:238 Pipeline latency (live=False, min_latency=0, max_latency=18446744073709551615)

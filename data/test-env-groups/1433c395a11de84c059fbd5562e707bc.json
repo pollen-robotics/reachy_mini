@@ -1,1 +1,1 @@
-{"id":"1433c395a11de84c059fbd5562e707bc","fullName":"tests.unit_tests.test_undistort.TestUndistortPointsVsOpenCV#test_zero_distortion","name":"test_zero_distortion[960.0-540.0]","status":"passed","testResultsByEnv":{"default":"eccffe5668e2e0c49e420f5585a6c47b"}}
+{"id":"1433c395a11de84c059fbd5562e707bc","fullName":"tests.unit_tests.test_undistort.TestUndistortPointsVsOpenCV#test_zero_distortion","name":"test_zero_distortion[0.0-0.0]","status":"passed","testResultsByEnv":{"default":"6d9829779407a8fc3a68e031d0caeba1"}}

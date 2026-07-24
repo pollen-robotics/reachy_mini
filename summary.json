@@ -2,99 +2,25 @@
   "stats": {
     "total": 725,
     "passed": 710,
-    "new": 12,
     "skipped": 15
   },
   "status": "passed",
-  "newTests": [
-    {
-      "id": "8e57f6d94bd91ef983e17fc46e34a1d4",
-      "name": "test_set_rejects_empty_or_whitespace[   ]",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "5d87b1ee2d0ebae1edda3b915a775001",
-      "name": "test_set_caps_length_to_max",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "059d8479d6f9e1c25170a939593cbe13",
-      "name": "test_set_rejects_non_string",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "e91b6af8b9ecfff0faadd6aa1a8626b8",
-      "name": "test_get_is_failsafe_on_corrupt_json",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "b264e4f5573e0b81f701b2557d5aaad1",
-      "name": "test_set_trims_surrounding_whitespace",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "012d82394da6a0d3f1dfedcb7f6c32bf",
-      "name": "test_set_then_get_round_trips",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "14cc4054191497df9d97dc20824a9681",
-      "name": "test_set_creates_parent_dirs",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "6dd9d50aefb02e5eff177cac2f68a041",
-      "name": "test_set_is_failsafe_on_write_error",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "4a5df8c7a2798ddd37126ca2de1f71d3",
-      "name": "test_set_rejects_empty_or_whitespace[]",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "0d6c4aad44797aebe2934e62ca4c40a2",
-      "name": "test_set_rejects_empty_or_whitespace[\\n\\t]",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "89f3dc4effabe52392d8e044c1d5072c",
-      "name": "test_get_returns_none_when_unset",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "b2c9d963c5e818043a7851a0d43184f2",
-      "name": "test_get_ignores_non_string_name",
-      "status": "passed",
-      "duration": 0
-    }
-  ],
+  "newTests": [],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 94117,
-  "createdAt": 1784899494794,
+  "duration": 93756,
+  "createdAt": 1784900161287,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "7d29fbbb-fa88-456b-bd89-818e23bd1f3e",
+    "reportId": "07021e79-880b-41da-9e61-98486253d913",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/30096543040",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/30097261317",
   "href": "awesome/",
   "coverage": 52
 }
