@@ -296,6 +296,27 @@ class Daemon:
         except Exception as e:
             self.logger.warning(f"Idle reset request failed: {e}")
 
+    def _on_robot_slot_taken_by_remote(self) -> None:
+        """Cancel a pending idle reset when a remote session grabs the robot.
+
+        A reconnecting remote session acquires ``robot_app_lock`` from the relay
+        thread the instant ``startSession`` arrives - potentially before it has
+        sent any data-channel command, and the relay has no backend handle to
+        cancel with directly. Without this, an idle reset scheduled when the
+        *previous* session freed the slot could outlive its debounce and fire
+        goto_sleep on the fresh session (e.g. a slow WebRTC data-channel open).
+        The local-app acquire path is already covered in
+        ``AppManager.start_app``; this closes the remote path. Best-effort,
+        non-blocking; the cancel is scheduled threadsafely on the backend loop.
+        """
+        backend = self.backend
+        if backend is None:
+            return
+        try:
+            backend.cancel_idle_reset()
+        except Exception as e:
+            self.logger.warning(f"Idle reset cancel failed: {e}")
+
     async def start(
         self,
         sim: bool = False,
@@ -432,6 +453,13 @@ class Daemon:
             # `request_idle_reset()` has a loop to hop onto.
             self.robot_app_lock.set_on_became_free_handler(self._on_robot_slot_free)
 
+            # Symmetric to the above: cancel a pending idle reset the moment a
+            # remote session (re)acquires the slot, so a stale goto_sleep can't
+            # sleep the fresh session before its first data-channel command.
+            self.robot_app_lock.set_on_remote_acquired_handler(
+                self._on_robot_slot_taken_by_remote
+            )
+
             # Wire the wake-up hook before any wake can fire (on-start below, or
             # later via button/REST on the wireless unit, which boots asleep).
             if on_wake_up_callback is not None:
@@ -502,11 +530,12 @@ class Daemon:
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
 
-            # Unwire the idle-reset hook before tearing down the relay: stopping
+            # Unwire the idle-reset hooks before tearing down the relay: stopping
             # the relay releases the remote hold on `robot_app_lock`, which would
             # otherwise fire `_on_robot_slot_free` and race the explicit
             # goto_sleep below with a second one.
             self.robot_app_lock.set_on_became_free_handler(None)
+            self.robot_app_lock.set_on_remote_acquired_handler(None)
 
             # Close the JSON-RPC app relay (drops the app /rpc connection and
             # fails any in-flight calls) before tearing the backend down.

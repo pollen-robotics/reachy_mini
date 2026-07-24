@@ -392,3 +392,80 @@ def test_clearing_became_free_handler_disables_it() -> None:
     lock.try_acquire_remote("client1")
     lock.release_remote()
     assert calls == []
+
+
+# ---------------------------------------------------------------------------
+# Remote-acquired handler: daemon-side idle-reset cancellation
+# ---------------------------------------------------------------------------
+
+
+def test_remote_acquired_handler_fires_on_acquire() -> None:
+    """Acquiring a remote session fires the remote-acquired handler once."""
+    lock = RobotAppLock()
+    calls: list[str] = []
+    lock.set_on_remote_acquired_handler(lambda: calls.append("taken"))
+
+    assert lock.try_acquire_remote("client1") is True
+    assert calls == ["taken"]
+
+
+def test_remote_acquired_handler_sees_remote_state() -> None:
+    """When the handler runs, the lock already holds the remote session."""
+    lock = RobotAppLock()
+    seen: list[RobotAppLockState] = []
+    lock.set_on_remote_acquired_handler(lambda: seen.append(lock.status().state))
+
+    lock.try_acquire_remote("client1")
+    assert seen == [RobotAppLockState.REMOTE_SESSION]
+
+
+def test_remote_acquired_handler_not_fired_on_refused_acquire() -> None:
+    """A refused acquire (slot already held) must not fire the handler."""
+    lock = RobotAppLock()
+    calls: list[str] = []
+    lock.set_on_remote_acquired_handler(lambda: calls.append("taken"))
+
+    # Local app holds the slot: remote acquire is refused.
+    assert lock.try_acquire_local("app_a") is True
+    assert lock.try_acquire_remote("client1") is False
+    assert calls == []
+
+    # Another remote already holds it: second acquire refused.
+    lock.release_local("app_a")
+    assert lock.try_acquire_remote("client1") is True
+    calls.clear()
+    assert lock.try_acquire_remote("client2") is False
+    assert calls == []
+
+
+def test_remote_acquired_handler_not_fired_on_local_acquire() -> None:
+    """Local-app acquires must not fire the remote-acquired handler."""
+    lock = RobotAppLock()
+    calls: list[str] = []
+    lock.set_on_remote_acquired_handler(lambda: calls.append("taken"))
+
+    lock.try_acquire_local("app_a")
+    assert calls == []
+
+
+def test_remote_acquired_handler_exception_is_swallowed() -> None:
+    """A raising remote-acquired handler must not break the acquire path."""
+    lock = RobotAppLock()
+
+    def handler() -> None:
+        raise RuntimeError("boom")
+
+    lock.set_on_remote_acquired_handler(handler)
+    assert lock.try_acquire_remote("client1") is True  # must not raise
+    assert lock.status().state == RobotAppLockState.REMOTE_SESSION
+
+
+def test_clearing_remote_acquired_handler_disables_it() -> None:
+    """Passing ``None`` clears the remote-acquired handler."""
+    lock = RobotAppLock()
+    calls: list[str] = []
+    lock.set_on_remote_acquired_handler(lambda: calls.append("taken"))
+    lock.set_on_remote_acquired_handler(None)
+
+    lock.try_acquire_remote("client1")
+    assert calls == []
