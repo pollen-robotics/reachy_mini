@@ -133,6 +133,9 @@ lint.ignore = [
     "D203", # Incompatible with D211
     "D213", # Incompatible with D212
 ]
+# The daemon entry point runs the early parked-app spawn before its heavy
+# imports (cold-boot overlap), so imports legitimately follow module code.
+lint.per-file-ignores = { "src/reachy_mini/daemon/app/main.py" = ["E402"] }
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit_tests"]

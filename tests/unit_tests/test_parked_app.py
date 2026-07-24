@@ -228,6 +228,70 @@ async def test_close_tears_down_parked(manager):
     assert manager.parked_app is None
 
 
+def _early_popen(mode: str | None = None):
+    """Spawn the fake app the way the early boot path does (plain Popen)."""
+    import subprocess
+
+    env = dict(**__import__("os").environ, **{PARKED_ENV_VAR: "1"})
+    if mode is not None:
+        env["FAKE_APP_MODE"] = mode
+    return subprocess.Popen(
+        [sys.executable, "-u", "-m", "fakeapp"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=0,
+        env=env,
+    )
+
+
+@pytest.mark.asyncio
+async def test_adopted_early_process_parks_and_activates(manager):
+    """An early-spawned Popen is adopted, reports ready, and activates."""
+    popen = _early_popen()
+    assert await manager.adopt_early_parked_app(popen, "fakeapp") is True
+    assert manager.parked_app is not None
+    await _wait_for(lambda: manager.parked_app.ready)
+
+    status = await manager.start_app("fakeapp")
+    assert status.info.name == "fakeapp"
+    assert manager.current_app is not None
+    assert manager.current_app.process.pid == popen.pid
+    await manager.current_app.monitor_task
+
+
+@pytest.mark.asyncio
+async def test_adopted_early_process_evicts_cleanly(manager):
+    """EOF on the adopted stdin makes the parked process exit 0."""
+    popen = _early_popen()
+    assert await manager.adopt_early_parked_app(popen, "fakeapp") is True
+    await _wait_for(lambda: manager.parked_app.ready)
+    await manager._evict_parked_app("test cleanup")
+    assert manager.parked_app is None
+    assert popen.wait(timeout=10) == 0
+
+
+@pytest.mark.asyncio
+async def test_adopt_dead_process_is_refused(manager):
+    """A process that died before adoption is refused and counted as a crash."""
+    popen = _early_popen(mode="crash")
+    popen.wait(timeout=10)
+    assert await manager.adopt_early_parked_app(popen, "fakeapp") is False
+    assert manager.parked_app is None
+    assert len(manager._parked_crash_times) == 1
+
+
+@pytest.mark.asyncio
+async def test_adopt_refused_when_already_parked(manager):
+    """A keeper-spawned instance wins; the early process is discarded."""
+    await manager._spawn_parked_app("fakeapp")
+    await _wait_for(lambda: manager.parked_app.ready)
+    popen = _early_popen()
+    assert await manager.adopt_early_parked_app(popen, "fakeapp") is False
+    assert popen.wait(timeout=10) is not None  # discarded, not leaked
+    await manager._evict_parked_app("test cleanup")
+
+
 def test_app_supports_parking_scrape(tmp_path, monkeypatch):
     """Both the app opt-in and the SDK hook must be present (fail-closed)."""
     site = tmp_path / "site-packages"
@@ -237,11 +301,14 @@ def test_app_supports_parking_scrape(tmp_path, monkeypatch):
     sdk_dir.mkdir(parents=True)
     main_py = app_dir / "main.py"
 
+    # app_supports_parking lives in local_venv_paths now; patch it there.
+    from reachy_mini.apps.sources import local_venv_paths
+
     monkeypatch.setattr(
-        local_common_venv, "_find_app_main_file", lambda *a, **k: main_py
+        local_venv_paths, "_find_app_main_file", lambda *a, **k: main_py
     )
     monkeypatch.setattr(
-        local_common_venv, "get_app_site_packages", lambda *a, **k: site
+        local_venv_paths, "get_app_site_packages", lambda *a, **k: site
     )
 
     main_py.write_text("class X:\n    supports_parking = True\n")

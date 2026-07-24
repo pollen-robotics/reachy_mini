@@ -7,6 +7,18 @@ managing the robot's state.
 
 """
 
+# Early parked-app spawn: MUST run before this module's heavy imports so the
+# app's ~5s import phase overlaps the daemon's own ~9s one (separate process,
+# separate core). No-op (None) unless this is the wireless daemon with a
+# parking-capable prewarm app and a valid startup stamp. The lifespan adopts
+# the process; if the daemon dies first, the dropped stdin pipe EOFs the
+# parked app into a cooperative exit.
+import sys  # isort: skip
+
+from reachy_mini.apps.prewarm_spawn import spawn_early_parked_app  # isort: skip
+
+_early_parked_app = spawn_early_parked_app(sys.argv)
+
 import argparse
 import asyncio
 import logging
@@ -182,9 +194,15 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             # Started before daemon.start() so the app's import phase overlaps
             # the robot/media init instead of waiting for it.
             if args.autostart and args.wireless_version:
-                # Awaited eagerly: the keeper task alone can be starved for
-                # seconds while robot init blocks the loop, and the boot
-                # auto-start waits on parked-ready.
+                # Adopt the early-spawned parked app (see module top) if there
+                # is one; otherwise spawn now. Awaited eagerly: the keeper
+                # task alone can be starved for seconds while robot init
+                # blocks the loop, and the boot auto-start waits on
+                # parked-ready.
+                if _early_parked_app is not None:
+                    await app.state.app_manager.adopt_early_parked_app(
+                        *_early_parked_app
+                    )
                 await app.state.app_manager.prewarm_parked_app_now()
                 app.state.app_manager.start_parked_app_keeper()
 

@@ -15,6 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from reachy_mini.apps.sources import local_common_venv as lcv
+from reachy_mini.apps.sources import local_venv_paths as lvp
 
 MAIN = 'custom_app_url: str | None = "http://0.0.0.0:7860/"\n'
 
@@ -30,7 +31,7 @@ def _write_app(root: Path, name: str) -> Path:
 def test_copy_install_reads_site_packages(monkeypatch, tmp_path):
     """A regular copy install: main.py physically under site-packages/<app>."""
     _write_app(tmp_path, "some_app")
-    monkeypatch.setattr(lcv, "_get_app_site_packages", lambda *a, **k: tmp_path)
+    monkeypatch.setattr(lvp, "_get_app_site_packages", lambda *a, **k: tmp_path)
     assert lcv._get_custom_app_url_from_file("some_app") == "http://0.0.0.0:7860/"
 
 
@@ -39,14 +40,13 @@ def test_editable_install_resolves_via_app_python(monkeypatch, tmp_path):
     pkg = _write_app(tmp_path, "some_app")
     empty_sp = tmp_path / "site-packages"
     empty_sp.mkdir()
-    monkeypatch.setattr(lcv, "_get_app_site_packages", lambda *a, **k: empty_sp)
+    monkeypatch.setattr(lvp, "_get_app_site_packages", lambda *a, **k: empty_sp)
     # The app's python (e.g. apps_venv) prints the package origin; the daemon
     # interpreter could not have found this in-process.
-    monkeypatch.setattr(
-        lcv, "get_app_python", lambda *a, **k: Path("/venvs/apps_venv/bin/python")
+    monkeypatch.setattr(lvp, "get_app_python", lambda *a, **k: Path("/venvs/apps_venv/bin/python")
     )
     monkeypatch.setattr(
-        lcv.subprocess,
+        lvp.subprocess,
         "run",
         lambda *a, **k: SimpleNamespace(
             stdout=f"{pkg / '__init__.py'}\n", returncode=0
@@ -60,12 +60,11 @@ def test_editable_install_resolves_via_app_python(monkeypatch, tmp_path):
 
 def test_missing_everywhere_returns_none(monkeypatch, tmp_path):
     """Neither the file path nor the app-python resolution finds it -> None."""
-    monkeypatch.setattr(lcv, "_get_app_site_packages", lambda *a, **k: tmp_path)
-    monkeypatch.setattr(
-        lcv, "get_app_python", lambda *a, **k: Path("/nonexistent/python")
+    monkeypatch.setattr(lvp, "_get_app_site_packages", lambda *a, **k: tmp_path)
+    monkeypatch.setattr(lvp, "get_app_python", lambda *a, **k: Path("/nonexistent/python")
     )
     monkeypatch.setattr(
-        lcv.subprocess,
+        lvp.subprocess,
         "run",
         lambda *a, **k: SimpleNamespace(stdout="\n", returncode=0),
     )

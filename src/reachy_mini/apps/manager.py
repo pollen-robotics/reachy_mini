@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import signal
+import subprocess
 import time
 from collections import deque
 from contextlib import asynccontextmanager, suppress
@@ -21,7 +22,8 @@ from reachy_mini.io.protocol import MotorControlMode
 from reachy_mini.utils.interpolation import distance_between_poses
 
 from . import AppInfo, SourceKind
-from .app import PARKED_ENV_VAR, PARKED_READY_SENTINEL
+from .app import PARKED_READY_SENTINEL
+from .prewarm_spawn import AdoptedPopen, build_app_env
 from .sources import hf_space, local_common_venv
 
 if TYPE_CHECKING:
@@ -53,7 +55,7 @@ class AppStatus(BaseModel):
 class RunningApp:
     """Information about a running app."""
 
-    process: asyncio.subprocess.Process
+    process: "asyncio.subprocess.Process | AdoptedPopen"
     monitor_task: asyncio.Task[None]
     status: AppStatus
 
@@ -72,7 +74,9 @@ class ParkedApp:
     ``is_app_running()``, the status endpoints and the JSON-RPC relay.
     """
 
-    process: asyncio.subprocess.Process
+    # Also accepts prewarm_spawn.AdoptedPopen (same interface) for processes
+    # spawned by the early boot path before the event loop existed.
+    process: "asyncio.subprocess.Process | AdoptedPopen"
     name: str
     spawned_at: float
     stderr_tail: "deque[str]"
@@ -172,21 +176,7 @@ class AppManager:
             which can mask issues specific to apps_venv's own gstreamer install.
         See pollen-robotics/reachy-mini-desktop-app#185.
         """
-        app_env = os.environ.copy()
-        for key in (
-            "GST_PLUGIN_PATH_1_0",
-            "GST_PLUGIN_SYSTEM_PATH_1_0",
-            "GST_REGISTRY_1_0",
-            "GST_PLUGIN_SCANNER_1_0",
-            "GI_TYPELIB_PATH",
-            "PYGI_DLL_DIRS",
-            "XDG_DATA_DIRS",
-            "XDG_CONFIG_DIRS",
-        ):
-            app_env.pop(key, None)
-        if parked:
-            app_env[PARKED_ENV_VAR] = "1"
-        return app_env
+        return build_app_env(parked=parked)
 
     async def _spawn_app_subprocess(
         self, app_name: str, *, parked: bool
@@ -213,7 +203,9 @@ class AppManager:
     # Parked (pre-warmed) app machinery
     # ------------------------------------------------------------------
 
-    async def _activate_parked_app(self) -> "asyncio.subprocess.Process | None":
+    async def _activate_parked_app(
+        self,
+    ) -> "asyncio.subprocess.Process | AdoptedPopen | None":
         """Signal the parked process to resume; ``None`` => plain spawn."""
         parked = self.parked_app
         assert parked is not None
@@ -320,6 +312,56 @@ class AppManager:
                 await asyncio.wait_for(
                     self._parking_nudge.wait(), timeout=_PARK_KEEPER_POLL_S
                 )
+
+    async def adopt_early_parked_app(
+        self, process: "subprocess.Popen[bytes]", name: str
+    ) -> bool:
+        """Adopt a process spawned by the early boot path as the parked app.
+
+        See ``prewarm_spawn.spawn_early_parked_app``. Fail-safe: any refusal
+        or error discards the process (killed, never leaked) and returns
+        False so the caller can fall back to ``prewarm_parked_app_now``.
+        """
+        log = self.logger.getChild("parked")
+
+        def discard(reason: str) -> None:
+            log.warning(f"Discarding early-spawned app '{name}': {reason}")
+            with suppress(Exception):
+                process.kill()
+                process.wait(timeout=5)
+
+        if (
+            self.parked_app is not None
+            or self._parking_paused > 0
+            or self.is_app_running()
+        ):
+            discard("parking slot not free")
+            return False
+        if process.poll() is not None:
+            log.warning(
+                f"Early-spawned app '{name}' exited (code {process.returncode}) "
+                "before adoption"
+            )
+            self._parked_crash_times.append(time.monotonic())
+            return False
+        try:
+            adopted = AdoptedPopen(process)
+            await adopted.connect_streams()
+        except Exception:
+            log.warning("Failed to adopt early-spawned app", exc_info=True)
+            discard("stream adoption failed")
+            return False
+
+        parked = ParkedApp(
+            process=adopted,
+            name=name,
+            spawned_at=time.monotonic(),
+            stderr_tail=deque(maxlen=10),
+        )
+        parked.drain_task = asyncio.create_task(self._drain_parked_process(parked))
+        self.parked_app = parked
+        log.info(f"Adopted early-spawned parked app '{name}' (pid {process.pid})")
+        return True
 
     async def prewarm_parked_app_now(self) -> None:
         """Spawn the parked app immediately if the parking invariant wants one.
@@ -432,7 +474,7 @@ class AppManager:
                 raise RuntimeError("The robot app slot is already in use")
 
         try:
-            process: "asyncio.subprocess.Process | None" = None
+            process: "asyncio.subprocess.Process | AdoptedPopen | None" = None
             if self.parked_app is not None:
                 if self.parked_app.name == app_name:
                     process = await self._activate_parked_app()
