@@ -1,52 +1,100 @@
 {
   "stats": {
-    "total": 713,
-    "passed": 698,
-    "skipped": 15,
-    "new": 4
+    "total": 725,
+    "passed": 710,
+    "new": 12,
+    "skipped": 15
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "ff7e511e630391374f3dea2fd6002763",
-      "name": "test_named_daemon_falls_back_to_host_when_mdns_misses",
+      "id": "8e57f6d94bd91ef983e17fc46e34a1d4",
+      "name": "test_set_rejects_empty_or_whitespace[   ]",
       "status": "passed",
-      "duration": 3069
+      "duration": 0
     },
     {
-      "id": "7a7930810d4ca8c3259ad9a3d5bddc9d",
-      "name": "test_named_local_daemon_is_validated",
+      "id": "5d87b1ee2d0ebae1edda3b915a775001",
+      "name": "test_set_caps_length_to_max",
       "status": "passed",
-      "duration": 4130
+      "duration": 0
     },
     {
-      "id": "556836a4fb96ee61ffb78d431cc58921",
-      "name": "test_named_daemon_auto_discovers_and_tries_all_addresses",
+      "id": "059d8479d6f9e1c25170a939593cbe13",
+      "name": "test_set_rejects_non_string",
       "status": "passed",
-      "duration": 3129
+      "duration": 0
     },
     {
-      "id": "9485593e2ee3a4aaf6f38c93850933e2",
-      "name": "test_named_daemon_host_fallback_rejects_wrong_name",
+      "id": "e91b6af8b9ecfff0faadd6aa1a8626b8",
+      "name": "test_get_is_failsafe_on_corrupt_json",
       "status": "passed",
-      "duration": 2600
+      "duration": 0
+    },
+    {
+      "id": "b264e4f5573e0b81f701b2557d5aaad1",
+      "name": "test_set_trims_surrounding_whitespace",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "012d82394da6a0d3f1dfedcb7f6c32bf",
+      "name": "test_set_then_get_round_trips",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "14cc4054191497df9d97dc20824a9681",
+      "name": "test_set_creates_parent_dirs",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "6dd9d50aefb02e5eff177cac2f68a041",
+      "name": "test_set_is_failsafe_on_write_error",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "4a5df8c7a2798ddd37126ca2de1f71d3",
+      "name": "test_set_rejects_empty_or_whitespace[]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "0d6c4aad44797aebe2934e62ca4c40a2",
+      "name": "test_set_rejects_empty_or_whitespace[\\n\\t]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "89f3dc4effabe52392d8e044c1d5072c",
+      "name": "test_get_returns_none_when_unset",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "b2c9d963c5e818043a7851a0d43184f2",
+      "name": "test_get_ignores_non_string_name",
+      "status": "passed",
+      "duration": 0
     }
   ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 88827,
-  "createdAt": 1784885509396,
+  "duration": 94117,
+  "createdAt": 1784899494794,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "9ba82c04-1e05-4222-b967-561266738ea9",
+    "reportId": "7d29fbbb-fa88-456b-bd89-818e23bd1f3e",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/30082682199",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/30096543040",
   "href": "awesome/",
   "coverage": 52
 }

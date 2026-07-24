@@ -54,9 +54,9 @@
             </div>
         </aside>
         <h2>
-            <span class="text">697 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">355<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">342<span class="text"> missing</span></button>
+            <span class="text">701 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">356<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">345<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_df35a68c63299422_device_detection_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.2">coverage.py v7.15.2</a>,
-            created at 2026-07-24 09:31 +0000
+            created at 2026-07-24 13:24 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -1814,44 +1814,63 @@
     <p class="run"><span class="n"><a id="t1732" href="#t1732">1732</a></span><span class="t">    <span class="key">await</span> <span class="nam">_relay_instance</span><span class="op">.</span><span class="nam">update_token</span><span class="op">(</span><span class="nam">new_token</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1733" href="#t1733">1733</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1734" href="#t1734">1734</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1735" href="#t1735">1735</a></span><span class="t"><span class="key">async</span> <span class="key">def</span> <span class="nam">notify_force_reconnect</span><span class="op">(</span><span class="op">)</span> <span class="op">-></span> <span class="nam">bool</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1736" href="#t1736">1736</a></span><span class="t">    <span class="str">"""Force the central signaling relay to drop and reconnect right now.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1735" href="#t1735">1735</a></span><span class="t"><span class="key">def</span> <span class="nam">notify_robot_name_change</span><span class="op">(</span><span class="nam">new_name</span><span class="op">:</span> <span class="nam">str</span><span class="op">)</span> <span class="op">-></span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1736" href="#t1736">1736</a></span><span class="t">    <span class="str">"""Update the producer name advertised to the central relay.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1737" href="#t1737">1737</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1738" href="#t1738">1738</a></span><span class="t"><span class="str">    Drops the relay's current connection and re-registers with the</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1739" href="#t1739">1739</a></span><span class="t"><span class="str">    currently stored HF token. Recovery handle for the "zombie relay"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1740" href="#t1740">1740</a></span><span class="t"><span class="str">    state where ``/relay-status`` reports ``connected`` but</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1741" href="#t1741">1741</a></span><span class="t"><span class="str">    ``/central-robot-status`` returns ``robots: []`` &#8212; central no</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1742" href="#t1742">1742</a></span><span class="t"><span class="str">    longer lists this robot as a producer for the authenticated user</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1743" href="#t1743">1743</a></span><span class="t"><span class="str">    while the relay still holds its SSE channel open. From the outside</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1744" href="#t1744">1744</a></span><span class="t"><span class="str">    this manifests as "the robot is online but no one can call it"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1745" href="#t1745">1745</a></span><span class="t"><span class="str">    until someone restarts the daemon.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1746" href="#t1746">1746</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1747" href="#t1747">1747</a></span><span class="t"><span class="str">    Common triggers:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1748" href="#t1748">1748</a></span><span class="t"><span class="str">      - the relay attached with a token that has since been rotated;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1749" href="#t1749">1749</a></span><span class="t"><span class="str">      - a transient error during ``setPeerStatus`` went unnoticed.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1750" href="#t1750">1750</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1751" href="#t1751">1751</a></span><span class="t"><span class="str">    Unlike ``notify_token_change``, this skips the</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1752" href="#t1752">1752</a></span><span class="t"><span class="str">    ``old_token == new_token`` early-return and always reconnects,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1753" href="#t1753">1753</a></span><span class="t"><span class="str">    which is exactly what callers of ``POST /api/hf-auth/refresh-relay``</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1754" href="#t1754">1754</a></span><span class="t"><span class="str">    need (their whole reason for invoking is the token did not change</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1755" href="#t1755">1755</a></span><span class="t"><span class="str">    but the producer registration was lost). Goes through the relay's</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1756" href="#t1756">1756</a></span><span class="t"><span class="str">    own reconnect path &#8212; works with any token shape currently stored</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1757" href="#t1757">1757</a></span><span class="t"><span class="str">    (raw user tokens, OAuth access tokens) without re-validation.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1758" href="#t1758">1758</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1759" href="#t1759">1759</a></span><span class="t"><span class="str">    Returns:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1760" href="#t1760">1760</a></span><span class="t"><span class="str">        ``True`` if a reconnect was actually kicked off, ``False`` if</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1761" href="#t1761">1761</a></span><span class="t"><span class="str">        there was no relay instance to reconnect (e.g. Lite-only build,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1762" href="#t1762">1762</a></span><span class="t"><span class="str">        daemon not yet up). HTTP callers (mobile auto-heal flow) must</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1763" href="#t1763">1763</a></span><span class="t"><span class="str">        surface this distinction so they can stop waiting on a</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1764" href="#t1764">1764</a></span><span class="t"><span class="str">        reconnect that will never happen.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1738" href="#t1738">1738</a></span><span class="t"><span class="str">    The name is read fresh from ``self.robot_name`` on every heartbeat</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1739" href="#t1739">1739</a></span><span class="t"><span class="str">    re-emit (see ``_heartbeat_loop`` / ``_producer_status_payload``), so</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1740" href="#t1740">1740</a></span><span class="t"><span class="str">    mutating it here is enough for central to pick up the new label at the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1741" href="#t1741">1741</a></span><span class="t"><span class="str">    next heartbeat (a few seconds) with no reconnect. A plain attribute</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1742" href="#t1742">1742</a></span><span class="t"><span class="str">    write is atomic under the GIL, so this is safe to call from the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1743" href="#t1743">1743</a></span><span class="t"><span class="str">    backend's command thread. No-op if no relay is running.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1744" href="#t1744">1744</a></span><span class="t"><span class="str">    """</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1745" href="#t1745">1745</a></span><span class="t">    <span class="key">if</span> <span class="nam">_relay_instance</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span> <span class="key">and</span> <span class="nam">new_name</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1746" href="#t1746">1746</a></span><span class="t">        <span class="nam">_relay_instance</span><span class="op">.</span><span class="nam">robot_name</span> <span class="op">=</span> <span class="nam">new_name</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1747" href="#t1747">1747</a></span><span class="t">        <span class="nam">logger</span><span class="op">.</span><span class="nam">info</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t1748" href="#t1748">1748</a></span><span class="t">            <span class="str">"[Central Relay] robot name updated to %r "</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t1749" href="#t1749">1749</a></span><span class="t">            <span class="str">"(propagates to central on next heartbeat)"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t1750" href="#t1750">1750</a></span><span class="t">            <span class="nam">new_name</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t1751" href="#t1751">1751</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1752" href="#t1752">1752</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1753" href="#t1753">1753</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1754" href="#t1754">1754</a></span><span class="t"><span class="key">async</span> <span class="key">def</span> <span class="nam">notify_force_reconnect</span><span class="op">(</span><span class="op">)</span> <span class="op">-></span> <span class="nam">bool</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1755" href="#t1755">1755</a></span><span class="t">    <span class="str">"""Force the central signaling relay to drop and reconnect right now.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1756" href="#t1756">1756</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1757" href="#t1757">1757</a></span><span class="t"><span class="str">    Drops the relay's current connection and re-registers with the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1758" href="#t1758">1758</a></span><span class="t"><span class="str">    currently stored HF token. Recovery handle for the "zombie relay"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1759" href="#t1759">1759</a></span><span class="t"><span class="str">    state where ``/relay-status`` reports ``connected`` but</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1760" href="#t1760">1760</a></span><span class="t"><span class="str">    ``/central-robot-status`` returns ``robots: []`` &#8212; central no</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1761" href="#t1761">1761</a></span><span class="t"><span class="str">    longer lists this robot as a producer for the authenticated user</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1762" href="#t1762">1762</a></span><span class="t"><span class="str">    while the relay still holds its SSE channel open. From the outside</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1763" href="#t1763">1763</a></span><span class="t"><span class="str">    this manifests as "the robot is online but no one can call it"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1764" href="#t1764">1764</a></span><span class="t"><span class="str">    until someone restarts the daemon.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1765" href="#t1765">1765</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1766" href="#t1766">1766</a></span><span class="t"><span class="str">    """</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1767" href="#t1767">1767</a></span><span class="t">    <span class="key">if</span> <span class="nam">_relay_instance</span> <span class="key">is</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1768" href="#t1768">1768</a></span><span class="t">        <span class="nam">logger</span><span class="op">.</span><span class="nam">debug</span><span class="op">(</span><span class="str">"[Central Relay] No relay instance, ignoring force reconnect"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1769" href="#t1769">1769</a></span><span class="t">        <span class="key">return</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1770" href="#t1770">1770</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1771" href="#t1771">1771</a></span><span class="t">    <span class="key">await</span> <span class="nam">_relay_instance</span><span class="op">.</span><span class="nam">force_reconnect</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1772" href="#t1772">1772</a></span><span class="t">    <span class="key">return</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1766" href="#t1766">1766</a></span><span class="t"><span class="str">    Common triggers:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1767" href="#t1767">1767</a></span><span class="t"><span class="str">      - the relay attached with a token that has since been rotated;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1768" href="#t1768">1768</a></span><span class="t"><span class="str">      - a transient error during ``setPeerStatus`` went unnoticed.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1769" href="#t1769">1769</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1770" href="#t1770">1770</a></span><span class="t"><span class="str">    Unlike ``notify_token_change``, this skips the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1771" href="#t1771">1771</a></span><span class="t"><span class="str">    ``old_token == new_token`` early-return and always reconnects,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1772" href="#t1772">1772</a></span><span class="t"><span class="str">    which is exactly what callers of ``POST /api/hf-auth/refresh-relay``</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1773" href="#t1773">1773</a></span><span class="t"><span class="str">    need (their whole reason for invoking is the token did not change</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1774" href="#t1774">1774</a></span><span class="t"><span class="str">    but the producer registration was lost). Goes through the relay's</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1775" href="#t1775">1775</a></span><span class="t"><span class="str">    own reconnect path &#8212; works with any token shape currently stored</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1776" href="#t1776">1776</a></span><span class="t"><span class="str">    (raw user tokens, OAuth access tokens) without re-validation.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1777" href="#t1777">1777</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1778" href="#t1778">1778</a></span><span class="t"><span class="str">    Returns:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1779" href="#t1779">1779</a></span><span class="t"><span class="str">        ``True`` if a reconnect was actually kicked off, ``False`` if</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1780" href="#t1780">1780</a></span><span class="t"><span class="str">        there was no relay instance to reconnect (e.g. Lite-only build,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1781" href="#t1781">1781</a></span><span class="t"><span class="str">        daemon not yet up). HTTP callers (mobile auto-heal flow) must</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1782" href="#t1782">1782</a></span><span class="t"><span class="str">        surface this distinction so they can stop waiting on a</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1783" href="#t1783">1783</a></span><span class="t"><span class="str">        reconnect that will never happen.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1784" href="#t1784">1784</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1785" href="#t1785">1785</a></span><span class="t"><span class="str">    """</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1786" href="#t1786">1786</a></span><span class="t">    <span class="key">if</span> <span class="nam">_relay_instance</span> <span class="key">is</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1787" href="#t1787">1787</a></span><span class="t">        <span class="nam">logger</span><span class="op">.</span><span class="nam">debug</span><span class="op">(</span><span class="str">"[Central Relay] No relay instance, ignoring force reconnect"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1788" href="#t1788">1788</a></span><span class="t">        <span class="key">return</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1789" href="#t1789">1789</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1790" href="#t1790">1790</a></span><span class="t">    <span class="key">await</span> <span class="nam">_relay_instance</span><span class="op">.</span><span class="nam">force_reconnect</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1791" href="#t1791">1791</a></span><span class="t">    <span class="key">return</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -1861,7 +1880,7 @@
             <a class="nav" href="z_df35a68c63299422_device_detection_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.2">coverage.py v7.15.2</a>,
-            created at 2026-07-24 09:31 +0000
+            created at 2026-07-24 13:24 +0000
         </p>
     </div>
 </footer>
