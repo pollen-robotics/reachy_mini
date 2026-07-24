@@ -1,2 +1,0 @@
-INFO     reachy_mini.daemon.backend.abstract:abstract.py:155 Using AnalyticalKinematics kinematics engine
-WARNING  reachy_mini.daemon.backend.abstract:abstract.py:2078 upload_move_finish: unknown encoding 'bogus' on enc

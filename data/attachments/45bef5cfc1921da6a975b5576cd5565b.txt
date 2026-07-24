@@ -1,2 +1,0 @@
-INFO     reachy_mini.daemon.backend.abstract:abstract.py:155 Using AnalyticalKinematics kinematics engine
-WARNING  reachy_mini.daemon.backend.abstract:abstract.py:1762 upload_move_start: refusing s2, too many active slots

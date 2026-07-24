@@ -1,26 +1,100 @@
 {
   "stats": {
-    "total": 725,
-    "passed": 710,
-    "skipped": 15
+    "total": 737,
+    "passed": 722,
+    "skipped": 15,
+    "new": 12
   },
   "status": "passed",
-  "newTests": [],
+  "newTests": [
+    {
+      "id": "0afdc85c2347c23943f40593cc2a2bcd",
+      "name": "test_became_free_handler_fires_on_remote_release",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "3926e5e2f11afffbcf16aa823da41dc5",
+      "name": "test_became_free_handler_exception_is_swallowed",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "ecf46baed4e4f717925fb20194694e32",
+      "name": "test_idle_reset_skips_when_already_disabled",
+      "status": "passed",
+      "duration": 20
+    },
+    {
+      "id": "fa167998e9af82ac976bf79ef2e4c1fb",
+      "name": "test_idle_reset_skips_when_shutting_down",
+      "status": "passed",
+      "duration": 21
+    },
+    {
+      "id": "d9ae0ad863673f5b1f696be0fe9b615c",
+      "name": "test_finally_does_not_clobber_newer_task",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "5749a7ecff6bfb84bb076a1c3e27b3d3",
+      "name": "test_clearing_became_free_handler_disables_it",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "264097045c2d976e9fce99765648ab3b",
+      "name": "test_idle_reset_sleeps_after_debounce",
+      "status": "passed",
+      "duration": 21
+    },
+    {
+      "id": "818dd05ef82fca23e8e1c634dd354092",
+      "name": "test_became_free_handler_not_fired_on_eviction",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "82acd92a7d361139da83232e3372099c",
+      "name": "test_became_free_handler_not_fired_on_noop_release",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "cc6bcaefa9235bdf74d412972e81e890",
+      "name": "test_cancel_during_debounce_skips_motion",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "90c7e34d93313d032a625d3ea4a94b87",
+      "name": "test_became_free_handler_sees_free_state",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "e632dec40144dedf36cff2ba2fbddb54",
+      "name": "test_became_free_handler_fires_on_local_release",
+      "status": "passed",
+      "duration": 0
+    }
+  ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 93907,
-  "createdAt": 1784902607614,
+  "duration": 89306,
+  "createdAt": 1784902798904,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "8a081cf7-639d-4e9b-83c3-315cb1eabb56",
+    "reportId": "8e72baa0-b2db-4859-9f3f-d3b6708459da",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/30100052648",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/30100272141",
   "href": "awesome/",
   "coverage": 52
 }

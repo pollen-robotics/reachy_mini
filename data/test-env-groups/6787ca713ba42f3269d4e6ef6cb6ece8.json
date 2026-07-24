@@ -1,0 +1,1 @@
+{"id":"6787ca713ba42f3269d4e6ef6cb6ece8","fullName":"tests.unit_tests.test_robot_app_lock#test_became_free_handler_not_fired_on_noop_release","name":"test_became_free_handler_not_fired_on_noop_release","status":"passed","testResultsByEnv":{"default":"82acd92a7d361139da83232e3372099c"}}
