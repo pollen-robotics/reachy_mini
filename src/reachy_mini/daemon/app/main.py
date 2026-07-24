@@ -182,6 +182,10 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             # Started before daemon.start() so the app's import phase overlaps
             # the robot/media init instead of waiting for it.
             if args.autostart and args.wireless_version:
+                # Awaited eagerly: the keeper task alone can be starved for
+                # seconds while robot init blocks the loop, and the boot
+                # auto-start waits on parked-ready.
+                await app.state.app_manager.prewarm_parked_app_now()
                 app.state.app_manager.start_parked_app_keeper()
 
             # Install the startup app (if missing) before waking the robot, so a

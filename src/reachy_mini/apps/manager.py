@@ -310,17 +310,8 @@ class AppManager:
                     # Safety backstop: opted in but never parked => misbehaving.
                     await self._evict_parked_app("never reported parked-ready")
                     self._parked_crash_times.append(time.monotonic())
-                elif (
-                    parked is None
-                    and self._parking_paused == 0
-                    and not self.is_app_running()
-                    and not self._parking_crash_looping()
-                ):
-                    name = startup_app_config.get_prewarm_app()
-                    if name and local_common_venv.app_supports_parking(
-                        name, self.wireless_version, self.desktop_app_daemon
-                    ):
-                        await self._spawn_parked_app(name)
+                elif parked is None:
+                    await self.prewarm_parked_app_now()
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -329,6 +320,27 @@ class AppManager:
                 await asyncio.wait_for(
                     self._parking_nudge.wait(), timeout=_PARK_KEEPER_POLL_S
                 )
+
+    async def prewarm_parked_app_now(self) -> None:
+        """Spawn the parked app immediately if the parking invariant wants one.
+
+        Same guarded spawn as the keeper's idle branch. The boot path awaits
+        this directly because the keeper task's first iteration can be starved
+        for seconds while robot init blocks the event loop — every second the
+        spawn slips is a second on the cold-boot critical path (the boot
+        auto-start waits on parked-ready).
+        """
+        if (
+            self.parked_app is None
+            and self._parking_paused == 0
+            and not self.is_app_running()
+            and not self._parking_crash_looping()
+        ):
+            name = startup_app_config.get_prewarm_app()
+            if name and local_common_venv.app_supports_parking(
+                name, self.wireless_version, self.desktop_app_daemon
+            ):
+                await self._spawn_parked_app(name)
 
     async def _spawn_parked_app(self, name: str) -> None:
         log = self.logger.getChild("parked")

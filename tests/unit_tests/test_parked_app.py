@@ -67,6 +67,56 @@ async def _wait_for(predicate, timeout=10.0):
         await asyncio.sleep(0.05)
 
 
+@pytest.fixture
+def prewarm_configured(monkeypatch):
+    """Make the prewarm config resolve to the fake app with parking support."""
+    from reachy_mini.apps import manager as manager_mod
+
+    monkeypatch.setattr(
+        manager_mod.startup_app_config, "get_prewarm_app", lambda: "fakeapp"
+    )
+    monkeypatch.setattr(
+        local_common_venv, "app_supports_parking", lambda *a, **k: True
+    )
+
+
+@pytest.mark.asyncio
+async def test_prewarm_now_spawns_immediately_when_idle(manager, prewarm_configured):
+    """The boot path can await the first spawn without the keeper loop."""
+    await manager.prewarm_parked_app_now()
+    assert manager.parked_app is not None
+    await _wait_for(lambda: manager.parked_app.ready)
+    await manager._evict_parked_app("test cleanup")
+
+
+@pytest.mark.asyncio
+async def test_prewarm_now_respects_pause_and_existing_parked(
+    manager, prewarm_configured
+):
+    """No spawn while parking is paused; no double spawn once parked."""
+    async with manager.pause_parking("test install"):
+        await manager.prewarm_parked_app_now()
+        assert manager.parked_app is None
+
+    await manager.prewarm_parked_app_now()
+    assert manager.parked_app is not None
+    first = manager.parked_app
+    await manager.prewarm_parked_app_now()
+    assert manager.parked_app is first
+    await manager._evict_parked_app("test cleanup")
+
+
+@pytest.mark.asyncio
+async def test_prewarm_now_respects_crash_loop_guard(manager, prewarm_configured):
+    """A crash loop blocks the eager spawn exactly like the keeper."""
+    import time as _time
+
+    now = _time.monotonic()
+    manager._parked_crash_times.extend([now, now, now])
+    await manager.prewarm_parked_app_now()
+    assert manager.parked_app is None
+
+
 @pytest.mark.asyncio
 async def test_parked_spawn_reports_ready(manager):
     """A parked spawn prints the sentinel and stays alive, holding nothing."""
