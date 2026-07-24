@@ -1,1 +1,1 @@
-{"id":"e9916794b6007065a0eb2dea1d5826ca","fullName":"tests.unit_tests.test_device_detection.TestFindAudioDevice#test_pipewire_sink","name":"test_pipewire_sink","status":"passed","testResultsByEnv":{"default":"4ff5d2dd37c008d744d3bcb7eebd7bf1"}}
+{"id":"e9916794b6007065a0eb2dea1d5826ca","fullName":"tests.unit_tests.test_device_detection.TestFindAudioDevice#test_pipewire_sink","name":"test_pipewire_sink","status":"passed","testResultsByEnv":{"default":"1bc51eead5175d67e21e9035de8ac766"}}

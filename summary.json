@@ -1,40 +1,52 @@
 {
   "stats": {
-    "total": 709,
-    "passed": 694,
+    "total": 713,
+    "passed": 698,
     "skipped": 15,
-    "new": 2
+    "new": 4
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "fb2e73d7c38fb7d67d6ea848bd10615a",
-      "name": "test_delete_hf_token_error",
+      "id": "ff7e511e630391374f3dea2fd6002763",
+      "name": "test_named_daemon_falls_back_to_host_when_mdns_misses",
       "status": "passed",
-      "duration": 0
+      "duration": 3069
     },
     {
-      "id": "bc96b9786d56b6b95f2fe792135bea0f",
-      "name": "test_delete_hf_token_ok",
+      "id": "7a7930810d4ca8c3259ad9a3d5bddc9d",
+      "name": "test_named_local_daemon_is_validated",
       "status": "passed",
-      "duration": 1
+      "duration": 4130
+    },
+    {
+      "id": "556836a4fb96ee61ffb78d431cc58921",
+      "name": "test_named_daemon_auto_discovers_and_tries_all_addresses",
+      "status": "passed",
+      "duration": 3129
+    },
+    {
+      "id": "9485593e2ee3a4aaf6f38c93850933e2",
+      "name": "test_named_daemon_host_fallback_rejects_wrong_name",
+      "status": "passed",
+      "duration": 2600
     }
   ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 80652,
-  "createdAt": 1784881004684,
+  "duration": 88827,
+  "createdAt": 1784885509396,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "9c436aca-4302-4681-a9b4-2a1e1787f413",
+    "reportId": "9ba82c04-1e05-4222-b967-561266738ea9",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/30078160432",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/30082682199",
   "href": "awesome/",
   "coverage": 52
 }
