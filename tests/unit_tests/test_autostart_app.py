@@ -346,7 +346,10 @@ async def test_antenna_watcher_wakes_from_baseline_when_target_is_missing() -> N
     try:
         await asyncio.sleep(0.03)
         daemon.backend.present = [0.30, 0.0]
-        await asyncio.sleep(0.03)
+        for _ in range(50):
+            if mgr.started:
+                break
+            await asyncio.sleep(0.01)
 
         assert daemon.backend.wake_up_calls == 1
         assert mgr.started == ["foo"]
