@@ -239,6 +239,46 @@
         }
       }
     },
+    "/api/apps/start-app/{app_name}/no-evict": {
+      "post": {
+        "summary": "Start App No Evict",
+        "description": "Start an app only when the managed robot slot can be acquired atomically.",
+        "operationId": "start_app_no_evict_api_apps_start_app__app_name__no_evict_post",
+        "parameters": [
+          {
+            "name": "app_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/apps/restart-current-app": {
       "post": {
         "summary": "Restart App",
