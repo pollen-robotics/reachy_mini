@@ -1,40 +1,172 @@
 {
   "stats": {
-    "total": 739,
-    "passed": 724,
-    "skipped": 15,
-    "new": 2
+    "total": 763,
+    "new": 24,
+    "passed": 748,
+    "skipped": 15
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "38f5af1775333a211926dd2c786a099d",
-      "name": "test_no_evict_start_reports_busy_managed_slot",
+      "id": "17d7bf721256462dcd2ec1cf1825d15e",
+      "name": "test_request_device_code_callable_with_no_args",
       "status": "passed",
-      "duration": 32
+      "duration": 0
     },
     {
-      "id": "a1fa0d679167747141edd5979cdeb5ec",
-      "name": "test_no_evict_start_uses_atomic_app_manager_contract",
+      "id": "e4cbd47273f092ff59e481778f14917e",
+      "name": "test_private_symbols_are_callable_or_class[huggingface_hub.utils._oauth_device-request_device_code]",
       "status": "passed",
-      "duration": 32
+      "duration": 0
+    },
+    {
+      "id": "1ea0ce3294702dcf9e673cb3d5d7ae55",
+      "name": "test_poll_denied_maps_to_error_status",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "f2897979c29ff378e608d451c41c4657",
+      "name": "test_device_code_protocol_imports_exist",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "7c11683f756419887380d96e6da05bd3",
+      "name": "test_installed_version_within_supported_range",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "07f23b55bef2edb2bb25ea1232773974",
+      "name": "test_device_code_error_is_exception",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "913491fcfcb40f8330e55cb2d7956e75",
+      "name": "test_poll_success_persists_token_and_notifies_relay",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "267fe3978e73ed2a4c899c678cf72adb",
+      "name": "test_status_authorized_includes_username",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "4df7a6b976d389888d1cbeaaadba412c",
+      "name": "test_status_unknown_session_is_expired",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "9fb78d6dbe5f3aa3a9b09a74a6b35229",
+      "name": "test_start_returns_user_code_and_registers_session",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "30923757a71cf744dc67b3bfe2687f42",
+      "name": "test_save_oauth_token_accepts_response_and_is_private",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "7b7250f6889f474001b6a6dcc49731e6",
+      "name": "test_cancel_session_removes_it",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "5ebe7116f95614a32e6dbdd706b674a3",
+      "name": "test_private_symbols_are_callable_or_class[huggingface_hub.errors-DeviceCodeError]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "576e9ae8fbb2d83ef26ff00e31dd81dd",
+      "name": "test_private_symbols_are_callable_or_class[huggingface_hub._login-_save_oauth_token]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "0ebe3c1d6a6d00571c88c84ad0850657",
+      "name": "test_consume_relay_pending_fires_once",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "b01e7bba83e1307ba0459ef25089dd01",
+      "name": "test_start_returns_error_when_request_fails",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "00f4ba3be3414e2c437bf932d7f03c8b",
+      "name": "test_poll_device_token_accepts_device_info_and_on_pending",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "b6151c4c821c3f157342491cbed96e56",
+      "name": "test_authorized_session_gets_bounded_ttl",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "cef6aba9dea3fd8d3e0e311a25779bb2",
+      "name": "test_poll_aborts_when_cancel_event_set",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "3786112de6550d0c1936284bb30b3faf",
+      "name": "test_poll_expired_maps_to_expired_status",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "879c210fed95b814a5258f4aa0b19392",
+      "name": "test_cancel_signals_the_polling_thread",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "675079cb9871d8acbd0034bd1b76ae64",
+      "name": "test_private_symbols_are_callable_or_class[huggingface_hub.utils._oauth_device-poll_device_token]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "1b44ab68461afa03ca5dc59af3c94941",
+      "name": "test_consume_relay_pending_false_while_pending",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "2bd32caf764e5e9e5fbc69db258b3408",
+      "name": "test_cleanup_prunes_authorized_after_expiry",
+      "status": "passed",
+      "duration": 0
     }
   ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 94967,
-  "createdAt": 1785141303485,
+  "duration": 95311,
+  "createdAt": 1785168174463,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "6c3ed74e-a5dc-4bad-a3b8-4867cd39fae8",
+    "reportId": "90de641d-34a1-4011-95ad-1c28145bf159",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/30250217233",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/30282548732",
   "href": "awesome/",
   "coverage": 52
 }

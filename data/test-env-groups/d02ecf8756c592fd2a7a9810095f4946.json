@@ -1,1 +1,1 @@
-{"id":"d02ecf8756c592fd2a7a9810095f4946","fullName":"tests.unit_tests.test_app_stop_sleep#test_stop_returns_to_zero_when_awake","name":"test_stop_returns_to_zero_when_awake","status":"passed","testResultsByEnv":{"default":"eea890e766aee2df80bf5ed9ff96c040"}}
+{"id":"d02ecf8756c592fd2a7a9810095f4946","fullName":"tests.unit_tests.test_app_stop_sleep#test_stop_returns_to_zero_when_awake","name":"test_stop_returns_to_zero_when_awake","status":"passed","testResultsByEnv":{"default":"e6b5ec48e7be7ddc90a204c4c4bf2d79"}}

@@ -1,1 +1,1 @@
-{"id":"dada2ec4652c0185677a4d20b66f0d43","fullName":"tests.unit_tests.test_ws_client#test_connect_keeps_default_compression_for_remote_host","name":"test_connect_keeps_default_compression_for_remote_host","status":"passed","testResultsByEnv":{"default":"df0d3e1824ea5c8e8c32e527ed911973"}}
+{"id":"dada2ec4652c0185677a4d20b66f0d43","fullName":"tests.unit_tests.test_ws_client#test_connect_keeps_default_compression_for_remote_host","name":"test_connect_keeps_default_compression_for_remote_host","status":"passed","testResultsByEnv":{"default":"75a27867d8f1556929b10eafd9acc1f2"}}
