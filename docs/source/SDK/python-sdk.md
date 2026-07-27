@@ -1,5 +1,7 @@
 # Python SDK Reference
 
+> **Heads up:** For building and shipping apps, the recommended path is now **[JavaScript & Web Apps](javascript-sdk.md)**. The Python SDK is kept here as a reference for lower-level on-robot control, but is no longer actively developed.
+
 > **💡 Reminder:** The SDK now auto-detects whether it should connect over USB/localhost or over the network, so `ReachyMini()` works out of the box. You can still force a mode with `ReachyMini(connection_mode="localhost_only" | "network")` if needed.
 
 ## Movement
