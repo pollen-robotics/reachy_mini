@@ -9,7 +9,7 @@ Reachy Mini uses a **Client-Server** architecture:
 1.  **The Daemon (Server):** 
     * Runs on the computer connected to the robot (or the simulation).
     * Handles hardware I/O (USB/Serial), safety checks, and sensor reading.
-    * Exposes a REST API (`localhost:8000`) and WebSocket.
+    * Exposes a REST API and WebSocket at `http://<host>:8000` — the host is `localhost` on Lite (daemon on your machine) and `reachy-mini.local` (or the robot's IP) on Wireless.
     
 2.  **The SDK (Client):**
     * Your Python code (`reachy_mini` package).

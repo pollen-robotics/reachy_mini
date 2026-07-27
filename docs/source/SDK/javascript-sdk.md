@@ -178,7 +178,7 @@ Use `robot.addEventListener(name, handler)` — the SDK extends `EventTarget`.
 | `robotsChanged` | `{ robots }` | Robot list updated |
 | `streaming` | `{ sessionId, robotId }` | WebRTC session active |
 | `sessionStopped` | `{ reason }` | Session ended |
-| `state` | `{ head, antennas, body_yaw, motor_mode, is_move_running }` | Robot state update (~500ms; wire shape — see "Receive robot state" above) |
+| `state` | Same shape as the `robotState` property (see above) | Robot state update (~500 ms polled, or ~30 Hz when subscribed via `subscribePose()`; wire shape) |
 | `videoTrack` | `{ track, stream }` | Video track available |
 | `micSupported` | `{ supported }` | Bidirectional audio availability |
 | `error` | `{ source, error }` | Error from `signaling`, `webrtc`, or `robot` |
