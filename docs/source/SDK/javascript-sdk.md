@@ -84,7 +84,7 @@ new ReachyMini({
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `state` | `string` | `"disconnected"`, `"connected"`, or `"streaming"` |
-| `robots` | `Array` | Available robots: `[{ id, meta: { name } }]` |
+| `robots` | `Array` | Available robots: `[{ id, meta: { name }, transport }]`. `transport` is `"wifi"`, `"usb"`, or `"sim"` (simulation mode) |
 | `robotState` | `Object` | Latest `state` event detail — `{ head: number[16], antennas: [rRad, lRad], body_yaw, motor_mode, is_move_running }` (wire shape) |
 | `username` | `string\|null` | HF username after `authenticate()` |
 | `isAuthenticated` | `boolean` | True if a valid HF token is available |
