@@ -1,1 +1,1 @@
-{"id":"ab5b711b41144a292f3a7581fb67393c","fullName":"tests.unit_tests.test_volume_control#test_get_output_volume","name":"test_get_output_volume[pulsectl]","status":"skipped","testResultsByEnv":{"default":"7a84d2ef28b7c6bef13c3350526005da"}}
+{"id":"ab5b711b41144a292f3a7581fb67393c","fullName":"tests.unit_tests.test_volume_control#test_get_output_volume","name":"test_get_output_volume[alsa]","status":"skipped","testResultsByEnv":{"default":"a025c99a0c58113054b1cf6f573af3bd"}}

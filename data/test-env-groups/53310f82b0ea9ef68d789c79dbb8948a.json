@@ -1,1 +1,1 @@
-{"id":"53310f82b0ea9ef68d789c79dbb8948a","fullName":"tests.unit_tests.test_autostart_app#test_set_startup_app_endpoint_persists_and_rearms","name":"test_set_startup_app_endpoint_persists_and_rearms","status":"passed","testResultsByEnv":{"default":"b0458f7da50758b5faa6cb6697093f25"}}
+{"id":"53310f82b0ea9ef68d789c79dbb8948a","fullName":"tests.unit_tests.test_autostart_app#test_set_startup_app_endpoint_persists_and_rearms","name":"test_set_startup_app_endpoint_persists_and_rearms","status":"passed","testResultsByEnv":{"default":"d85c23a6a9c27a86164b2ba185d0236a"}}
