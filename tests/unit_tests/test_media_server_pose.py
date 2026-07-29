@@ -14,6 +14,7 @@ delivery.
 from __future__ import annotations
 
 import logging
+from threading import Lock
 from typing import Any, List, cast
 from unittest.mock import MagicMock
 
@@ -35,10 +36,26 @@ def _make_server() -> GstMediaServer:
     server._pose_subscribers = set()
     server._pose_provider = None
     server._pose_push_source_id = None
+    server._pose_lock = Lock()
     # Stubs for `__del__` -> `close()`, which the destructor calls at GC time.
     server._loop = MagicMock()
     server._bus_sender = MagicMock()
     return server
+
+
+def _stub_timeout_add(
+    monkeypatch: pytest.MonkeyPatch, source_id: int = 4242
+) -> List[Any]:
+    """Record ``GLib.timeout_add`` calls instead of arming a real timer."""
+    added: List[Any] = []
+    from reachy_mini.media import media_server as ms
+
+    def fake_timeout_add(interval: int, fn: Any) -> int:
+        added.append((interval, fn))
+        return source_id
+
+    monkeypatch.setattr(ms.GLib, "timeout_add", fake_timeout_add)
+    return added
 
 
 def test_set_pose_subscription_add_and_remove_is_idempotent() -> None:
@@ -57,25 +74,29 @@ def test_set_pose_subscription_add_and_remove_is_idempotent() -> None:
     assert server._pose_subscribers == set()
 
 
-def test_push_pose_noop_without_subscribers() -> None:
-    """No subscribers: the provider isn't even polled, timer stays alive."""
+def test_push_pose_disarms_without_subscribers() -> None:
+    """No subscribers: the provider isn't polled and the timer is dropped."""
     server = _make_server()
     provider = MagicMock(return_value='{"state": {}, "seq": 1}')
     server._pose_provider = provider
+    server._pose_push_source_id = 4242
 
-    assert server._push_pose() is True
+    assert server._push_pose() is False
     provider.assert_not_called()
+    assert server._pose_push_source_id is None
 
 
-def test_push_pose_noop_without_provider() -> None:
-    """A subscriber but no provider: nothing to send, timer stays alive."""
+def test_push_pose_disarms_without_provider() -> None:
+    """A subscriber but no provider: nothing to push, so the timer is dropped."""
     server = _make_server()
     channel = MagicMock()
     server._pose_channels = {"peer-1": channel}
     server._pose_subscribers = {"peer-1"}
+    server._pose_push_source_id = 4242
 
-    assert server._push_pose() is True
+    assert server._push_pose() is False
     channel.emit.assert_not_called()
+    assert server._pose_push_source_id is None
 
 
 def test_push_pose_skips_tick_when_provider_returns_none() -> None:
@@ -143,22 +164,14 @@ def test_pose_channel_close_drops_channel_and_subscriber() -> None:
     assert "peer-1" not in server._pose_subscribers
 
 
-def test_ensure_pose_push_started_is_idempotent(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_arm_pose_push_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     """The push timer is armed exactly once, even across repeated calls."""
-    added: List[Any] = []
-    from reachy_mini.media import media_server as ms
-
-    def fake_timeout_add(interval: int, fn: Any) -> int:
-        added.append((interval, fn))
-        return 4242
-
-    monkeypatch.setattr(ms.GLib, "timeout_add", fake_timeout_add)
+    added = _stub_timeout_add(monkeypatch)
 
     server = _make_server()
-    server._ensure_pose_push_started()
-    server._ensure_pose_push_started()
+    with server._pose_lock:
+        server._arm_pose_push_locked()
+        server._arm_pose_push_locked()
 
     assert len(added) == 1
     assert added[0][0] == GstMediaServer.POSE_PUSH_INTERVAL_MS
@@ -167,3 +180,98 @@ def test_ensure_pose_push_started_is_idempotent(
     # Clear the fake source id so `__del__` -> `close()` doesn't try to remove
     # a non-existent GLib source at GC time (noisy unraisable warning).
     server._pose_push_source_id = None
+
+
+def test_subscribing_arms_the_push_timer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A peer subscribing is what starts the 30 Hz push, not the connection."""
+    added = _stub_timeout_add(monkeypatch)
+
+    server = _make_server()
+    server._pose_provider = MagicMock(return_value='{"state": {}, "seq": 1}')
+
+    # A connected peer that never subscribes must not cost a periodic wakeup.
+    assert added == []
+
+    server.set_pose_subscription("peer-1", True)
+    assert len(added) == 1
+    assert server._pose_push_source_id == 4242
+
+    # A second subscriber shares the single timer.
+    server.set_pose_subscription("peer-2", True)
+    assert len(added) == 1
+
+    server._pose_push_source_id = None
+
+
+def test_timer_rearms_after_disarming(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Once the last subscriber leaves, the next subscribe re-arms the timer."""
+    added = _stub_timeout_add(monkeypatch)
+
+    server = _make_server()
+    server._pose_provider = MagicMock(return_value='{"state": {}, "seq": 1}')
+
+    server.set_pose_subscription("peer-1", True)
+    server.set_pose_subscription("peer-1", False)
+    # The timer only drops on its next tick, which finds nobody subscribed.
+    assert server._push_pose() is False
+    assert server._pose_push_source_id is None
+
+    server.set_pose_subscription("peer-1", True)
+    assert len(added) == 2
+    assert server._pose_push_source_id == 4242
+
+    server._pose_push_source_id = None
+
+
+def test_set_pose_provider_arms_when_subscribers_already_waiting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A late-wired provider picks up peers that subscribed before it."""
+    added = _stub_timeout_add(monkeypatch)
+
+    server = _make_server()
+    server.set_pose_subscription("peer-1", True)
+    # No provider yet, so nothing to push and nothing armed.
+    assert added == []
+
+    server.set_pose_provider(MagicMock(return_value='{"state": {}, "seq": 1}'))
+    assert len(added) == 1
+
+    server._pose_push_source_id = None
+
+
+def test_close_tolerates_a_half_built_server() -> None:
+    """`__del__` on an instance whose `__init__` raised must stay silent."""
+    server = cast(GstMediaServer, object.__new__(GstMediaServer))
+    server._logger = logging.getLogger("test_pose")
+
+    # No pose attrs, no main loop, no bus: must not raise.
+    server.close()
+
+
+def test_close_disarms_an_armed_push_timer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A live timer is removed from the main loop on shutdown."""
+    removed: List[Any] = []
+    from reachy_mini.media import media_server as ms
+
+    monkeypatch.setattr(ms.GLib, "source_remove", removed.append)
+
+    server = _make_server()
+    server._pose_push_source_id = 4242
+
+    server.close()
+
+    assert removed == [4242]
+    assert server._pose_push_source_id is None
+
+
+def test_consumer_removal_drops_pose_state() -> None:
+    """A peer vanishing without an `on-close` must not pin the timer on."""
+    server = _make_server()
+    server._pose_channels = {"peer-1": MagicMock()}
+    server._pose_subscribers = {"peer-1"}
+
+    server._drop_pose_peer("peer-1")
+
+    assert server._pose_channels == {}
+    assert server._pose_subscribers == set()
