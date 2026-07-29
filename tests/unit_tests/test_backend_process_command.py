@@ -22,6 +22,7 @@ from reachy_mini.io.protocol import (
     ApplyAudioConfigCmd,
     AudioParamPair,
     ClearIncomingAudioCmd,
+    DeleteHfTokenCmd,
     GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
@@ -368,6 +369,33 @@ def test_get_hardware_id(sim_backend: Any, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(hw, "get_hardware_id", lambda: "HW-1234")
     responses = _dispatch(sim_backend, GetHardwareIdCmd())
     assert responses == [{"hardware_id": "HW-1234"}]
+
+
+# ------------------------------------------------------------------
+# Hugging Face sign-out
+# ------------------------------------------------------------------
+
+
+def test_delete_hf_token_ok(
+    sim_backend: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A successful delete_hf_token acks status ok."""
+    import reachy_mini.apps.sources.hf_auth as hf_auth
+
+    monkeypatch.setattr(hf_auth, "delete_hf_token", lambda: True)
+    responses = _dispatch(sim_backend, DeleteHfTokenCmd())
+    assert responses == [{"command": "delete_hf_token", "status": "ok"}]
+
+
+def test_delete_hf_token_error(
+    sim_backend: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed delete_hf_token acks status error (the fail-safe False path)."""
+    import reachy_mini.apps.sources.hf_auth as hf_auth
+
+    monkeypatch.setattr(hf_auth, "delete_hf_token", lambda: False)
+    responses = _dispatch(sim_backend, DeleteHfTokenCmd())
+    assert responses == [{"command": "delete_hf_token", "status": "error"}]
 
 
 # ------------------------------------------------------------------

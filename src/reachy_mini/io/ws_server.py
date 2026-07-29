@@ -85,7 +85,8 @@ class WSServer(AbstractServer):
 
     def _broadcast(self, msg: str) -> None:
         """Thread-safe broadcast to all connected client queues."""
-        if self._loop is None:
+        # No clients: skip the per-tick call_soon_threadsafe wakeup.
+        if self._loop is None or not self._clients:
             return
 
         def _put(msg: str = msg) -> None:

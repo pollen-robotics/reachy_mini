@@ -141,6 +141,18 @@ async def start_app(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/start-app/{app_name}/no-evict")
+async def start_app_no_evict(
+    app_name: str,
+    app_manager: "AppManager" = Depends(get_app_manager),
+) -> AppStatus:
+    """Start an app only when the managed robot slot can be acquired atomically."""
+    try:
+        return await app_manager.start_app(app_name, evict_remote=False)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/restart-current-app")
 async def restart_app(
     app_manager: "AppManager" = Depends(get_app_manager),

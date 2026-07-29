@@ -91,6 +91,8 @@ def test_registered_txt_records_carry_metadata_keys(registered_mdns, expected_mo
     assert props.get("model") == expected_model
     assert props.get("manufacturer") == "Pollen Robotics"
     assert props.get("api") == "rest+ws"
+    assert props.get("robot_name") == "test_robot"
+    assert registered_mdns._info.name == f"test_robot.{SERVICE_TYPE}"
     caps = set((props.get("caps") or "").split(","))
     assert {"camera", "mic", "speaker", "motion", "apps"} <= caps
     # unit_id is only present when a robot is attached. In CI it

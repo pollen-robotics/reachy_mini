@@ -135,6 +135,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             args.fastapi_port,
             wireless_version=args.wireless_version,
         )
+        # Exposed on app.state so the `/api/daemon/robot-name` route can
+        # re-advertise the LAN record live on a rename (BLE setup path).
+        app.state.mdns = mdns
 
         def preload_with_logging() -> None:
             """Download datasets with logging."""
@@ -225,6 +228,23 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
             # Register mDNS service only after the daemon is ready
             mdns.register()
+
+            # Wire the live rename hook now that both the daemon (relay +
+            # status) and the mDNS registration exist. A `set_robot_name`
+            # command then applies without a restart: daemon status + central
+            # relay (via apply_robot_name) and the LAN mDNS record (re-register).
+            daemon_instance = app.state.daemon
+            if daemon_instance.backend is not None:
+
+                def _apply_robot_name_live(
+                    name: str,
+                    _daemon: Daemon = daemon_instance,
+                    _mdns: MdnsServiceRegistration = mdns,
+                ) -> None:
+                    _daemon.apply_robot_name(name)
+                    _mdns.update_name(name)
+
+                daemon_instance.backend.set_robot_name_callback(_apply_robot_name_live)
 
             yield
         finally:
@@ -480,6 +500,17 @@ def run_app(args: Args) -> None:
     handler.setFormatter(logging.Formatter("%(name)s - %(levelname)s - %(message)s"))
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
+
+    # Surface a persisted rename so an operator isn't puzzled when the
+    # advertised name differs from the --robot-name they passed.
+    from reachy_mini.utils.robot_name import get_robot_name as _get_persisted_name
+
+    if _get_persisted_name():
+        logger.info(
+            "Robot name %r comes from a persisted rename and overrides the "
+            "--robot-name default.",
+            args.robot_name,
+        )
 
     # Explicitly configure the apps.manager logger to ensure propagation
     apps_logger = logging.getLogger("reachy_mini.apps.manager")
@@ -783,6 +814,15 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    # A name set by a client (e.g. the mobile app over the data channel) is
+    # persisted on the robot and wins over the CLI default so the rename
+    # survives reboots. Fail-safe: falls back to --robot-name on any error.
+    from reachy_mini.utils.robot_name import get_robot_name as get_persisted_robot_name
+
+    persisted_robot_name = get_persisted_robot_name()
+    if persisted_robot_name:
+        args.robot_name = persisted_robot_name
 
     if args.log_file:
         file_handler = logging.FileHandler(args.log_file, mode="a")

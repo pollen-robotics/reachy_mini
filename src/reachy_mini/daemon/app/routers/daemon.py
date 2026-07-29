@@ -4,11 +4,13 @@ import logging
 import threading
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.robot_app_lock import RobotAppLockStatus
 from reachy_mini.io.protocol import DaemonStatus
 from reachy_mini.utils.hardware_id import get_hardware_id
+from reachy_mini.utils.robot_name import get_robot_name, set_robot_name
 
 from ...daemon import Daemon
 from ..dependencies import get_daemon
@@ -83,6 +85,72 @@ async def restart_daemon(
 async def get_daemon_status(daemon: Daemon = Depends(get_daemon)) -> DaemonStatus:
     """Get the current status of the daemon."""
     return daemon.status()
+
+
+class RobotNameRequest(BaseModel):
+    """Body for setting the robot display name."""
+
+    name: str = Field(..., min_length=1, max_length=64)
+
+
+class RobotNameResponse(BaseModel):
+    """The robot's current display name (``null`` only if none is resolvable)."""
+
+    name: str | None = None
+
+
+@router.get("/robot-name")
+async def get_robot_display_name(
+    daemon: Daemon = Depends(get_daemon),
+) -> RobotNameResponse:
+    """Return the robot's current display name.
+
+    Reports the effective/advertised name: the persisted override when a
+    client has renamed the robot, otherwise the ``--robot-name`` default the
+    daemon is running with. A client can pre-fill a rename field from this
+    without having to fall back to the daemon status for the default.
+    """
+    return RobotNameResponse(name=get_robot_name() or daemon.robot_name)
+
+
+@router.post("/robot-name")
+async def set_robot_display_name(
+    body: RobotNameRequest,
+    request: Request,
+    daemon: Daemon = Depends(get_daemon),
+) -> RobotNameResponse:
+    """Persist a new robot display name and apply it live (no restart).
+
+    Persists the name to disk, then refreshes the advertised copies so the
+    rename takes effect immediately: the daemon status + central relay (via
+    ``Daemon.apply_robot_name``) and the LAN mDNS record. This is the REST
+    entry point used by the BLE setup service; the WebRTC ``set_robot_name``
+    command goes through the same live-apply path on the backend.
+    """
+    stored = set_robot_name(body.name)
+    if stored is None:
+        raise HTTPException(status_code=422, detail="Invalid robot name")
+
+    # Live-apply: daemon status + central relay. Fail-safe so a wiring issue
+    # can't turn a successful persist into an HTTP error.
+    try:
+        daemon.apply_robot_name(stored)
+    except Exception as e:
+        logging.getLogger(__name__).warning(
+            "apply_robot_name failed after rename: %s", e
+        )
+
+    # Re-advertise the LAN mDNS record if the app lifespan wired it up.
+    mdns = getattr(request.app.state, "mdns", None)
+    if mdns is not None:
+        try:
+            mdns.update_name(stored)
+        except Exception as e:
+            logging.getLogger(__name__).warning(
+                "mDNS update_name failed after rename: %s", e
+            )
+
+    return RobotNameResponse(name=stored)
 
 
 @router.get("/hardware-id")

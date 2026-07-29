@@ -153,11 +153,17 @@ class AppManager:
             if keep_remote:
                 self.daemon.robot_app_lock.acquire_local_keeping_remote(app_name)
             elif evict_remote:
-                await self.daemon.robot_app_lock.acquire_local_evicting_remote(
-                    app_name
-                )
+                await self.daemon.robot_app_lock.acquire_local_evicting_remote(app_name)
             elif not self.daemon.robot_app_lock.try_acquire_local(app_name):
                 raise RuntimeError("The robot app slot is already in use")
+
+            # We now own the app slot. Cancel any idle reset the daemon
+            # scheduled when the slot last became free: this local app runs its
+            # own wake/motion sequence and must not fight a stale goto_sleep.
+            # Threadsafe; no-op if the backend loop isn't up.
+            backend = getattr(self.daemon, "backend", None)
+            if backend is not None:
+                backend.cancel_idle_reset()
 
         try:
             # Get module name and Python path for subprocess execution.
@@ -263,9 +269,7 @@ class AppManager:
                 if self.current_app is not None:
                     if returncode == 0:
                         self.current_app.status.state = AppState.DONE
-                        self.logger.getChild("runner").info(
-                            f"App {app_name} finished"
-                        )
+                        self.logger.getChild("runner").info(f"App {app_name} finished")
                     else:
                         self.current_app.status.state = AppState.ERROR
                         error_msg = "\n".join(stderr_lines[-10:])  # Last 10 lines

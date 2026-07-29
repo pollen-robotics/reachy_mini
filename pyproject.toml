@@ -13,7 +13,16 @@ dependencies = [
     "aiohttp>=3.14.0",
     "asgiref",
     "fastapi",
-    "huggingface-hub>=1.17.0,<2.0.0",
+    # Floor is 1.20.1, NOT 1.20.0: the device-code OAuth flow (apps/sources/hf_auth.py)
+    # imports PRIVATE huggingface_hub internals, and the `_oauth_device` module lived at
+    # the top level in 1.20.0 before moving to `utils/` in 1.20.1 (where it has stayed,
+    # import- and signature-identical, through at least 1.24.0). `_login._save_oauth_token`
+    # (refresh-capable token persistence backing get_token()) and `errors.DeviceCodeError`
+    # are likewise private. This private-API contract is guarded in CI by
+    # tests/unit_tests/test_hf_hub_private_api_contract.py, which runs against both the
+    # locked version and (in a dedicated job) the latest version allowed by this range —
+    # so an upstream break surfaces in CI rather than at runtime on a robot.
+    "huggingface-hub>=1.20.1,<2.0.0",
     "jinja2",
     "libusb_package>=1.0.26.3",
     "log-throttling==0.0.3",
@@ -107,6 +116,8 @@ exclude-newer = "7 days"
 
 [tool.uv.exclude-newer-package]
 "pollen_BMI088_imu_library"  = false
+# huggingface-hub is pinned to an exact version (==1.20.1) in [project.dependencies],
+# released well before the 7-day cutoff, so no opt-out is needed here.
 
 [tool.setuptools]
 package-dir = { "" = "src" }

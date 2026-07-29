@@ -32,10 +32,12 @@ from reachy_mini.io.protocol import (
     CancelAudioCmd,
     CancelMoveCmd,
     ClearIncomingAudioCmd,
+    DeleteHfTokenCmd,
     FaceTarget,
     GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
+    GetRobotNameCmd,
     GetStateCmd,
     GetTrackedFaceCmd,
     GetVersionCmd,
@@ -63,6 +65,7 @@ from reachy_mini.io.protocol import (
     SetHeadTrackingCmd,
     SetMicrophoneVolumeCmd,
     SetMotorModeCmd,
+    SetRobotNameCmd,
     SetSpeechOffsetsCmd,
     SetTargetCmd,
     SetTorqueCmd,
@@ -387,6 +390,17 @@ class Backend:
         # in by `Daemon` to auto-start a configured startup app after the robot
         # wakes (however the wake was triggered: on-start, button, or REST).
         self._on_wake_up_callback: Optional[Callable[[], None]] = None
+
+        # In-flight "return to a clean idle state" task, scheduled by
+        # request_idle_reset() when the managed app slot becomes free. Kept so a
+        # fast reconnect (or a local app grabbing the robot) can cancel it
+        # instead of letting a stale goto_sleep fight the new session.
+        self._idle_reset_task: Optional["asyncio.Task[None]"] = None
+        # Synchronous callback fired after a `set_robot_name` command persists
+        # a new name. Wired in by the app lifespan to apply the rename live
+        # (daemon status + central relay + mDNS) so it takes effect without a
+        # restart. Receives the stored (trimmed) name and must return promptly.
+        self._set_robot_name_callback: Optional[Callable[[str], None]] = None
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -1520,6 +1534,56 @@ class Backend:
 
             send_response({"hardware_id": get_hardware_id()})
 
+        elif isinstance(cmd, (GetRobotNameCmd, SetRobotNameCmd)):
+            # Robot display name is a persistent, robot-wide string stored on
+            # disk. A rename is applied live below (status + central relay +
+            # mDNS) via the set-robot-name callback, so no daemon restart is
+            # needed; the persisted value also overrides the --robot-name
+            # default on the next start.
+            from reachy_mini.utils.robot_name import get_robot_name, set_robot_name
+
+            if isinstance(cmd, SetRobotNameCmd):
+                stored = set_robot_name(cmd.name)
+                # Apply the rename live (status + central relay + mDNS) so it
+                # takes effect without a daemon restart. Fail-safe: a wiring
+                # error here must not break the persisted rename or the ack.
+                if stored is not None and self._set_robot_name_callback is not None:
+                    try:
+                        self._set_robot_name_callback(stored)
+                    except Exception as e:  # noqa: BLE001 - never break the cmd loop
+                        self.logger.warning(f"set_robot_name live-apply failed: {e}")
+                send_response(
+                    {
+                        "command": "set_robot_name",
+                        "status": "ok" if stored is not None else "error",
+                        "name": stored if stored is not None else get_robot_name(),
+                    }
+                )
+            else:  # GetRobotNameCmd
+                send_response(
+                    {
+                        "command": "get_robot_name",
+                        "name": get_robot_name(),
+                    }
+                )
+
+        elif isinstance(cmd, DeleteHfTokenCmd):
+            # Sign the robot out of Hugging Face: clears the daemon's stored
+            # token and notifies the central relay (drops it to
+            # WAITING_FOR_TOKEN), so the robot de-registers and disappears
+            # from its owner's list until it is set up again. Fail-safe:
+            # delete_hf_token() never raises (returns False on failure), so
+            # a storage/logout error can't break the command loop.
+            from reachy_mini.apps.sources.hf_auth import delete_hf_token
+
+            ok = delete_hf_token()
+            send_response(
+                {
+                    "command": "delete_hf_token",
+                    "status": "ok" if ok else "error",
+                }
+            )
+
         elif isinstance(
             cmd,
             (
@@ -2433,6 +2497,17 @@ class Backend:
         """
         self._on_wake_up_callback = callback
 
+    def set_robot_name_callback(self, callback: Callable[[str], None]) -> None:
+        """Wire the live-apply hook for the ``set_robot_name`` DataChannel cmd.
+
+        The app lifespan injects a callback that refreshes the advertised
+        name in place (daemon status + central relay + mDNS) so a rename
+        takes effect without a daemon restart. It receives the persisted
+        (trimmed) name and MUST return promptly (any slow work is
+        thread-offloaded on its side).
+        """
+        self._set_robot_name_callback = callback
+
     def setup_media_server(self, media_server: Any) -> None:
         """Connect the backend to the media server.
 
@@ -2480,6 +2555,11 @@ class Backend:
         self._jsonrpc_handler = handler
 
     def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
+        # A fresh command means someone owns the robot again: cancel any pending
+        # idle-reset goto_sleep so it doesn't fight the new session. Runs on the
+        # same loop as the task, so the cancel is race-free.
+        self._cancel_idle_reset()
+
         def send(resp: dict[str, Any]) -> None:
             self._send_webrtc_response(peer_id, resp)
 
@@ -2509,3 +2589,112 @@ class Backend:
     def _send_webrtc_response(self, peer_id: str, response: dict[str, Any]) -> None:
         if self._send_message_to_webrtc:
             self._send_message_to_webrtc(peer_id, json.dumps(response))
+
+    # ------------------------------------------------------------------
+    # Idle reset (clean state when no managed app owns the robot)
+    # ------------------------------------------------------------------
+
+    # Grace period before an idle reset actually moves the robot. A transient
+    # drop (Wi-Fi blip, fast session hand-off, quick app switch) frees the lock
+    # and immediately reschedules a new owner; waiting this long before starting
+    # goto_sleep lets that reconnect cancel the reset *before* any motion, so we
+    # don't start a trajectory only to yank it mid-flight and leave the robot in
+    # an intermediate pose.
+    IDLE_RESET_DEBOUNCE_S: float = 1.5
+
+    def request_idle_reset(self) -> None:
+        """Return the robot to a clean idle state when no managed app owns it.
+
+        Called by the daemon when the shared ``RobotAppLock`` transitions to
+        ``free`` (a remote WebRTC session ended or dropped, or a local app
+        exited). The daemon never resets motor state on session teardown, and
+        clients are not guaranteed to run a clean leave sequence: a crash, a
+        buggy app, or a lost Wi-Fi link all skip it. Without this, whatever
+        motor mode the last app left behind - notably ``gravity_compensation`` -
+        survives into the next session, where the client's ``ensureAwake()``
+        sees ``isAwake() == true`` and skips the wake animation, leaving the
+        robot parked in a weird state.
+
+        Threadsafe and non-blocking: hops onto the backend's own event loop (the
+        one that also handles data-channel commands) and returns immediately.
+        No-op when that loop isn't up yet (e.g. ``--no-media`` daemons, which
+        have no remote sessions anyway).
+        """
+        loop = getattr(self, "_log_loop", None)
+        if loop is None:
+            return
+        loop.call_soon_threadsafe(self._maybe_start_idle_reset)
+
+    def cancel_idle_reset(self) -> None:
+        """Cancel a pending/in-flight idle reset from any thread.
+
+        Called when a new owner grabs the robot from a path that doesn't go
+        through the data channel - notably a local Python app acquiring the app
+        slot (``AppManager.start_app``) - so the daemon's teardown goto_sleep
+        doesn't fight the app's own wake/motion. Threadsafe: hops onto the
+        backend loop that owns the reset task. No-op when that loop isn't up yet.
+        """
+        loop = getattr(self, "_log_loop", None)
+        if loop is None:
+            return
+        loop.call_soon_threadsafe(self._cancel_idle_reset)
+
+    def _cancel_idle_reset(self) -> None:
+        """Cancel an in-flight idle reset. Must run on the backend loop."""
+        task = self._idle_reset_task
+        if task is not None and not task.done():
+            task.cancel()
+        self._idle_reset_task = None
+
+    def _maybe_start_idle_reset(self) -> None:
+        """Kick off a goto_sleep if the robot is still awake. Runs on the loop."""
+        try:
+            if not self.ready.is_set() or self.is_shutting_down:
+                return
+            # Already limp / asleep: a well-behaved client (e.g. the mobile app,
+            # which sleeps + disables on leave) leaves nothing to do, so we skip
+            # the redundant trajectory + sound.
+            if self.get_motor_control_mode() == MotorControlMode.Disabled:
+                return
+            self._cancel_idle_reset()
+            self._idle_reset_task = asyncio.create_task(self._async_idle_reset())
+        except Exception:
+            self.logger.warning("Idle reset scheduling failed", exc_info=True)
+
+    async def _async_idle_reset(self) -> None:
+        """Graceful return to the sleep pose, which ends with motors disabled.
+
+        Starts with a short debounce (``IDLE_RESET_DEBOUNCE_S``): a fast
+        reconnect or a local app grabbing the robot cancels the task during that
+        window, so no motion happens at all on transient drops. Only if the slot
+        stays free past the grace period do we actually goto_sleep.
+
+        Mirrors the reference leave behaviour clients already run by hand
+        (gotoSleep -> motors off). ``goto_sleep()`` finishes with
+        ``set_motor_control_mode(Disabled)``, which also clears
+        ``gravity_compensation_mode`` - so the next session's ``ensureAwake()``
+        correctly triggers a fresh wake.
+        """
+        try:
+            await asyncio.sleep(self.IDLE_RESET_DEBOUNCE_S)
+            # Conditions may have changed during the grace period (shutdown
+            # started, or the robot was already put to sleep by whoever briefly
+            # held the slot). Re-check before committing to the trajectory.
+            if self.is_shutting_down:
+                return
+            if self.get_motor_control_mode() == MotorControlMode.Disabled:
+                return
+            await self.goto_sleep()
+        except asyncio.CancelledError:
+            # A new session (or local app) grabbed the robot before/mid-reset:
+            # let it take over without noise.
+            raise
+        except Exception:
+            self.logger.warning("Idle reset goto_sleep failed", exc_info=True)
+        finally:
+            # Only clear the handle if it still points at *this* task: a
+            # concurrent _cancel_idle_reset()+reschedule may have already
+            # installed a newer task, and blindly nulling would orphan it
+            # (a later cancel would then miss it).
+            if self._idle_reset_task is asyncio.current_task():
+                self._idle_reset_task = None

@@ -145,7 +145,7 @@ def _clone_repo(console: Console, target_path: Path) -> None:
                 "--depth",
                 "1",
                 "-b",
-                "develop",
+                "main",
                 CONVERSATION_APP_REPO,
                 str(tmp_clone),
             ],
