@@ -45,6 +45,8 @@
   ],
   "sideEffects": false,
   "scripts": {
+    "gen:version": "node scripts/gen-version.mjs",
+    "prebuild:sdk": "node scripts/gen-version.mjs",
     "build:sdk": "tsc -p tsconfig.json",
     "build:host": "cd host && vite build && tsc -p tsconfig.build.json",
     "build": "npm run build:sdk && npm run build:host",
