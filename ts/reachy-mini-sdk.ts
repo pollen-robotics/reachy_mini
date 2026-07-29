@@ -64,6 +64,10 @@
 
 export { ReachyMini } from './lib/reachy-mini.js';
 export { degToRad, radToDeg, rpyToMatrix, matrixToRpy } from './lib/math.js';
+/** Build version of this SDK (npm package `version`), build-injected from
+ *  package.json. Also reachable as `ReachyMini.version` / a live
+ *  instance's `.sdkVersion`. */
+export { SDK_VERSION } from './lib/version.js';
 export type {
     RobotInfo,
     RobotState,
