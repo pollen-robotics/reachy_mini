@@ -232,6 +232,9 @@ class GstMediaServer:
         # `_push_pose`). Kept separate from `_data_channels` so a stale pose
         # frame is never head-of-line-blocking a reliable control message.
         self._pose_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
+        # Each peer's `webrtcbin`, kept so the pose channel can be opened
+        # lazily on `subscribe_pose` rather than eagerly for every peer.
+        self._peer_webrtcbins: dict[str, Gst.Element] = {}  # peer_id -> bin
         # Peers that have opted into the pose stream via `subscribe_pose`. The
         # push timer only exists while this set is non-empty, so an idle
         # session (no 3D mirror on screen) costs nothing - not even a wakeup.
@@ -451,6 +454,7 @@ class GstMediaServer:
         self._logger.info(f"consumer removed: {peer_id}")
         self._cleanup_incoming_audio(peer_id)
         self._drop_pose_peer(peer_id)
+        self._peer_webrtcbins.pop(peer_id, None)
         # Cancel any outstanding watchdog for this peer; the consumer
         # is gone so there's nothing left to police.
         self._teardown_negotiation_watchdog(peer_id)
@@ -1782,11 +1786,14 @@ class GstMediaServer:
         else:
             self._logger.error(f"Failed to create data channel for peer {peer_id}")
 
-        # Second channel for the pushed pose stream. Created right after the
-        # control channel (before the SDP offer) so it rides the same SCTP
-        # association; additional data channels are negotiated in-band via
-        # DCEP, so this needs no separate renegotiation.
-        self._setup_pose_channel(peer_id, webrtcbin)
+        # The pose channel is deliberately NOT created here. Opening a second
+        # channel for every peer breaks any client that predates label-based
+        # routing: such a client keeps the *last* channel it is handed as its
+        # command channel, so its commands would end up on the pose channel,
+        # which carries no message handler. We keep the webrtcbin instead and
+        # open the channel on demand from `set_pose_subscription`; a client
+        # that never asks for pose therefore never sees a second channel.
+        self._peer_webrtcbins[peer_id] = webrtcbin
 
     def set_pose_provider(
         self, provider: Optional[Callable[[], Optional[str]]]
@@ -1811,8 +1818,10 @@ class GstMediaServer:
 
         Driven by the backend's `subscribe_pose`/`unsubscribe_pose` handling,
         so this runs on the backend's asyncio thread rather than the GLib main
-        loop. Idempotent. Subscribing arms the push timer; the timer disarms
-        itself once the last subscriber leaves.
+        loop. Idempotent. Subscribing opens the peer's pose channel if it has
+        none yet and arms the push timer; the timer disarms itself once the
+        last subscriber leaves. The channel is kept open for the rest of the
+        session: unsubscribing only stops the frames.
         """
         with self._pose_lock:
             if enabled:
@@ -1822,11 +1831,36 @@ class GstMediaServer:
             else:
                 self._pose_subscribers.discard(peer_id)
         if enabled:
+            # Touching the peer's webrtcbin has to happen on the GLib main
+            # loop, not on the caller's asyncio thread.
+            GLib.idle_add(self._open_pose_channel_if_needed, peer_id)
             self._logger.info(f"Pose stream subscribed by peer {peer_id}")
         else:
             self._logger.info(f"Pose stream unsubscribed by peer {peer_id}")
 
+    def _open_pose_channel_if_needed(self, peer_id: str) -> bool:
+        """Create the peer's pose channel on first subscribe.
+
+        Runs on the GLib main loop (scheduled by `set_pose_subscription`),
+        which also serialises the check-then-create against a second
+        subscribe. Returns ``False`` so the idle source fires once.
+        """
+        if peer_id in self._pose_channels:
+            return False
+        webrtcbin = self._peer_webrtcbins.get(peer_id)
+        if webrtcbin is None:
+            self._logger.warning(
+                f"No webrtcbin for peer {peer_id}, cannot open pose channel"
+            )
+            return False
+        self._setup_pose_channel(peer_id, webrtcbin)
+        return False
+
     def _setup_pose_channel(self, peer_id: str, webrtcbin: Gst.Element) -> None:
+        # Opened mid-session, after the SDP exchange: extra data channels are
+        # negotiated in-band via DCEP, so this needs no renegotiation and the
+        # client just sees another `ondatachannel`.
+        #
         # Unreliable + unordered: pose is a "latest value wins" stream, so we
         # never want a lost frame to be retransmitted (it'd already be stale)
         # nor to head-of-line-block the frames behind it.
@@ -1897,7 +1931,9 @@ class GstMediaServer:
 
         Called both on pose-channel close and on consumer removal: a peer can
         vanish (ICE failure, killed tab) without `on-close` ever firing, and a
-        lingering subscriber would keep the push timer armed forever.
+        lingering subscriber would keep the push timer armed forever. The
+        peer's webrtcbin outlives this (see `_consumer_removed`) so a peer
+        whose pose channel closed can still re-subscribe.
         """
         self._pose_channels.pop(peer_id, None)
         with self._pose_lock:

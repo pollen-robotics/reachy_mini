@@ -33,6 +33,7 @@ def _make_server() -> GstMediaServer:
     server = cast(GstMediaServer, object.__new__(GstMediaServer))
     server._logger = logging.getLogger("test_pose")
     server._pose_channels = {}
+    server._peer_webrtcbins = {}
     server._pose_subscribers = set()
     server._pose_provider = None
     server._pose_push_source_id = None
@@ -58,8 +59,31 @@ def _stub_timeout_add(
     return added
 
 
-def test_set_pose_subscription_add_and_remove_is_idempotent() -> None:
+def _stub_idle_add(monkeypatch: pytest.MonkeyPatch, run: bool = False) -> List[Any]:
+    """Record ``GLib.idle_add`` calls, optionally running them inline.
+
+    ``set_pose_subscription`` defers pose-channel creation to the GLib main
+    loop, which no test runs, so the scheduled callback has to be captured
+    (and invoked by hand when the test cares about the result).
+    """
+    scheduled: List[Any] = []
+    from reachy_mini.media import media_server as ms
+
+    def fake_idle_add(fn: Any, *args: Any) -> int:
+        scheduled.append((fn, args))
+        if run:
+            fn(*args)
+        return 1
+
+    monkeypatch.setattr(ms.GLib, "idle_add", fake_idle_add)
+    return scheduled
+
+
+def test_set_pose_subscription_add_and_remove_is_idempotent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Adding/removing a peer is a set op - safe to repeat."""
+    _stub_idle_add(monkeypatch)
     server = _make_server()
 
     server.set_pose_subscription("peer-1", True)
@@ -185,6 +209,7 @@ def test_arm_pose_push_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_subscribing_arms_the_push_timer(monkeypatch: pytest.MonkeyPatch) -> None:
     """A peer subscribing is what starts the 30 Hz push, not the connection."""
     added = _stub_timeout_add(monkeypatch)
+    _stub_idle_add(monkeypatch)
 
     server = _make_server()
     server._pose_provider = MagicMock(return_value='{"state": {}, "seq": 1}')
@@ -206,6 +231,7 @@ def test_subscribing_arms_the_push_timer(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_timer_rearms_after_disarming(monkeypatch: pytest.MonkeyPatch) -> None:
     """Once the last subscriber leaves, the next subscribe re-arms the timer."""
     added = _stub_timeout_add(monkeypatch)
+    _stub_idle_add(monkeypatch)
 
     server = _make_server()
     server._pose_provider = MagicMock(return_value='{"state": {}, "seq": 1}')
@@ -228,6 +254,7 @@ def test_set_pose_provider_arms_when_subscribers_already_waiting(
 ) -> None:
     """A late-wired provider picks up peers that subscribed before it."""
     added = _stub_timeout_add(monkeypatch)
+    _stub_idle_add(monkeypatch)
 
     server = _make_server()
     server.set_pose_subscription("peer-1", True)
@@ -275,3 +302,68 @@ def test_consumer_removal_drops_pose_state() -> None:
 
     assert server._pose_channels == {}
     assert server._pose_subscribers == set()
+
+
+def test_subscribing_opens_the_pose_channel(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The pose channel is opened on subscribe, never for every peer.
+
+    A client predating label-based routing keeps the last channel it is
+    handed as its command channel, so handing it an unsolicited second one
+    would silently break its control path.
+    """
+    _stub_timeout_add(monkeypatch)
+    _stub_idle_add(monkeypatch, run=True)
+
+    server = _make_server()
+    server._pose_provider = MagicMock(return_value='{"state": {}, "seq": 1}')
+    webrtcbin = MagicMock()
+    server._peer_webrtcbins = {"peer-1": webrtcbin}
+
+    # Connected but not subscribed: no channel has been created.
+    assert webrtcbin.emit.call_count == 0
+
+    server.set_pose_subscription("peer-1", True)
+
+    labels = [c.args[1] for c in webrtcbin.emit.call_args_list]
+    assert labels == ["pose"]
+    assert "peer-1" in server._pose_channels
+
+    server._pose_push_source_id = None
+
+
+def test_pose_channel_is_opened_once_per_peer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-subscribing reuses the channel instead of opening another."""
+    _stub_timeout_add(monkeypatch)
+    _stub_idle_add(monkeypatch, run=True)
+
+    server = _make_server()
+    server._pose_provider = MagicMock(return_value='{"state": {}, "seq": 1}')
+    webrtcbin = MagicMock()
+    server._peer_webrtcbins = {"peer-1": webrtcbin}
+
+    server.set_pose_subscription("peer-1", True)
+    server.set_pose_subscription("peer-1", False)
+    server.set_pose_subscription("peer-1", True)
+
+    assert webrtcbin.emit.call_count == 1
+
+    server._pose_push_source_id = None
+
+
+def test_subscribe_without_a_known_peer_does_not_raise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A subscribe for a peer whose webrtcbin is gone is logged, not fatal."""
+    _stub_timeout_add(monkeypatch)
+    _stub_idle_add(monkeypatch, run=True)
+
+    server = _make_server()
+    server._pose_provider = MagicMock(return_value='{"state": {}, "seq": 1}')
+
+    server.set_pose_subscription("ghost-peer", True)
+
+    assert server._pose_channels == {}
+
+    server._pose_push_source_id = None

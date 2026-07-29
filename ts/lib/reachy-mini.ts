@@ -698,14 +698,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
             this._pc!.ondatachannel = (e) => {
                 const ch = e.channel;
-                // The daemon opens a second, unreliable/unordered channel
-                // labelled "pose" that *pushes* the robot state at ~30 Hz
-                // (see media_server `_setup_pose_channel`). It carries the
-                // same `{state:{...}}` envelope as a get_state reply, so we
-                // route it through the same handler - but it must NOT gate
-                // session readiness (that's the reliable control channel's
-                // job) nor become `_dc` (commands must never ride the lossy
-                // channel).
+                // On `subscribe_pose` the daemon opens a second,
+                // unreliable/unordered channel labelled "pose" that *pushes*
+                // the robot state at ~30 Hz (see media_server
+                // `_setup_pose_channel`), so this can fire mid-session. It
+                // carries the same `{state:{...}}` envelope as a get_state
+                // reply, so we route it through the same handler - but it
+                // must NOT gate session readiness (that's the reliable
+                // control channel's job) nor become `_dc` (commands must
+                // never ride the lossy channel).
                 if (ch.label === 'pose') {
                     // Fresh channel (new session or daemon restart): the
                     // daemon's seq counter may have reset, so forget the old
