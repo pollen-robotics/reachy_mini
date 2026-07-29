@@ -28,6 +28,11 @@ export interface OAuthState {
   /** Boot started from an OAuth redirect (i.e. `oauth-pending`
    *  flag was set). Reset once `isAuthenticated` flips true. */
   isPostOauthReturn: boolean;
+  /** `false` until the boot-time `authenticate()` settles (or we
+   *  know synchronously there's nothing to resolve). The shell
+   *  uses this to keep a neutral splash up instead of flashing
+   *  `SignInView` while the cached token is still resolving. */
+  authResolved: boolean;
   /** Async wrapper around `sdk.login()`. */
   signIn(): Promise<void>;
   /** Sync wrapper around `sdk.logout()` + mark signed-out. */
@@ -64,6 +69,13 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
   const [isPostOauthReturn, setPostOauth] = useState<boolean>(() =>
     readOAuthPendingOnce(),
   );
+  // Whether the boot-time auth resolution has settled. Starts true only when
+  // there's nothing async to wait for: the SDK already reports authenticated,
+  // or the user explicitly signed out earlier. Otherwise we must wait for
+  // `authenticate()` before deciding between SignInView and the picker.
+  const [authResolved, setAuthResolved] = useState<boolean>(() =>
+    Boolean(sdk?.isAuthenticated) || isUserSignedOut(),
+  );
 
   // 2. Try to authenticate from cached tokens once the SDK is
   //    available. Skip if the user explicitly signed out earlier.
@@ -81,7 +93,11 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
   //    until the next sign-out / page reload.
   useEffect(() => {
     if (!sdk) return;
-    if (isUserSignedOut()) return;
+    if (isUserSignedOut()) {
+      // Nothing to resolve: we already know the user is signed out.
+      setAuthResolved(true);
+      return;
+    }
     let alive = true;
     void (async () => {
       try {
@@ -91,6 +107,9 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
         setUserName(sdk.username);
       } catch (err) {
         console.warn('[reachy-mini-sdk/host] authenticate() threw', err);
+      } finally {
+        // Settled either way - the shell can now pick a definite view.
+        if (alive) setAuthResolved(true);
       }
     })();
     return () => {
@@ -185,6 +204,7 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
     isAuthenticated,
     userName,
     isPostOauthReturn,
+    authResolved,
     signIn,
     signOut,
   };

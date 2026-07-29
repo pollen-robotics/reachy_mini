@@ -9,7 +9,7 @@
  *
  * Layout (signed in, streaming):
  *
- *   [ logo ]  Telepresence  [ ⏻ End session ]  [ avatar @user ▾ ]
+ *   [ logo ]  Telepresence  [ End session ⏻ ]  [ avatar @user ▾ ]
  *
  * UX rationale
  * ────────────
@@ -42,6 +42,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 
 import { reachyHeadSvg } from '../assets';
+import { RADIUS } from '../lib/tokens';
 import { IdentityChipBar } from '../ui/design/IdentityChipBar';
 
 export type HostPhase =
@@ -183,12 +184,12 @@ export function TopBar({
             size="small"
             onClick={handleEndSession}
             disabled={isStopping}
-            startIcon={
-              // Wrap both the icon and the spinner in a fixed 18x18
-              // slot so the button width does NOT shift when we swap
-              // glyphs during teardown. `CircularProgress` and
-              // `PowerSettingsNewIcon` otherwise render at slightly
-              // different intrinsic sizes.
+            endIcon={
+              // Power glyph sits AFTER the label. Wrap both it and the
+              // spinner in a fixed 18x18 slot so the button width does
+              // NOT shift when we swap glyphs during teardown.
+              // `CircularProgress` and `PowerSettingsNewIcon` otherwise
+              // render at slightly different intrinsic sizes.
               <Box
                 sx={{
                   width: 18,
@@ -214,7 +215,10 @@ export function TopBar({
               fontWeight: 700,
               py: 0.7,
               px: 2,
-              borderRadius: 1.5,
+              // Crisp, squared-off corners matching the Reachy ecosystem
+              // (px value, not the sx multiplier which would scale off
+              // theme.shape.borderRadius = 12 and read as ~18px).
+              borderRadius: `${RADIUS.md}px`,
               textTransform: 'none',
               lineHeight: 1.1,
             }}

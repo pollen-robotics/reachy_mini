@@ -209,8 +209,14 @@ function ReachyHostShellNormal({
 
   /* ─────────────────── External hooks ─────────────────── */
 
-  const { isAuthenticated, userName, isPostOauthReturn, signIn, signOut } =
-    useOAuth(sdk);
+  const {
+    isAuthenticated,
+    userName,
+    isPostOauthReturn,
+    authResolved,
+    signIn,
+    signOut,
+  } = useOAuth(sdk);
   const hfToken = isAuthenticated ? readToken() : null;
   const hfProfile = useHfProfile(hfToken);
   // Prefer the HF whoami payload's avatar + canonical username
@@ -503,6 +509,25 @@ function ReachyHostShellNormal({
     (embedAppState.phase === 'boot' || embedAppState.phase === 'connecting');
   const showLeavingOverlay = hostPhase === 'leaving';
 
+  // Neutral covering splash while auth is still settling, so neither
+  // `SignInView` nor a naked `PickerView` flashes during the async
+  // `authenticate()` + phase transition:
+  //   - post-OAuth return: from boot through the flip to `picking`, until the
+  //     WelcomeBackOverlay takes over (`welcomeBackShown`);
+  //   - auto-login: the boot window while `authenticate()` resolves, plus the
+  //     one-frame gap after it confirms auth but before the phase flips to
+  //     `picking` (`isAuthenticated` true while still `signing-in`).
+  const showPostOAuthSplash =
+    isPostOauthReturn &&
+    !welcomeBackShown &&
+    (hostPhase === 'signing-in' || hostPhase === 'picking');
+  const showBootSplash =
+    !isPostOauthReturn &&
+    !welcomeBackShown &&
+    hostPhase === 'signing-in' &&
+    (!authResolved || isAuthenticated);
+  const showAuthSplash = showPostOAuthSplash || showBootSplash;
+
   return (
     <>
       <GlobalStyles
@@ -560,13 +585,16 @@ function ReachyHostShellNormal({
             />
           )}
 
-          {hostPhase === 'signing-in' && !isPostOauthReturn && (
-            <SignInView
-              appName={appName}
-              isLocalDevMissingConfig={isLocalDevMissingConfig}
-              onSignIn={signIn}
-            />
-          )}
+          {hostPhase === 'signing-in' &&
+            authResolved &&
+            !isAuthenticated &&
+            !isPostOauthReturn && (
+              <SignInView
+                appName={appName}
+                isLocalDevMissingConfig={isLocalDevMissingConfig}
+                onSignIn={signIn}
+              />
+            )}
 
           {hostPhase === 'picking' && (
             <PickerView
@@ -601,14 +629,12 @@ function ReachyHostShellNormal({
         </Box>
       </Stack>
 
-      {/* OAuth return leg: cover the screen the moment we know we
-       *  came back from a redirect, so the "Continue with Hugging
-       *  Face" button never flashes while `authenticate()` resolves
-       *  the cached token. Hands off to WelcomeBackOverlay (zIndex
-       *  1300) once the username lands. */}
-      {hostPhase === 'signing-in' && isPostOauthReturn && !welcomeBackShown && (
-        <PostOAuthSplash />
-      )}
+      {/* Covering splash for both boot legs (post-OAuth return AND
+       *  auto-login), so the "Continue with Hugging Face" button and
+       *  a naked picker never flash while `authenticate()` resolves
+       *  and the phase transitions. Hands off to WelcomeBackOverlay
+       *  (zIndex 1300) once the username lands. */}
+      {showAuthSplash && <PostOAuthSplash />}
 
       {welcomeBackShown && (
         <WelcomeBackOverlay
