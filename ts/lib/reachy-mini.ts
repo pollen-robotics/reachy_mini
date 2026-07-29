@@ -136,6 +136,20 @@ const ICE_FAILED_GRACE_MS = 1000;
  */
 const MAX_VISIBILITY_DEFER_MS = 60_000;
 
+/**
+ * How long a pushed pose frame keeps the periodic `get_state` poll on hold.
+ *
+ * Poll replies carry no `seq`, so they slip past the stale-frame guard: a
+ * reply that crosses a fresher pushed frame would rewind the very mirror the
+ * stream exists to smooth. While frames flow at ~30 Hz there is nothing left
+ * for the poll to add, so it stands down. Keying that on frame arrival rather
+ * than on `_poseSubRefs` keeps the poll running against a daemon that doesn't
+ * know `subscribe_pose`, and brings it back on its own if the stream stalls.
+ * A little over one 500 ms poll period, so a couple of dropped frames don't
+ * flip it back and forth.
+ */
+const POSE_STREAM_FRESH_MS = 750;
+
 export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Config ──────────────────────────────────────────────────────────
@@ -154,6 +168,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     // out of order (older seq) are dropped so a late packet can't rewind the
     // live mirror. `null` until the first pose frame.
     private _lastPoseSeq: number | null = null;
+    // When the last pushed pose frame was applied, used to park the periodic
+    // `get_state` poll while the stream is live (see POSE_STREAM_FRESH_MS).
+    private _lastPoseFrameAt = 0;
     // Local refcount of pose-stream consumers (the 3D mirror, the wizard's
     // move-end watcher, ...). The daemon's subscription is a per-peer boolean
     // (not refcounted), so we only send `unsubscribe_pose` once the LAST local
@@ -719,6 +736,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                             if (this._lastPoseSeq !== null && msg.seq <= this._lastPoseSeq) return;
                             this._lastPoseSeq = msg.seq;
                         }
+                        this._lastPoseFrameAt = Date.now();
                         this._handleRobotMessage(msg);
                     };
                     return;
@@ -1925,7 +1943,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             // unsubscribed on the daemon). Sent raw so it doesn't touch the
             // local refcount, which already reflects the live consumer count.
             if (this._poseSubRefs > 0) this._sendCommand({ type: 'subscribe_pose' });
-            this._stateRefreshInterval = setInterval(() => this.requestState(), 500);
+            // A fresh session has received no pose frame yet, so a timestamp
+            // left over from the previous one must not hold off the poll.
+            this._lastPoseFrameAt = 0;
+            this._stateRefreshInterval = setInterval(() => {
+                // Skip while the pose stream is already feeding state; see
+                // POSE_STREAM_FRESH_MS.
+                if (Date.now() - this._lastPoseFrameAt < POSE_STREAM_FRESH_MS) return;
+                this.requestState();
+            }, 500);
             this._emit('streaming', { sessionId: this._sessionId!, robotId: this._selectedRobotId! });
             this._sessionResolve();
             this._sessionResolve = null;

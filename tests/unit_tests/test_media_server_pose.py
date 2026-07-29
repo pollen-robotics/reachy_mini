@@ -352,10 +352,14 @@ def test_pose_channel_is_opened_once_per_peer(
     server._pose_push_source_id = None
 
 
-def test_subscribe_without_a_known_peer_does_not_raise(
+def test_subscribe_without_a_known_peer_drops_the_subscription(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A subscribe for a peer whose webrtcbin is gone is logged, not fatal."""
+    """A subscribe for a peer whose webrtcbin is gone is logged, not fatal.
+
+    The peer must not stay subscribed either, or the timer would keep
+    building a frame 30 times a second for a peer with no channel.
+    """
     _stub_timeout_add(monkeypatch)
     _stub_idle_add(monkeypatch, run=True)
 
@@ -365,5 +369,29 @@ def test_subscribe_without_a_known_peer_does_not_raise(
     server.set_pose_subscription("ghost-peer", True)
 
     assert server._pose_channels == {}
+    assert server._pose_subscribers == set()
+    # Nothing left to push, so the next tick drops the timer.
+    assert server._push_pose() is False
+
+    server._pose_push_source_id = None
+
+
+def test_failed_channel_creation_drops_the_subscription(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`create-data-channel` returning null must not leave a ghost subscriber."""
+    _stub_timeout_add(monkeypatch)
+    _stub_idle_add(monkeypatch, run=True)
+
+    server = _make_server()
+    server._pose_provider = MagicMock(return_value='{"state": {}, "seq": 1}')
+    webrtcbin = MagicMock()
+    webrtcbin.emit.return_value = None  # GStreamer refused the channel
+    server._peer_webrtcbins = {"peer-1": webrtcbin}
+
+    server.set_pose_subscription("peer-1", True)
+
+    assert server._pose_channels == {}
+    assert server._pose_subscribers == set()
 
     server._pose_push_source_id = None

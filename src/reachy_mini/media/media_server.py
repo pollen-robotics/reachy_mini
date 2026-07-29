@@ -1844,6 +1844,10 @@ class GstMediaServer:
         Runs on the GLib main loop (scheduled by `set_pose_subscription`),
         which also serialises the check-then-create against a second
         subscribe. Returns ``False`` so the idle source fires once.
+
+        A peer we can't open a channel for is dropped from the subscribers:
+        leaving it there would keep the timer armed, building a state frame
+        30 times a second and sending it nowhere until the peer disconnects.
         """
         if peer_id in self._pose_channels:
             return False
@@ -1852,11 +1856,13 @@ class GstMediaServer:
             self._logger.warning(
                 f"No webrtcbin for peer {peer_id}, cannot open pose channel"
             )
+            self._drop_pose_subscription(peer_id)
             return False
-        self._setup_pose_channel(peer_id, webrtcbin)
+        if not self._setup_pose_channel(peer_id, webrtcbin):
+            self._drop_pose_subscription(peer_id)
         return False
 
-    def _setup_pose_channel(self, peer_id: str, webrtcbin: Gst.Element) -> None:
+    def _setup_pose_channel(self, peer_id: str, webrtcbin: Gst.Element) -> bool:
         # Opened mid-session, after the SDP exchange: extra data channels are
         # negotiated in-band via DCEP, so this needs no renegotiation and the
         # client just sees another `ondatachannel`.
@@ -1870,12 +1876,13 @@ class GstMediaServer:
         channel = webrtcbin.emit("create-data-channel", "pose", options)
         if not channel:
             self._logger.error(f"Failed to create pose channel for peer {peer_id}")
-            return
+            return False
         self._logger.debug(f"Pose channel created for peer {peer_id}")
         self._pose_channels[peer_id] = channel
         channel.connect("on-open", self._on_pose_channel_open, peer_id)
         channel.connect("on-close", self._on_pose_channel_close, peer_id)
         channel.connect("on-error", self._on_data_channel_error, peer_id)
+        return True
 
     def _arm_pose_push_locked(self) -> None:
         """Arm the periodic pose-push timer (idempotent).
@@ -1936,6 +1943,10 @@ class GstMediaServer:
         whose pose channel closed can still re-subscribe.
         """
         self._pose_channels.pop(peer_id, None)
+        self._drop_pose_subscription(peer_id)
+
+    def _drop_pose_subscription(self, peer_id: str) -> None:
+        """Forget a peer's pose subscription."""
         with self._pose_lock:
             self._pose_subscribers.discard(peer_id)
 
