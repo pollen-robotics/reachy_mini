@@ -286,6 +286,13 @@ export interface ReachyMiniInstance extends EventTarget {
     readonly preselectedRobotId: string | null;
     /** `true` iff `preselectedRobotId !== null`. UX branching helper. */
     readonly isEmbedded: boolean;
+    /**
+     * Build version of this SDK (npm package `version`), injected from
+     * package.json at build time. The JS SDK's OWN version — distinct from
+     * `getVersion()`, which asks the DAEMON its version over the data
+     * channel. `0.0.0-managed-by-ci` means an unreleased/branch build.
+     */
+    readonly sdkVersion: string;
 
     /** Underlying RTCPeerConnection. Apps can read it to inspect
      *  audio / video transceivers. */
@@ -444,9 +451,14 @@ export interface ReachyMiniInstance extends EventTarget {
     cancelAudio(uploadId?: string | null): boolean;
 }
 
-export type ReachyMiniConstructor = new (
+export type ReachyMiniConstructor = (new (
     options?: ReachyMiniOptions,
-) => ReachyMiniInstance;
+) => ReachyMiniInstance) & {
+    /** Build version of the SDK (npm package `version`), reachable without
+     *  an instance via `ReachyMini.version`. Mirror of the instance
+     *  `sdkVersion`. */
+    readonly version: string;
+};
 
 /**
  * Internal "session reject" error shape. Surfaced by `startSession()`

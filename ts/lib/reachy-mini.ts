@@ -10,6 +10,7 @@ import {
 } from '@huggingface/hub';
 
 import { degToRad, rpyToMatrix } from './math.js';
+import { SDK_VERSION } from './version.js';
 import {
     consumeFragmentCredentials,
     readPreselectedRobotIdFromUrl,
@@ -284,6 +285,19 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     get audioMuted(): boolean { return this._audioMuted; }
     get preselectedRobotId(): string | null { return this._preselectedRobotId; }
     get isEmbedded(): boolean { return this._preselectedRobotId !== null; }
+
+    /**
+     * Build version of this SDK (npm package `version`), injected from
+     * package.json at build time. This is the JS SDK's OWN version and is
+     * distinct from `getVersion()`, which asks the DAEMON its version over
+     * the data channel. `0.0.0-managed-by-ci` means an unreleased/branch
+     * build (npm releases carry a real semver).
+     */
+    get sdkVersion(): string { return SDK_VERSION; }
+
+    /** Same value as the instance `sdkVersion`, reachable without an
+     *  instance: `ReachyMini.version`. */
+    static get version(): string { return SDK_VERSION; }
 
     /**
      * Internal: try to honour the `autoStartFromUrl` constructor
