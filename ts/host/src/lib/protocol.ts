@@ -101,8 +101,19 @@ export interface HostInitMsg {
   hfToken?: string;
   /** HF account user name, when known. */
   userName?: string | null;
-  /** Robot ID selected by the host's picker. */
+  /** Robot ID selected by the host's picker. Unstable: the central
+   *  peer id rotates on every relay reconnect, so the embed treats
+   *  this as a starting point and re-resolves the live id from
+   *  `robotHardwareId` right before `startSession()`. */
   robotPeerId: string;
+  /** Stable hardware id of the selected robot (central
+   *  `meta.hardware_id`), when the daemon exposes one. Lets the embed
+   *  re-resolve the CURRENT `robotPeerId` from central just before
+   *  dialing, so a rotated peer id (long iframe cold-start, relay
+   *  reconnect) doesn't strand the app on a dead producer. Omitted for
+   *  daemons too old to advertise it - the embed then uses
+   *  `robotPeerId` as-is. */
+  robotHardwareId?: string | null;
   /** Optional opaque payload from `?config=<base64>` or from the
    *  mobile-app handoff. App is responsible for parsing /
    *  validating. */
@@ -247,6 +258,14 @@ export interface CredsBundle {
   hfToken?: string | null;
   userName?: string | null;
   robotPeerId: string;
+  /** Stable hardware id of the selected robot (central
+   *  `meta.hardware_id`), when the daemon exposes one. Lets the embed
+   *  re-resolve the CURRENT `robotPeerId` from central just before
+   *  dialing, so a rotated peer id (long iframe cold-start, relay
+   *  reconnect) doesn't strand the app on a dead producer. Omitted for
+   *  daemons too old to advertise it - the embed then uses
+   *  `robotPeerId` as-is. */
+  robotHardwareId?: string | null;
   signalingUrl: string;
   theme: ThemeMode;
   config: ConfigPayload;

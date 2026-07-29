@@ -7,8 +7,8 @@
  *   ┌──────────────────────────────────────────┐
  *   │              (reachy-buste)              │
  *   │                                          │
- *   │            Your Reachies                 │
- *   │   N online · linked to your HF account   │
+ *   │        Your Reachies      ( ↻ )         │  ← discreet auto-spinner,
+ *   │   N online · linked to your HF account   │    right of the title
  *   │                                          │
  *   │   ┌────────────────────────────────┐     │
  *   │   │ [reachy] ● Name             >  │     │
@@ -16,23 +16,27 @@
  *   │   ┌────────────────────────────────┐     │
  *   │   │ [reachy] ● Other            🔒 │     │  (busy)
  *   │   └────────────────────────────────┘     │
- *   │                                          │
- *   │  ────────────────────────────────────────│
- *   │              ↻ Refresh                   │  Sticky bottom
  *   └──────────────────────────────────────────┘
  *
  *  - Hero illustration: `reachy-buste.svg`, same asset as the
  *    splash, gives the screen a brand identity beyond the cards.
  *  - Robot cards: avatar + name + hardware-id tag + trailing
  *    chevron (or lock when busy).
- *  - Sticky refresh: pinned to the bottom, out of the scrollable
- *    area, so it's always one tap away.
+ *  - Refresh: NOT a button anymore. The list refreshes on its own
+ *    (realtime SSE + a 60 s safety-net poll in `useRobots`), so the
+ *    former sticky "Refresh" button was pure redundancy. Mirroring
+ *    the mobile ScanScreen, it's now a discreet NON-interactive
+ *    spinner to the right of the title, shown only while a fetch is
+ *    in flight (with a min-visible floor + trailing debounce so a
+ *    fast fetch isn't clipped and a burst reads as one spin).
+ *  - Quiet initial load: the very first fetch (no data yet) collapses
+ *    the whole screen to a single centered spinner - no hero, no
+ *    header - so the first paint is calm while we wait on central.
  */
 import type { JSX } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
-  Button,
   CircularProgress,
   ListItemButton,
   Stack,
@@ -52,9 +56,15 @@ import { VariantTag } from '../ui/design/MetaPill';
 
 export interface PickerViewProps {
   robots: RobotInfo[];
-  /** `true` while the picker is fetching its first robot list or
-   *  the user just clicked "Refresh" - drives the header spinner. */
+  /** Any in-flight central fetch (initial load, safety-net poll, or
+   *  SSE-triggered refetch). Drives the discreet auto-spinner to the
+   *  right of the title. */
   isRefreshing: boolean;
+  /** `true` only on the very first fetch with no data yet. Drives the
+   *  quiet initial paint (a bare centered spinner, no hero / header).
+   *  Distinct from `isRefreshing`, which is also `true` on background
+   *  polls once the list is populated. */
+  isLoading?: boolean;
   /** Last error message from the central listener / REST fetch,
    *  or `null` if everything's healthy. Surfaces as an error state
    *  card when the list is empty so the user knows the screen is
@@ -62,21 +72,19 @@ export interface PickerViewProps {
   error?: string | null;
   preselectedRobotId: string | null;
   onSelect(robotId: string): void;
-  /** Asks the picker source to re-fetch the robot list. Defaults
-   *  to a no-op if the host has nothing to refresh; the spinner
-   *  still plays for ~1 s as visual feedback. */
-  onRefresh?(): void;
 }
 
 export function PickerView({
   robots,
   isRefreshing,
+  isLoading = false,
   error,
   preselectedRobotId,
   onSelect,
-  onRefresh,
 }: PickerViewProps): JSX.Element {
   const hasRobots = robots.length > 0;
+  // First-ever fetch, nothing to show yet → quiet, chrome-free paint.
+  const isInitialLoading = !hasRobots && isLoading;
 
   // Auto-select a preselected robot when it appears free.
   useEffect(() => {
@@ -111,50 +119,60 @@ export function PickerView({
             py: 4,
           }}
         >
-          <Stack spacing={2} sx={{
-            alignItems: 'center'
-          }}>
-            <HeroBuste />
-            <RobotsHeader
-              isRefreshing={isRefreshing}
-              hasError={Boolean(error)}
-              count={robots.length}
-              hasRobots={hasRobots}
-            />
-          </Stack>
-
-          {hasRobots ? (
-            <Stack
-              spacing={2.5}
-              sx={{ width: '100%' }}
-              role="list"
-              aria-label="Available Reachies"
+          {isInitialLoading ? (
+            <Box
+              sx={{
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'center',
+                py: 6,
+              }}
             >
-              {robots.map((robot) => (
-                <RemoteRobotCard
-                  key={robot.id}
-                  robot={robot}
-                  disabled={Boolean(robot.busy)}
-                  onTap={() => onSelect(robot.id)}
-                />
-              ))}
-            </Stack>
-          ) : isRefreshing ? (
-            <LoadingState />
-          ) : error ? (
-            <CenteredMessageState
-              title="Couldn't reach Hugging Face"
-              subtitle={error}
-            />
+              <CircularProgress
+                thickness={2.5}
+                sx={{ color: (theme) => alpha(theme.palette.text.primary, 0.3) }}
+              />
+            </Box>
           ) : (
-            <CenteredMessageState title="No Reachy online" />
+            <>
+              <Stack spacing={2} sx={{ alignItems: 'center' }}>
+                <HeroBuste />
+                <RobotsHeader
+                  isRefreshing={isRefreshing}
+                  hasError={Boolean(error)}
+                  count={robots.length}
+                  hasRobots={hasRobots}
+                />
+              </Stack>
+
+              {hasRobots ? (
+                <Stack
+                  spacing={2.5}
+                  sx={{ width: '100%' }}
+                  role="list"
+                  aria-label="Available Reachies"
+                >
+                  {robots.map((robot) => (
+                    <RemoteRobotCard
+                      key={robot.id}
+                      robot={robot}
+                      disabled={Boolean(robot.busy)}
+                      onTap={() => onSelect(robot.id)}
+                    />
+                  ))}
+                </Stack>
+              ) : error ? (
+                <CenteredMessageState
+                  title="Couldn't reach Hugging Face"
+                  subtitle={error}
+                />
+              ) : (
+                <CenteredMessageState title="No Reachy online" />
+              )}
+            </>
           )}
         </Stack>
       </Stack>
-      <StickyRefreshBar
-        onRefresh={onRefresh}
-        isRefreshing={isRefreshing}
-      />
     </Stack>
   );
 }
@@ -215,21 +233,39 @@ function RobotsHeader({
       spacing={0.5}
       sx={{
         alignItems: 'center',
-        width: '100%'
-      }}>
-      <Typography
-        component="h1"
+        width: '100%',
+      }}
+    >
+      {/* Title row: the title stays optically centered, flanked by two
+          equal fixed-width slots - a mirror spacer on the left and the
+          discreet refresh indicator on the right. Both keep their width
+          whether or not the spinner shows, so no layout shift when a
+          refresh starts / ends. */}
+      <Box
         sx={{
-          m: 0,
-          textAlign: 'center',
-          fontSize: TYPO.display,
-          fontWeight: FONT_WEIGHT.semibold,
-          color: 'text.primary',
-          letterSpacing: '-0.3px',
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 1,
         }}
       >
-        Your Reachies
-      </Typography>
+        <Box sx={{ width: 40, flexShrink: 0 }} aria-hidden />
+        <Typography
+          component="h1"
+          sx={{
+            m: 0,
+            textAlign: 'center',
+            fontSize: TYPO.display,
+            fontWeight: FONT_WEIGHT.semibold,
+            color: 'text.primary',
+            letterSpacing: '-0.3px',
+          }}
+        >
+          Your Reachies
+        </Typography>
+        <RefreshIndicator isRefreshing={isRefreshing} />
+      </Box>
       <Typography
         sx={{
           fontSize: TYPO.sm,
@@ -242,6 +278,123 @@ function RobotsHeader({
         {subtitle}
       </Typography>
     </Stack>
+  );
+}
+
+/* ─────────────────── Refresh activity indicator ─────────────────── */
+
+// Floor we keep the indicator on screen once a refresh starts, so an
+// instant (cached) fetch still shows a complete, smooth turn instead of
+// a one-frame flash that reads as "cut off".
+const MIN_VISIBLE_MS = 900;
+
+// Trailing debounce: a single logical refresh often fires two fetches
+// back-to-back (a poll plus an SSE-driven refetch), so `isRefreshing`
+// flips true→false→true. We hold the spinner for this long after
+// activity STOPS; any follow-up fetch within the window re-arms it,
+// coalescing the burst into one continuous spinner.
+const TAIL_DEBOUNCE_MS = 600;
+
+// Opacity cross-fade on enter / leave so the glyph eases in and out
+// instead of popping. It stays mounted (still spinning) through the
+// fade-out, then unmounts once fully transparent.
+const FADE_MS = 320;
+const REST_OPACITY = 0.32;
+
+const refreshSpinKeyframes = keyframes`
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+`;
+
+/**
+ * Discreet, NON-interactive refresh indicator to the right of the
+ * title. There's nothing to tap: the list refreshes on its own
+ * (realtime SSE push + a 60 s safety-net poll in `useRobots`), so this
+ * is pure feedback - the slowly-spinning arrows show ONLY while a fetch
+ * is in flight and are absent otherwise. Lives in a fixed-width slot so
+ * the title stays optically centered whether or not it shows. Mirrors
+ * the mobile `ScanScreen` `RefreshIndicator`.
+ */
+function RefreshIndicator({ isRefreshing }: { isRefreshing: boolean }): JSX.Element {
+  const [visible, setVisible] = useState(false);
+  const startedAtRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (isRefreshing) {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      if (!visible) {
+        startedAtRef.current = Date.now();
+        setVisible(true);
+      }
+    } else if (visible && !timerRef.current) {
+      const sinceStart = Date.now() - startedAtRef.current;
+      const delay = Math.max(MIN_VISIBLE_MS - sinceStart, TAIL_DEBOUNCE_MS);
+      timerRef.current = setTimeout(() => {
+        setVisible(false);
+        timerRef.current = null;
+      }, delay);
+    }
+  }, [isRefreshing, visible]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  // Fade layer: `mounted` keeps the glyph in the DOM through its
+  // fade-out, `shown` drives the opacity target. Toggling `shown` one
+  // frame after mount lets the CSS transition animate the enter.
+  const [mounted, setMounted] = useState(false);
+  const [shown, setShown] = useState(false);
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (fadeTimerRef.current) {
+      clearTimeout(fadeTimerRef.current);
+      fadeTimerRef.current = null;
+    }
+    if (visible) {
+      setMounted(true);
+      const id = requestAnimationFrame(() => setShown(true));
+      return () => cancelAnimationFrame(id);
+    }
+    setShown(false);
+    fadeTimerRef.current = setTimeout(() => setMounted(false), FADE_MS);
+    return () => {
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+    };
+  }, [visible]);
+
+  return (
+    <Box
+      sx={{
+        width: 40,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+      aria-hidden={!visible}
+    >
+      {mounted && (
+        <RefreshIcon
+          aria-label="Refreshing robot list"
+          sx={{
+            fontSize: 22,
+            color: 'text.disabled',
+            opacity: shown ? REST_OPACITY : 0,
+            transition: `opacity ${FADE_MS}ms ease`,
+            transformOrigin: 'center',
+            animation: `${refreshSpinKeyframes} 1.4s linear infinite`,
+          }}
+        />
+      )}
+    </Box>
   );
 }
 
@@ -455,114 +608,24 @@ function CardAvatar(): JSX.Element {
   );
 }
 
-/* ─────────────────── Sticky refresh ─────────────────── */
-
-const refreshSpinKeyframes = keyframes`
-  0%   { transform: rotate(0deg) scale(1); }
-  50%  { transform: rotate(180deg) scale(0.92); }
-  100% { transform: rotate(360deg) scale(1); }
-`;
-
-const refreshTapKeyframes = keyframes`
-  0%   { transform: rotate(0deg) scale(1); }
-  12%  { transform: rotate(-32deg) scale(0.94); }
-  100% { transform: rotate(360deg) scale(1); }
-`;
-
-function StickyRefreshBar({
-  onRefresh,
-  isRefreshing,
-}: {
-  onRefresh?(): void;
-  isRefreshing: boolean;
-}): JSX.Element {
-  const [tapCounter, setTapCounter] = useState(0);
-
-  const handleClick = (): void => {
-    setTapCounter((c) => c + 1);
-    onRefresh?.();
-  };
-
-  const iconAnimation = isRefreshing
-    ? `${refreshSpinKeyframes} 1.1s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite`
-    : tapCounter > 0
-      ? `${refreshTapKeyframes} 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)`
-      : 'none';
-
-  return (
-    <Stack
-      sx={{
-        alignItems: 'center',
-        width: '100%',
-        flexShrink: 0,
-        pt: 1.5,
-        pb: 2,
-        px: 2,
-        bgcolor: 'background.default',
-        borderTop: (theme) => `1px solid ${theme.palette.divider}`
-      }}>
-      <Button
-        variant="text"
-        color="primary"
-        disabled={isRefreshing}
-        startIcon={
-          <RefreshIcon
-            key={`refresh-icon-${tapCounter}-${isRefreshing}`}
-            sx={{
-              fontSize: 22,
-              transformOrigin: 'center',
-              animation: iconAnimation,
-              color: 'inherit',
-            }}
-          />
-        }
-        onClick={handleClick}
-        sx={{
-          textTransform: 'none',
-          fontSize: TYPO.md,
-          fontWeight: FONT_WEIGHT.semibold,
-          borderRadius: 999,
-          px: 3,
-          py: 1,
-          transition: (theme) =>
-            theme.transitions.create(['background-color', 'color'], {
-              duration: theme.transitions.duration.short,
-            }),
-          ...(isRefreshing && {
-            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
-          }),
-          '&.Mui-disabled': {
-            color: 'primary.main',
-            opacity: 1,
-          },
-        }}
-      >
-        Refresh
-      </Button>
-    </Stack>
-  );
-}
-
-/* ─────────────────── State cards (loading / empty / error) ───── */
+/* ─────────────────── State cards (empty / error) ───── */
 
 /**
  * Shared minimum height for every "single-card" state.
  *
  * Tuned to match the natural height of a populated
  * `RemoteRobotCard` so the body slot doesn't snap between
- * states (loading → empty → 1 robot → N robots). Without this,
- * the spinner would visibly resize the moment central returns
- * the list.
+ * states (empty → error → 1 robot → N robots).
  */
 const STATE_CARD_MIN_HEIGHT = 104;
 
 /**
- * Card chrome shared by the loading / empty states.
+ * Card chrome shared by the empty / error states.
  *
  * Mirrors the surface used by `RemoteRobotCard` (paper bg,
  * theme divider border, same dual inset + drop shadow) so the
- * three states form a coherent visual family with the actual
- * robot rows below them.
+ * states form a coherent visual family with the actual robot
+ * rows below them.
  */
 function StateCard({
   children,
@@ -590,24 +653,6 @@ function StateCard({
     >
       {children}
     </Box>
-  );
-}
-
-function LoadingState(): JSX.Element {
-  return (
-    <StateCard>
-      <Stack
-        spacing={1.5}
-        sx={{
-          alignItems: 'center',
-          color: 'text.secondary'
-        }}>
-        <CircularProgress size={24} sx={{ color: 'text.secondary' }} />
-        <Typography sx={{ fontSize: TYPO.sm, fontWeight: FONT_WEIGHT.medium }}>
-          Asking Hugging Face for your robots…
-        </Typography>
-      </Stack>
-    </StateCard>
   );
 }
 
