@@ -223,7 +223,6 @@ function ReachyHostShellNormal({
     isLoading: robotsLoading,
     isRefreshing: robotsRefreshing,
     error: robotsError,
-    refresh: refreshRobots,
   } = useRobots({
     hfToken,
     enabled: isAuthenticated && hostPhase === 'picking',
@@ -287,6 +286,9 @@ function ReachyHostShellNormal({
       hfToken: readToken(),
       userName,
       robotPeerId: selectedRobotId,
+      // Stable id so the embed re-resolves the live peer id at dial
+      // time (the peer id above rotates on relay reconnects).
+      robotHardwareId: robot?.hardwareId ?? null,
       signalingUrl: resolveSignalingUrl(),
       theme,
       config: initialConfig ?? null,
@@ -300,14 +302,13 @@ function ReachyHostShellNormal({
       hfToken: bundle.hfToken ?? undefined,
       userName: bundle.userName,
       robotPeerId: bundle.robotPeerId,
+      robotHardwareId: bundle.robotHardwareId,
       config: bundle.config,
       hostName,
       appName,
     });
     initSentForRef.current = selectedRobotId;
     embedReadyPendingRef.current = false;
-
-    void robot; // referenced for clarity; could expose meta later
   }, [
     appName,
     hostName,
@@ -444,10 +445,14 @@ function ReachyHostShellNormal({
 
   const iframeUrl = useMemo(() => {
     if (selectedRobotId == null) return null;
+    const picked = robots.find((r) => r.id === selectedRobotId);
     const bundle: CredsBundle = {
       hfToken: readToken(),
       userName,
       robotPeerId: selectedRobotId,
+      // Kept byte-identical with the `host:init` bundle so the embed
+      // re-resolves the live peer id whichever channel it reads.
+      robotHardwareId: picked?.hardwareId ?? null,
       signalingUrl: resolveSignalingUrl(),
       theme,
       config: initialConfig ?? null,
@@ -470,6 +475,7 @@ function ReachyHostShellNormal({
     embedPath,
     hostName,
     initialConfig,
+    robots,
     selectedRobotId,
     theme,
     userName,
@@ -566,10 +572,10 @@ function ReachyHostShellNormal({
             <PickerView
               robots={robots}
               isRefreshing={robotsLoading || robotsRefreshing}
+              isLoading={robotsLoading}
               error={robotsError}
               preselectedRobotId={sdk?.preselectedRobotId ?? null}
               onSelect={selectRobot}
-              onRefresh={refreshRobots}
             />
           )}
 
@@ -712,7 +718,6 @@ function ReachyHostShellPreview({
               isRefreshing={false}
               preselectedRobotId={null}
               onSelect={(id) => window.alert(`Preview: selected ${id}`)}
-              onRefresh={() => window.alert('Preview: refresh')}
             />
           )}
 

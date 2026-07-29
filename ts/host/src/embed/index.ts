@@ -43,6 +43,7 @@ import {
   decodeCredsFromHash,
   isProtocolMessage,
 } from '../lib/protocol';
+import { fetchRobotsFromCentral } from '../lib/centralRest';
 import type {
   AppConnectingStep,
   AppPhase,
@@ -319,11 +320,24 @@ async function bootOnce(
     robots: ((sdk as { robots?: unknown[] }).robots ?? []).length,
   });
 
+  // Re-resolve the CURRENT peer id from central by the robot's stable
+  // hardware id before dialing. The `robotPeerId` we were handed is a
+  // snapshot the host captured earlier (picker selection / mobile
+  // handoff); the central peer id rotates on every relay reconnect, so
+  // after a Space cold-start it is frequently dead. Matching on
+  // `hardware_id` self-heals against that rotation. A `null` hardware
+  // id (older daemon) or any central hiccup falls back to the handed-in
+  // peer id unchanged.
+  const targetPeerId = await resolveLivePeerId(live, creds);
   pushAppState('connecting', 'session');
-  postDebug('boot:session:start', { robotPeerId: live.robotPeerId });
+  postDebug('boot:session:start', {
+    robotPeerId: targetPeerId,
+    handedPeerId: live.robotPeerId,
+    reresolved: targetPeerId !== live.robotPeerId,
+  });
   installSdkProbe(sdk);
   try {
-    await sdk.startSession(live.robotPeerId);
+    await sdk.startSession(targetPeerId);
     postDebug('boot:session:ok');
   } catch (err) {
     postDebug('boot:session:error', {
@@ -359,6 +373,9 @@ interface LiveState {
   hostName: string;
   userName: string | null;
   robotPeerId: string;
+  /** Stable hardware id used to re-resolve `robotPeerId` at dial time.
+   *  `null` when the host didn't provide one (older daemon). */
+  robotHardwareId: string | null;
 }
 
 function liveStateFromCreds(creds: CredsBundle): LiveState {
@@ -369,6 +386,7 @@ function liveStateFromCreds(creds: CredsBundle): LiveState {
     hostName: creds.hostName,
     userName: creds.userName ?? null,
     robotPeerId: creds.robotPeerId,
+    robotHardwareId: creds.robotHardwareId ?? null,
   };
 }
 
@@ -380,7 +398,42 @@ function liveStateFromInit(msg: HostInitMsg): LiveState {
     hostName: msg.hostName,
     userName: msg.userName ?? null,
     robotPeerId: msg.robotPeerId,
+    robotHardwareId: msg.robotHardwareId ?? null,
   };
+}
+
+/**
+ * Re-resolve the live central peer id for the target robot from its
+ * stable hardware id, right before `startSession()`.
+ *
+ * The handed-in `live.robotPeerId` is a snapshot: central rotates a
+ * robot's peer id on every relay reconnect, so by the time the iframe
+ * has cold-started and reached this point the id can already be dead.
+ * We fetch the current robot list from central and match on
+ * `hardware_id` (stable per physical robot) to recover the fresh id.
+ *
+ * Fail-open: no hardware id (older daemon), no token, central
+ * unreachable, or no match all return the handed-in peer id unchanged,
+ * so this can only ever improve on the previous behaviour.
+ */
+async function resolveLivePeerId(
+  live: LiveState,
+  creds: CredsBundle,
+): Promise<string> {
+  const hardwareId = live.robotHardwareId;
+  const hfToken = creds.hfToken;
+  if (!hardwareId || !hfToken) return live.robotPeerId;
+  try {
+    const res = await fetchRobotsFromCentral({
+      signalingUrl: creds.signalingUrl,
+      hfToken,
+    });
+    if (!res.ok) return live.robotPeerId;
+    const match = res.robots.find((r) => r.hardwareId === hardwareId);
+    return match?.id ?? live.robotPeerId;
+  } catch {
+    return live.robotPeerId;
+  }
 }
 
 function createBridge(expectedOrigin: string) {
