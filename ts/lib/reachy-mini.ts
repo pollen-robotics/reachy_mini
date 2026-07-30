@@ -137,7 +137,9 @@ const ICE_FAILED_GRACE_MS = 1000;
 const MAX_VISIBILITY_DEFER_MS = 60_000;
 
 /**
- * How long a pushed pose frame keeps the periodic `get_state` poll on hold.
+ * How long a pushed pose frame keeps the periodic `get_state` poll on hold -
+ * both on the way out (no request is sent) and on the way back (a reply that
+ * arrives anyway doesn't touch the state mirror).
  *
  * Poll replies carry no `seq`, so they slip past the stale-frame guard: a
  * reply that crosses a fresher pushed frame would rewind the very mirror the
@@ -754,7 +756,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                             this._lastPoseSeq = msg.seq;
                         }
                         this._lastPoseFrameAt = Date.now();
-                        this._handleRobotMessage(msg);
+                        this._handleRobotMessage(msg, true);
                     };
                     return;
                 }
@@ -2186,7 +2188,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         }
     }
 
-    private _handleRobotMessage(data: Record<string, unknown>): void {
+    /**
+     * @param fromPoseStream Frame came from the pushed `pose` channel rather
+     *   than the reliable control channel. Only those may refresh the state
+     *   mirror while the stream is live (see the `data.state` branch).
+     */
+    private _handleRobotMessage(data: Record<string, unknown>, fromPoseStream = false): void {
         // JSON-RPC frames (app control surface) are handled separately from
         // the legacy {command|type} robot messages that share this channel.
         if (data.jsonrpc === '2.0') {
@@ -2322,7 +2329,18 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             }
             return;
         }
-        if (data.state) {
+        // Only the stream may write the mirror while the stream is live. The
+        // poll stands down in that case (see POSE_STREAM_FRESH_MS), but it
+        // can't unsend a request already in flight: `get_state` rides the
+        // reliable channel, so its reply queues behind whatever else is on it
+        // - a `upload_move_*` burst, typically - and can land hundreds of ms
+        // after the snapshot it carries. Having no `seq`, it slips past the
+        // stale-frame guard and rewinds every consumer to a pose from before
+        // the upload, until the next pushed frame puts them back. That reads
+        // as a one-frame flick to the pre-move pose right as an animation
+        // starts. Nothing is lost by dropping it: pushed frames carry the same
+        // fields (daemon-side `build_state_dict` feeds both).
+        if (data.state && (fromPoseStream || Date.now() - this._lastPoseFrameAt >= POSE_STREAM_FRESH_MS)) {
             const s = data.state as {
                 head_pose?: number[][];
                 antennas?: [number, number];
