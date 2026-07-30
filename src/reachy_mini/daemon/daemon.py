@@ -250,7 +250,7 @@ class Daemon:
         except Exception as e:
             self.logger.debug(f"Error stopping central signaling relay: {e}")
 
-    def _on_robot_slot_free(self) -> None:
+    def _on_robot_slot_free(self, expect_handoff: bool = False) -> None:
         """Return the robot to a clean idle state when the app slot frees.
 
         Wired into ``robot_app_lock`` so that when a remote session ends/drops
@@ -260,14 +260,21 @@ class Daemon:
         threadsafely on the backend's loop. Fires on both graceful and abnormal
         teardown (crash, killed tab, lost Wi-Fi), which is the whole point:
         those paths run no client-side cleanup.
+
+        Args:
+            expect_handoff: True when the session ended on purpose to let a
+                successor take the slot, which buys the incoming session a much
+                longer grace period before the robot is put back to sleep.
+
         """
         backend = self.backend
         if backend is None:
             return
         try:
-            backend.request_idle_reset()
+            backend.request_idle_reset(expect_handoff=expect_handoff)
         except Exception as e:
             self.logger.warning(f"Idle reset request failed: {e}")
+
     def apply_robot_name(self, name: str) -> None:
         """Apply a new robot name to the live daemon without a restart.
 

@@ -2610,7 +2610,18 @@ class Backend:
     # an intermediate pose.
     IDLE_RESET_DEBOUNCE_S: float = 1.5
 
-    def request_idle_reset(self) -> None:
+    # Longer grace used when the previous owner released the slot on purpose so
+    # another session could take over (see ``RobotAppLock.release_remote``).
+    # The canonical case is the mobile app dropping its own session to hand the
+    # robot to an app's iframe: the daemon only sees an empty slot, but a new
+    # session *is* coming - it just has to cold-start a Space (page load, auth,
+    # bundle, WebRTC handshake), which takes far longer than the debounce
+    # above. Sleeping in that window is exactly what the user doesn't want:
+    # they tapped an app, not "go to sleep". Long enough to cover a slow Space,
+    # short enough that a hand-off that never lands still parks the robot.
+    IDLE_RESET_HANDOFF_GRACE_S: float = 30.0
+
+    def request_idle_reset(self, *, expect_handoff: bool = False) -> None:
         """Return the robot to a clean idle state when no managed app owns it.
 
         Called by the daemon when the shared ``RobotAppLock`` transitions to
@@ -2627,11 +2638,22 @@ class Backend:
         one that also handles data-channel commands) and returns immediately.
         No-op when that loop isn't up yet (e.g. ``--no-media`` daemons, which
         have no remote sessions anyway).
+
+        Args:
+            expect_handoff: True when the slot was released on purpose for a
+                successor session, which earns the longer
+                ``IDLE_RESET_HANDOFF_GRACE_S`` instead of the default debounce.
+
         """
         loop = getattr(self, "_log_loop", None)
         if loop is None:
             return
-        loop.call_soon_threadsafe(self._maybe_start_idle_reset)
+        grace_s = (
+            self.IDLE_RESET_HANDOFF_GRACE_S
+            if expect_handoff
+            else self.IDLE_RESET_DEBOUNCE_S
+        )
+        loop.call_soon_threadsafe(self._maybe_start_idle_reset, grace_s)
 
     def cancel_idle_reset(self) -> None:
         """Cancel a pending/in-flight idle reset from any thread.
@@ -2654,7 +2676,7 @@ class Backend:
             task.cancel()
         self._idle_reset_task = None
 
-    def _maybe_start_idle_reset(self) -> None:
+    def _maybe_start_idle_reset(self, grace_s: float) -> None:
         """Kick off a goto_sleep if the robot is still awake. Runs on the loop."""
         try:
             if not self.ready.is_set() or self.is_shutting_down:
@@ -2665,17 +2687,21 @@ class Backend:
             if self.get_motor_control_mode() == MotorControlMode.Disabled:
                 return
             self._cancel_idle_reset()
-            self._idle_reset_task = asyncio.create_task(self._async_idle_reset())
+            self._idle_reset_task = asyncio.create_task(
+                self._async_idle_reset(
+                    self.IDLE_RESET_DEBOUNCE_S if grace_s is None else grace_s
+                )
+            )
         except Exception:
             self.logger.warning("Idle reset scheduling failed", exc_info=True)
 
-    async def _async_idle_reset(self) -> None:
+    async def _async_idle_reset(self, grace_s: float) -> None:
         """Graceful return to the sleep pose, which ends with motors disabled.
 
-        Starts with a short debounce (``IDLE_RESET_DEBOUNCE_S``): a fast
-        reconnect or a local app grabbing the robot cancels the task during that
-        window, so no motion happens at all on transient drops. Only if the slot
-        stays free past the grace period do we actually goto_sleep.
+        Starts with a debounce (``grace_s``): a fast reconnect or a local app
+        grabbing the robot cancels the task during that window, so no motion
+        happens at all on transient drops. Only if the slot stays free past the
+        grace period do we actually goto_sleep.
 
         Mirrors the reference leave behaviour clients already run by hand
         (gotoSleep -> motors off). ``goto_sleep()`` finishes with
@@ -2684,7 +2710,7 @@ class Backend:
         correctly triggers a fresh wake.
         """
         try:
-            await asyncio.sleep(self.IDLE_RESET_DEBOUNCE_S)
+            await asyncio.sleep(grace_s)
             # Conditions may have changed during the grace period (shutdown
             # started, or the robot was already put to sleep by whoever briefly
             # held the slot). Re-check before committing to the trajectory.

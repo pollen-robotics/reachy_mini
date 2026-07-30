@@ -16,6 +16,8 @@ import pytest
 from reachy_mini.daemon.backend.abstract import Backend
 from reachy_mini.io.protocol import MotorControlMode
 
+GRACE_S = 0.02
+
 
 def _fake_backend(
     *,
@@ -23,7 +25,8 @@ def _fake_backend(
     shutting_down: bool = False,
 ) -> SimpleNamespace:
     return SimpleNamespace(
-        IDLE_RESET_DEBOUNCE_S=0.02,
+        IDLE_RESET_DEBOUNCE_S=GRACE_S,
+        IDLE_RESET_HANDOFF_GRACE_S=GRACE_S * 10,
         is_shutting_down=shutting_down,
         get_motor_control_mode=lambda: motor_mode,
         goto_sleep=AsyncMock(),
@@ -36,7 +39,7 @@ def _fake_backend(
 async def test_idle_reset_sleeps_after_debounce() -> None:
     """When the slot stays free past the grace period, goto_sleep runs."""
     fake = _fake_backend()
-    task = asyncio.ensure_future(Backend._async_idle_reset(fake))
+    task = asyncio.ensure_future(Backend._async_idle_reset(fake, GRACE_S))
     fake._idle_reset_task = task
     await task
     fake.goto_sleep.assert_awaited_once()
@@ -47,7 +50,7 @@ async def test_idle_reset_sleeps_after_debounce() -> None:
 async def test_cancel_during_debounce_skips_motion() -> None:
     """A reconnect within the grace period cancels the reset before any motion."""
     fake = _fake_backend()
-    task = asyncio.ensure_future(Backend._async_idle_reset(fake))
+    task = asyncio.ensure_future(Backend._async_idle_reset(fake, GRACE_S))
     fake._idle_reset_task = task
     await asyncio.sleep(0)  # let the task reach the debounce sleep
     task.cancel()
@@ -60,7 +63,7 @@ async def test_cancel_during_debounce_skips_motion() -> None:
 async def test_idle_reset_skips_when_already_disabled() -> None:
     """Re-check after the grace period: skip goto_sleep if already limp."""
     fake = _fake_backend(motor_mode=MotorControlMode.Disabled)
-    task = asyncio.ensure_future(Backend._async_idle_reset(fake))
+    task = asyncio.ensure_future(Backend._async_idle_reset(fake, GRACE_S))
     fake._idle_reset_task = task
     await task
     fake.goto_sleep.assert_not_awaited()
@@ -70,10 +73,32 @@ async def test_idle_reset_skips_when_already_disabled() -> None:
 async def test_idle_reset_skips_when_shutting_down() -> None:
     """Re-check after the grace period: skip goto_sleep if shutdown started."""
     fake = _fake_backend(shutting_down=True)
-    task = asyncio.ensure_future(Backend._async_idle_reset(fake))
+    task = asyncio.ensure_future(Backend._async_idle_reset(fake, GRACE_S))
     fake._idle_reset_task = task
     await task
     fake.goto_sleep.assert_not_awaited()
+
+
+def test_handoff_release_gets_the_long_grace() -> None:
+    """A hand-off release must schedule with the long grace, not the debounce.
+
+    Regression guard for the mobile app dropping its session so an app iframe
+    can take the slot: the short debounce expires long before a Space has
+    finished cold-starting, and the robot would fall asleep in that gap.
+    """
+    scheduled: list[tuple] = []
+    fake = _fake_backend()
+    fake._maybe_start_idle_reset = lambda *args: None
+    fake._log_loop = SimpleNamespace(
+        call_soon_threadsafe=lambda fn, *args: scheduled.append(args)
+    )
+
+    Backend.request_idle_reset(fake, expect_handoff=True)
+    assert scheduled == [(fake.IDLE_RESET_HANDOFF_GRACE_S,)]
+
+    scheduled.clear()
+    Backend.request_idle_reset(fake, expect_handoff=False)
+    assert scheduled == [(fake.IDLE_RESET_DEBOUNCE_S,)]
 
 
 @pytest.mark.asyncio
@@ -85,7 +110,7 @@ async def test_finally_does_not_clobber_newer_task() -> None:
     ``_cancel_idle_reset`` would miss the newer in-flight goto_sleep.
     """
     fake = _fake_backend()
-    task_a = asyncio.ensure_future(Backend._async_idle_reset(fake))
+    task_a = asyncio.ensure_future(Backend._async_idle_reset(fake, GRACE_S))
     fake._idle_reset_task = task_a
     await asyncio.sleep(0)  # let task_a reach the debounce sleep
 
