@@ -51,7 +51,11 @@ import { SignInView } from './SignInView';
 import { TopBar, type HostPhase } from './TopBar';
 import { WelcomeBackOverlay } from './WelcomeBackOverlay';
 
-const LEAVING_TIMEOUT_MS = 1500;
+// Hard cap on how long the host stays on the leaving overlay waiting for the
+// embed's `embed:left` ack (app cleanup + host-owned sleep/disable). Larger
+// than the embed's own sleep hard-cap (~6.5 s) so a well-behaved embed's ack
+// wins the race; a wedged/older embed that never acks just falls through here.
+const LEAVING_ACK_CAP_MS = 8000;
 
 export interface ReachyHostShellProps {
   sdk: ReachyMiniInstance | null;
@@ -190,6 +194,22 @@ function ReachyHostShellNormal({
    *  reports authenticated) so the celebratory beat plays out
    *  even on a fast auth confirmation. */
   const [welcomeBackShown, setWelcomeBackShown] = useState<boolean>(false);
+  /** Latches true once the WelcomeBackOverlay has finished (its
+   *  `onDone`). Needed because `welcomeBackShown` flips back to
+   *  false on `onDone` while `isPostOauthReturn` stays true in the
+   *  real-OAuth path - without this the post-OAuth splash would
+   *  re-trigger in `picking` and loop "Signing you in…" forever.
+   *  Reset on sign-out so a re-sign-in replays the sequence. */
+  const [welcomeBackDone, setWelcomeBackDone] = useState<boolean>(false);
+  /** Latches true once the initial boot has reached its first stable
+   *  view (SignInView when unauthenticated, or the picker with its
+   *  first central response settled). Lets the boot splash stay up
+   *  continuously through the `signing-in → picking → list` handoff
+   *  so the auto-login path goes splash → list with no bare
+   *  picker-spinner frame in between. Only gates the FIRST boot: once
+   *  latched, later returns to the picker use the picker's own
+   *  spinner. Reset on sign-out so a re-sign-in replays the sequence. */
+  const [bootSplashDone, setBootSplashDone] = useState<boolean>(false);
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   /** Guards `host:init` sending: at most once per selected
@@ -206,6 +226,10 @@ function ReachyHostShellNormal({
    *  overlay in a loop. The ref is reset when the user signs out
    *  so a subsequent sign-in plays the anim again. */
   const welcomeBackShownOnceRef = useRef<boolean>(false);
+  /** Resolver for the in-flight `endSession` waiting on the embed's
+   *  `embed:left` ack. Set while a leave is pending; the `onLeft`
+   *  bridge callback calls it to let the host unmount immediately. */
+  const leftAckResolveRef = useRef<(() => void) | null>(null);
 
   /* ─────────────────── External hooks ─────────────────── */
 
@@ -274,8 +298,45 @@ function ReachyHostShellNormal({
   useEffect(() => {
     if (!isAuthenticated) {
       welcomeBackShownOnceRef.current = false;
+      setWelcomeBackDone(false);
+      setBootSplashDone(false);
     }
   }, [isAuthenticated]);
+
+  // Latch the boot splash off once the first stable view is ready.
+  // The post-OAuth return leg runs its own splash → welcome-back
+  // handoff, so we let it out immediately here and don't extend the
+  // plain boot splash over it.
+  useEffect(() => {
+    if (bootSplashDone) return;
+    if (isPostOauthReturn) {
+      setBootSplashDone(true);
+      return;
+    }
+    // Auth resolved but no session → SignInView is the stable view.
+    if (authResolved && !isAuthenticated) {
+      setBootSplashDone(true);
+      return;
+    }
+    // Authenticated and the picker's first central fetch has settled
+    // (robotsLoading is held true from the very first `picking` frame
+    // by useRobots' initial-loading floor) → the list is the stable
+    // view.
+    if (
+      isAuthenticated &&
+      hostPhase === 'picking' &&
+      !robotsLoading
+    ) {
+      setBootSplashDone(true);
+    }
+  }, [
+    bootSplashDone,
+    isPostOauthReturn,
+    authResolved,
+    isAuthenticated,
+    hostPhase,
+    robotsLoading,
+  ]);
 
   /* ─────────────────── Bridge ─────────────────── */
 
@@ -341,6 +402,11 @@ function ReachyHostShellNormal({
     },
     onRequestLeave: () => {
       void endSession('session-stopped');
+    },
+    onLeft: () => {
+      // Embed finished its host-owned sleep/disable; let the pending
+      // endSession unmount now instead of waiting out the cap.
+      leftAckResolveRef.current?.();
     },
     onError: ({ message, fatal, detail }) => {
       if (fatal) {
@@ -417,11 +483,27 @@ function ReachyHostShellNormal({
     async (reason: LeavingReason): Promise<void> => {
       if (hostPhase !== 'embedded' && hostPhase !== 'error') return;
       if (iframeRef.current) {
-        bridge.sendLeaving(iframeRef.current, reason, LEAVING_TIMEOUT_MS);
+        bridge.sendLeaving(iframeRef.current, reason, LEAVING_ACK_CAP_MS);
       }
       setHostPhase('leaving');
 
-      await sleep(LEAVING_TIMEOUT_MS);
+      // Wait for the embed to finish its host-owned tear-down (app onLeave +
+      // gotoSleep + motors disabled) and ack via `embed:left`, so the robot is
+      // actually asleep before we drop the session. Bounded by
+      // `LEAVING_ACK_CAP_MS` so a wedged or older embed (which never acks)
+      // still falls through and unmounts.
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const done = (): void => {
+          if (settled) return;
+          settled = true;
+          leftAckResolveRef.current = null;
+          window.clearTimeout(timer);
+          resolve();
+        };
+        const timer = window.setTimeout(done, LEAVING_ACK_CAP_MS);
+        leftAckResolveRef.current = done;
+      });
 
       // Unmount iframe (selectedRobotId = null) and clean up.
       // CRITICAL: do NOT call `wipeHfSessionStorage()` here. The
@@ -520,12 +602,24 @@ function ReachyHostShellNormal({
   const showPostOAuthSplash =
     isPostOauthReturn &&
     !welcomeBackShown &&
+    !welcomeBackDone &&
     (hostPhase === 'signing-in' || hostPhase === 'picking');
+  // Boot splash covers the whole first boot continuously, so the
+  // auto-login path reads as splash → list with no intermediate bare
+  // picker-spinner:
+  //   - signing-in: while `authenticate()` resolves (`!authResolved`)
+  //     and the one-frame gap after it confirms auth but before the
+  //     phase flips to `picking` (`isAuthenticated` still `signing-in`);
+  //   - picking: while the picker's first central fetch is in flight
+  //     (`robotsLoading`, held true from frame 0 by useRobots).
+  // `bootSplashDone` latches it off after the first stable view so
+  // later returns to the picker use its own spinner instead.
   const showBootSplash =
     !isPostOauthReturn &&
     !welcomeBackShown &&
-    hostPhase === 'signing-in' &&
-    (!authResolved || isAuthenticated);
+    !bootSplashDone &&
+    ((hostPhase === 'signing-in' && (!authResolved || isAuthenticated)) ||
+      (hostPhase === 'picking' && isAuthenticated && robotsLoading));
   const showAuthSplash = showPostOAuthSplash || showBootSplash;
 
   return (
@@ -639,7 +733,10 @@ function ReachyHostShellNormal({
       {welcomeBackShown && (
         <WelcomeBackOverlay
           userName={userName}
-          onDone={() => setWelcomeBackShown(false)}
+          onDone={() => {
+            setWelcomeBackShown(false);
+            setWelcomeBackDone(true);
+          }}
         />
       )}
     </>
@@ -654,10 +751,6 @@ function readToken(): string | null {
   } catch {
     return null;
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 /* ─────────────────── Preview shell ───────────────────
