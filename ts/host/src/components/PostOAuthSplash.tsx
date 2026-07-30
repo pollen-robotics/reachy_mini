@@ -1,11 +1,21 @@
 /**
- * Covering splash shown on the OAuth return leg, while the SDK
- * resolves the cached token via `authenticate()`.
+ * Covering splash shown while the host can't render a definite view
+ * yet. Two variants, one frame:
  *
- * Without it the host would render `SignInView` (the "Continue
- * with Hugging Face" button) for the ~30-500 ms the in-flight
- * `authenticate()` takes, so the user briefly bounces back to the
- * sign-in button after already authorising on huggingface.co.
+ *   `signing-in` - the OAuth return leg, while the SDK resolves the
+ *     cached token via `authenticate()`. Shows the "Signing you in…"
+ *     heading: the user DID just authorise on huggingface.co, so the
+ *     copy is a promise we know we're keeping.
+ *   `neutral` - the plain boot leg, while the auth state is still
+ *     unknown (or auth is settled and the first robot list is in
+ *     flight). Logo + spinner only: a first-time visitor with no
+ *     session must not read "Signing you in…" right before landing
+ *     on the sign-in button.
+ *
+ * Without this splash the host would render `SignInView` (the
+ * "Continue with Hugging Face" button) for the ~30-500 ms the
+ * in-flight `authenticate()` takes, so an authenticated user would
+ * briefly bounce back to the sign-in button.
  *
  * This splash deliberately mirrors `WelcomeBackOverlay`'s frame
  * (same `background.default` fill, same centred HF logo) so the
@@ -49,7 +59,16 @@ const pulseKeyframes = keyframes`
   }
 `;
 
-export function PostOAuthSplash(): JSX.Element {
+export interface PostOAuthSplashProps {
+  /** `signing-in` shows the "Signing you in…" heading (OAuth return
+   *  leg); `neutral` keeps logo + spinner only (plain boot, auth
+   *  state not known yet). Defaults to `signing-in`. */
+  variant?: 'signing-in' | 'neutral';
+}
+
+export function PostOAuthSplash({
+  variant = 'signing-in',
+}: PostOAuthSplashProps = {}): JSX.Element {
   return (
     <Box
       sx={{
@@ -88,18 +107,20 @@ export function PostOAuthSplash(): JSX.Element {
           justifyContent: 'center',
           minHeight: CONTENT_MIN_HEIGHT
         }}>
-        <Typography
-          component="h1"
-          sx={{
-            fontSize: TYPO.hero,
-            fontWeight: FONT_WEIGHT.bold,
-            letterSpacing: '-0.3px',
-            textAlign: 'center',
-            m: 0,
-          }}
-        >
-          Signing you in…
-        </Typography>
+        {variant === 'signing-in' && (
+          <Typography
+            component="h1"
+            sx={{
+              fontSize: TYPO.hero,
+              fontWeight: FONT_WEIGHT.bold,
+              letterSpacing: '-0.3px',
+              textAlign: 'center',
+              m: 0,
+            }}
+          >
+            Signing you in…
+          </Typography>
+        )}
         <CircularProgress
           size={22}
           thickness={5}
