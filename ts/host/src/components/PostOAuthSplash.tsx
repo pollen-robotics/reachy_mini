@@ -100,7 +100,11 @@ export function PostOAuthSplash(): JSX.Element {
         >
           Signing you in…
         </Typography>
-        <CircularProgress size={22} thickness={5} color="primary" />
+        <CircularProgress
+          size={22}
+          thickness={5}
+          sx={{ color: 'text.secondary' }}
+        />
       </Stack>
     </Box>
   );
