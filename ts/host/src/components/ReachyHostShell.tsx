@@ -38,6 +38,12 @@ import {
 } from '../lib/protocol';
 import { resolveSignalingUrl } from '../lib/signalingUrl';
 import { wipeHfSessionStorage } from '../lib/settings';
+import {
+  advanceRebootWatch,
+  isTargetListed,
+  type RebootTarget,
+  type RebootWatchPhase,
+} from '../lib/rebootWatch';
 import { useLatestDaemonVersion } from '../hooks/useLatestDaemonVersion';
 import { useHfProfile } from '../hooks/useHfProfile';
 import { useOAuth } from '../hooks/useOAuth';
@@ -220,10 +226,18 @@ function ReachyHostShellNormal({
   /** Set when we dropped the iframe because the daemon restarted mid
    *  update. Holds what we need to recognise the robot when it comes
    *  back on central (its peer id will have rotated). */
-  const [awaitingReboot, setAwaitingReboot] = useState<{
-    hardwareId: string | null;
-    name: string | null;
-  } | null>(null);
+  const [awaitingReboot, setAwaitingReboot] = useState<RebootTarget | null>(
+    null,
+  );
+  /** Offline-first latch over the central listing while `awaitingReboot`
+   *  is set: the robot must be seen ABSENT once before its presence
+   *  counts as "back online", so a stale pre-reboot listing can't
+   *  complete the update gate prematurely (see `lib/rebootWatch.ts`).
+   *  Held at `waiting-offline` whenever `awaitingReboot` is null: the
+   *  advancing effect is gated on it, and `dismissDaemonUpdate` (the
+   *  only path clearing `awaitingReboot`) resets the watch with it. */
+  const [rebootWatch, setRebootWatch] =
+    useState<RebootWatchPhase>('waiting-offline');
   /** Remounts `DaemonUpdateGate` on every selection so its "user
    *  already dismissed this" latch doesn't leak into the next robot. */
   const [gateKey, setGateKey] = useState(0);
@@ -607,22 +621,27 @@ function ReachyHostShellNormal({
 
   const dismissDaemonUpdate = useCallback((): void => {
     setAwaitingReboot(null);
+    setRebootWatch('waiting-offline');
     setUpdateProgress(null);
   }, []);
 
-  // Is the robot we were updating listed on central again? Its peer id
-  // rotates across the reboot, so match on the stable hardware id, then
-  // on the advertised name. With neither (an older daemon that reports
-  // no hardware id), any robot coming online is the best guess we have.
-  const rebootedRobotBack =
-    awaitingReboot !== null &&
-    robots.some((r) => {
-      if (awaitingReboot.hardwareId) {
-        return r.hardwareId === awaitingReboot.hardwareId;
-      }
-      if (awaitingReboot.name) return r.meta?.name === awaitingReboot.name;
-      return true;
-    });
+  // Advance the reboot watch on every settled view of the central
+  // listing. Central may keep the robot's pre-reboot registration
+  // listed for a while after the daemon goes down, so presence alone
+  // is not "back online": the watch first requires one observation
+  // WITHOUT the robot (the SSE offline event, typically) before its
+  // reappearance completes it. Observations are skipped while
+  // `robotsLoading` holds - in that window `robots` is empty because
+  // there's no data yet, not because the robot is offline.
+  useEffect(() => {
+    if (awaitingReboot === null || hostPhase !== 'picking' || robotsLoading) {
+      return;
+    }
+    const listed = isTargetListed(robots, awaitingReboot);
+    setRebootWatch((prev) => advanceRebootWatch(prev, listed));
+  }, [awaitingReboot, hostPhase, robotsLoading, robots]);
+
+  const rebootedRobotBack = awaitingReboot !== null && rebootWatch === 'back';
 
   /* ─────────────────── Iframe URL ─────────────────── */
 

@@ -86,9 +86,12 @@ export interface DaemonUpdateGateProps {
   latestVersion: string | null;
   /** Last `embed:update-progress` payload, or `null` before any. */
   progress: DaemonUpdateProgress | null;
-  /** True once the robot we're updating is listed on central again.
-   *  Only meaningful after the shell has torn the iframe down and
-   *  resumed polling - `false` at every other point in the flow. */
+  /** True once the robot we're updating is listed on central again
+   *  AFTER having been seen absent at least once (the shell's
+   *  offline-first reboot watch, see `lib/rebootWatch.ts` - a stale
+   *  pre-reboot listing must not complete the gate). Only meaningful
+   *  after the shell has torn the iframe down and resumed polling -
+   *  `false` at every other point in the flow. */
   robotBackOnline: boolean;
   /** True once the embedded app is interactive. The soft notice waits
    *  for it so an optional offer doesn't land on top of the connecting
