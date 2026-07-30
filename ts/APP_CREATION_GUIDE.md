@@ -1505,6 +1505,8 @@ before trusting the payload.
 | host  → embed   | `host:leaving`                | Tear-down request with `timeoutMs`            |
 | embed → host    | `embed:request-leave`         | App requests end-of-session                   |
 | embed → host    | `embed:error`                 | Error report (`{ message, fatal, detail? }`)  |
+| host  → embed   | `host:start-update`           | Run the daemon's PyPI self-update (only the embed holds a data channel) |
+| embed → host    | `embed:update-progress`       | Install progress, plus `rebooting` when the restart kills the session |
 
 Intentionally **not** in the v1 protocol:
 
@@ -1531,6 +1533,31 @@ Intentionally **not** in the v1 protocol:
   every time.
 - `host:init` may arrive twice (rare: bridge re-arm); the embed
   treats the latest as authoritative and re-applies theme / config.
+
+#### Daemon update gate (Mode A only)
+
+The shell checks the robot's daemon version against the latest
+GitHub release and can interrupt the app. App authors don't wire
+anything up - `connectToHost()` reports the version for them - but
+should know the two outcomes exist:
+
+- **Below `MIN_SUPPORTED_DAEMON_VERSION`** (`host/src/lib/daemonRelease.ts`):
+  a full-screen block. Such a daemon predates the OTA command, so
+  the only way out is the desktop app. The app never becomes
+  interactive.
+- **Merely behind the latest release**: a dismissable card once the
+  app is `live`. The app keeps running; the user may start an
+  update, which reboots the robot and drops the session.
+
+This is deliberately softer than the mobile app, which blocks on
+any version behind the latest. A Space is public: applying that
+rule here would make every daemon release a global kill switch for
+robots that were working a minute earlier.
+
+Mode B needs none of this. The mobile app never mounts the shell -
+it points its iframe straight at `?embedded=1` and runs its own
+gate before an app can be opened - so the component simply doesn't
+exist in that path.
 
 ### 13.7 Non-goals
 

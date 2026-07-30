@@ -45,12 +45,18 @@ import {
   isProtocolMessage,
 } from '../lib/protocol';
 import { fetchRobotsFromCentral } from '../lib/centralRest';
+import {
+  fetchLatestDaemonVersion,
+  isDaemonOutdated,
+  parseSemver,
+} from '../lib/daemonRelease';
 import type {
   AppConnectingStep,
   AppPhase,
   ConfigPayload,
   CredsBundle,
   EmbedToHostMsg,
+  EmbedUpdateProgressMsg,
   HostInitMsg,
   HostToEmbedMsg,
   ThemeMode,
@@ -71,6 +77,11 @@ const TOKEN_TTL_MS = 15 * 60 * 1000;
 // (and the ConnectingView "slow hint" at ~6 s), so a slow or older daemon
 // degrades into "land the user" rather than trapping them on the splash.
 const WAKE_TRAJECTORY_TIMEOUT_MS = 8000;
+// Budget for the `get_version` round-trip we run between session-up and
+// wake. Short on purpose: the answer only feeds the host's update gate,
+// so an unresponsive or too-old daemon must cost the boot a blink, not a
+// stall. Mirrors the mobile app's own bring-up version read.
+const DAEMON_VERSION_TIMEOUT_MS = 2500;
 // Sleep-on-leave budget. The host layer owns wake/sleep, so on an explicit
 // graceful leave the embed plays goto_sleep itself (immediate) then forces
 // motors disabled - mirroring the mobile app (`sleepAndDisableRobot`). We wait
@@ -398,6 +409,11 @@ async function bootOnce(
     signalingUrl: creds.signalingUrl,
     ...options.sdkOptions,
   });
+  // Not OUR build version: the embed rides whatever `window.ReachyMini`
+  // the app loaded, and that bundle is what talks to the robot. Latched
+  // module-level so every app-state re-advertises it (same lifecycle as
+  // `daemonVersion` below). SDKs that predate the field leave it null.
+  appSdkVersion = typeof sdk.sdkVersion === 'string' ? sdk.sdkVersion : null;
 
   // 5. Build the bridge (subscriber registry) + post ready.
   const bridge = createBridge(expectedOrigin, sdk);
@@ -456,6 +472,13 @@ async function bootOnce(
     throw err;
   }
 
+  // Read the daemon version now that the data channel is up, and before
+  // the wake, so a host that gates on it (the web shell's update gate)
+  // can decide while the user is still on the connecting splash rather
+  // than after the app has painted. Fail-open: stays `null` on timeout.
+  daemonVersion = await readDaemonVersion(sdk);
+  postDebug('boot:daemon-version', { daemonVersion });
+
   // Await the wake-up trajectory to completion (not fire-and-forget) so the
   // app is only revealed once the robot has finished its wake animation.
   pushAppState('connecting', 'wake');
@@ -467,6 +490,12 @@ async function bootOnce(
   //    robot if the browser kills the tab.
   bridge.attachPageHide(sdk);
   pushAppState('live', null);
+
+  // Self-serve staleness check: this runs INSIDE the app's iframe, so
+  // it covers every consumer (web shell, mobile app, anything else)
+  // without the parent lifting a finger. Fire-and-forget: the GitHub
+  // lookup must never delay or break going live.
+  void maybeWarnSdkOutdated();
 
   // 9. Start sampling our own WebRTC RTT and reporting it upstream so
   //    a host shell that handed its session off to us (mobile app)
@@ -589,6 +618,10 @@ function createBridge(expectedOrigin: string, sdk: ReachyMiniInstance) {
       }
       case 'host:leaving': {
         void runGracefulLeave();
+        break;
+      }
+      case 'host:start-update': {
+        startDaemonUpdateForHost(sdk, msg.preRelease === true);
         break;
       }
     }
@@ -873,6 +906,107 @@ function postToHost(msg: EmbedToHostMsg): void {
   }
 }
 
+/**
+ * Run the daemon self-update on the host's behalf and relay its
+ * progress back over the bridge.
+ *
+ * The host asks for this because only we hold a data channel. Daemon
+ * events are forwarded verbatim; on top of them we synthesise the one
+ * the daemon can't send - `rebooting`, when the restart takes the
+ * session down mid-install, which is what a success looks like from
+ * here.
+ */
+function startDaemonUpdateForHost(
+  sdk: ReachyMiniInstance,
+  preRelease: boolean,
+): void {
+  const postProgress = (msg: Omit<EmbedUpdateProgressMsg, 'source' | 'type' | 'version'>): void => {
+    postToHost({
+      source: PROTOCOL_SOURCE,
+      type: 'embed:update-progress',
+      version: PROTOCOL_VERSION,
+      ...msg,
+    });
+  };
+
+  let sent: boolean;
+  try {
+    sent = sdk.startDaemonUpdate({
+      preRelease,
+      onProgress: (event) =>
+        postProgress({
+          status: event.status,
+          line: event.line ?? null,
+          error: event.error ?? null,
+        }),
+    });
+  } catch (err) {
+    postProgress({ status: 'failed', error: (err as Error)?.message ?? String(err) });
+    return;
+  }
+  // Channel closed: the daemon never saw the request, so nothing else
+  // will ever report on it. Say so now rather than leaving the host to
+  // time out on a job that was never started.
+  if (!sent) {
+    postProgress({ status: 'failed', error: 'Data channel not open' });
+    return;
+  }
+
+  // A successful install ends with `systemctl restart`, which kills the
+  // session before the daemon can report anything: the transport
+  // dropping IS the completion signal. Translate it into an explicit
+  // `rebooting` so the host stops waiting on a channel that will never
+  // speak again.
+  const onSessionStopped = (): void => {
+    sdk.removeEventListener('sessionStopped', onSessionStopped);
+    postProgress({ status: 'rebooting' });
+  };
+  try {
+    sdk.addEventListener('sessionStopped', onSessionStopped);
+  } catch {
+    /* older SDK without the event: the host falls back to its stall timer */
+  }
+}
+
+/**
+ * Daemon version of the robot we're talking to, resolved once the
+ * session is up (see `readDaemonVersion`). Module-level so every
+ * subsequent `pushAppState` re-advertises it: the host has no data
+ * channel of its own, so this is its only way to learn what software
+ * the robot runs. `null` until resolved, or forever against a daemon
+ * that predates `get_version`.
+ */
+let daemonVersion: string | null = null;
+
+/**
+ * Version of the SDK bundle the app loaded (`instance.sdkVersion`),
+ * captured at construction in `bootOnce`. Drives our own staleness
+ * check (`maybeWarnSdkOutdated`) and is advertised on every app-state
+ * for parents that update independently of the app (see `sdkVersion`
+ * in protocol.ts). `null` against an SDK old enough not to carry the
+ * field.
+ */
+let appSdkVersion: string | null = null;
+
+/**
+ * Ask the daemon its version, bounded so a silent or too-old daemon
+ * can't stall the boot. Fail-open: any timeout / rejection resolves
+ * `null`, which every consumer reads as "unknown, carry on".
+ */
+async function readDaemonVersion(sdk: ReachyMiniInstance): Promise<string | null> {
+  try {
+    const version = await Promise.race([
+      sdk.getVersion(),
+      new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), DAEMON_VERSION_TIMEOUT_MS),
+      ),
+    ]);
+    return typeof version === 'string' && version.length > 0 ? version : null;
+  } catch {
+    return null;
+  }
+}
+
 function pushAppState(
   phase: AppPhase,
   connectingStep: AppConnectingStep | null,
@@ -887,7 +1021,111 @@ function pushAppState(
     connectingStep,
     message,
     rttMs,
+    daemonVersion,
+    sdkVersion: appSdkVersion,
   });
+}
+
+/* ─────────────────── SDK staleness self-check ─────────────────── */
+
+/**
+ * Warn the user, from inside the iframe, when the SDK bundle this app
+ * shipped trails the latest release.
+ *
+ * Why here and not in the parent: the embed is the only code that runs
+ * identically under every host (web shell, mobile app WebView), so a
+ * check living here needs zero integration on the parent's side. The
+ * one case it structurally CANNOT cover is an app whose SDK predates
+ * this very code - a frozen bundle can't warn about itself. Only a
+ * parent that updates independently of the app could catch that (the
+ * mobile app, via the absence of `sdkVersion` on app-state); the web
+ * shell can't, being part of the same frozen bundle.
+ *
+ * Silent when: the version is a dev placeholder (`0.0.0-*`) or
+ * unparseable, the latest release can't be fetched, or we're simply up
+ * to date. Never blocks - one click dismisses it for the session.
+ */
+async function maybeWarnSdkOutdated(): Promise<void> {
+  try {
+    const parsed = parseSemver(appSdkVersion);
+    if (!parsed || parsed.major === 0) return;
+    const latest = await fetchLatestDaemonVersion();
+    if (!isDaemonOutdated(appSdkVersion, latest)) return;
+    showSdkOutdatedOverlay(appSdkVersion as string, latest as string);
+  } catch {
+    /* purely advisory - never let it interfere with a live session */
+  }
+}
+
+/** Plain-DOM overlay (the embed is framework-agnostic): dark scrim,
+ *  centred card, one dismiss button. Styling is self-contained so it
+ *  renders the same over any app theme. */
+function showSdkOutdatedOverlay(current: string, latest: string): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('reachy-sdk-outdated-overlay')) return;
+
+  const scrim = document.createElement('div');
+  scrim.id = 'reachy-sdk-outdated-overlay';
+  scrim.setAttribute('role', 'alertdialog');
+  scrim.setAttribute('aria-label', 'This app may be out of date');
+  scrim.style.cssText = [
+    'position:fixed',
+    'inset:0',
+    'z-index:2147483000',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'padding:16px',
+    'background:rgba(0,0,0,0.55)',
+    'font-family:system-ui,-apple-system,sans-serif',
+  ].join(';');
+
+  const card = document.createElement('div');
+  card.style.cssText = [
+    'background:#fff',
+    'color:#1a1a1a',
+    'border-radius:12px',
+    'padding:24px',
+    'max-width:400px',
+    'width:100%',
+    'text-align:center',
+    'box-shadow:0 8px 32px rgba(0,0,0,0.35)',
+  ].join(';');
+
+  const icon = document.createElement('div');
+  icon.textContent = '\u26A0\uFE0F';
+  icon.style.cssText = 'font-size:32px;line-height:1;margin-bottom:12px';
+
+  const title = document.createElement('div');
+  title.textContent = 'This app may be out of date';
+  title.style.cssText = 'font-size:17px;font-weight:700;margin-bottom:8px';
+
+  const body = document.createElement('div');
+  body.textContent =
+    `It was built with SDK v${current}, but v${latest} is the latest. ` +
+    'Some things may not behave as expected with your robot.';
+  body.style.cssText =
+    'font-size:13px;line-height:1.6;color:#555;margin-bottom:16px';
+
+  const button = document.createElement('button');
+  button.textContent = 'I understand, continue';
+  button.style.cssText = [
+    'width:100%',
+    'padding:10px 16px',
+    'border:none',
+    'border-radius:8px',
+    'background:#1a1a1a',
+    'color:#fff',
+    'font-size:13px',
+    'font-weight:600',
+    'cursor:pointer',
+  ].join(';');
+  button.addEventListener('click', () => scrim.remove());
+
+  card.append(icon, title, body, button);
+  scrim.appendChild(card);
+  document.body.appendChild(scrim);
+  button.focus();
 }
 
 /* ─────────────────── Live link latency monitor ─────────────────── */

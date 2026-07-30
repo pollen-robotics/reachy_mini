@@ -14,10 +14,12 @@
  * - Every message carries `source: 'reachy-mini'`. Lets receivers
  *   distinguish our envelopes from unrelated `postMessage` traffic
  *   (DevTools, MUI portals, browser extensions, ...).
- * - Both sides validate `event.origin` against the expected origin
- *   before trusting the payload. In our deployment (same-origin
- *   iframe within an HF Space) the expected origin is
- *   `event.origin === window.location.origin`.
+ * - Both sides validate `event.origin` before trusting the payload,
+ *   but against different references: the web shell requires strict
+ *   same-origin (`window.location.origin` - Mode A, the Space embeds
+ *   itself), while the embed accepts its PARENT's origin resolved via
+ *   `document.referrer` (Mode B, the mobile shell at e.g.
+ *   `tauri.localhost` is a different origin by construction).
  *
  * Message families
  * ────────────────
@@ -162,11 +164,33 @@ export interface HostLeavingMsg {
   timeoutMs: number;
 }
 
+/**
+ * Ask the embed to trigger the daemon's PyPI self-update.
+ *
+ * Only the embed holds a data channel, so the host cannot send
+ * `start_update` itself - it delegates here and watches the
+ * `embed:update-progress` replies. A successful update ends with a
+ * `systemctl restart` on the robot, which kills the session: the embed
+ * will go silent and the host is expected to remount the iframe once
+ * the robot is back on central.
+ *
+ * Additive message (no version bump): an embed too old to know this
+ * type ignores it, so the host must not block on a reply.
+ */
+export interface HostStartUpdateMsg {
+  source: typeof PROTOCOL_SOURCE;
+  type: 'host:start-update';
+  version: 1;
+  /** Install the latest pre-release instead of the latest stable. */
+  preRelease?: boolean;
+}
+
 export type HostToEmbedMsg =
   | HostInitMsg
   | HostThemeChangedMsg
   | HostConfigChangedMsg
-  | HostLeavingMsg;
+  | HostLeavingMsg
+  | HostStartUpdateMsg;
 
 /* ─────────────────── EMBED → HOST ─────────────────── */
 
@@ -212,6 +236,66 @@ export interface EmbedAppStateMsg {
    * ignore it.
    */
   rttMs?: number | null;
+  /**
+   * Daemon version reported by the robot (`get_version` over the data
+   * channel), resolved once the session is up. Additive field (no
+   * version bump).
+   *
+   * The host has no data channel of its own and central exposes no
+   * version, so this is the ONLY way a shell can tell whether the robot
+   * it just handed the app to is running current software. The web
+   * shell uses it to gate on a minimum supported version; hosts that
+   * don't care ignore it.
+   *
+   * `null` (or omitted) until resolved, or when the daemon predates
+   * `get_version`. Receivers MUST treat "unknown" as "fine" - never
+   * block a robot just because it stayed silent.
+   */
+  daemonVersion?: string | null;
+  /**
+   * Build version of the SDK bundle the app loaded
+   * (`ReachyMini.version`, generated at publish time). Additive field
+   * (no version bump).
+   *
+   * The embed rides whatever `window.ReachyMini` the app shipped, so
+   * this tells the shell how stale the app's robot stack is - e.g. to
+   * warn that behaviour may be off against a newer daemon. `null` (or
+   * omitted) when the SDK predates the field - which, unlike
+   * `daemonVersion`, is a meaningful signal: every SDK from the release
+   * that introduced this field reports it, so silence through a live
+   * session means "built before that". Receivers may surface a notice
+   * on it, but MUST never block on it.
+   */
+  sdkVersion?: string | null;
+}
+
+/**
+ * Progress of a `host:start-update` job, relayed from the SDK's
+ * `update_progress` stream one message per log line.
+ *
+ *   in_progress : a log line of the install.
+ *   rebooting   : the WebRTC session died while the update was in
+ *                 flight. Synthesised by the embed, NOT by the daemon -
+ *                 a successful install restarts the daemon before it
+ *                 can report anything, so the transport dropping is the
+ *                 success signal. Nothing more will arrive on this
+ *                 channel: the host should tear the iframe down and
+ *                 wait for the robot to reappear on central.
+ *   done        : the daemon explicitly reported completion. Rare (see
+ *                 above), but forwarded when it happens.
+ *   failed      : the daemon declined the job (not wireless, no update
+ *                 available, one already running) or the install raised
+ *                 before the restart.
+ */
+export interface EmbedUpdateProgressMsg {
+  source: typeof PROTOCOL_SOURCE;
+  type: 'embed:update-progress';
+  version: 1;
+  status: 'in_progress' | 'rebooting' | 'done' | 'failed';
+  /** Log line for `in_progress`. */
+  line?: string | null;
+  /** Reason for `failed`. */
+  error?: string | null;
 }
 
 /** App requests to leave (user clicked an in-app exit, error,
@@ -256,7 +340,8 @@ export type EmbedToHostMsg =
   | EmbedAppStateMsg
   | EmbedRequestLeaveMsg
   | EmbedLeftMsg
-  | EmbedErrorMsg;
+  | EmbedErrorMsg
+  | EmbedUpdateProgressMsg;
 
 /* ─────────────────── CREDS BUNDLE ─────────────────── */
 
