@@ -47,6 +47,12 @@ jobs:
       - name: Install package dependencies
         run: npm ci
 
+      # Unit + wire-compat tests (vitest). Gates the publish: the
+      # golden-envelope suite is what guarantees already-published
+      # Spaces (frozen embed bundles) keep talking to a newer host.
+      - name: Run tests
+        run: npm test
+
       # Build the SDK dist/ + host bundles into host/dist/. Required
       # for the `.`, `./host`, `./host/auto`, `./host/embed`, and
       # `./host/protocol` subpath exports to resolve in the published
