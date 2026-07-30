@@ -705,7 +705,11 @@ class CentralSignalingRelay:
                             f"Connection failed after {self._connection_attempts} attempts: {e}",
                         )
 
-                if self._running and not had_exception and self._state == RelayState.ERROR:
+                if (
+                    self._running
+                    and not had_exception
+                    and self._state == RelayState.ERROR
+                ):
                     # Clean return but ERROR (e.g. 401) - back off like a failure.
                     had_exception = True
                     self._connection_attempts += 1
@@ -1471,13 +1475,16 @@ class CentralSignalingRelay:
                 logger.info(
                     f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}"
                 )
-                # If no sessions remain, release the robot lock.
+                # If no sessions remain, release the robot lock. This is the
+                # client hanging up on purpose, so flag it as a hand-off: it may
+                # well be making room for a successor session (mobile app ->
+                # app iframe) rather than walking away from the robot.
                 if (
                     self._robot_app_lock is not None
                     and not self._central_to_local_session
                     and not self._pending_central_sessions
                 ):
-                    self._robot_app_lock.release_remote()
+                    self._robot_app_lock.release_remote(expect_handoff=True)
 
         elif msg_type == "peerStatusChanged":
             # Another peer changed status - ignore for producers
@@ -1604,13 +1611,14 @@ class CentralSignalingRelay:
                 logger.info(
                     f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}"
                 )
-                # If no sessions remain, release the robot lock.
+                # If no sessions remain, release the robot lock. Deliberate
+                # hang-up, so same hand-off treatment as the central-side path.
                 if (
                     self._robot_app_lock is not None
                     and not self._central_to_local_session
                     and not self._pending_central_sessions
                 ):
-                    self._robot_app_lock.release_remote()
+                    self._robot_app_lock.release_remote(expect_handoff=True)
 
 
 # Singleton instance for integration
