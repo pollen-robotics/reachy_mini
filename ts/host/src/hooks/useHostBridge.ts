@@ -24,6 +24,7 @@ import type {
   AppPhase,
   ConfigPayload,
   EmbedToHostMsg,
+  EmbedUpdateProgressMsg,
   HostInitMsg,
   LeavingReason,
   ThemeMode,
@@ -39,6 +40,16 @@ export interface EmbedAppState {
    *  TRUE link-latency signal available; `null` when not yet measured
    *  or unavailable (e.g. iOS WKWebView). */
   rttMs: number | null;
+  /** Daemon version the embed read over its data channel, or `null`
+   *  while unknown (not yet resolved, or a daemon predating
+   *  `get_version`). The shell has no channel of its own, so this is
+   *  its only version signal - see `DaemonUpdateGate`. */
+  daemonVersion: string | null;
+  /** Build version of the SDK bundle the app loaded, or `null` when
+   *  the SDK predates the field (see `sdkVersion` in protocol.ts).
+   *  The web shell itself has no use for it (same bundle as the
+   *  embed); parsed for consumers that update independently. */
+  sdkVersion: string | null;
 }
 
 export interface UseHostBridgeOptions {
@@ -58,6 +69,17 @@ export interface UseHostBridgeOptions {
   /** App reported an error. Fatal errors should switch the host
    *  to ErrorView; non-fatal can be toasted or logged. */
   onError(payload: { message: string; fatal: boolean; detail?: unknown }): void;
+  /** Progress of a daemon update the host asked for via
+   *  `sendStartUpdate`. Optional: hosts that never trigger one will
+   *  never see these. */
+  onUpdateProgress?(payload: EmbedUpdateProgress): void;
+}
+
+/** Payload of an `embed:update-progress` envelope. */
+export interface EmbedUpdateProgress {
+  status: EmbedUpdateProgressMsg['status'];
+  line: string | null;
+  error: string | null;
 }
 
 export interface HostBridge {
@@ -80,6 +102,11 @@ export interface HostBridge {
     reason: LeavingReason,
     timeoutMs: number,
   ): void;
+  /** `host:start-update`. Ask the embed to run the daemon's PyPI
+   *  self-update on our behalf (only it holds a data channel).
+   *  Fire-and-forget: an embed too old to know the message ignores it,
+   *  so callers MUST have their own timeout. */
+  sendStartUpdate(iframe: HTMLIFrameElement, preRelease?: boolean): void;
 }
 
 export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
@@ -105,6 +132,8 @@ export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
             connectingStep: data.connectingStep ?? null,
             message: data.message ?? null,
             rttMs: data.rttMs ?? null,
+            daemonVersion: data.daemonVersion ?? null,
+            sdkVersion: data.sdkVersion ?? null,
           });
           return;
         case 'embed:request-leave':
@@ -118,6 +147,13 @@ export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
             message: data.message,
             fatal: data.fatal,
             detail: data.detail,
+          });
+          return;
+        case 'embed:update-progress':
+          callbacks.current.onUpdateProgress?.({
+            status: data.status,
+            line: data.line ?? null,
+            error: data.error ?? null,
           });
           return;
         default: {
@@ -192,7 +228,25 @@ export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
     [],
   );
 
-  return { sendInit, sendThemeChanged, sendConfigChanged, sendLeaving };
+  const sendStartUpdate = useCallback<HostBridge['sendStartUpdate']>(
+    (iframe, preRelease = false) => {
+      postToFrame(iframe, {
+        source: PROTOCOL_SOURCE,
+        type: 'host:start-update',
+        version: PROTOCOL_VERSION,
+        preRelease,
+      });
+    },
+    [],
+  );
+
+  return {
+    sendInit,
+    sendThemeChanged,
+    sendConfigChanged,
+    sendLeaving,
+    sendStartUpdate,
+  };
 }
 
 function postToFrame(iframe: HTMLIFrameElement, msg: unknown): void {

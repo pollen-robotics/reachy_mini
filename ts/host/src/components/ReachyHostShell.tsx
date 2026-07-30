@@ -29,6 +29,8 @@ import Stack from '@mui/material/Stack';
 import type { ReachyMiniInstance, RobotInfo } from '../lib/sdk-types';
 import {
   encodeCredsToHash,
+  type AppConnectingStep,
+  type AppPhase,
   type ConfigPayload,
   type CredsBundle,
   type LeavingReason,
@@ -36,12 +38,18 @@ import {
 } from '../lib/protocol';
 import { resolveSignalingUrl } from '../lib/signalingUrl';
 import { wipeHfSessionStorage } from '../lib/settings';
+import { useLatestDaemonVersion } from '../hooks/useLatestDaemonVersion';
 import { useHfProfile } from '../hooks/useHfProfile';
 import { useOAuth } from '../hooks/useOAuth';
 import { useRobots } from '../hooks/useRobots';
-import { useHostBridge, type EmbedAppState } from '../hooks/useHostBridge';
+import {
+  useHostBridge,
+  type EmbedAppState,
+  type EmbedUpdateProgress,
+} from '../hooks/useHostBridge';
 
 import { ConnectingView } from './ConnectingView';
+import { DaemonUpdateGate } from './DaemonUpdateGate';
 import { EmbedFrame } from './EmbedFrame';
 import { ErrorView } from './ErrorView';
 import { LeavingView } from './LeavingView';
@@ -56,6 +64,24 @@ import { WelcomeBackOverlay } from './WelcomeBackOverlay';
 // than the embed's own sleep hard-cap (~6.5 s) so a well-behaved embed's ack
 // wins the race; a wedged/older embed that never acks just falls through here.
 const LEAVING_ACK_CAP_MS = 8000;
+
+/** Fresh `EmbedAppState` for a phase reset (boot, or the optimistic
+ *  `connecting` shown while the iframe mounts). Single source of truth
+ *  for the "everything unknown" shape - additive fields default to
+ *  null here and nowhere else. */
+function makeEmbedAppState(
+  phase: AppPhase,
+  connectingStep: AppConnectingStep | null = null,
+): EmbedAppState {
+  return {
+    phase,
+    connectingStep,
+    message: null,
+    rttMs: null,
+    daemonVersion: null,
+    sdkVersion: null,
+  };
+}
 
 export interface ReachyHostShellProps {
   sdk: ReachyMiniInstance | null;
@@ -178,12 +204,29 @@ function ReachyHostShellNormal({
     transport: string | null;
     hardwareId: string | null;
   } | null>(null);
-  const [embedAppState, setEmbedAppState] = useState<EmbedAppState>({
-    phase: 'boot',
-    connectingStep: null,
-    message: null,
-    rttMs: null,
-  });
+  const [embedAppState, setEmbedAppState] = useState<EmbedAppState>(() =>
+    makeEmbedAppState('boot'),
+  );
+  /** Daemon version of the robot in session, latched from the embed's
+   *  app-state. Kept OUT of `embedAppState` because the update flow
+   *  outlives the iframe: we tear the embed down when the daemon
+   *  restarts, and the gate still needs to name the version it is
+   *  replacing. Cleared on the next selection. */
+  const [daemonVersion, setDaemonVersion] = useState<string | null>(null);
+  /** Latest `embed:update-progress` payload, or `null` when no update
+   *  has been asked for in this selection. */
+  const [updateProgress, setUpdateProgress] =
+    useState<EmbedUpdateProgress | null>(null);
+  /** Set when we dropped the iframe because the daemon restarted mid
+   *  update. Holds what we need to recognise the robot when it comes
+   *  back on central (its peer id will have rotated). */
+  const [awaitingReboot, setAwaitingReboot] = useState<{
+    hardwareId: string | null;
+    name: string | null;
+  } | null>(null);
+  /** Remounts `DaemonUpdateGate` on every selection so its "user
+   *  already dismissed this" latch doesn't leak into the next robot. */
+  const [gateKey, setGateKey] = useState(0);
   const [errorPayload, setErrorPayload] = useState<{
     message: string;
     detail?: unknown;
@@ -258,6 +301,7 @@ function ReachyHostShellNormal({
     hfToken,
     enabled: isAuthenticated && hostPhase === 'picking',
   });
+  const latestDaemonVersion = useLatestDaemonVersion();
 
   // Latch the welcome-back overlay on once the post-OAuth flag
   // fires AND the username is resolved. Gating on `userName`
@@ -395,6 +439,10 @@ function ReachyHostShellNormal({
     },
     onAppState: (state) => {
       setEmbedAppState(state);
+      // Latch, never clear: the embed re-sends app-state without the
+      // version on some transitions, and a momentary `null` would make
+      // the gate blink out mid-decision.
+      if (state.daemonVersion) setDaemonVersion(state.daemonVersion);
       if (state.phase === 'error') {
         setErrorPayload({
           message: state.message ?? 'The app reported an error.',
@@ -422,6 +470,7 @@ function ReachyHostShellNormal({
         );
       }
     },
+    onUpdateProgress: setUpdateProgress,
   });
 
   /* ─────────────────── Phase driver: auth ─────────────────── */
@@ -464,17 +513,16 @@ function ReachyHostShellNormal({
       });
       initSentForRef.current = null;
       embedReadyPendingRef.current = false;
+      setDaemonVersion(null);
+      setUpdateProgress(null);
+      setAwaitingReboot(null);
+      setGateKey((k) => k + 1);
       // The host never opened an SSE (picker uses REST), so the
       // iframe's SDK gets a clean central slot with no prior peer
       // registered for this HF token. No releaseSdkForHandoff()
       // needed - that legacy hook tore down a connection we no
       // longer create.
-      setEmbedAppState({
-        phase: 'connecting',
-        connectingStep: 'link',
-        message: null,
-        rttMs: null,
-      });
+      setEmbedAppState(makeEmbedAppState('connecting', 'link'));
       setHostPhase('embedded');
     },
     [hostPhase, robots, sdk],
@@ -516,12 +564,7 @@ function ReachyHostShellNormal({
       // close).
       setSelectedRobotId(null);
       setSelectedRobot(null);
-      setEmbedAppState({
-        phase: 'boot',
-        connectingStep: null,
-        message: null,
-        rttMs: null,
-      });
+      setEmbedAppState(makeEmbedAppState('boot'));
       initSentForRef.current = null;
       embedReadyPendingRef.current = false;
 
@@ -531,6 +574,55 @@ function ReachyHostShellNormal({
     },
     [bridge, hostPhase],
   );
+
+  /* ─────────────────── Daemon update ─────────────────── */
+
+  const startDaemonUpdate = useCallback((): void => {
+    if (!iframeRef.current) return;
+    setUpdateProgress(null);
+    bridge.sendStartUpdate(iframeRef.current);
+  }, [bridge]);
+
+  /**
+   * The daemon restarted, so the session is gone for good. Drop the
+   * iframe WITHOUT the usual `host:leaving` handshake - there's no
+   * robot left to sleep, and waiting on an ack that can't come would
+   * just stall the overlay - then fall back to the picker, whose
+   * central polling is how we find out the robot is back.
+   */
+  const handleUpdateSessionLost = useCallback((): void => {
+    setAwaitingReboot((prev) =>
+      prev ?? {
+        hardwareId: selectedRobot?.hardwareId ?? null,
+        name: selectedRobot?.name ?? null,
+      },
+    );
+    setSelectedRobotId(null);
+    setSelectedRobot(null);
+    setEmbedAppState(makeEmbedAppState('boot'));
+    initSentForRef.current = null;
+    embedReadyPendingRef.current = false;
+    setHostPhase('picking');
+  }, [selectedRobot]);
+
+  const dismissDaemonUpdate = useCallback((): void => {
+    setAwaitingReboot(null);
+    setUpdateProgress(null);
+  }, []);
+
+  // Is the robot we were updating listed on central again? Its peer id
+  // rotates across the reboot, so match on the stable hardware id, then
+  // on the advertised name. With neither (an older daemon that reports
+  // no hardware id), any robot coming online is the best guess we have.
+  const rebootedRobotBack =
+    awaitingReboot !== null &&
+    robots.some((r) => {
+      if (awaitingReboot.hardwareId) {
+        return r.hardwareId === awaitingReboot.hardwareId;
+      }
+      if (awaitingReboot.name) return r.meta?.name === awaitingReboot.name;
+      return true;
+    });
 
   /* ─────────────────── Iframe URL ─────────────────── */
 
@@ -734,6 +826,25 @@ function ReachyHostShellNormal({
        *  and the phase transitions. Hands off to WelcomeBackOverlay
        *  (zIndex 1300) once the username lands. */}
       {showAuthSplash && <PostOAuthSplash />}
+
+      {/* Web-only by construction: the mobile app never mounts this
+       *  shell (it points its iframe straight at `?embedded=1` and runs
+       *  its own gate), so there is nothing to suppress here. Rendered
+       *  outside the phase switch because the update flow outlives the
+       *  session it started in: the daemon reboots, we drop the iframe,
+       *  and this overlay stays up over the picker until the robot is
+       *  back. Renders null whenever there's nothing to say. */}
+      <DaemonUpdateGate
+        key={gateKey}
+        currentVersion={daemonVersion}
+        latestVersion={latestDaemonVersion}
+        progress={updateProgress}
+        robotBackOnline={rebootedRobotBack}
+        appLive={hostPhase === 'embedded' && embedAppState.phase === 'live'}
+        onStartUpdate={startDaemonUpdate}
+        onSessionLost={handleUpdateSessionLost}
+        onDismiss={dismissDaemonUpdate}
+      />
 
       {welcomeBackShown && (
         <WelcomeBackOverlay
