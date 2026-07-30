@@ -22,6 +22,8 @@ export type {
   AutoConnectResult,
   MotionAwaitOptions,
   SubscribeLogsOptions,
+  StartDaemonUpdateOptions,
+  UpdateProgressEvent,
 } from '@pollen-robotics/reachy-mini-sdk';
 
 import type { ReachyMiniConstructor } from '@pollen-robotics/reachy-mini-sdk';
