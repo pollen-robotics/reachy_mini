@@ -2344,6 +2344,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';
                 is_move_running?: boolean;
                 face_target?: FaceTarget;
+                doa?: { angle: number; speech_detected: boolean } | null;
             };
             if (s.head_pose) this._robotState.head = s.head_pose.flat();
             if (s.antennas) this._robotState.antennas = [s.antennas[0], s.antennas[1]];
@@ -2351,6 +2352,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             if (s.motor_mode) this._robotState.motor_mode = s.motor_mode;
             if (typeof s.is_move_running === 'boolean') this._robotState.is_move_running = s.is_move_running;
             if (s.face_target) this._robotState.face_target = s.face_target;
+            // DoA is null when there's no mic array / no reading yet - reflect
+            // that by clearing our mirror so stale angles don't linger.
+            if ('doa' in s) this._robotState.doa = s.doa ?? undefined;
             this._emit('state', { ...this._robotState });
         }
         if (data.error) {
