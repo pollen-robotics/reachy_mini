@@ -61,14 +61,21 @@ def test_build_external_venv_pip_fallback(monkeypatch):
     assert tokens[:2] == [str(py.parent / "pip"), "install"]
 
 
+def _split_git_ref_cmd(cmd):
+    """Split `step1 && ( step2 || step3 )` into its three steps."""
+    step1, rest = cmd.split(" && ", 1)
+    assert rest.startswith("( ") and rest.endswith(" )")
+    step2, step3 = rest[2:-2].split(" || ", 1)
+    return step1, step2, step3
+
+
 def test_build_git_ref_uv(monkeypatch):
     """Git ref install chains three steps and sets the LFS env var (uv)."""
     monkeypatch.setattr(utils, "_check_uv_available", lambda: True)
     cmd, env = utils.build_install_command("wireless-version", git_ref="main")
     assert env == {"GIT_LFS_SKIP_SMUDGE": "1"}
 
-    step1, rest = cmd.split(" && ", 1)
-    step2, step3 = rest.split(" || ", 1)
+    step1, step2, step3 = _split_git_ref_cmd(cmd)
 
     t1 = shlex.split(step1)
     assert "--force-reinstall" in t1 and "--no-deps" in t1 and "--no-cache-dir" in t1
@@ -85,11 +92,49 @@ def test_build_git_ref_pip_fallback(monkeypatch):
     """Git ref via pip appends the only-if-needed upgrade strategy."""
     monkeypatch.setattr(utils, "_check_uv_available", lambda: False)
     cmd, _ = utils.build_install_command("wireless-version", git_ref="dev")
-    _, rest = cmd.split(" && ", 1)
-    step2, step3 = rest.split(" || ", 1)
+    _, step2, step3 = _split_git_ref_cmd(cmd)
     assert shlex.split(step2) == ["pip", "check"]
     t3 = shlex.split(step3)
     assert "--upgrade-strategy" in t3 and "only-if-needed" in t3
+
+
+def test_build_git_ref_step1_failure_not_masked(monkeypatch):
+    """Regression: a failed step1 must fail the WHOLE chain.
+
+    With the bare `step1 && step2 || step3` shell precedence, a failed
+    step1 ran step3 (a plain PyPI upgrade): the latest wheel silently
+    replaced the requested git ref AND its exit code masked the failure.
+    The grouped form `step1 && ( step2 || step3 )` short-circuits instead.
+    """
+    monkeypatch.setattr(utils, "_check_uv_available", lambda: True)
+    cmd, _ = utils.build_install_command("wireless-version", git_ref="main")
+    step1, _, _ = _split_git_ref_cmd(cmd)
+    assert cmd.startswith(f"{step1} && ( ")
+
+
+# --- call_logger_wrapper ---
+
+
+@pytest.mark.asyncio
+async def test_call_logger_wrapper_success():
+    """A zero exit code returns without raising."""
+    import logging
+
+    await utils.call_logger_wrapper("true", logging.getLogger("test"))
+
+
+@pytest.mark.asyncio
+async def test_call_logger_wrapper_nonzero_raises():
+    """Regression: a non-zero exit code must raise, not pass silently.
+
+    Before this check, a failed `pip install` sailed through and
+    `update_reachy_mini` restarted the daemon on the OLD version while
+    every route (REST job, BLE screen, WebRTC broadcast) reported success.
+    """
+    import logging
+
+    with pytest.raises(RuntimeError, match="exit code 7"):
+        await utils.call_logger_wrapper("exit 7", logging.getLogger("test"))
 
 
 # --- _semver_version ---
@@ -305,3 +350,65 @@ async def test_update_without_apps_venv(monkeypatch):
 
     assert calls.call_count == 2
     assert calls.await_args_list[-1].args[0] == "sudo systemctl restart reachy-mini-daemon"
+
+
+@pytest.mark.asyncio
+async def test_update_daemon_install_failure_aborts_before_restart(monkeypatch):
+    """A failed daemon venv install propagates and never restarts the daemon."""
+    calls = AsyncMock(side_effect=RuntimeError("pip install failed"))
+    monkeypatch.setattr(update, "call_logger_wrapper", calls)
+    monkeypatch.setattr(update.Path, "exists", lambda self: True)
+
+    import logging
+
+    with pytest.raises(RuntimeError, match="pip install failed"):
+        await update.update_reachy_mini(logging.getLogger("test"))
+
+    # Only the daemon venv install ran: no apps_venv step, no restart.
+    assert calls.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_update_apps_venv_failure_still_restarts(monkeypatch):
+    """An apps_venv failure is non-fatal: the restart still applies the update.
+
+    The daemon venv is already on the new version when apps_venv fails;
+    skipping the restart would leave it installed-but-not-running with
+    retries refused as "no update available". The startup check re-syncs
+    apps_venv on the next boot instead.
+    """
+    commands: list[str] = []
+
+    async def fake_call(cmd, logger, env=None):
+        commands.append(cmd)
+        if len(commands) == 2:  # second call = apps_venv install
+            raise RuntimeError("apps_venv install failed")
+
+    monkeypatch.setattr(update, "call_logger_wrapper", fake_call)
+    monkeypatch.setattr(update.Path, "exists", lambda self: True)
+
+    import logging
+
+    await update.update_reachy_mini(logging.getLogger("test"))
+
+    assert len(commands) == 3
+    assert commands[-1] == "sudo systemctl restart reachy-mini-daemon"
+
+
+@pytest.mark.asyncio
+async def test_update_restart_failure_propagates(monkeypatch):
+    """A failed restart command surfaces as a failed job, not a silent pass."""
+    commands: list[str] = []
+
+    async def fake_call(cmd, logger, env=None):
+        commands.append(cmd)
+        if cmd.startswith("sudo systemctl restart"):
+            raise RuntimeError("systemctl failed")
+
+    monkeypatch.setattr(update, "call_logger_wrapper", fake_call)
+    monkeypatch.setattr(update.Path, "exists", lambda self: False)
+
+    import logging
+
+    with pytest.raises(RuntimeError, match="systemctl failed"):
+        await update.update_reachy_mini(logging.getLogger("test"))
