@@ -2703,7 +2703,14 @@ class Backend:
     # above. Sleeping in that window is exactly what the user doesn't want:
     # they tapped an app, not "go to sleep". Long enough to cover a slow Space,
     # short enough that a hand-off that never lands still parks the robot.
-    IDLE_RESET_HANDOFF_GRACE_S: float = 30.0
+    #
+    # Sized down from an initial 30 s after hardware testing: real handoffs
+    # re-acquire the slot within 1-4 s, and abrupt client deaths (tab kill)
+    # ride the same local endSession path as deliberate hang-ups - the relay
+    # cannot tell them apart - so this grace is also how long a crashed
+    # client keeps the robot needlessly awake. A Space colder than this just
+    # gets a legitimate wake animation when it finally connects.
+    IDLE_RESET_HANDOFF_GRACE_S: float = 15.0
 
     def request_idle_reset(self, *, expect_handoff: bool = False) -> None:
         """Return the robot to a clean idle state when no managed app owns it.
