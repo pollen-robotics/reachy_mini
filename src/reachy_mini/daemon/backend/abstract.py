@@ -1176,12 +1176,31 @@ class Backend:
     )
 
     async def wake_up(self) -> None:
-        """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
+        """Wake up the robot - go to the initial head position and play the wake up emote and sound.
+
+        Skips the emote (and its "toudoum") when the robot is already awake and
+        standing at the init pose: clients routinely send ``wake_up`` on
+        session start, and now that a handoff keeps the robot awake between
+        sessions (see ``request_idle_reset``'s handoff grace), replaying the
+        animation on an already-awake robot reads as a glitch, not a wake.
+        Mirrors ``goto_sleep``, which likewise stands down near its target
+        pose. The wake-completed callback still fires so the "start app after
+        wake" hook keeps its semantics: the robot IS awake.
+        """
         await asyncio.sleep(0.1)
 
         _, _, magic_distance = distance_between_poses(
             self.get_current_head_pose(), self.INIT_HEAD_POSE
         )
+
+        # Same empirical "close enough" threshold as goto_sleep's.
+        if (
+            self.get_motor_control_mode() == MotorControlMode.Enabled
+            and magic_distance < 10
+        ):
+            if self._on_wake_up_callback is not None:
+                self._on_wake_up_callback()
+            return
 
         await self.goto_target(
             self.INIT_HEAD_POSE,
