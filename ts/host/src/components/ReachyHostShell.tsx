@@ -167,15 +167,16 @@ function ReachyHostShellNormal({
 
   const [hostPhase, setHostPhase] = useState<HostPhase>('signing-in');
   const [selectedRobotId, setSelectedRobotId] = useState<string | null>(null);
-  /** Identity (name + transport) of the picked robot, captured at
-   *  selection time. `useRobots` is disabled the moment we leave
-   *  `picking` (and clears its list to protect the 1:1 token→peer
-   *  handoff invariant), so we CANNOT look the robot up in `robots`
-   *  during the session - it's empty. We snapshot what the topbar
-   *  needs here instead. */
+  /** Identity (name + transport) and stable hardware id of the picked
+   *  robot, captured at selection time. `useRobots` is disabled the
+   *  moment we leave `picking` (and clears its list to protect the 1:1
+   *  token→peer handoff invariant), so we CANNOT look the robot up in
+   *  `robots` during the session - it's empty. We snapshot what the
+   *  topbar and the embed handoff need here instead. */
   const [selectedRobot, setSelectedRobot] = useState<{
     name: string | null;
     transport: string | null;
+    hardwareId: string | null;
   } | null>(null);
   const [embedAppState, setEmbedAppState] = useState<EmbedAppState>({
     phase: 'boot',
@@ -346,7 +347,6 @@ function ReachyHostShellNormal({
     if (selectedRobotId == null) return;
     if (initSentForRef.current === selectedRobotId) return;
 
-    const robot = robots.find((r) => r.id === selectedRobotId);
     const bundle: Omit<CredsBundle, 'signalingUrl'> & {
       signalingUrl: string;
     } = {
@@ -354,8 +354,10 @@ function ReachyHostShellNormal({
       userName,
       robotPeerId: selectedRobotId,
       // Stable id so the embed re-resolves the live peer id at dial
-      // time (the peer id above rotates on relay reconnects).
-      robotHardwareId: robot?.hardwareId ?? null,
+      // time (the peer id above rotates on relay reconnects). Read from
+      // the selection-time snapshot: this runs on `embed:ready`, by
+      // which point `robots` has long been cleared.
+      robotHardwareId: selectedRobot?.hardwareId ?? null,
       signalingUrl: resolveSignalingUrl(),
       theme,
       config: initialConfig ?? null,
@@ -380,7 +382,7 @@ function ReachyHostShellNormal({
     appName,
     hostName,
     initialConfig,
-    robots,
+    selectedRobot,
     selectedRobotId,
     theme,
     userName,
@@ -458,6 +460,7 @@ function ReachyHostShellNormal({
       setSelectedRobot({
         name: picked?.meta?.name ?? null,
         transport: picked?.transport ?? null,
+        hardwareId: picked?.hardwareId ?? null,
       });
       initSentForRef.current = null;
       embedReadyPendingRef.current = false;
@@ -533,14 +536,16 @@ function ReachyHostShellNormal({
 
   const iframeUrl = useMemo(() => {
     if (selectedRobotId == null) return null;
-    const picked = robots.find((r) => r.id === selectedRobotId);
     const bundle: CredsBundle = {
       hfToken: readToken(),
       userName,
       robotPeerId: selectedRobotId,
       // Kept byte-identical with the `host:init` bundle so the embed
-      // re-resolves the live peer id whichever channel it reads.
-      robotHardwareId: picked?.hardwareId ?? null,
+      // re-resolves the live peer id whichever channel it reads. Sourced
+      // from the selection-time snapshot rather than `robots`: that list
+      // is emptied one render after the handoff, which would rebuild this
+      // URL with a null hardware id and re-navigate a live iframe.
+      robotHardwareId: selectedRobot?.hardwareId ?? null,
       signalingUrl: resolveSignalingUrl(),
       theme,
       config: initialConfig ?? null,
@@ -563,7 +568,7 @@ function ReachyHostShellNormal({
     embedPath,
     hostName,
     initialConfig,
-    robots,
+    selectedRobot,
     selectedRobotId,
     theme,
     userName,
