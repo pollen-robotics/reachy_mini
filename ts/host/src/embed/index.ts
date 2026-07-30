@@ -81,6 +81,23 @@ const WAKE_TRAJECTORY_TIMEOUT_MS = 8000;
 // wedged daemon can't stall the leave forever.
 const LEAVE_SLEEP_TIMEOUT_MS = 6000;
 const LEAVE_SLEEP_HARD_TIMEOUT_MS = 6500;
+// How long we wait for the daemon to echo the motors-off state back before
+// acking the leave. `setMotorMode` is fire-and-forget: it queues the command
+// on the data channel and returns, so acking on the next line lets the host
+// unmount this iframe - tearing the peer connection down - while the command
+// may still be sitting in the SCTP send queue. Losing it is precisely what
+// the sequence below relies on NOT happening, since the daemon would then
+// still see `Enabled` when the app-slot lock frees and replay its own
+// goto_sleep. Small enough that the whole leave stays under the host's own
+// `LEAVING_ACK_CAP_MS` even stacked on the sleep hard cap above.
+//
+// Sized against the slowest confirmation path rather than the typical one.
+// With a pose stream running the state lands within a frame (~33 ms), and
+// with no stream a poll reply takes about one RTT. But an app that releases
+// its pose subscription from `onLeave` leaves the SDK's `POSE_STREAM_FRESH_MS`
+// window (750 ms) still armed, and poll replies are ignored for its remainder,
+// so the confirmation can legitimately take a beat under a second.
+const LEAVE_DISABLE_CONFIRM_TIMEOUT_MS = 1000;
 
 /**
  * Land the user in a *settled* robot.
@@ -118,6 +135,45 @@ async function awaitFullyAwake(sdk: ReachyMiniInstance): Promise<void> {
   } catch {
     /* degraded: reveal the app anyway rather than trap the user on splash */
   }
+}
+
+/**
+ * Wait until the daemon echoes back `motor_mode: 'disabled'`.
+ *
+ * Used to close a graceful leave: a state frame carrying the new mode is
+ * proof that the fire-and-forget `set_motor_mode` actually reached the
+ * daemon, rather than having been dropped with the peer connection when the
+ * host unmounted us (see `LEAVE_DISABLE_CONFIRM_TIMEOUT_MS`).
+ *
+ * We nudge `requestState()` on a short interval rather than trusting the
+ * SDK's own 500 ms poll, which stands down while a pose stream is feeding
+ * state and would otherwise leave us waiting on the next pushed frame.
+ * A timeout resolves anyway: the leave must never hang on this, and the
+ * daemon's idle-reset remains the backstop.
+ */
+async function awaitMotorsDisabled(sdk: ReachyMiniInstance): Promise<void> {
+  if (sdk.robotState.motor_mode === 'disabled') return;
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    let pollId = 0;
+    let timerId = 0;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      sdk.removeEventListener('state', onState);
+      window.clearInterval(pollId);
+      window.clearTimeout(timerId);
+      resolve();
+    };
+    // Hoisted so `finish` can unregister it.
+    function onState(): void {
+      if (sdk.robotState.motor_mode === 'disabled') finish();
+    }
+    sdk.addEventListener('state', onState);
+    timerId = window.setTimeout(finish, LEAVE_DISABLE_CONFIRM_TIMEOUT_MS);
+    pollId = window.setInterval(() => sdk.requestState(), 120);
+    sdk.requestState();
+  });
 }
 
 /**
@@ -566,7 +622,9 @@ function createBridge(expectedOrigin: string, sdk: ReachyMiniInstance) {
    *      the robot is already asleep. The daemon's idle-reset then sees
    *      `Disabled` and skips, so there's no second goto_sleep (no double
    *      trajectory / go_sleep sound) - all without any daemon-side change.
-   *   4. Post `embed:left` so the host can unmount right away instead of waiting
+   *   4. Wait for the daemon to confirm the new motor mode, so we don't ack a
+   *      command that never left the send queue (see `awaitMotorsDisabled`).
+   *   5. Post `embed:left` so the host can unmount right away instead of waiting
    *      out its safety cap.
    *
    * Only wired to the explicit `host:leaving` path - `pagehide` (tab kill) has
@@ -590,6 +648,9 @@ function createBridge(expectedOrigin: string, sdk: ReachyMiniInstance) {
     }
     try {
       sdk.setMotorMode('disabled');
+      // Only ack once the daemon has echoed the mode back: the host unmounts
+      // this iframe on the ack, which would kill the command in flight.
+      await awaitMotorsDisabled(sdk);
     } catch {
       /* channel may already be closing - best effort */
     }
