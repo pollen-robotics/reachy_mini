@@ -23,8 +23,9 @@
  *  5. Wait for `host:init` (2 s soft timeout; on hit we proceed
  *     from the hash creds alone via `liveStateFromCreds`, which
  *     carries the same fields as `liveStateFromInit`).
- *  6. `connect()` → `startSession()` → `ensureAwake()`, emitting
- *     `embed:app-state` at each step.
+ *  6. `connect()` → `startSession()` → wake (awaiting the full wake-up
+ *     trajectory, not fire-and-forget), emitting `embed:app-state` at each
+ *     step.
  *  7. Resolve `connectToHost()` with the live SDK handle.
  *
  * Strict Mode safety (APP_CREATION_GUIDE §13.5.4): the function is idempotent
@@ -65,6 +66,59 @@ const SDK_READY_TIMEOUT_MS = 8000;
 // in <100 ms; 2 s is comfortable defensive slack.
 const HOST_INIT_TIMEOUT_MS = 2000;
 const TOKEN_TTL_MS = 15 * 60 * 1000;
+// Upper bound on how long we wait for the wake-up trajectory to finish
+// before revealing the app anyway. Matches the SDK's own `wakeUp` default
+// (and the ConnectingView "slow hint" at ~6 s), so a slow or older daemon
+// degrades into "land the user" rather than trapping them on the splash.
+const WAKE_TRAJECTORY_TIMEOUT_MS = 8000;
+// Sleep-on-leave budget. The host layer owns wake/sleep, so on an explicit
+// graceful leave the embed plays goto_sleep itself (immediate) then forces
+// motors disabled - mirroring the mobile app (`sleepAndDisableRobot`). We wait
+// for it to finish BEFORE letting the host unmount, so the motors are already
+// `Disabled` when the app-slot lock frees: the daemon's idle-reset then skips
+// (no double trajectory / go_sleep sound), with no daemon-side change needed.
+// SDK-level timeout on the goto_sleep move + a slightly larger JS hard cap so a
+// wedged daemon can't stall the leave forever.
+const LEAVE_SLEEP_TIMEOUT_MS = 6000;
+const LEAVE_SLEEP_HARD_TIMEOUT_MS = 6500;
+
+/**
+ * Land the user in a *settled* robot.
+ *
+ * Unlike `sdk.ensureAwake()` - which kicks `wakeUp()` fire-and-forget and
+ * resolves the instant the command is *sent* - this awaits the wake-up
+ * trajectory to actual completion (the daemon's `completed: true` ack), so
+ * the host only reveals the app once the robot has finished its wake
+ * animation instead of mid-move.
+ *
+ * Ordering:
+ *   1. If the motor mode is still unknown (fresh session), ask for a state
+ *      snapshot and wait briefly for it so `isAwake()` is meaningful.
+ *   2. Already awake -> return immediately (no trajectory to play).
+ *   3. Asleep -> await the full `wakeUp()` trajectory. A timeout or error is
+ *      swallowed and we reveal the app anyway (degraded but reachable),
+ *      never trapping the user on the connecting splash.
+ */
+async function awaitFullyAwake(sdk: ReachyMiniInstance): Promise<void> {
+  if (sdk.robotState.motor_mode === undefined) {
+    await new Promise<void>((resolve) => {
+      const done = (): void => {
+        sdk.removeEventListener('state', done);
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(done, 1000);
+      sdk.addEventListener('state', done);
+      sdk.requestState();
+    });
+  }
+  if (sdk.isAwake()) return;
+  try {
+    await sdk.wakeUp({ timeoutMs: WAKE_TRAJECTORY_TIMEOUT_MS });
+  } catch {
+    /* degraded: reveal the app anyway rather than trap the user on splash */
+  }
+}
 
 /**
  * Stable surface for the robot's WebRTC media. All accessors are
@@ -290,7 +344,7 @@ async function bootOnce(
   });
 
   // 5. Build the bridge (subscriber registry) + post ready.
-  const bridge = createBridge(expectedOrigin);
+  const bridge = createBridge(expectedOrigin, sdk);
   postToHost({
     source: PROTOCOL_SOURCE,
     type: 'embed:ready',
@@ -309,7 +363,7 @@ async function bootOnce(
   //    `liveStateFromInit` (verified in `liveStateFrom*` below).
   const live = await bridge.awaitHostInit(HOST_INIT_TIMEOUT_MS, creds);
 
-  // 7. Sequence: connect → startSession → ensureAwake.
+  // 7. Sequence: connect → startSession → wake (await full trajectory).
   pushAppState('connecting', 'link');
   postDebug('boot:link:start', { robotPeerId: live.robotPeerId });
   await sdk.authenticate();
@@ -346,10 +400,12 @@ async function bootOnce(
     throw err;
   }
 
+  // Await the wake-up trajectory to completion (not fire-and-forget) so the
+  // app is only revealed once the robot has finished its wake animation.
   pushAppState('connecting', 'wake');
   postDebug('boot:wake:start');
-  await sdk.ensureAwake();
-  postDebug('boot:wake:ok');
+  await awaitFullyAwake(sdk);
+  postDebug('boot:wake:ok', { awake: sdk.isAwake() });
 
   // 8. We're live. Wire pagehide cleanup so the SDK releases the
   //    robot if the browser kills the tab.
@@ -436,7 +492,7 @@ async function resolveLivePeerId(
   }
 }
 
-function createBridge(expectedOrigin: string) {
+function createBridge(expectedOrigin: string, sdk: ReachyMiniInstance) {
   type LeaveCb = () => void | Promise<void>;
   type ThemeCb = (t: ThemeMode) => void;
   type ConfigCb = (c: unknown) => void;
@@ -447,6 +503,7 @@ function createBridge(expectedOrigin: string) {
 
   let current: LiveState | null = null;
   let leaveTriggered = false;
+  let graceLeaveStarted = false;
 
   // Listener installed lazily so `embed:ready` is the only
   // outgoing event before the host has time to respond.
@@ -475,7 +532,7 @@ function createBridge(expectedOrigin: string) {
         break;
       }
       case 'host:leaving': {
-        runLeaveOnce();
+        void runGracefulLeave();
         break;
       }
     }
@@ -484,14 +541,63 @@ function createBridge(expectedOrigin: string) {
   function runLeaveOnce(): void {
     if (leaveTriggered) return;
     leaveTriggered = true;
-    // Fire and forget; the host doesn't wait for an ack, it just
-    // unmounts the iframe after `timeoutMs`.
+    // App-level cleanup. Fire and forget: the host budgets its own
+    // teardown deadline, it doesn't wait on individual `onLeave` cbs.
     leaveListeners.forEach((cb) => {
       try {
         void cb();
       } catch (err) {
         console.warn('[reachy-mini-sdk/host/embed] onLeave threw', err);
       }
+    });
+  }
+
+  /**
+   * Graceful `host:leaving` teardown. The host layer owns the wake/sleep
+   * contract, so on an explicit leave the SDK - not the app - puts the robot
+   * to sleep, mirroring the mobile app's `sleepAndDisableRobot`:
+   *
+   *   1. Run the app's `onLeave` callbacks (their own cleanup).
+   *   2. Dispatch `gotoSleep` immediately so the robot starts sleeping the
+   *      instant the user leaves (no waiting on the daemon idle-reset debounce),
+   *      bounded by a hard cap so a wedged daemon can't stall us.
+   *   3. Force motors `Disabled` - deterministic off-switch, and it lands while
+   *      the WebRTC session is still up, so the app-slot lock frees only AFTER
+   *      the robot is already asleep. The daemon's idle-reset then sees
+   *      `Disabled` and skips, so there's no second goto_sleep (no double
+   *      trajectory / go_sleep sound) - all without any daemon-side change.
+   *   4. Post `embed:left` so the host can unmount right away instead of waiting
+   *      out its safety cap.
+   *
+   * Only wired to the explicit `host:leaving` path - `pagehide` (tab kill) has
+   * no time to play a trajectory, so the daemon idle-reset covers that instead.
+   */
+  async function runGracefulLeave(): Promise<void> {
+    if (graceLeaveStarted) return;
+    graceLeaveStarted = true;
+
+    runLeaveOnce();
+
+    try {
+      await Promise.race([
+        sdk.gotoSleep({ timeoutMs: LEAVE_SLEEP_TIMEOUT_MS }),
+        new Promise<void>((resolve) =>
+          window.setTimeout(resolve, LEAVE_SLEEP_HARD_TIMEOUT_MS),
+        ),
+      ]);
+    } catch {
+      /* wedged/older daemon: fall through to the explicit disable */
+    }
+    try {
+      sdk.setMotorMode('disabled');
+    } catch {
+      /* channel may already be closing - best effort */
+    }
+
+    postToHost({
+      source: PROTOCOL_SOURCE,
+      type: 'embed:left',
+      version: PROTOCOL_VERSION,
     });
   }
 

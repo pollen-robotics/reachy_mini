@@ -223,6 +223,23 @@ export interface EmbedRequestLeaveMsg {
   version: 1;
 }
 
+/**
+ * The embed finished its `host:leaving` tear-down: app `onLeave`
+ * callbacks ran AND the SDK's host-owned sleep sequence completed
+ * (goto_sleep trajectory + motors disabled). Lets the host unmount as
+ * soon as the robot is actually asleep instead of after a fixed
+ * worst-case timeout - and, because the WebRTC session is still up when
+ * this fires, the motors are already `Disabled` before the app-slot lock
+ * frees, so the daemon's idle-reset sees "already asleep" and does NOT
+ * replay a second goto_sleep (no double trajectory / go_sleep sound).
+ * The host still force-unmounts after its own cap if this never arrives.
+ */
+export interface EmbedLeftMsg {
+  source: typeof PROTOCOL_SOURCE;
+  type: 'embed:left';
+  version: 1;
+}
+
 /** App-level error report. `fatal: true` switches the host to
  *  ErrorView; `fatal: false` is logged and may surface a toast. */
 export interface EmbedErrorMsg {
@@ -238,6 +255,7 @@ export type EmbedToHostMsg =
   | EmbedReadyMsg
   | EmbedAppStateMsg
   | EmbedRequestLeaveMsg
+  | EmbedLeftMsg
   | EmbedErrorMsg;
 
 /* ─────────────────── CREDS BUNDLE ─────────────────── */
