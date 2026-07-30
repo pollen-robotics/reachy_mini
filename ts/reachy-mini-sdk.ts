@@ -79,6 +79,8 @@ export type {
     AutoConnectResult,
     MotionAwaitOptions,
     SubscribeLogsOptions,
+    StartDaemonUpdateOptions,
+    UpdateProgressEvent,
     AudioConfigEntry,
     ApplyAudioConfigOptions,
     MoveData,

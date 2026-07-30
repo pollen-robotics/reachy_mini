@@ -161,6 +161,23 @@ export interface SubscribeLogsOptions {
     onError?: (error: string) => void;
 }
 
+/** One progress event from an in-flight `startDaemonUpdate()`. */
+export interface UpdateProgressEvent {
+    status: 'in_progress' | 'done' | 'failed';
+    /** A log line of the underlying update job (when `in_progress`). */
+    line?: string;
+    /** Set when `status === 'failed'`. */
+    error?: string;
+}
+
+/** `startDaemonUpdate()` argument. */
+export interface StartDaemonUpdateOptions {
+    /** Install the latest pre-release instead of the latest stable. */
+    preRelease?: boolean;
+    /** Receives one event per log line of the update job. */
+    onProgress?: (event: UpdateProgressEvent) => void;
+}
+
 // ─── XVF3800 audio-board config (Wireless only) ──────────────────────────────
 
 /** Single XVF3800 parameter write. */
@@ -438,6 +455,16 @@ export interface ReachyMiniInstance extends EventTarget {
     unsubscribePose(): boolean;
     /** Subscribe to daemon `journalctl` logs over the data channel. */
     subscribeLogs(options: SubscribeLogsOptions): () => void;
+    /**
+     * Ask the daemon to update itself from PyPI (Wireless only) and
+     * restart. Fire-and-ack: returns `false` only when the data channel
+     * isn't open. A *successful* update restarts the daemon before a
+     * `done` event can arrive, so treat the session teardown followed by
+     * a successful reconnect as the success signal; `onProgress` fires
+     * with `status: 'failed'` when the daemon declines the job or the
+     * install errors before the restart.
+     */
+    startDaemonUpdate(options?: StartDaemonUpdateOptions): boolean;
 
     /**
      * Motor torque mode: `enabled` (position control), `disabled`

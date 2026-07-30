@@ -45,7 +45,9 @@ import type {
     RobotInfo,
     RobotState,
     SessionRejectError,
+    StartDaemonUpdateOptions,
     SubscribeLogsOptions,
+    UpdateProgressEvent,
     UploadAudioOptions,
 } from './types.js';
 
@@ -66,14 +68,7 @@ interface LogSubscriber {
     onError?: (error: string) => void;
 }
 
-/** One progress event from an in-flight `startDaemonUpdate()`. */
-export interface UpdateProgressEvent {
-    status: 'in_progress' | 'done' | 'failed';
-    /** A log line of the underlying update job (when `in_progress`). */
-    line?: string;
-    /** Set when `status === 'failed'`. */
-    error?: string;
-}
+export type { UpdateProgressEvent };
 
 type UpdateProgressCallback = (event: UpdateProgressEvent) => void;
 
@@ -1293,7 +1288,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * Returns `false` if the data channel isn't open.
      */
     startDaemonUpdate(
-        { preRelease = false, onProgress }: { preRelease?: boolean; onProgress?: UpdateProgressCallback } = {},
+        { preRelease = false, onProgress }: StartDaemonUpdateOptions = {},
     ): boolean {
         if (onProgress) this._updateProgressSubscribers.add(onProgress);
         return this._sendCommand({ type: 'start_update', pre_release: preRelease });
