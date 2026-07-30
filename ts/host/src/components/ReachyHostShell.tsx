@@ -824,8 +824,17 @@ function ReachyHostShellNormal({
        *  auto-login), so the "Continue with Hugging Face" button and
        *  a naked picker never flash while `authenticate()` resolves
        *  and the phase transitions. Hands off to WelcomeBackOverlay
-       *  (zIndex 1300) once the username lands. */}
-      {showAuthSplash && <PostOAuthSplash />}
+       *  (zIndex 1300) once the username lands. The plain boot leg is
+       *  `neutral` (logo + spinner, no heading): before `authResolved`
+       *  we don't know whether a session exists, and a first-time
+       *  visitor must not read "Signing you in…" right before landing
+       *  on the sign-in button. Only the OAuth return leg - where the
+       *  user really did just sign in - keeps the heading. */}
+      {showAuthSplash && (
+        <PostOAuthSplash
+          variant={showPostOAuthSplash ? 'signing-in' : 'neutral'}
+        />
+      )}
 
       {/* Web-only by construction: the mobile app never mounts this
        *  shell (it points its iframe straight at `?embedded=1` and runs
