@@ -714,6 +714,7 @@ app_build_command: npm ci && npm run build   # HF runs this on its builder
 app_file: dist/index.html                     # HF serves the build output as entry
 pinned: false
 hf_oauth: true
+hf_oauth_expiration_minutes: 43200   # 30 days (max); default is only 8 h
 short_description: One-line description shown in the mobile catalog.
 tags:
   - reachy_mini
@@ -730,6 +731,12 @@ tags:
   build completes**. For a Vite-built SPA that's `dist/index.html`.
 - `hf_oauth: true` is what triggers `__OAUTH_CLIENT_ID__` substitution
   inside HTML files in the served output (post-build).
+- `hf_oauth_expiration_minutes` sets the OAuth token lifetime. Strongly
+  recommended: the default (8 hours) forces a re-auth round trip several
+  times a day. The host's silent sign-in makes those round trips
+  invisible for logged-in users, but a long-lived token avoids them
+  entirely; the SDK bounds the effective session with a 24 h sliding
+  idle window regardless.
 - The **`reachy_mini_js_app` tag is mandatory** for mobile-catalog
   discovery. The catalog API filters on this exact string.
 - Apps in the `pollen-robotics/*` namespace are automatically tagged

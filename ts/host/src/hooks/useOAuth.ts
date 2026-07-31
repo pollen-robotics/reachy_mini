@@ -6,16 +6,26 @@
  * "are we signed in?" + names + sign-in / sign-out helpers, and
  * threads the `oauth-pending` flag for the "welcome back"
  * animation across the redirect.
+ *
+ * Boot also carries a SILENT sign-in leg: when `authenticate()` finds
+ * no token and no guard objects (explicit sign-out, previous attempt
+ * this tab, dev token, iframe), the hook redirects once through
+ * `login({ prompt: 'none' })`. Users with a live HF session and a
+ * prior grant come back signed in without ever seeing SignInView;
+ * everyone else bounces straight back to the regular signed-out view.
  */
 import { useEffect, useState, useCallback } from 'react';
 
 import type { ReachyMiniInstance } from '../lib/sdk-types';
 import {
   clearSignedOutFlag,
+  clearSilentAuthAttempted,
   consumeOAuthPending,
   hasCachedDevToken,
+  hasSilentAuthAttempted,
   isUserSignedOut,
   markOAuthPending,
+  markSilentAuthAttempted,
   markUserSignedOut,
   rehydrateDevToken,
 } from '../lib/settings';
@@ -59,6 +69,31 @@ function readOAuthPendingOnce(): boolean {
   return cachedOAuthPending;
 }
 
+/**
+ * Should the boot leg auto-redirect into a silent sign-in
+ * (`login({ prompt: 'none' })`) after `authenticate()` found no token?
+ *
+ * Every guard is a "never surprise the user" rule:
+ *  - explicit sign-out wins over convenience;
+ *  - one attempt per tab (the sessionStorage flag survives the redirect
+ *    round trip, so a `login_required` return can't loop);
+ *  - dev-token setups never redirect (local dev has no OAuth app);
+ *  - never from inside an iframe: with third-party cookies blocked the
+ *    silent attempt always comes back `login_required`, and the iframe
+ *    would navigate away from its parent's page.
+ */
+function shouldAttemptSilentSignIn(): boolean {
+  if (isUserSignedOut()) return false;
+  if (hasSilentAuthAttempted()) return false;
+  if (hasCachedDevToken()) return false;
+  try {
+    if (window.self !== window.top) return false;
+  } catch {
+    return false; // cross-origin access throw = definitely framed
+  }
+  return true;
+}
+
 export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
   const [isAuthenticated, setAuth] = useState<boolean>(() =>
     Boolean(sdk?.isAuthenticated),
@@ -99,17 +134,38 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
       return;
     }
     let alive = true;
+    // True once we've committed to the silent-auth redirect: the page is
+    // about to unload, so `authResolved` must stay false to keep the
+    // neutral splash up instead of flashing SignInView for a frame.
+    let redirecting = false;
     void (async () => {
       try {
         const ok = await sdk.authenticate();
         if (!alive) return;
+        if (!ok && shouldAttemptSilentSignIn()) {
+          // Silent sign-in leg: a user with a live HF session and a
+          // previous grant comes back with a token and never sees the
+          // sign-in view; anyone else bounces back with `?error=...`,
+          // which `authenticate()` strips on the return leg while the
+          // attempt flag routes them to the regular SignInView.
+          markSilentAuthAttempted();
+          try {
+            await sdk.login({ prompt: 'none' });
+            redirecting = true;
+            return;
+          } catch (err) {
+            // No client ID (dev setups) or blocked redirect: fall
+            // through to the normal signed-out view.
+            console.warn('[reachy-mini-sdk/host] silent sign-in failed to start', err);
+          }
+        }
         setAuth(ok);
         setUserName(sdk.username);
       } catch (err) {
         console.warn('[reachy-mini-sdk/host] authenticate() threw', err);
       } finally {
         // Settled either way - the shell can now pick a definite view.
-        if (alive) setAuthResolved(true);
+        if (alive && !redirecting) setAuthResolved(true);
       }
     })();
     return () => {
@@ -142,6 +198,8 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
   const signIn = useCallback(async () => {
     if (!sdk) return;
     clearSignedOutFlag();
+    // Explicit click re-arms the one-shot silent attempt for this tab.
+    clearSilentAuthAttempted();
 
     // Local dev path: a `devToken` was passed to `mountHost()`
     // earlier. Re-seed the session storage (wiped by the previous
