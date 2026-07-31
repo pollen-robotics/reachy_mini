@@ -1,1 +1,1 @@
-{"id":"ced56da04ace37d357a1e7d008221a1d","fullName":"tests.unit_tests.test_apps_hf_auth#test_generate_user_code_format","name":"test_generate_user_code_format","status":"passed","testResultsByEnv":{"default":"6264e9d379657b573930ef903379d225"}}
+{"id":"ced56da04ace37d357a1e7d008221a1d","fullName":"tests.unit_tests.test_apps_hf_auth#test_generate_user_code_format","name":"test_generate_user_code_format","status":"passed","testResultsByEnv":{"default":"3b396b6af6901253528238a0cd77fc73"}}
