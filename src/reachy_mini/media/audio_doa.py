@@ -45,6 +45,11 @@ class AudioDoA:
         """Initialize the DoA helper, probing for a ReSpeaker USB device."""
         self._respeaker: Optional[ReSpeaker] = init_respeaker_usb()
 
+    @property
+    def available(self) -> bool:
+        """True while a ReSpeaker device is held (probe succeeded, not closed)."""
+        return self._respeaker is not None
+
     def get_DoA(self) -> tuple[float, bool] | None:
         """Read the current Direction of Arrival from the ReSpeaker.
 

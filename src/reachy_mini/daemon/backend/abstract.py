@@ -33,6 +33,7 @@ from reachy_mini.io.protocol import (
     CancelMoveCmd,
     ClearIncomingAudioCmd,
     DeleteHfTokenCmd,
+    DoaSnapshot,
     FaceTarget,
     GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
@@ -147,19 +148,29 @@ class Backend:
         self.use_audio = use_audio
 
         self.doa = AudioDoA() if use_audio else None
-        # Latest Direction-of-Arrival reading, refreshed by a lightweight
+        # Latest Direction-of-Arrival reading, refreshed by a demand-driven
         # background poller. `get_DoA()` is a blocking USB control transfer, so
         # we must NOT call it from `build_state_dict()` - that feeds the ~30 Hz
         # pose push (`_push_pose`) on the media server's GLib loop, which has to
-        # stay cheap and non-blocking. Instead this thread samples DoA at
-        # ~10 Hz (matching the ReSpeaker's useful rate) and caches it here; the
-        # state snapshot just reads the cache under a lock.
+        # stay cheap and non-blocking. Instead a thread samples DoA at ~10 Hz
+        # and caches it here; the state snapshot just reads the cache under
+        # `_doa_lock`. The thread is spawned lazily on first demand (a pushed
+        # frame or a REST read) and exits after `DOA_IDLE_STOP_S` without any,
+        # so an idle daemon doesn't poll USB forever (see `_note_doa_demand`).
         self._doa_lock = threading.Lock()
+        # Serializes every `get_DoA()` call: `ReSpeaker.read()` is a
+        # multi-step USB conversation on a non-thread-safe pyusb device, so
+        # the poller and an on-demand REST read must never interleave.
+        self._doa_usb_lock = threading.Lock()
         self._last_doa: tuple[float, bool] | None = None
+        # Monotonic time of the last completed read (poller or direct).
+        # 0.0 = never; `_doa_snapshot` treats entries older than
+        # `DOA_CACHE_FRESH_S` as absent.
+        self._last_doa_ts: float = 0.0
+        # Monotonic time of the last cache consumer; keeps the poller alive.
+        self._doa_demand_ts: float = 0.0
         self._doa_stop = threading.Event()
         self._doa_thread: threading.Thread | None = None
-        if self.doa is not None:
-            self._start_doa_poller()
 
         self.should_stop = threading.Event()
         self.ready = threading.Event()
@@ -1331,43 +1342,105 @@ class Backend:
     # ~10 Hz: fast enough to track a speaker turning, slow enough to keep the
     # blocking ReSpeaker USB reads off the ~30 Hz pose-push loop.
     DOA_POLL_INTERVAL_S = 0.1
+    # Cache entries older than this are treated as absent: covers both a
+    # poller that just stopped (idle) and a burst of failed USB reads.
+    DOA_CACHE_FRESH_S = 0.5
+    # The poller exits after this long without any cache consumer, so DoA
+    # costs zero USB traffic while no session or REST client wants it.
+    DOA_IDLE_STOP_S = 5.0
 
-    def _start_doa_poller(self) -> None:
-        """Spawn the background thread that caches the latest DoA reading.
+    def _doa_available(self) -> bool:
+        """Return True when a ReSpeaker was actually found at startup."""
+        return self.doa is not None and self.doa.available
 
-        Runs until :meth:`close` sets ``_doa_stop``. Every failure path is
-        swallowed so a flaky USB read can never take the thread (or the state
-        stream that reads its cache) down.
+    def _note_doa_demand(self) -> None:
+        """Record cache demand and make sure the poller is running.
+
+        Called from every consumer path (`_doa_snapshot`, `read_doa`).
+        Spawning is guarded by ``_doa_lock`` so the ~30 Hz push loop and
+        concurrent REST requests can't start two threads.
         """
+        now = time.monotonic()
+        with self._doa_lock:
+            self._doa_demand_ts = now
+            if self._doa_thread is not None and self._doa_thread.is_alive():
+                return
+            self._doa_thread = threading.Thread(
+                target=self._doa_poll_loop, name="doa-poller", daemon=True
+            )
+            self._doa_thread.start()
 
-        def _loop() -> None:
-            # `wait()` returns True once stopped, False on timeout - so this
-            # both paces the poll and exits promptly on shutdown.
-            while not self._doa_stop.wait(self.DOA_POLL_INTERVAL_S):
-                try:
+    def _doa_poll_loop(self) -> None:
+        """Cache the latest DoA reading until shutdown or idle timeout.
+
+        Every failure path is swallowed so a flaky USB read can never take
+        the thread (or the state stream that reads its cache) down.
+        """
+        # `wait()` returns True once stopped, False on timeout - so this
+        # both paces the poll and exits promptly on shutdown.
+        while not self._doa_stop.wait(self.DOA_POLL_INTERVAL_S):
+            with self._doa_lock:
+                idle_for = time.monotonic() - self._doa_demand_ts
+            if idle_for > self.DOA_IDLE_STOP_S:
+                return
+            try:
+                with self._doa_usb_lock:
                     reading = self.doa.get_DoA() if self.doa is not None else None
-                except Exception:  # noqa: BLE001 - never kill the poller
-                    reading = None
-                with self._doa_lock:
-                    self._last_doa = reading
+            except Exception:  # noqa: BLE001 - never kill the poller
+                reading = None
+            with self._doa_lock:
+                self._last_doa = reading
+                self._last_doa_ts = time.monotonic()
 
-        self._doa_thread = threading.Thread(
-            target=_loop, name="doa-poller", daemon=True
-        )
-        self._doa_thread.start()
+    def _cached_doa(self) -> tuple[float, bool] | None:
+        """Return the cached reading if fresh, else None."""
+        with self._doa_lock:
+            if time.monotonic() - self._last_doa_ts > self.DOA_CACHE_FRESH_S:
+                return None
+            return self._last_doa
 
-    def _doa_snapshot(self) -> dict[str, Any] | None:
-        """Return the last cached DoA as ``{"angle", "speech_detected"}``.
+    def _doa_snapshot(self) -> DoaSnapshot | None:
+        """Return the last cached DoA reading.
 
-        ``None`` when no ReSpeaker is present or no reading has landed yet.
+        Never blocks: this feeds the ~30 Hz pose push. Registers demand so
+        the poller (re)starts, and returns ``None`` when no ReSpeaker is
+        present, the cache is stale, or the first poll hasn't landed yet.
         Matches the REST ``DoAInfo`` field names so both surfaces agree.
         """
-        with self._doa_lock:
-            reading = self._last_doa
+        if not self._doa_available():
+            return None
+        self._note_doa_demand()
+        reading = self._cached_doa()
         if reading is None:
             return None
         angle, speech_detected = reading
-        return {"angle": angle, "speech_detected": speech_detected}
+        return DoaSnapshot(angle=angle, speech_detected=speech_detected)
+
+    def read_doa(self) -> tuple[float, bool] | None:
+        """Return a current DoA reading, blocking briefly if needed.
+
+        The REST surface (`/state/doa`, `/state/full?with_doa=true`) goes
+        through here instead of calling ``doa.get_DoA()`` directly, so a
+        one-shot request still gets a real reading when the poller is cold
+        (matching the historical behaviour) without ever interleaving with
+        the poller's own USB conversation (``_doa_usb_lock``).
+        """
+        if not self._doa_available():
+            return None
+        self._note_doa_demand()
+        cached = self._cached_doa()
+        if cached is not None:
+            return cached
+        try:
+            with self._doa_usb_lock:
+                reading = self.doa.get_DoA() if self.doa is not None else None
+        except Exception:  # noqa: BLE001 - a failed read reads as "no DoA"
+            self.logger.debug("Direct DoA read failed", exc_info=True)
+            reading = None
+        with self._doa_lock:
+            self._last_doa = reading
+            self._last_doa_ts = time.monotonic()
+        return reading
 
     # ------------------------------------------------------------------
     # State snapshot (shared by get_state replies and the pose push)
@@ -1402,7 +1475,7 @@ class Backend:
             face_target=self.get_tracked_face(),
             # Sound Direction of Arrival (ReSpeaker mic array), or None when
             # unavailable. Read from the ~10 Hz cache so this stays cheap on
-            # the pose-push path (see _start_doa_poller).
+            # the pose-push path (see _note_doa_demand / _doa_poll_loop).
             doa=self._doa_snapshot(),
         )
 
