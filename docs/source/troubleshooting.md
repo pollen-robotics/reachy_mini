@@ -726,6 +726,36 @@ If the period is much higher than 20ms, it means the control loop is not running
 
 </details>
 
+<details>
+<summary><strong>My robot doesn't move and no error is reported</strong></summary>
+
+If motion commands are accepted but nothing happens, the motors are most likely disabled. With torque off the daemon still accepts every command, reports success, and keeps its control loop running at 50Hz with no errors, so nothing indicates that the robot is not moving.
+
+Two common situations leave the motors disabled:
+- The robot is asleep and limp after an app has stopped, or after the daemon has just started.
+- `wake_up()` was called on its own. It plays the wake up pose, emote and sound, but it does not enable torque.
+
+Check the current mode:
+- via the SDK
+```python
+mini = ReachyMini()
+print(mini.client.get_status().backend_status.motor_control_mode)
+```
+- via the REST API, in the `backend_status` field of the `/api/daemon/status` endpoint
+
+If it reads `MotorControlMode.Disabled`, enable the motors before moving the robot:
+
+```python
+mini.enable_motors()
+mini.wake_up()
+```
+
+Note that a limp robot keeps its head down in the sleep position, close to the body. The camera then faces the inside of the shell and returns a dark, almost uniform image with exposure and gain at their maximum, which is easy to mistake for a broken camera. Check that the head is really up before investigating the camera.
+
+The **Why are the motors "limp" or "stiff"? (Compliancy)** entry above describes the different motor modes.
+
+</details>
+
 
 
 ## 👁️ Vision & Audio
