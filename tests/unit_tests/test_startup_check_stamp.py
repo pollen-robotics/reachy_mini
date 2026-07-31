@@ -210,3 +210,34 @@ def test_stamp_write_is_atomic_no_tmp_left_behind(fake_venvs, spy_checks):
     sc.run_wireless_startup_checks()
     leftovers = list(fake_venvs["daemon"].glob("*.tmp"))
     assert leftovers == []
+
+
+def test_stamp_path_being_a_directory_never_crashes_boot(fake_venvs, spy_checks):
+    """A directory squatting the stamp path degrades to full checks, no crash."""
+    fake_venvs["stamp"].mkdir()
+    sc.run_wireless_startup_checks()  # must not raise
+    assert set(spy_checks) == EXPENSIVE | CHEAP
+
+
+@pytest.mark.asyncio
+async def test_update_clears_stamp_before_first_install(fake_venvs, monkeypatch):
+    """update_reachy_mini drops the stamp before any venv is touched.
+
+    This is the first defense against interrupted updates: even if the
+    install is killed halfway, the next boot cannot find a valid stamp.
+    """
+    from reachy_mini.utils.wireless_version import update as up
+
+    fake_venvs["stamp"].write_text("{}")
+    stamp_present_at_install = []
+
+    async def fake_call(cmd, logger, env=None):
+        stamp_present_at_install.append(fake_venvs["stamp"].exists())
+
+    monkeypatch.setattr(up, "build_install_command", lambda **kw: ("true", None))
+    monkeypatch.setattr(up, "call_logger_wrapper", fake_call)
+
+    await up.update_reachy_mini(sc.logger)
+
+    assert stamp_present_at_install, "install command was never invoked"
+    assert stamp_present_at_install[0] is False
