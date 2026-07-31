@@ -77,6 +77,7 @@ export type {
     AutoConnectOptions,
     AutoConnectRobotChoice,
     AutoConnectResult,
+    LoginOptions,
     MotionAwaitOptions,
     SubscribeLogsOptions,
     StartDaemonUpdateOptions,
