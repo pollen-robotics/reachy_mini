@@ -85,7 +85,7 @@ export function ErrorView({
           <Button variant="outlined" onClick={onBackToPicker}>
             Back to picker
           </Button>
-          <Button variant="contained" onClick={onReload}>
+          <Button variant="outlined" onClick={onReload}>
             Reload
           </Button>
         </Stack>
