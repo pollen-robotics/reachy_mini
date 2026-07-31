@@ -30,6 +30,13 @@ export default defineConfig({
   // Relative asset URLs so the bundle works regardless of the path the
   // Space serves it from (root in practice, but this keeps us safe).
   base: './',
+  // CRITICAL: do NOT load `host/.env*`. The local dev harness keeps a
+  // real personal HF token in `.env` (VITE_HF_TOKEN) and Vite inlines
+  // `import.meta.env.*` at build time - without this the token ships
+  // inside the public Space bundle (HF's push-time secret scanner
+  // rejects it, which is how we found out). `harness/` contains no env
+  // files, so the deployed build always runs the real OAuth flow.
+  envDir: resolve(__dirname, 'harness'),
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

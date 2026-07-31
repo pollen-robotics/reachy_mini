@@ -37,7 +37,6 @@ import {
   type ThemeMode,
 } from '../lib/protocol';
 import { resolveSignalingUrl } from '../lib/signalingUrl';
-import { wipeHfSessionStorage } from '../lib/settings';
 import {
   advanceRebootWatch,
   isTargetListed,
@@ -574,8 +573,8 @@ function ReachyHostShellNormal({
       // CRITICAL: do NOT call `wipeHfSessionStorage()` here. The
       // picker needs the HF token to keep its SSE listener open
       // and the REST safety-net polling alive. The token is wiped
-      // only on full sign-out (`signOut`) and on `pagehide` (tab
-      // close).
+      // only on full sign-out (`signOut`); its lifetime is otherwise
+      // bounded by the SDK token-store's expiry + sliding idle window.
       setSelectedRobotId(null);
       setSelectedRobot(null);
       setEmbedAppState(makeEmbedAppState('boot'));
@@ -691,10 +690,17 @@ function ReachyHostShellNormal({
     const onPageHide = (): void => {
       // Best-effort: tell the embed it's leaving so it can
       // disconnect its SDK. We don't wait for an ack.
+      //
+      // Deliberately NOT wiping the HF token here anymore: pagehide
+      // fires on every reload / navigation (it can't tell an F5 from a
+      // tab close), so the wipe forced a re-login on every refresh.
+      // The token-store's sliding idle window (SDK `token-store.ts`)
+      // now covers what the wipe protected against - a tab resurrected
+      // days later via session restore gets a stale-by-idle token that
+      // reads as absent.
       if (iframeRef.current && (hostPhase === 'embedded' || hostPhase === 'leaving')) {
         bridge.sendLeaving(iframeRef.current, 'pagehide', 0);
       }
-      wipeHfSessionStorage();
     };
     window.addEventListener('pagehide', onPageHide, { once: true });
     return () => window.removeEventListener('pagehide', onPageHide);
@@ -844,11 +850,13 @@ function ReachyHostShellNormal({
        *  a naked picker never flash while `authenticate()` resolves
        *  and the phase transitions. Hands off to WelcomeBackOverlay
        *  (zIndex 1300) once the username lands. The plain boot leg is
-       *  `neutral` (logo + spinner, no heading): before `authResolved`
-       *  we don't know whether a session exists, and a first-time
-       *  visitor must not read "Signing you in…" right before landing
-       *  on the sign-in button. Only the OAuth return leg - where the
-       *  user really did just sign in - keeps the heading. */}
+       *  `neutral` (bare spinner, no HF logo, no heading): before
+       *  `authResolved` we don't know whether a session exists, and an
+       *  already-signed-in user must never see OAuth branding on a
+       *  plain reload (nor a first-time visitor read "Signing you in…"
+       *  right before landing on the sign-in button). Only the OAuth
+       *  return leg - where the user really did just sign in - keeps
+       *  the HF logo and the heading. */}
       {showAuthSplash && (
         <PostOAuthSplash
           variant={showPostOAuthSplash ? 'signing-in' : 'neutral'}
