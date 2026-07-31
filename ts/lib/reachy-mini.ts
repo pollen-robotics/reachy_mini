@@ -156,6 +156,25 @@ const MAX_VISIBILITY_DEFER_MS = 60_000;
 const POSE_STREAM_FRESH_MS = 750;
 
 /**
+ * Backoff schedule for the automatic session re-dial (one entry per
+ * attempt, in ms of wait BEFORE that attempt). A dead link on a phone
+ * usually heals within the first two attempts (WiFi re-associates,
+ * 4G comes back); the tail exists for slower recoveries like a router
+ * reboot. Total window ≈ 22 s + dial time, capped so a genuinely gone
+ * robot surfaces a terminal `sessionStopped` in well under a minute.
+ */
+const REDIAL_BACKOFF_MS = [0, 2000, 4000, 8000, 8000] as const;
+
+/**
+ * Ceiling on a single re-dial attempt (startSession handshake). The
+ * signaling round-trip plus ICE + DTLS normally lands in 2-4 s; if an
+ * attempt hasn't settled after this long the robot side is likely
+ * still holding the previous (dead) session, so we tear the attempt
+ * down and let the next backoff slot retry against a freed slot.
+ */
+const REDIAL_DIAL_TIMEOUT_MS = 15_000;
+
+/**
  * Fail-open ceiling for a single `_slotRoundtrip` request/response.
  * Every slot command has a strict "one reply per request" contract, so
  * a missing reply means the daemon either never got it or - crucially -
@@ -280,6 +299,21 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _offlineHandler: (() => void) | null = null;
     private _connectionChangeHandler: (() => void) | null = null;
 
+    // ─── Resilience: automatic session re-dial ──────────────────────────
+    // When an ESTABLISHED session's transport dies for good (ICE failed
+    // past its grace, stuck-disconnected past its grace, or expired
+    // while backgrounded), the SDK re-dials the same robot through the
+    // signaling server instead of surfacing a fatal error. See
+    // `_maybeBeginRedial` / `_runRedialLoop`.
+    private readonly _autoReconnect: boolean;
+    private _redialing = false;
+    private _redialTimer: ReturnType<typeof setTimeout> | null = null;
+    private _redialWake: (() => void) | null = null;
+    // True while the redial loop itself is inside startSession(), so the
+    // "external startSession cancels a pending redial" guard can tell the
+    // two apart.
+    private _redialInternalDial = false;
+
     // ─── Motion completion plumbing (wake_up / goto_sleep) ───────────────
     private readonly _pendingMotionCompletions: Record<'wake_up' | 'goto_sleep', PendingMotion[]> = {
         wake_up: [],
@@ -301,6 +335,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._videoJitterBufferTargetMs = options.videoJitterBufferTargetMs ?? 0;
         this._autoStartFromUrl = options.autoStartFromUrl === true;
         this._autoStartAttempted = false;
+        this._autoReconnect = options.autoReconnect !== false;
         this._preselectedRobotId = readPreselectedRobotIdFromUrl();
     }
 
@@ -640,6 +675,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     async startSession(robotId: string): Promise<void> {
+        // An explicit dial from the app supersedes any in-flight
+        // auto-reconnect (possibly towards a different robot).
+        if (this._redialing && !this._redialInternalDial) this._cancelRedial();
         if (this._state !== 'connected') throw new Error('Not connected');
         this._selectedRobotId = robotId;
         this._iceConnected = false;
@@ -828,7 +866,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._micMuted = true;
         this._micSupported = false;
 
-        this._emit('sessionRejected', { reason: msg.reason, activeApp: msg.activeApp });
+        // During an auto-reconnect the rejection is expected noise (the
+        // robot side may still hold the dead session for a few seconds) —
+        // the loop retries, the app only sees `sessionReconnecting`.
+        if (!this._redialing) {
+            this._emit('sessionRejected', { reason: msg.reason, activeApp: msg.activeApp });
+        }
 
         if (this._sessionReject) {
             const reject = this._sessionReject;
@@ -839,6 +882,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     async stopSession(): Promise<void> {
+        // A deliberate stop always wins over a pending auto-reconnect:
+        // the in-flight dial attempt (if any) is rejected right below via
+        // `_sessionReject`, and the loop exits on the cleared flag.
+        this._cancelRedial();
         if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
@@ -888,6 +935,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     disconnect(): void {
+        this._cancelRedial();
         if (this._sseAbortController) { this._sseAbortController.abort(); this._sseAbortController = null; }
 
         if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
@@ -986,6 +1034,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             const s = this._pc?.iceConnectionState;
             if (s === 'connected' || s === 'completed') return; // healed
             if (r === 'disconnected' && s === 'disconnected') {
+                if (this._maybeBeginRedial(`ICE stuck in 'disconnected' for > ${ms}ms`)) return;
                 this._emit('error', {
                     source: 'webrtc',
                     error: new Error(`ICE stuck in 'disconnected' for > ${ms}ms`),
@@ -995,10 +1044,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             if (r === 'failed' || s === 'failed') {
                 const err = new Error('ICE connection failed');
                 if (this._sessionReject) {
+                    // Mid-setup failure: keep the promise contract — the
+                    // caller of startSession() owns the retry decision.
                     this._sessionReject(err);
                     this._sessionResolve = null;
                     this._sessionReject = null;
+                    this._emit('error', { source: 'webrtc', error: err });
+                    return;
                 }
+                if (this._maybeBeginRedial('ICE connection failed')) return;
                 this._emit('error', { source: 'webrtc', error: err });
             }
         }, ms);
@@ -1037,7 +1091,14 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     this._sessionReject(err);
                     this._sessionResolve = null;
                     this._sessionReject = null;
+                    this._emit('error', { source: 'webrtc', error: err });
+                    return;
                 }
+                // The transport is unrecoverable (daemon dropped its side
+                // past the consent-freshness window) but the user is BACK
+                // and looking at the app — the perfect moment to re-dial
+                // rather than render "session expired".
+                if (this._maybeBeginRedial('Session expired while tab was backgrounded')) return;
                 this._emit('error', { source: 'webrtc', error: err });
                 return;
             }
@@ -1126,6 +1187,182 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._onlineHandler = null;
         this._offlineHandler = null;
         this._connectionChangeHandler = null;
+    }
+
+    // ─── Resilience: automatic session re-dial ───────────────────────────
+    //
+    // The daemon's `webrtcbin` cannot do a standards ICE restart (missing
+    // upstream support), so the recovery unit is the whole SESSION: tear
+    // down the dead RTCPeerConnection and dial the same robot again
+    // through central. Everything below runs inside the SDK so every
+    // consumer (host embed, mobile app, third-party apps) inherits it.
+
+    /**
+     * Escalation funnel for dead-transport signals. Returns `true` when
+     * the failure is being handled by a re-dial (callers should then skip
+     * their fatal `error` emit). Only fires for an ESTABLISHED session:
+     * mid-setup failures keep rejecting the startSession() promise so the
+     * original caller stays in charge of retries.
+     */
+    private _maybeBeginRedial(cause: string): boolean {
+        if (!this._autoReconnect) return false;
+        if (this._redialing) return true; // already in progress
+        if (this._sessionResolve || this._sessionReject) return false; // mid-setup
+        const robotId = this._selectedRobotId;
+        if (!robotId || !this._pc) return false;
+        this._redialing = true;
+        console.info(`[reachy-mini] auto-reconnect: ${cause} — re-dialing ${robotId}`);
+        void this._runRedialLoop(robotId, cause);
+        return true;
+    }
+
+    /**
+     * The re-dial loop. One teardown, then up to REDIAL_BACKOFF_MS.length
+     * attempts, each preceded by its backoff slot. Every attempt re-runs
+     * the normal startSession() flow (and connect() first if the SSE feed
+     * died with the network), so a success is indistinguishable from a
+     * fresh session: `streaming` re-fires, videoTrack re-attaches, the
+     * pose subscription is re-asserted by `_checkSessionReady`.
+     *
+     * Exits early — without emitting anything further — when the user
+     * calls stopSession()/disconnect() or dials another robot, all of
+     * which flip `_redialing` off via `_cancelRedial`.
+     */
+    private async _runRedialLoop(robotId: string, cause: string): Promise<void> {
+        const maxAttempts = REDIAL_BACKOFF_MS.length;
+        this._teardownForRedial();
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (!this._redialing) return;
+            this._emit('sessionReconnecting', { attempt, maxAttempts, cause });
+            await this._redialSleep(REDIAL_BACKOFF_MS[attempt - 1]!);
+            if (!this._redialing) return;
+            try {
+                if (this._state === 'disconnected') {
+                    // The network drop also killed the signaling SSE feed —
+                    // re-establish it before dialing.
+                    await this.connect();
+                }
+                if (!this._redialing) return;
+                this._redialInternalDial = true;
+                try {
+                    await this._withTimeout(
+                        this.startSession(robotId),
+                        REDIAL_DIAL_TIMEOUT_MS,
+                        'auto-reconnect dial timed out',
+                    );
+                } finally {
+                    this._redialInternalDial = false;
+                }
+                if (!this._redialing) return;
+                this._redialing = false;
+                console.info(`[reachy-mini] auto-reconnect: recovered on attempt ${attempt}`);
+                this._emit('sessionReconnected', { attempt });
+                return;
+            } catch (e) {
+                console.warn(
+                    `[reachy-mini] auto-reconnect attempt ${attempt}/${maxAttempts} failed:`,
+                    e,
+                );
+                // A failed attempt can leave a half-open pc (e.g. the dial
+                // timed out mid-ICE). Clean it so the next attempt starts
+                // from a blank slate; also frees the robot-side slot via
+                // endSession when one was allocated.
+                if (this._redialing) this._teardownForRedial();
+            }
+        }
+        if (!this._redialing) return;
+        this._redialing = false;
+        const message = `Auto-reconnect gave up after ${maxAttempts} attempts (${cause})`;
+        console.warn(`[reachy-mini] ${message}`);
+        this._emit('sessionStopped', { reason: 'reconnect_failed', message });
+        this._emit('error', { source: 'webrtc', error: new Error(message) });
+    }
+
+    /**
+     * Transport-only teardown: everything stopSession() does EXCEPT the
+     * user-facing state flip (`sessionStopped` is not emitted, `_state`
+     * falls back to 'connected' so startSession() accepts the re-dial).
+     * Pending promises that ride the dead channel are settled just like
+     * stopSession() settles them — callers see the same failure shape a
+     * manual stop would produce.
+     */
+    private _teardownForRedial(): void {
+        if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
+        if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
+        if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
+        if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
+        if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
+        if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
+        if (this._robotNameResolve) { this._robotNameResolve(null); this._robotNameResolve = null; }
+        if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
+        this._rejectPendingMotionCompletions(new Error('Session reconnecting'));
+        this._rejectPendingRpc(new Error('Session reconnecting'));
+        this._clearIceGrace();
+        this._uninstallNetworkListeners();
+        if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
+        if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
+
+        // Free the robot-side slot: the relay refuses a second session
+        // while it still tracks the dead one, and only endSession (or its
+        // own consent-freshness timeout, ~30 s) clears it. Fire and
+        // forget — _sendToServer never throws.
+        const sessionId = this._sessionId;
+        this._sessionId = null;
+        if (sessionId && this._token) {
+            void this._sendToServer({ type: 'endSession', sessionId });
+        }
+
+        if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
+        this._micMuted = true;
+        this._micSupported = false;
+        if (this._pc) { this._pc.close(); this._pc = null; }
+        if (this._dc) { this._dc.close(); this._dc = null; }
+        this._iceConnected = false;
+        this._dcOpen = false;
+        if (this._state === 'streaming') this._state = 'connected';
+    }
+
+    /** Cancellable backoff sleep — `_cancelRedial` wakes it immediately. */
+    private _redialSleep(ms: number): Promise<void> {
+        if (ms <= 0) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+            this._redialWake = resolve;
+            this._redialTimer = setTimeout(() => {
+                this._redialTimer = null;
+                this._redialWake = null;
+                resolve();
+            }, ms);
+        });
+    }
+
+    /**
+     * Abort a pending re-dial. Called from stopSession(), disconnect()
+     * and an external startSession() — every path where the user (or the
+     * consumer app) takes over the session lifecycle.
+     */
+    private _cancelRedial(): void {
+        if (!this._redialing && !this._redialWake) return;
+        this._redialing = false;
+        if (this._redialTimer !== null) {
+            clearTimeout(this._redialTimer);
+            this._redialTimer = null;
+        }
+        if (this._redialWake) {
+            const wake = this._redialWake;
+            this._redialWake = null;
+            wake();
+        }
+    }
+
+    private _withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error(label)), ms);
+            p.then(
+                (v) => { clearTimeout(timer); resolve(v); },
+                (e) => { clearTimeout(timer); reject(e); },
+            );
+        });
     }
 
     // ─── Commands ────────────────────────────────────────────────────────
@@ -2133,7 +2370,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 friendly || `Session ended before it could start: ${reason || 'unknown reason'}`,
             ) as SessionRejectError;
             err.reason = reason ?? null;
-            this._emit('sessionRejected', { reason, activeApp: null });
+            // Same suppression as _failSessionRejected: retries during an
+            // auto-reconnect must not surface as `sessionRejected`.
+            if (!this._redialing) {
+                this._emit('sessionRejected', { reason, activeApp: null });
+            }
             // Resilience teardown alongside the PC close path.
             this._clearIceGrace();
             this._uninstallNetworkListeners();
