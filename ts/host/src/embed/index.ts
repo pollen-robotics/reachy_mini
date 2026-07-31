@@ -491,6 +491,13 @@ async function bootOnce(
   bridge.attachPageHide(sdk);
   pushAppState('live', null);
 
+  // Surface the SDK's automatic session re-dial to the host: the shell
+  // already renders a full-screen ConnectingView whenever we report the
+  // `connecting` phase, so a reconnect reads as "Reconnecting…" instead
+  // of a dead frozen app. No-op against an older SDK bundle that doesn't
+  // emit these events.
+  installReconnectBridge(sdk);
+
   // Self-serve staleness check: this runs INSIDE the app's iframe, so
   // it covers every consumer (web shell, mobile app, anything else)
   // without the parent lifting a finger. Fire-and-forget: the GitHub
@@ -1186,14 +1193,20 @@ async function sampleRttMs(pc: RTCPeerConnection): Promise<number | null> {
  */
 function startLiveLinkMonitor(sdk: ReachyMiniInstance): void {
   if (typeof window === 'undefined') return;
-  const pc = (sdk as unknown as { _pc?: RTCPeerConnection | null })._pc;
-  if (!pc) return;
+  // `_pc` is re-read on every tick (not captured once): the SDK's
+  // auto-reconnect replaces the RTCPeerConnection mid-session, and a
+  // sampler pinned to the old pc would freeze the RTT forever.
+  const livePc = (): RTCPeerConnection | null =>
+    (sdk as unknown as { _pc?: RTCPeerConnection | null })._pc ?? null;
+  if (!livePc()) return;
 
   const windowMs: number[] = [];
   let stopped = false;
 
   const tick = async (): Promise<void> => {
     if (stopped) return;
+    const pc = livePc();
+    if (!pc || pc.connectionState === 'closed') return;
     const sample = await sampleRttMs(pc);
     if (sample === null) return;
     windowMs.push(sample);
@@ -1332,7 +1345,9 @@ function createRobotMedia(sdk: ReachyMiniInstance): RobotMedia {
 
   // Drop the cache as soon as the daemon tears down - keeps
   // `media.robotStream` honest if anything reads it after
-  // `sessionStopped`.
+  // `sessionStopped`. Same on `sessionReconnecting`: the SDK's
+  // auto re-dial replaces the RTCPeerConnection, so the cached
+  // tracks are dead and must be rebuilt from the new receivers.
   const onSessionStopped = (): void => {
     if (cached) {
       cached = null;
@@ -1340,6 +1355,7 @@ function createRobotMedia(sdk: ReachyMiniInstance): RobotMedia {
     }
   };
   sdk.addEventListener('sessionStopped', onSessionStopped);
+  sdk.addEventListener('sessionReconnecting', onSessionStopped);
 
   return {
     attachVideo(el: HTMLVideoElement): () => void {
@@ -1377,6 +1393,64 @@ function createRobotMedia(sdk: ReachyMiniInstance): RobotMedia {
 }
 
 /**
+ * Mirror the SDK's automatic session re-dial into host app-states.
+ *
+ * The SDK (>= the version carrying `autoReconnect`) re-dials the robot
+ * by itself when an established session's transport dies. While it
+ * retries, the app iframe is functionally frozen — motion/RPC calls
+ * fail — so the honest UX is the same connecting splash the boot flow
+ * uses. On success the SDK re-fires `streaming` (video re-attaches on
+ * its own) and we flip back to `live`; on a terminal
+ * `sessionStopped { reason: 'reconnect_failed' }` we report a fatal
+ * error so the shell offers reload / back-to-picker.
+ *
+ * Registered with plain string event names so an app that shipped an
+ * OLDER SDK bundle (no such events) is a silent no-op.
+ */
+function installReconnectBridge(sdk: ReachyMiniInstance): void {
+  const on = (
+    name: string,
+    cb: (e: { detail?: Record<string, unknown> }) => void,
+  ): void => {
+    try {
+      (sdk as unknown as {
+        addEventListener: (n: string, c: (e: unknown) => void) => void;
+      }).addEventListener(name, cb as (e: unknown) => void);
+    } catch {
+      /* older SDK bundle */
+    }
+  };
+
+  on('sessionReconnecting', (e) => {
+    const attempt = Number(e.detail?.attempt ?? 1);
+    const max = Number(e.detail?.maxAttempts ?? 1);
+    pushAppState(
+      'connecting',
+      'session',
+      attempt > 1
+        ? `Reconnecting to the robot (attempt ${attempt}/${max})`
+        : 'Connection lost — reconnecting to the robot',
+    );
+  });
+
+  on('sessionReconnected', () => {
+    pushAppState('live', null);
+  });
+
+  on('sessionStopped', (e) => {
+    if (e.detail?.reason !== 'reconnect_failed') return;
+    postToHost({
+      source: PROTOCOL_SOURCE,
+      type: 'embed:error',
+      version: PROTOCOL_VERSION,
+      message: 'Lost the connection to the robot and could not reconnect.',
+      fatal: true,
+      detail: typeof e.detail?.message === 'string' ? e.detail.message : undefined,
+    });
+  });
+}
+
+/**
  * One-shot SDK probe used while we hunt the "stuck at session" bug.
  * Subscribes to every internal event the SDK is known to emit and
  * forwards them to the host via `embed:debug`. No-op in production
@@ -1389,6 +1463,8 @@ function installSdkProbe(sdk: ReachyMiniInstance): void {
     'streaming',
     'sessionStopped',
     'sessionRejected',
+    'sessionReconnecting',
+    'sessionReconnected',
     'robotsChanged',
     'error',
     'state',
