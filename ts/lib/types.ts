@@ -104,6 +104,21 @@ export interface ReachyMiniOptions {
      * per page load; the host iframe relies on this to skip the picker.
      */
     autoStartFromUrl?: boolean;
+    /**
+     * Automatic session re-dial (default `true`). When an ESTABLISHED
+     * session's transport dies for good (ICE `failed` past its grace
+     * window, stuck `disconnected`, or expired while the tab was
+     * backgrounded), the SDK tears the dead RTCPeerConnection down and
+     * re-dials the same robot through the signaling server — up to 5
+     * attempts with backoff (~22 s window). The app sees
+     * `sessionReconnecting` per attempt, then either `sessionReconnected`
+     * followed by a fresh `streaming` event, or a terminal
+     * `sessionStopped` with reason `reconnect_failed`. Failures during
+     * the INITIAL `startSession()` handshake still reject the promise —
+     * the caller owns that retry. Set to `false` to restore the previous
+     * fatal-`error` behaviour.
+     */
+    autoReconnect?: boolean;
 }
 
 /** Options accepted by `login()`. */
@@ -306,6 +321,30 @@ export interface NetworkChangeEventDetail {
     rtt?: number;
     saveData?: boolean;
 }
+/**
+ * One auto-reconnect attempt is starting (fires once per attempt,
+ * BEFORE its backoff wait). Show a "Reconnecting…" UI on the first one
+ * and keep it until `sessionReconnected` or a `sessionStopped` with
+ * reason `reconnect_failed`. Motion/RPC calls made while reconnecting
+ * fail exactly as they would on a stopped session.
+ */
+export interface SessionReconnectingEventDetail {
+    attempt: number;
+    maxAttempts: number;
+    /** Human-readable description of what killed the transport. */
+    cause: string;
+}
+/**
+ * Auto-reconnect succeeded. A fresh `streaming` event fires alongside
+ * (same robot, new sessionId); video re-attaches automatically through
+ * the `videoTrack` listener installed by `attachVideo()`. App-level
+ * state that lives daemon-side per session (motor mode override, a
+ * replaced audio sender track, …) must be re-asserted by the app.
+ */
+export interface SessionReconnectedEventDetail {
+    /** The attempt number that got through (1-based). */
+    attempt: number;
+}
 
 /** Map of event names to their detail shapes. */
 export interface ReachyMiniEventMap {
@@ -323,6 +362,8 @@ export interface ReachyMiniEventMap {
     networkOnline: CustomEvent<Record<string, never>>;
     networkOffline: CustomEvent<Record<string, never>>;
     networkChange: CustomEvent<NetworkChangeEventDetail>;
+    sessionReconnecting: CustomEvent<SessionReconnectingEventDetail>;
+    sessionReconnected: CustomEvent<SessionReconnectedEventDetail>;
 }
 
 /** Public surface of a ReachyMini SDK instance. */
