@@ -17,6 +17,12 @@ import {
     sdpHasAudioSendRecv,
 } from './url-helpers.js';
 import {
+    clearStoredToken,
+    consumeOAuthErrorParams,
+    readUsableToken,
+    writeStoredToken,
+} from './token-store.js';
+import {
     UPLOAD_CHUNK_SIZE,
     UPLOAD_BUFFERED_HIGH_WATER,
     UPLOAD_BUFFERED_LOW_WATER,
@@ -34,6 +40,7 @@ import type {
     AutoConnectResult,
     AutoConnectRobotChoice,
     FaceTarget,
+    LoginOptions,
     MotionAwaitOptions,
     MoveData,
     PlayMoveOptions,
@@ -352,29 +359,38 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         try {
             consumeFragmentCredentials();
 
+            // A failed silent login (`login({ prompt: 'none' })`) returns as
+            // `?error=login_required` / `consent_required` query params.
+            // Strip them so they don't linger in the URL; the fall-through
+            // to the cached-token check below then reports "not signed in".
+            const silentError = consumeOAuthErrorParams();
+            if (silentError) {
+                console.info('[reachy-mini] silent sign-in declined:', silentError);
+            }
+
             const result = (await oauthHandleRedirectIfPresent()) as OAuthRedirectResult | false | null;
             if (result) {
                 this._username = result.userInfo.preferred_username || result.userInfo.name || null;
                 this._token = result.accessToken;
                 this._tokenExpires = result.accessTokenExpiresAt;
-                sessionStorage.setItem('hf_token', this._token);
-                sessionStorage.setItem('hf_username', this._username ?? '');
-                sessionStorage.setItem(
-                    'hf_token_expires',
-                    typeof this._tokenExpires === 'string'
-                        ? this._tokenExpires
-                        : this._tokenExpires.toISOString(),
-                );
+                writeStoredToken({
+                    token: this._token,
+                    username: this._username ?? '',
+                    expires:
+                        typeof this._tokenExpires === 'string'
+                            ? this._tokenExpires
+                            : this._tokenExpires.toISOString(),
+                });
                 return true;
             }
 
-            const t = sessionStorage.getItem('hf_token');
-            const u = sessionStorage.getItem('hf_username');
-            const e = sessionStorage.getItem('hf_token_expires');
-            if (t && u && e && new Date(e) > new Date()) {
-                this._token = t;
-                this._username = u;
-                this._tokenExpires = e;
+            // Cached-token path. `readUsableToken` enforces both the OAuth
+            // expiry and a sliding idle window (see token-store.ts).
+            const stored = readUsableToken();
+            if (stored && stored.username) {
+                this._token = stored.token;
+                this._username = stored.username;
+                this._tokenExpires = stored.expires;
                 return true;
             }
             return false;
@@ -384,16 +400,21 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         }
     }
 
-    async login(): Promise<void> {
+    async login(options?: LoginOptions): Promise<void> {
         const opts: { clientId?: string } = {};
         if (this._clientId) opts.clientId = this._clientId;
-        window.location.href = await oauthLoginUrl(opts);
+        let url = await oauthLoginUrl(opts);
+        // OIDC prompt param. `oauthLoginUrl` doesn't expose it, but the HF
+        // authorize endpoint honours it (verified empirically): with
+        // `prompt=none` an already-authorized user comes straight back with
+        // a code and no screen, anyone else comes back with `?error=...`
+        // instead of landing on the HF login page.
+        if (options?.prompt) url += `&prompt=${options.prompt}`;
+        window.location.href = url;
     }
 
     logout(): void {
-        sessionStorage.removeItem('hf_token');
-        sessionStorage.removeItem('hf_username');
-        sessionStorage.removeItem('hf_token_expires');
+        clearStoredToken();
         this._username = null;
         this._tokenExpires = null;
         this.disconnect();

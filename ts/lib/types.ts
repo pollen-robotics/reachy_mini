@@ -106,6 +106,26 @@ export interface ReachyMiniOptions {
     autoStartFromUrl?: boolean;
 }
 
+/** Options accepted by `login()`. */
+export interface LoginOptions {
+    /**
+     * OIDC prompt behaviour for the OAuth redirect.
+     *
+     * `'none'` performs a SILENT authorization: a user who is logged in
+     * to Hugging Face and has already authorized the app comes straight
+     * back with a code (no screen, no interaction); everyone else comes
+     * back immediately with `?error=login_required` /
+     * `consent_required` instead of landing on the HF login page. The
+     * error return is consumed and stripped by `authenticate()`, which
+     * then simply reports "not signed in". Supported by the HF
+     * authorize endpoint although absent from its discovery metadata
+     * (verified empirically).
+     *
+     * Omit for the regular interactive flow.
+     */
+    prompt?: 'none';
+}
+
 /** Options accepted by `autoConnect()`. */
 export interface AutoConnectOptions {
     /** Skip `authenticate()`; use this raw HF token. */
@@ -341,7 +361,7 @@ export interface ReachyMiniInstance extends EventTarget {
     _micStream: MediaStream | null;
 
     authenticate(): Promise<boolean>;
-    login(): Promise<void>;
+    login(options?: LoginOptions): Promise<void>;
     logout(): void;
 
     connect(token?: string): Promise<void>;
