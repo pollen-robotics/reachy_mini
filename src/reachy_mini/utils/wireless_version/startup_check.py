@@ -595,7 +595,10 @@ def _quick_ownership_ok() -> bool:
 def _startup_stamp_valid() -> bool:
     """Check that the stored stamp matches the freshly computed signature."""
     stored = json.loads(STAMP_PATH.read_text())
-    return stored == _compute_stamp_signature() and _quick_ownership_ok()
+    if stored != _compute_stamp_signature():
+        print("Startup stamp mismatch (install state changed); running full startup checks")
+        return False
+    return _quick_ownership_ok()
 
 
 def _write_startup_stamp() -> None:

@@ -212,6 +212,23 @@ def test_stamp_write_is_atomic_no_tmp_left_behind(fake_venvs, spy_checks):
     assert leftovers == []
 
 
+def test_stale_stamp_says_why_full_checks_run(fake_venvs, spy_checks, capsys):
+    """A parseable-but-stale stamp must say WHY the full checks run.
+
+    Field debugging relies on the journal: a silent fallback would look
+    identical to a boot that never had a stamp.
+    """
+    sc.run_wireless_startup_checks()
+    record = next(
+        fake_venvs["daemon"].glob("lib/python*/site-packages/*.dist-info/RECORD")
+    )
+    os.utime(record, ns=(9, 9))
+    capsys.readouterr()
+
+    sc.run_wireless_startup_checks()
+    assert "Startup stamp mismatch" in capsys.readouterr().out
+
+
 def test_stamp_path_being_a_directory_never_crashes_boot(fake_venvs, spy_checks):
     """A directory squatting the stamp path degrades to full checks, no crash."""
     fake_venvs["stamp"].mkdir()
