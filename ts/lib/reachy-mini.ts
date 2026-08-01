@@ -10,6 +10,8 @@ import {
 } from '@huggingface/hub';
 
 import { degToRad, rpyToMatrix } from './math.js';
+import { PendingReplies } from './pending-replies.js';
+import type { MotionCommand, ReplySlotKey, ReplySlotValues } from './pending-replies.js';
 import { SessionSupervisor } from './session-supervisor.js';
 import { SDK_VERSION } from './version.js';
 import {
@@ -58,18 +60,6 @@ import type {
     UpdateProgressEvent,
     UploadAudioOptions,
 } from './types.js';
-
-interface PendingMotion {
-    resolve: () => void;
-    reject: (err: Error) => void;
-    timer: ReturnType<typeof setTimeout>;
-}
-
-interface BroadcastWaiter {
-    predicate: (m: Record<string, unknown>) => boolean;
-    resolve: (m: Record<string, unknown>) => void;
-    timer: ReturnType<typeof setTimeout>;
-}
 
 interface LogSubscriber {
     onLine: (entry: { timestamp: string; line: string }) => void;
@@ -122,39 +112,6 @@ interface OAuthRedirectResult {
  * flip it back and forth.
  */
 const POSE_STREAM_FRESH_MS = 750;
-
-/**
- * Fail-open ceiling for a single `_slotRoundtrip` request/response.
- * Every slot command has a strict "one reply per request" contract, so
- * a missing reply means the daemon either never got it or - crucially -
- * predates that command entirely: an older daemon silently drops an
- * unknown `type` and sends nothing back, which would otherwise leave the
- * caller's promise pending forever (e.g. a newer SDK calling a command a
- * 1.8.x daemon doesn't implement). Resolving `null` on timeout maps
- * cleanly onto the "unsupported / failed" value every slot caller already
- * handles. 4 s is comfortably above a WebRTC data-channel round trip on a
- * congested phone link while still failing fast enough that a gated UI
- * doesn't feel hung.
- */
-const SLOT_ROUNDTRIP_TIMEOUT_MS = 4000;
-
-/**
- * Value type carried by each single-slot reply waiter (see `_replySlots`).
- * These daemon replies are correlated by message TYPE — the legacy command
- * set carries no request ids — so at most one call per slot is in flight.
- */
-interface ReplySlotValues {
-    version: string | null;
-    hardware_id: string | null;
-    volume: number | null;
-    mic_volume: number | null;
-    tracked_face: FaceTarget | null;
-    robot_name: string | null;
-    delete_hf_token: boolean | null;
-    apply_audio_config: boolean | null;
-    read_audio_parameter: number[] | null;
-}
-type ReplySlotKey = keyof ReplySlotValues;
 
 export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
@@ -210,31 +167,19 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _latencyMonitorId: ReturnType<typeof setInterval> | null = null;
     private _stateRefreshInterval: ReturnType<typeof setInterval> | null = null;
 
-    // ─── Single-slot reply waiters ───────────────────────────────────────
-    // One pending `_slotRoundtrip` settle closure per `ReplySlotKey`.
-    // Separate slots so unrelated commands can be in flight concurrently;
-    // a newer call on the SAME slot supersedes the older waiter with
-    // `null`. Every teardown path settles the whole map at once via
-    // `_settleAllReplySlots`.
-    private readonly _replySlots = new Map<ReplySlotKey, (v: unknown) => void>();
+    // ─── Pending replies (reply slots / JSON-RPC / motion / broadcast) ───
+    // All request/response waiters on the data channel live in one
+    // ledger so every teardown path settles them in a single call.
+    private readonly _pending = new PendingReplies();
 
     // ─── Log subscribers ─────────────────────────────────────────────────
     private readonly _logSubscribers: Set<LogSubscriber> = new Set();
     private readonly _updateProgressSubscribers: Set<UpdateProgressCallback> = new Set();
 
-    // ─── JSON-RPC app control (over the same DataChannel) ────────────────
-    // rpcCall() sends {jsonrpc,id,method,params} and awaits the matching
-    // response; onNotification() subscribes to one-way events (no id) the
-    // robot/app pushes (conversation.phase/turn/transcript, ...).
-    private _rpcCounter = 0;
-    private readonly _pendingRpc = new Map<
-        string,
-        { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }
-    >();
+    // ─── JSON-RPC notification listeners (one-way events, no id) ─────────
+    // onNotification() subscribes to events the robot/app pushes
+    // (conversation.phase/turn/transcript, ...).
     private readonly _rpcListeners = new Map<string, Set<(params: Record<string, unknown>) => void>>();
-
-    // ─── Broadcast waiters (playMove / playUploadedAudio) ────────────────
-    private _broadcastWaiters: BroadcastWaiter[] = [];
 
     // ─── Active upload ids for no-arg cancels ────────────────────────────
     private _activeMoveUploadId: string | null = null;
@@ -252,12 +197,6 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     // class forwards pc/browser events to it and implements its deps as
     // closures over the private state below (see the constructor).
     private readonly _supervisor: SessionSupervisor;
-
-    // ─── Motion completion plumbing (wake_up / goto_sleep) ───────────────
-    private readonly _pendingMotionCompletions: Record<'wake_up' | 'goto_sleep', PendingMotion[]> = {
-        wake_up: [],
-        goto_sleep: [],
-    };
 
     // ─── Video element ───────────────────────────────────────────────────
     private _videoElement: HTMLVideoElement | null = null;
@@ -845,11 +784,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         // the in-flight dial attempt (if any) is rejected right below via
         // `_sessionReject`, and the loop exits on the cleared flag.
         this._supervisor.cancelRedial();
-        this._settleAllReplySlots();
+        this._pending.settleAll(new Error('Session stopped'));
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
-        this._rejectPendingMotionCompletions(new Error('Session stopped'));
-        this._rejectPendingRpc(new Error('Session stopped'));
         // Tear down resilience plumbing BEFORE closing `_pc` so a
         // queued grace callback can't dereference a dead handle.
         this._supervisor.clearIceGrace();
@@ -890,10 +827,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._supervisor.cancelRedial();
         if (this._sseAbortController) { this._sseAbortController.abort(); this._sseAbortController = null; }
 
-        this._settleAllReplySlots();
+        this._pending.settleAll(new Error('Disconnected'));
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
-        this._rejectPendingMotionCompletions(new Error('Disconnected'));
         // Mirrors the resilience teardown in `stopSession()`.
         this._supervisor.clearIceGrace();
         this._supervisor.uninstallNetworkListeners();
@@ -952,9 +888,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * manual stop would produce.
      */
     private _teardownForRedial(): void {
-        this._settleAllReplySlots();
-        this._rejectPendingMotionCompletions(new Error('Session reconnecting'));
-        this._rejectPendingRpc(new Error('Session reconnecting'));
+        this._pending.settleAll(new Error('Session reconnecting'));
         // A timed-out dial attempt leaves its startSession() promise
         // pending with the resolvers still armed; a late signaling
         // reply could otherwise settle them against a closed pc, and
@@ -1193,36 +1127,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     private _sendCommandAwaitCompletion(
-        command: 'wake_up' | 'goto_sleep',
+        command: MotionCommand,
         timeoutMs: number,
     ): Promise<void> {
         if (!this._sendCommand({ type: command })) {
             return Promise.reject(new Error(`${command}: data channel not open`));
         }
-        return new Promise<void>((resolve, reject) => {
-            const entry: PendingMotion = {
-                resolve,
-                reject,
-                timer: setTimeout(() => {
-                    const queue = this._pendingMotionCompletions[command];
-                    const idx = queue.indexOf(entry);
-                    if (idx !== -1) queue.splice(idx, 1);
-                    reject(new Error(`${command} timed out after ${timeoutMs}ms`));
-                }, timeoutMs),
-            };
-            this._pendingMotionCompletions[command].push(entry);
-        });
-    }
-
-    private _rejectPendingMotionCompletions(error: Error): void {
-        for (const command of Object.keys(this._pendingMotionCompletions) as Array<'wake_up' | 'goto_sleep'>) {
-            const queue = this._pendingMotionCompletions[command];
-            while (queue.length) {
-                const entry = queue.shift()!;
-                clearTimeout(entry.timer);
-                entry.reject(error);
-            }
-        }
+        return this._pending.awaitMotion(command, timeoutMs);
     }
 
     isAwake(): boolean {
@@ -1331,72 +1242,18 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     /**
      * Internal: send a command and await the matching daemon response in a
-     * named single-resolver slot (see `_replySlots`). Every caller has a
-     * strict request/response shape where a single in-flight call per slot
-     * is sufficient. If a previous request on the same slot is still
-     * pending when a new one comes in, the older promise is resolved to
-     * `null` so its caller doesn't hang forever.
+     * named single-resolver slot (see `PendingReplies.slotRoundtrip`).
+     * Every caller has a strict request/response shape where a single
+     * in-flight call per slot is sufficient.
      */
     private _slotRoundtrip<K extends ReplySlotKey>(
         slot: K,
         command: Record<string, unknown>,
     ): Promise<ReplySlotValues[K] | null> {
-        return new Promise<ReplySlotValues[K] | null>((resolve, reject) => {
-            if (!this._dc || this._dc.readyState !== 'open') {
-                reject(new Error('Data channel not open'));
-                return;
-            }
-            const prev = this._replySlots.get(slot);
-            if (prev) prev(null);
-            let timer: ReturnType<typeof setTimeout> | undefined;
-            // Single settle path shared by the daemon response, supersession
-            // by a newer call, and the fail-open timeout below. It clears the
-            // timer once and detaches itself from the slot only if it's still
-            // the current occupant, so a stale settle (timed-out or superseded)
-            // can't clear a newer call's slot registration. The message handler
-            // stores `settle` (not `resolve`), so every response route funnels
-            // through here.
-            // Note: slots are keyed by command type, not request id, so this
-            // does not prevent a genuinely late daemon reply from being routed
-            // to a newer same-command caller — that cross-talk is inherent to
-            // the single-flight slot design and unchanged here.
-            const settle = (v: unknown): void => {
-                if (timer !== undefined) {
-                    clearTimeout(timer);
-                    timer = undefined;
-                }
-                if (this._replySlots.get(slot) === settle) this._replySlots.delete(slot);
-                resolve(v as ReplySlotValues[K] | null);
-            };
-            this._replySlots.set(slot, settle);
-            timer = setTimeout(() => settle(null), SLOT_ROUNDTRIP_TIMEOUT_MS);
-            this._sendCommand(command);
-        });
-    }
-
-    /**
-     * Deliver a daemon reply to the pending waiter for `slot`, if any.
-     * Returns `true` when a waiter consumed the value — some message-handler
-     * branches use that to decide whether the message was ours to swallow.
-     */
-    private _settleReplySlot<K extends ReplySlotKey>(slot: K, value: ReplySlotValues[K]): boolean {
-        const waiter = this._replySlots.get(slot);
-        if (!waiter) return false;
-        waiter(value);
-        return true;
-    }
-
-    /**
-     * Settle every pending reply slot with `null` — the "no answer" value
-     * all slot callers already handle (public wrappers coerce where needed,
-     * e.g. `applyAudioConfig` maps it to `false`). Called from every
-     * session-teardown path so no caller is left hanging on a dead channel.
-     */
-    private _settleAllReplySlots(): void {
-        for (const waiter of [...this._replySlots.values()]) {
-            waiter(null);
+        if (!this._dc || this._dc.readyState !== 'open') {
+            return Promise.reject(new Error('Data channel not open'));
         }
-        this._replySlots.clear();
+        return this._pending.slotRoundtrip(slot, () => { this._sendCommand(command); });
     }
 
     sendRaw(data: unknown): boolean {
@@ -1742,20 +1599,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     private _waitForBroadcast(
         predicate: (m: Record<string, unknown>) => boolean,
-        { timeoutMs = 5000, debugLabel = '' }: { timeoutMs?: number; debugLabel?: string } = {},
+        opts: { timeoutMs?: number; debugLabel?: string } = {},
     ): Promise<Record<string, unknown>> {
-        return new Promise<Record<string, unknown>>((resolve, reject) => {
-            const slot: BroadcastWaiter = {
-                predicate,
-                resolve,
-                timer: setTimeout(() => {
-                    const i = this._broadcastWaiters.indexOf(slot);
-                    if (i !== -1) this._broadcastWaiters.splice(i, 1);
-                    reject(new Error(`broadcast timeout (${timeoutMs} ms): ${debugLabel}`));
-                }, timeoutMs),
-            };
-            this._broadcastWaiters.push(slot);
-        });
+        return this._pending.awaitBroadcast(predicate, opts);
     }
 
     private async _awaitDataChannelDrain(): Promise<void> {
@@ -1814,21 +1660,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         opts: { timeoutMs?: number } = {},
     ): Promise<T> {
         const timeoutMs = opts.timeoutMs ?? 20000;
-        const id = `rpc-${++this._rpcCounter}`;
+        const id = this._pending.nextRpcId();
         if (!this._sendCommand({ jsonrpc: '2.0', id, method, params })) {
             return Promise.reject(new Error(`rpcCall(${method}): data channel not open`));
         }
-        return new Promise<T>((resolve, reject) => {
-            const timer = setTimeout(() => {
-                this._pendingRpc.delete(id);
-                reject(new Error(`rpcCall(${method}) timed out after ${timeoutMs}ms`));
-            }, timeoutMs);
-            this._pendingRpc.set(id, {
-                resolve: (v) => resolve(v as T),
-                reject,
-                timer,
-            });
-        });
+        return this._pending.registerRpc(id, method, timeoutMs) as Promise<T>;
     }
 
     /**
@@ -1850,31 +1686,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         };
     }
 
-    private _rejectPendingRpc(err: Error): void {
-        for (const pending of this._pendingRpc.values()) {
-            clearTimeout(pending.timer);
-            pending.reject(err);
-        }
-        this._pendingRpc.clear();
-    }
-
     private _handleRpcMessage(data: Record<string, unknown>): void {
         // Response to an rpcCall (correlated by id)...
-        if ('id' in data && data.id != null && ('result' in data || 'error' in data)) {
-            const pending = this._pendingRpc.get(data.id as string);
-            if (!pending) return;
-            this._pendingRpc.delete(data.id as string);
-            clearTimeout(pending.timer);
-            if ('error' in data && data.error) {
-                const err = data.error as { message?: string; data?: { reason?: string } };
-                const e = new Error(err.message ?? 'rpc error');
-                (e as Error & { reason?: string }).reason = err.data?.reason;
-                pending.reject(e);
-            } else {
-                pending.resolve((data as { result?: unknown }).result);
-            }
-            return;
-        }
+        if (this._pending.settleRpcResponse(data)) return;
         // ...or a one-way notification (event): dispatch to listeners.
         if (typeof data.method === 'string') {
             const params = (data.params as Record<string, unknown> | undefined) ?? {};
@@ -2071,65 +1885,52 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         // only swallow them when a waiter is actually pending, otherwise
         // let the message fall through to the branches below.
         if ('version' in data
-            && this._settleReplySlot('version', (data.version as string | null) ?? null)) {
+            && this._pending.settleReplySlot('version', (data.version as string | null) ?? null)) {
             return;
         }
         if ('hardware_id' in data
-            && this._settleReplySlot('hardware_id', (data.hardware_id as string | null) ?? null)) {
+            && this._pending.settleReplySlot('hardware_id', (data.hardware_id as string | null) ?? null)) {
             return;
         }
         if (data.command === 'get_volume' || data.command === 'set_volume') {
-            this._settleReplySlot('volume', data.status === 'error' ? null : (data.volume as number));
+            this._pending.settleReplySlot('volume', data.status === 'error' ? null : (data.volume as number));
             return;
         }
         if (data.command === 'get_microphone_volume' || data.command === 'set_microphone_volume') {
-            this._settleReplySlot('mic_volume', data.status === 'error' ? null : (data.volume as number));
+            this._pending.settleReplySlot('mic_volume', data.status === 'error' ? null : (data.volume as number));
             return;
         }
         if (data.command === 'get_robot_name' || data.command === 'set_robot_name') {
-            this._settleReplySlot(
+            this._pending.settleReplySlot(
                 'robot_name',
                 data.status === 'error' ? null : ((data.name as string | null) ?? null),
             );
             return;
         }
         if (data.command === 'delete_hf_token') {
-            this._settleReplySlot('delete_hf_token', data.status !== 'error');
+            this._pending.settleReplySlot('delete_hf_token', data.status !== 'error');
             return;
         }
         if (data.command === 'apply_audio_config') {
-            this._settleReplySlot('apply_audio_config', data.error ? false : !!data.applied);
+            this._pending.settleReplySlot('apply_audio_config', data.error ? false : !!data.applied);
             return;
         }
         if (data.command === 'read_audio_parameter') {
-            this._settleReplySlot(
+            this._pending.settleReplySlot(
                 'read_audio_parameter',
                 data.error ? null : ((data.values as number[] | undefined) ?? null),
             );
             return;
         }
         if (data.command === 'get_tracked_face') {
-            this._settleReplySlot('tracked_face', (data.face_target as FaceTarget | undefined) ?? null);
+            this._pending.settleReplySlot('tracked_face', (data.face_target as FaceTarget | undefined) ?? null);
             return;
         }
         if (
             (data.command === 'wake_up' || data.command === 'goto_sleep')
-            && this._pendingMotionCompletions
-            && this._pendingMotionCompletions[data.command as 'wake_up' | 'goto_sleep']
+            && this._pending.settleMotion(data.command as MotionCommand, data)
         ) {
-            const queue = this._pendingMotionCompletions[data.command as 'wake_up' | 'goto_sleep'];
-            if (data.completed === true && queue.length > 0) {
-                const entry = queue.shift()!;
-                clearTimeout(entry.timer);
-                entry.resolve();
-                return;
-            }
-            if (data.error && queue.length > 0) {
-                const entry = queue.shift()!;
-                clearTimeout(entry.timer);
-                entry.reject(new Error(`${data.command}: ${data.error}`));
-                return;
-            }
+            return;
         }
         if (data.type === 'log_line') {
             for (const sub of this._logSubscribers) {
@@ -2211,17 +2012,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (data.error) {
             this._emit('error', { source: 'robot', error: data.error as string });
         }
-        if (this._broadcastWaiters.length > 0) {
-            for (let i = this._broadcastWaiters.length - 1; i >= 0; i--) {
-                const slot = this._broadcastWaiters[i]!;
-                if (slot.predicate(data)) {
-                    this._broadcastWaiters.splice(i, 1);
-                    clearTimeout(slot.timer);
-                    slot.resolve(data);
-                    return;
-                }
-            }
-        }
+        if (this._pending.matchBroadcast(data)) return;
     }
 
     /** Snap video playback to live edge if buffered lag exceeds 0.5 s. */
