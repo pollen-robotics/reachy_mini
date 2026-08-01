@@ -14,6 +14,7 @@ from __future__ import annotations
 import time
 
 from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackend
+from reachy_mini.io.protocol import DoaSnapshot
 
 
 class FakeDoA:
@@ -89,7 +90,7 @@ def test_snapshot_starts_poller_and_serves_cache() -> None:
 
     assert _wait_for(lambda: backend._doa_snapshot() is not None)
     snapshot = backend._doa_snapshot()
-    assert snapshot == {"angle": 0.5, "speech_detected": False}
+    assert snapshot == DoaSnapshot(angle=0.5, speech_detected=False)
 
     backend._doa_stop.set()
 
@@ -178,10 +179,33 @@ def test_snapshot_ignores_stale_cache() -> None:
     backend._doa_stop.set()
 
 
+def test_close_joins_poller_and_releases_device() -> None:
+    """Backend.close() joins the poller thread and drops the USB handle."""
+    fake = FakeDoA(reading=(2.0, True))
+    backend = _make_backend(fake)
+
+    # Spin the poller up through a normal demand path.
+    assert backend.read_doa() == (2.0, True)
+    thread = backend._doa_thread
+    assert thread is not None and thread.is_alive()
+
+    backend.close()
+
+    assert not thread.is_alive()
+    assert backend._doa_thread is None
+    # The handle was closed and dropped, so post-close reads are inert.
+    assert fake.available is False
+    assert backend.doa is None
+    assert backend.read_doa() is None
+    assert backend._doa_snapshot() is None
+
+
 def test_build_state_dict_carries_doa_and_no_dead_payload() -> None:
-    """The pushed frame has `doa` and no per-motor joint duplicates."""
+    """The pushed frame has `doa` and no duplicated antenna payload."""
     backend = _make_backend(doa=None)
     state = backend.build_state_dict()
     assert "doa" in state
-    assert "head_joint_positions" not in state
+    # Per-motor head values are a real feature of the pose stream...
+    assert "head_joint_positions" in state
+    # ...but the antenna twin duplicated `antennas` verbatim and was dropped.
     assert "antennas_joint_positions" not in state
