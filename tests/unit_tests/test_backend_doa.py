@@ -179,6 +179,27 @@ def test_snapshot_ignores_stale_cache() -> None:
     backend._doa_stop.set()
 
 
+def test_close_joins_poller_and_releases_device() -> None:
+    """Backend.close() joins the poller thread and drops the USB handle."""
+    fake = FakeDoA(reading=(2.0, True))
+    backend = _make_backend(fake)
+
+    # Spin the poller up through a normal demand path.
+    assert backend.read_doa() == (2.0, True)
+    thread = backend._doa_thread
+    assert thread is not None and thread.is_alive()
+
+    backend.close()
+
+    assert not thread.is_alive()
+    assert backend._doa_thread is None
+    # The handle was closed and dropped, so post-close reads are inert.
+    assert fake.available is False
+    assert backend.doa is None
+    assert backend.read_doa() is None
+    assert backend._doa_snapshot() is None
+
+
 def test_build_state_dict_carries_doa_and_no_dead_payload() -> None:
     """The pushed frame has `doa` and no duplicated antenna payload."""
     backend = _make_backend(doa=None)

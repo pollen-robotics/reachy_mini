@@ -1505,7 +1505,7 @@ class Backend:
             face_target=self.get_tracked_face(),
             # Sound Direction of Arrival (ReSpeaker mic array), or None when
             # unavailable. Read from the ~10 Hz cache so this stays cheap on
-            # the pose-push path (see _start_doa_poller).
+            # the pose-push path (see _note_doa_demand / _doa_poll_loop).
             doa=self._doa_snapshot(),
         )
 
