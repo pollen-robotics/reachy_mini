@@ -175,6 +175,36 @@ const REDIAL_BACKOFF_MS = [0, 2000, 4000, 8000, 8000] as const;
 const REDIAL_DIAL_TIMEOUT_MS = 15_000;
 
 /**
+ * Data-channel silence watchdog. ICE only notices a dead path when
+ * STUN consent checks fail, which half-open links (NAT rebind, AP
+ * roam onto a blackholing path, asymmetric loss) can dodge for tens
+ * of seconds while `iceConnectionState` sits happily on 'connected'.
+ * The application layer has a much better liveness signal for free:
+ * during any streaming session the daemon talks to us constantly —
+ * `get_state` poll replies every ≤500 ms and/or ~30 Hz pushed pose
+ * frames. The watchdog measures the time since the LAST inbound
+ * data-channel message and escalates in two steps:
+ *
+ *   - past `DC_SILENCE_NUDGE_MS`, send one extra `get_state` so a
+ *     paused poll (fresh pose stream that just died) can't be
+ *     mistaken for a dead link;
+ *   - past `DC_SILENCE_FATAL_MS` of TOTAL silence, treat the
+ *     transport as dead and hand over to the auto re-dial (or emit
+ *     the classic fatal `error` when auto-reconnect is off).
+ *
+ * Hidden tabs throttle timers AND keep receiving messages
+ * unpredictably, so silence measured there is meaningless: ticks
+ * re-baseline while hidden, and a tick arriving after a large gap
+ * (throttled / suspended timer) re-baselines too instead of judging
+ * stale data. 8 s of zero inbound traffic on a link that normally
+ * delivers 2-30 messages per second is unambiguous, and still ~4×
+ * faster than the RFC 7675 consent-freshness teardown (~30 s).
+ */
+const DC_WATCHDOG_TICK_MS = 1000;
+const DC_SILENCE_NUDGE_MS = 2500;
+const DC_SILENCE_FATAL_MS = 8000;
+
+/**
  * Fail-open ceiling for a single `_slotRoundtrip` request/response.
  * Every slot command has a strict "one reply per request" contract, so
  * a missing reply means the daemon either never got it or - crucially -
@@ -242,6 +272,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     // ─── Timers ──────────────────────────────────────────────────────────
     private _latencyMonitorId: ReturnType<typeof setInterval> | null = null;
     private _stateRefreshInterval: ReturnType<typeof setInterval> | null = null;
+    // Data-channel silence watchdog (see DC_WATCHDOG_TICK_MS block).
+    private _dcWatchdogId: ReturnType<typeof setInterval> | null = null;
+    private _lastDcInboundAt = 0;
+    private _dcWatchdogLastTickAt = 0;
+    private _dcSilenceNudged = false;
 
     // ─── Single-slot promise resolvers ───────────────────────────────────
     private _versionResolve: ((v: string | null) => void) | null = null;
@@ -913,6 +948,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
         if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
         if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
+        this._stopDcWatchdog();
 
         if (this._sessionId) {
             await this._sendToServer({ type: 'endSession', sessionId: this._sessionId });
@@ -963,6 +999,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
         if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
         if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
+        this._stopDcWatchdog();
 
         if (this._sessionId && this._token) {
             this._sendToServer({ type: 'endSession', sessionId: this._sessionId });
@@ -1336,6 +1373,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._uninstallNetworkListeners();
         if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
         if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
+        this._stopDcWatchdog();
 
         // Free the robot-side slot: the relay refuses a second session
         // while it still tracks the dead one, and only endSession (or its
@@ -1397,6 +1435,83 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 (e) => { clearTimeout(timer); reject(e); },
             );
         });
+    }
+
+    // ─── Resilience: data-channel silence watchdog ───────────────────────
+    //
+    // Application-level heartbeat without any daemon change: a streaming
+    // session already receives constant inbound traffic (get_state poll
+    // replies and/or pushed pose frames), so prolonged TOTAL silence is a
+    // dead transport that ICE hasn't noticed yet (half-open path that
+    // still answers STUN consent checks, or answers nothing but hasn't
+    // hit the ~30 s RFC 7675 teardown). See the DC_WATCHDOG_TICK_MS
+    // constant block for the full rationale and thresholds.
+
+    /** (Re)start the watchdog. Called when a session reaches ready. */
+    private _startDcWatchdog(): void {
+        this._stopDcWatchdog();
+        const now = Date.now();
+        this._lastDcInboundAt = now;
+        this._dcWatchdogLastTickAt = now;
+        this._dcSilenceNudged = false;
+        this._dcWatchdogId = setInterval(() => this._dcWatchdogTick(), DC_WATCHDOG_TICK_MS);
+    }
+
+    private _stopDcWatchdog(): void {
+        if (this._dcWatchdogId !== null) {
+            clearInterval(this._dcWatchdogId);
+            this._dcWatchdogId = null;
+        }
+    }
+
+    private _dcWatchdogTick(): void {
+        const now = Date.now();
+        const tickGap = now - this._dcWatchdogLastTickAt;
+        this._dcWatchdogLastTickAt = now;
+
+        if (this._state !== 'streaming') return;
+
+        // A tick that arrives way late means the timer was throttled or
+        // suspended (hidden tab, iOS app switch). Whatever silence we
+        // measure against that stale baseline is meaningless — and the
+        // background-transport question is already owned by the
+        // visibility-deferred ICE grace. Re-baseline and judge again
+        // from the next healthy tick.
+        if (tickGap > DC_WATCHDOG_TICK_MS * 3) {
+            this._lastDcInboundAt = now;
+            this._dcSilenceNudged = false;
+            return;
+        }
+        if (typeof document !== 'undefined' && document.hidden) {
+            this._lastDcInboundAt = now;
+            this._dcSilenceNudged = false;
+            return;
+        }
+
+        const silence = now - this._lastDcInboundAt;
+        if (silence < DC_SILENCE_NUDGE_MS) return;
+
+        if (!this._dcSilenceNudged) {
+            // One extra get_state so a legitimately quiet channel (pose
+            // stream just died, poll on hold) gets a chance to answer
+            // before we call the transport dead. Any inbound message
+            // clears the flag via `_handleRobotMessage`.
+            this._dcSilenceNudged = true;
+            this.requestState();
+            return;
+        }
+
+        if (silence < DC_SILENCE_FATAL_MS) return;
+
+        // Dead transport. Stop judging (the re-dial tears this interval
+        // down anyway via `_teardownForRedial`; the error path keeps the
+        // session nominally up, so re-baseline to avoid a repeat every
+        // tick) and escalate through the same funnel as the ICE grace.
+        this._lastDcInboundAt = now;
+        this._dcSilenceNudged = false;
+        const cause = `No data-channel traffic for ${silence}ms`;
+        if (this._maybeBeginRedial(cause)) return;
+        this._emit('error', { source: 'webrtc', error: new Error(cause) });
     }
 
     // ─── Commands ────────────────────────────────────────────────────────
@@ -2349,6 +2464,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 if (Date.now() - this._lastPoseFrameAt < POSE_STREAM_FRESH_MS) return;
                 this.requestState();
             }, 500);
+            this._startDcWatchdog();
             this._emit('streaming', { sessionId: this._sessionId!, robotId: this._selectedRobotId! });
             this._sessionResolve();
             this._sessionResolve = null;
@@ -2499,6 +2615,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      *   mirror while the stream is live (see the `data.state` branch).
      */
     private _handleRobotMessage(data: Record<string, unknown>, fromPoseStream = false): void {
+        // Liveness stamp for the data-channel silence watchdog: every
+        // inbound message — control replies, broadcasts, pose frames —
+        // proves the transport is alive.
+        this._lastDcInboundAt = Date.now();
+        this._dcSilenceNudged = false;
         // JSON-RPC frames (app control surface) are handled separately from
         // the legacy {command|type} robot messages that share this channel.
         if (data.jsonrpc === '2.0') {
