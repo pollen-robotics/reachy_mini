@@ -416,3 +416,61 @@ def test_clearing_became_free_handler_disables_it() -> None:
     lock.try_acquire_remote("client1")
     lock.release_remote()
     assert calls == []
+
+
+# ---------------------------------------------------------------------------
+# Remote-acquired handler: daemon-side idle-reset cancellation
+# ---------------------------------------------------------------------------
+
+
+def test_remote_acquired_handler_fires_on_successful_acquire() -> None:
+    """A successful remote acquire fires the handler once, post-transition.
+
+    This is what cancels a pending handoff-grace idle reset the moment a
+    successor takes the slot, instead of waiting for its first data-channel
+    command.
+    """
+    lock = RobotAppLock()
+    seen: list[RobotAppLockState] = []
+    lock.set_on_remote_acquired_handler(lambda: seen.append(lock.status().state))
+
+    assert lock.try_acquire_remote("client1") is True
+    assert seen == [RobotAppLockState.REMOTE_SESSION]
+
+
+def test_remote_acquired_handler_not_fired_on_refused_acquire() -> None:
+    """A refused acquire (slot already held) must not fire the handler."""
+    lock = RobotAppLock()
+    assert lock.try_acquire_remote("client1") is True
+
+    calls: list[str] = []
+    lock.set_on_remote_acquired_handler(lambda: calls.append("acquired"))
+
+    assert lock.try_acquire_remote("client2") is False
+    assert calls == []
+
+
+def test_remote_acquired_handler_not_fired_on_local_acquire() -> None:
+    """Local-app acquisition must not fire the remote-acquired hook.
+
+    It has its own cancel path (``AppManager.start_app`` calls
+    ``backend.cancel_idle_reset()`` directly).
+    """
+    lock = RobotAppLock()
+    calls: list[str] = []
+    lock.set_on_remote_acquired_handler(lambda: calls.append("acquired"))
+
+    assert lock.try_acquire_local("app_a") is True
+    assert calls == []
+
+
+def test_remote_acquired_handler_exception_is_swallowed() -> None:
+    """A raising handler must not break (or undo) the acquire."""
+    lock = RobotAppLock()
+
+    def handler() -> None:
+        raise RuntimeError("boom")
+
+    lock.set_on_remote_acquired_handler(handler)
+    assert lock.try_acquire_remote("client1") is True
+    assert lock.status().state == RobotAppLockState.REMOTE_SESSION
