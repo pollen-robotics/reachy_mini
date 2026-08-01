@@ -92,6 +92,15 @@ class RobotAppLock:
         # NOT re-enter the lock (would deadlock).
         self._on_became_free: Optional[Callable[[bool], None]] = None
 
+        # Synchronous callback invoked when a REMOTE session acquires the
+        # slot. Counterpart of the free-transition handler above: the daemon
+        # registers it to cancel a pending idle reset, so a successor whose
+        # WebRTC handshake outlives the handoff grace doesn't take a
+        # goto_sleep mid-session. (Local-app acquisition already cancels via
+        # ``AppManager.start_app``.) Same contract: called outside the mutex,
+        # must return promptly, must not re-enter the lock.
+        self._on_remote_acquired: Optional[Callable[[], None]] = None
+
     # ------------------------------------------------------------------
     # Registration
     # ------------------------------------------------------------------
@@ -121,6 +130,17 @@ class RobotAppLock:
         """
         self._on_became_free = handler
 
+    def set_on_remote_acquired_handler(
+        self, handler: Optional[Callable[[], None]]
+    ) -> None:
+        """Register (or clear) the callback fired when a remote session acquires the slot.
+
+        Fired from ``try_acquire_remote`` after a successful acquisition,
+        *after* the internal mutex is released. It must return promptly and
+        must not call back into this lock. Pass ``None`` to clear.
+        """
+        self._on_remote_acquired = handler
+
     def _fire_became_free(self, expect_handoff: bool = False) -> None:
         """Invoke the FREE-transition handler outside the mutex. Best-effort."""
         handler = self._on_became_free
@@ -130,6 +150,18 @@ class RobotAppLock:
             handler(expect_handoff)
         except Exception:
             logger.warning("RobotAppLock: on_became_free handler raised", exc_info=True)
+
+    def _fire_remote_acquired(self) -> None:
+        """Invoke the remote-acquired handler outside the mutex. Best-effort."""
+        handler = self._on_remote_acquired
+        if handler is None:
+            return
+        try:
+            handler()
+        except Exception:
+            logger.warning(
+                "RobotAppLock: on_remote_acquired handler raised", exc_info=True
+            )
 
     # ------------------------------------------------------------------
     # Introspection
@@ -298,7 +330,9 @@ class RobotAppLock:
             self._state = RobotAppLockState.REMOTE_SESSION
             self._holder_name = app_name
             logger.info("RobotAppLock: acquired by remote session %r", app_name)
-            return True
+
+        self._fire_remote_acquired()
+        return True
 
     def release_remote(self, *, expect_handoff: bool = False) -> None:
         """Release a remote-session hold. Idempotent.

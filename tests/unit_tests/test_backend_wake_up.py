@@ -24,11 +24,15 @@ def _fake_backend(
     *,
     motor_mode: MotorControlMode,
     head_pose: np.ndarray,
+    antennas: np.ndarray | None = None,
 ) -> SimpleNamespace:
+    if antennas is None:
+        antennas = Backend.INIT_ANTENNAS_JOINT_POSITIONS.copy()
     return SimpleNamespace(
         INIT_HEAD_POSE=Backend.INIT_HEAD_POSE,
         INIT_ANTENNAS_JOINT_POSITIONS=Backend.INIT_ANTENNAS_JOINT_POSITIONS,
         get_current_head_pose=lambda: head_pose,
+        get_present_antenna_joint_positions=lambda: antennas,
         get_motor_control_mode=lambda: motor_mode,
         goto_target=AsyncMock(),
         play_sound=MagicMock(),
@@ -81,3 +85,38 @@ async def test_wake_up_runs_when_enabled_but_off_pose() -> None:
     await Backend.wake_up(fake)
     assert fake.goto_target.await_count >= 1
     fake.play_sound.assert_called_once_with("wake_up.wav")
+
+
+@pytest.mark.asyncio
+async def test_wake_up_runs_when_disabled_even_at_init_pose() -> None:
+    """Disabled motors + head at init: must still wake in full.
+
+    Locks the `and` in the stand-down condition: a limp robot that happens
+    to rest at the init pose is asleep, not awake.
+    """
+    fake = _fake_backend(
+        motor_mode=MotorControlMode.Disabled,
+        head_pose=Backend.INIT_HEAD_POSE.copy(),
+    )
+    await Backend.wake_up(fake)
+    assert fake.goto_target.await_count >= 1
+    fake.play_sound.assert_called_once_with("wake_up.wav")
+    fake._on_wake_up_callback.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_wake_up_runs_when_antennas_off_init() -> None:
+    """Enabled + head at init but antennas askew: the wake must run.
+
+    The wake's goto is what re-homes the antennas; standing down here
+    would leave them wherever the previous app parked them.
+    """
+    fake = _fake_backend(
+        motor_mode=MotorControlMode.Enabled,
+        head_pose=Backend.INIT_HEAD_POSE.copy(),
+        antennas=Backend.SLEEP_ANTENNAS_JOINT_POSITIONS.copy(),
+    )
+    await Backend.wake_up(fake)
+    assert fake.goto_target.await_count >= 1
+    fake.play_sound.assert_called_once_with("wake_up.wav")
+    fake._on_wake_up_callback.assert_called_once()

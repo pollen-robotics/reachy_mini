@@ -1170,11 +1170,25 @@ class Backend:
         _, _, magic_distance = distance_between_poses(
             self.get_current_head_pose(), self.INIT_HEAD_POSE
         )
+        # The goto below is also what re-homes the antennas, so the
+        # stand-down must check them too: head at init but antennas left
+        # askew by the previous app would otherwise stay askew all session.
+        antenna_offset = float(
+            np.max(
+                np.abs(
+                    self.get_present_antenna_joint_positions()
+                    - self.INIT_ANTENNAS_JOINT_POSITIONS
+                )
+            )
+        )
 
-        # Same empirical "close enough" threshold as goto_sleep's.
+        # Head: same empirical "close enough" threshold as goto_sleep's.
+        # Antennas: ~17° of slack absorbs sag/jitter while still catching a
+        # genuinely misplaced antenna (sleep parks them ~165° away).
         if (
             self.get_motor_control_mode() == MotorControlMode.Enabled
             and magic_distance < 10
+            and antenna_offset < 0.3
         ):
             if self._on_wake_up_callback is not None:
                 self._on_wake_up_callback()
@@ -2713,11 +2727,7 @@ class Backend:
             if self.get_motor_control_mode() == MotorControlMode.Disabled:
                 return
             self._cancel_idle_reset()
-            self._idle_reset_task = asyncio.create_task(
-                self._async_idle_reset(
-                    self.IDLE_RESET_DEBOUNCE_S if grace_s is None else grace_s
-                )
-            )
+            self._idle_reset_task = asyncio.create_task(self._async_idle_reset(grace_s))
         except Exception:
             self.logger.warning("Idle reset scheduling failed", exc_info=True)
 
