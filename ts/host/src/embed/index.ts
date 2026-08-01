@@ -1222,11 +1222,10 @@ async function sampleRttMs(pc: RTCPeerConnection): Promise<number | null> {
  */
 function startLiveLinkMonitor(sdk: ReachyMiniInstance): void {
   if (typeof window === 'undefined') return;
-  // `_pc` is re-read on every tick (not captured once): the SDK's
-  // auto-reconnect replaces the RTCPeerConnection mid-session, and a
-  // sampler pinned to the old pc would freeze the RTT forever.
-  const livePc = (): RTCPeerConnection | null =>
-    (sdk as unknown as { _pc?: RTCPeerConnection | null })._pc ?? null;
+  // Re-read on every tick (not captured once): the SDK's auto-reconnect
+  // replaces the RTCPeerConnection mid-session, and a sampler pinned to
+  // the old pc would freeze the RTT forever.
+  const livePc = (): RTCPeerConnection | null => livePeerConnection(sdk);
   if (!livePc()) return;
 
   const windowMs: number[] = [];
@@ -1259,6 +1258,20 @@ function startLiveLinkMonitor(sdk: ReachyMiniInstance): void {
     /* ignore - sampler will keep running until pagehide */
   }
   window.addEventListener('pagehide', stop, { once: true });
+}
+
+/**
+ * Live RTCPeerConnection of the SDK bundle the app shipped. Prefers the
+ * public `peerConnection` getter; falls back to the private `_pc` field
+ * for bundles that predate it (the embed rides whatever SDK the app
+ * bundled, so both shapes are in the wild). `null` between sessions.
+ */
+function livePeerConnection(sdk: ReachyMiniInstance): RTCPeerConnection | null {
+  const s = sdk as unknown as {
+    peerConnection?: RTCPeerConnection | null;
+    _pc?: RTCPeerConnection | null;
+  };
+  return s.peerConnection ?? s._pc ?? null;
 }
 
 /**
@@ -1342,12 +1355,11 @@ function createRobotMedia(sdk: ReachyMiniInstance): RobotMedia {
   let cached: MediaStream | null = null;
 
   const sdkInternals = sdk as unknown as {
-    _pc: RTCPeerConnection | null;
     _micStream: MediaStream | null;
   };
 
   const buildFromReceivers = (): MediaStream | null => {
-    const pc = sdkInternals._pc;
+    const pc = livePeerConnection(sdk);
     if (!pc) return null;
     const tracks = pc
       .getReceivers()
