@@ -12,14 +12,17 @@
  *     pending re-dial silently;
  *   - `autoReconnect: false` restores the legacy fatal-`error` path.
  *
- * The loop is exercised through the private surface (`_maybeBeginRedial`)
- * with the public `startSession`/`connect` stubbed out: the dial itself
- * is covered by integration flows, what matters here is the state
- * machine around it.
+ * The loop is exercised through the supervisor's surface
+ * (`maybeBeginRedial`) with the public `startSession`/`connect` stubbed
+ * out on the instance (the supervisor's deps are closures over the
+ * instance, so stubs are picked up transparently): the dial itself is
+ * covered by integration flows, what matters here is the state machine
+ * around it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ReachyMini } from './reachy-mini.js';
+import type { SessionSupervisor } from './session-supervisor.js';
 
 /** Private surface the tests poke at, spelled out for the casts. */
 interface RedialInternals {
@@ -29,10 +32,8 @@ interface RedialInternals {
     _sessionResolve: (() => void) | null;
     _sessionReject: ((err: Error) => void) | null;
     _pc: { close: () => void } | null;
-    _redialing: boolean;
     _token: string | null;
-    _maybeBeginRedial(cause: string): boolean;
-    _cancelRedial(): void;
+    _supervisor: SessionSupervisor;
     _teardownForRedial(): void;
     _sendToServer(msg: Record<string, unknown>): Promise<unknown>;
     startSession(robotId: string): Promise<void>;
@@ -78,30 +79,30 @@ afterEach(() => {
 describe('auto-reconnect trigger gating', () => {
     it('does not trigger when autoReconnect is disabled', () => {
         const { internals } = makeStreamingInstance({ autoReconnect: false });
-        expect(internals._maybeBeginRedial('test')).toBe(false);
-        expect(internals._redialing).toBe(false);
+        expect(internals._supervisor.maybeBeginRedial('test')).toBe(false);
+        expect(internals._supervisor.redialing).toBe(false);
     });
 
     it('does not trigger mid-setup (startSession promise still pending)', () => {
         const { internals } = makeStreamingInstance();
         internals._sessionReject = () => { /* pending dial */ };
-        expect(internals._maybeBeginRedial('test')).toBe(false);
+        expect(internals._supervisor.maybeBeginRedial('test')).toBe(false);
     });
 
     it('does not trigger without a selected robot or pc', () => {
         const { internals } = makeStreamingInstance();
         internals._selectedRobotId = null;
-        expect(internals._maybeBeginRedial('test')).toBe(false);
+        expect(internals._supervisor.maybeBeginRedial('test')).toBe(false);
         internals._selectedRobotId = 'robot-1';
         internals._pc = null;
-        expect(internals._maybeBeginRedial('test')).toBe(false);
+        expect(internals._supervisor.maybeBeginRedial('test')).toBe(false);
     });
 
     it('reports already-in-progress as handled', () => {
         const { internals } = makeStreamingInstance();
-        expect(internals._maybeBeginRedial('first')).toBe(true);
-        expect(internals._maybeBeginRedial('second')).toBe(true);
-        internals._cancelRedial();
+        expect(internals._supervisor.maybeBeginRedial('first')).toBe(true);
+        expect(internals._supervisor.maybeBeginRedial('second')).toBe(true);
+        internals._supervisor.cancelRedial();
     });
 });
 
@@ -112,7 +113,7 @@ describe('auto-reconnect success path', () => {
         const reconnected = events(r, 'sessionReconnected');
         const stopped = events(r, 'sessionStopped');
 
-        expect(internals._maybeBeginRedial('ICE connection failed')).toBe(true);
+        expect(internals._supervisor.maybeBeginRedial('ICE connection failed')).toBe(true);
         await vi.runAllTimersAsync();
 
         expect(dials).toHaveBeenCalledTimes(1);
@@ -122,13 +123,13 @@ describe('auto-reconnect success path', () => {
         ]);
         expect(reconnected).toEqual([{ attempt: 1 }]);
         expect(stopped).toEqual([]);
-        expect(internals._redialing).toBe(false);
+        expect(internals._supervisor.redialing).toBe(false);
     });
 
     it('tears the dead transport down before dialing (pc closed, endSession sent)', async () => {
         const { internals } = makeStreamingInstance();
         const pc = internals._pc!;
-        internals._maybeBeginRedial('test');
+        internals._supervisor.maybeBeginRedial('test');
         await vi.runAllTimersAsync();
 
         expect(pc.close).toHaveBeenCalled();
@@ -147,7 +148,7 @@ describe('auto-reconnect success path', () => {
         const reconnecting = events(r, 'sessionReconnecting');
         const reconnected = events(r, 'sessionReconnected');
 
-        internals._maybeBeginRedial('test');
+        internals._supervisor.maybeBeginRedial('test');
         await vi.runAllTimersAsync();
 
         expect(dials).toHaveBeenCalledTimes(3);
@@ -163,14 +164,14 @@ describe('auto-reconnect give-up path', () => {
         const stopped = events(r, 'sessionStopped');
         const errors = events(r, 'error');
 
-        internals._maybeBeginRedial('ICE connection failed');
+        internals._supervisor.maybeBeginRedial('ICE connection failed');
         await vi.runAllTimersAsync();
 
         expect(dials).toHaveBeenCalledTimes(5);
         expect(stopped).toHaveLength(1);
         expect(stopped[0]!.reason).toBe('reconnect_failed');
         expect(errors).toHaveLength(1);
-        expect(internals._redialing).toBe(false);
+        expect(internals._supervisor.redialing).toBe(false);
     });
 });
 
@@ -180,7 +181,7 @@ describe('auto-reconnect cancellation', () => {
         dials.mockRejectedValue(new Error('still dead'));
         const stopped = events(r, 'sessionStopped');
 
-        internals._maybeBeginRedial('test');
+        internals._supervisor.maybeBeginRedial('test');
         // Let attempt 1 fail, then cancel during the 2 s backoff.
         await vi.advanceTimersByTimeAsync(100);
         await r.stopSession();
@@ -189,7 +190,7 @@ describe('auto-reconnect cancellation', () => {
         expect(dials).toHaveBeenCalledTimes(1);
         // No reconnect_failed: the stop was deliberate.
         expect(stopped.filter((d) => d.reason === 'reconnect_failed')).toEqual([]);
-        expect(internals._redialing).toBe(false);
+        expect(internals._supervisor.redialing).toBe(false);
     });
 
     it('setAutoReconnect(false) aborts an in-flight re-dial and blocks new ones', async () => {
@@ -197,17 +198,17 @@ describe('auto-reconnect cancellation', () => {
         dials.mockRejectedValue(new Error('still dead'));
         const stopped = events(r, 'sessionStopped');
 
-        internals._maybeBeginRedial('test');
+        internals._supervisor.maybeBeginRedial('test');
         await vi.advanceTimersByTimeAsync(100);
         r.setAutoReconnect(false);
         await vi.runAllTimersAsync();
 
         expect(dials).toHaveBeenCalledTimes(1);
         expect(stopped).toEqual([]);
-        expect(internals._redialing).toBe(false);
+        expect(internals._supervisor.redialing).toBe(false);
         // And no new redial can start while disabled.
         internals._pc = { close: vi.fn() };
-        expect(internals._maybeBeginRedial('again')).toBe(false);
+        expect(internals._supervisor.maybeBeginRedial('again')).toBe(false);
     });
 
     it('teardown settles a pending dial promise instead of orphaning it', () => {
@@ -228,17 +229,17 @@ describe('auto-reconnect cancellation', () => {
         const { r, internals, dials } = makeStreamingInstance();
         dials.mockRejectedValue(new Error('still dead'));
 
-        internals._maybeBeginRedial('test');
+        internals._supervisor.maybeBeginRedial('test');
         await vi.advanceTimersByTimeAsync(100);
         // The app dials another robot: the loop must stand down. The
         // stubbed startSession still runs the redial-cancel guard from
         // the real method, so call the private cancel path the way the
         // real one does.
-        internals._cancelRedial();
+        internals._supervisor.cancelRedial();
         await vi.runAllTimersAsync();
 
         expect(dials).toHaveBeenCalledTimes(1);
-        expect(internals._redialing).toBe(false);
+        expect(internals._supervisor.redialing).toBe(false);
         void r;
     });
 });

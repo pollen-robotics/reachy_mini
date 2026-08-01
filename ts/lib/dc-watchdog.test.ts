@@ -19,6 +19,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ReachyMini } from './reachy-mini.js';
+import type { SessionSupervisor } from './session-supervisor.js';
+
+/** The supervisor's private clock state the throttle test rewinds. */
+interface SupervisorClockPoke {
+    _dcWatchdogLastTickAt: number;
+    _lastDcInboundAt: number;
+}
 
 /** Private surface the tests poke at, spelled out for the casts. */
 interface WatchdogInternals {
@@ -29,12 +36,8 @@ interface WatchdogInternals {
     _sessionReject: ((err: Error) => void) | null;
     _pc: { close: () => void } | null;
     _token: string | null;
-    _redialing: boolean;
-    _dcWatchdogLastTickAt: number;
-    _lastDcInboundAt: number;
+    _supervisor: SessionSupervisor;
     _sendToServer(msg: Record<string, unknown>): Promise<unknown>;
-    _startDcWatchdog(): void;
-    _stopDcWatchdog(): void;
     _handleRobotMessage(data: Record<string, unknown>): void;
     requestState(): boolean;
     startSession(robotId: string): Promise<void>;
@@ -85,7 +88,7 @@ describe('dc silence watchdog - quiet on a healthy link', () => {
     it('never nudges nor escalates while traffic flows', async () => {
         const { r, internals, nudges } = makeStreamingInstance();
         const errors = events(r, 'error');
-        internals._startDcWatchdog();
+        internals._supervisor.startDcWatchdog();
 
         // 12 s of clock with a message every 500 ms, like the real poll.
         for (let i = 0; i < 24; i++) {
@@ -95,14 +98,14 @@ describe('dc silence watchdog - quiet on a healthy link', () => {
 
         expect(nudges).not.toHaveBeenCalled();
         expect(errors).toEqual([]);
-        expect(internals._redialing).toBe(false);
-        internals._stopDcWatchdog();
+        expect(internals._supervisor.redialing).toBe(false);
+        internals._supervisor.stopDcWatchdog();
     });
 
     it('a reply to the nudge resets the cycle without escalating', async () => {
         const { r, internals, nudges } = makeStreamingInstance();
         const errors = events(r, 'error');
-        internals._startDcWatchdog();
+        internals._supervisor.startDcWatchdog();
 
         // Cross the nudge threshold in silence…
         await vi.advanceTimersByTimeAsync(3000);
@@ -114,8 +117,8 @@ describe('dc silence watchdog - quiet on a healthy link', () => {
         await vi.advanceTimersByTimeAsync(3000);
         expect(nudges).toHaveBeenCalledTimes(2);
         expect(errors).toEqual([]);
-        expect(internals._redialing).toBe(false);
-        internals._stopDcWatchdog();
+        expect(internals._supervisor.redialing).toBe(false);
+        internals._supervisor.stopDcWatchdog();
     });
 });
 
@@ -124,7 +127,7 @@ describe('dc silence watchdog - dead transport escalation', () => {
         const { r, internals, nudges, dials } = makeStreamingInstance();
         const reconnecting = events(r, 'sessionReconnecting');
         const reconnected = events(r, 'sessionReconnected');
-        internals._startDcWatchdog();
+        internals._supervisor.startDcWatchdog();
 
         // Total silence past the fatal threshold, then let the re-dial
         // loop run to completion (stubbed dial succeeds immediately).
@@ -140,7 +143,7 @@ describe('dc silence watchdog - dead transport escalation', () => {
     it('falls back to the fatal error when autoReconnect is off', async () => {
         const { r, internals } = makeStreamingInstance({ autoReconnect: false });
         const errors = events(r, 'error');
-        internals._startDcWatchdog();
+        internals._supervisor.startDcWatchdog();
 
         await vi.advanceTimersByTimeAsync(10_000);
 
@@ -148,12 +151,12 @@ describe('dc silence watchdog - dead transport escalation', () => {
         expect(String((errors[0]!.error as Error).message)).toMatch(
             /No data-channel traffic/,
         );
-        expect(internals._redialing).toBe(false);
+        expect(internals._supervisor.redialing).toBe(false);
         // The error path keeps the session nominally up: the baseline was
         // reset, so the very next tick doesn't re-emit.
         await vi.advanceTimersByTimeAsync(2000);
         expect(errors).toHaveLength(1);
-        internals._stopDcWatchdog();
+        internals._supervisor.stopDcWatchdog();
     });
 });
 
@@ -161,43 +164,44 @@ describe('dc silence watchdog - throttled-timer awareness', () => {
     it('re-baselines instead of judging after a large tick gap', async () => {
         const { r, internals, nudges } = makeStreamingInstance();
         const errors = events(r, 'error');
-        internals._startDcWatchdog();
+        internals._supervisor.startDcWatchdog();
 
         // Simulate a suspended tab: the interval did not fire for 30 s
         // and no message was stamped either.
-        internals._dcWatchdogLastTickAt -= 30_000;
-        internals._lastDcInboundAt -= 30_000;
+        const clock = internals._supervisor as unknown as SupervisorClockPoke;
+        clock._dcWatchdogLastTickAt -= 30_000;
+        clock._lastDcInboundAt -= 30_000;
         await vi.advanceTimersByTimeAsync(1000);
 
         // The gap tick re-baselined: no nudge, no error, and the silence
         // clock restarts from the resume point.
         expect(nudges).not.toHaveBeenCalled();
         expect(errors).toEqual([]);
-        expect(internals._redialing).toBe(false);
-        internals._stopDcWatchdog();
+        expect(internals._supervisor.redialing).toBe(false);
+        internals._supervisor.stopDcWatchdog();
     });
 });
 
 describe('dc silence watchdog - lifecycle', () => {
     it('stopSession() stops the watchdog', async () => {
         const { r, internals, nudges } = makeStreamingInstance();
-        internals._startDcWatchdog();
+        internals._supervisor.startDcWatchdog();
 
         await r.stopSession();
         await vi.advanceTimersByTimeAsync(20_000);
 
         expect(nudges).not.toHaveBeenCalled();
-        expect(internals._redialing).toBe(false);
+        expect(internals._supervisor.redialing).toBe(false);
     });
 
     it('ignores silence when the session is not streaming', async () => {
         const { internals, nudges } = makeStreamingInstance();
-        internals._startDcWatchdog();
+        internals._supervisor.startDcWatchdog();
         internals._state = 'connected';
 
         await vi.advanceTimersByTimeAsync(20_000);
 
         expect(nudges).not.toHaveBeenCalled();
-        internals._stopDcWatchdog();
+        internals._supervisor.stopDcWatchdog();
     });
 });
