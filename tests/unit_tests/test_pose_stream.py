@@ -17,7 +17,13 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackend
-from reachy_mini.io.protocol import SubscribePoseCmd, UnsubscribePoseCmd
+from reachy_mini.io.protocol import (
+    FaceTarget,
+    MotorControlMode,
+    StateSnapshot,
+    SubscribePoseCmd,
+    UnsubscribePoseCmd,
+)
 
 
 def _make_backend() -> MockupSimBackend:
@@ -74,10 +80,20 @@ def test_subscribe_pose_without_peer_id_is_noop_but_acks() -> None:
     assert responses == [{"status": "ok", "command": "subscribe_pose"}]
 
 
+def _snapshot(body_yaw: float = 0.0) -> StateSnapshot:
+    return StateSnapshot(
+        body_yaw=body_yaw,
+        motor_mode=MotorControlMode.Enabled,
+        is_recording=False,
+        is_move_running=False,
+        face_target=FaceTarget(),
+    )
+
+
 def test_build_state_json_wraps_state_and_increments_seq() -> None:
-    """Each frame wraps the state dict and carries a strictly increasing seq."""
+    """Each frame wraps the state snapshot and carries a strictly increasing seq."""
     backend = _make_backend()
-    backend.build_state_dict = lambda: {"body_yaw": 0.0}  # type: ignore[assignment]
+    backend.build_state_snapshot = _snapshot  # type: ignore[assignment]
 
     first = backend.build_state_json()
     second = backend.build_state_json()
@@ -85,7 +101,9 @@ def test_build_state_json_wraps_state_and_increments_seq() -> None:
 
     a = json.loads(first)
     b = json.loads(second)
-    assert a["state"] == {"body_yaw": 0.0}
+    assert a["state"]["body_yaw"] == 0.0
+    # The enum must serialize to its wire value, not its Python repr.
+    assert a["state"]["motor_mode"] == "enabled"
     # Monotonic, strictly increasing so the client can drop stale/out-of-order
     # frames on the unordered pose channel.
     assert a["seq"] == 1
@@ -96,8 +114,20 @@ def test_build_state_json_returns_none_on_build_error() -> None:
     """A transient build failure skips the tick instead of crashing the push."""
     backend = _make_backend()
 
-    def boom() -> dict[str, Any]:
+    def boom() -> StateSnapshot:
         raise RuntimeError("kinematics not ready")
 
-    backend.build_state_dict = boom  # type: ignore[assignment]
+    backend.build_state_snapshot = boom  # type: ignore[assignment]
     assert backend.build_state_json() is None
+
+
+def test_state_dict_carries_no_duplicate_antenna_field() -> None:
+    """The per-motor antenna twin was dropped.
+
+    `antennas` already IS the two motor values (review nit on #1296).
+    """
+    backend = _make_backend()
+    state = backend.build_state_dict()
+    assert "antennas_joint_positions" not in state
+    assert "head_joint_positions" in state
+    assert state["motor_mode"] == "enabled"

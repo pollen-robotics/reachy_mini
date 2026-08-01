@@ -97,6 +97,49 @@ class FaceTarget(BaseModel):
     ts: float | None = None
 
 
+class DoaSnapshot(BaseModel):
+    """Sound Direction of Arrival reading (ReSpeaker mic array)."""
+
+    angle: float
+    speech_detected: bool
+
+
+class StateSnapshot(BaseModel):
+    """Present-state snapshot sent to WebRTC clients.
+
+    Payload of both the polled ``get_state`` reply (``{"state": ...}``)
+    and the pushed pose-stream frames (see :class:`PoseFrame`). The field
+    names are the wire contract already parsed by released JS SDKs —
+    keep them stable.
+
+    ``head_joint_positions`` carries the 7 per-motor head values (body
+    yaw at index 0), which is genuinely distinct from the ``head_pose``
+    matrix; the antennas need no such twin since ``antennas`` already IS
+    the two motor values.
+    """
+
+    head_pose: Optional[list[list[float]]] = None
+    antennas: Optional[list[float]] = None
+    head_joint_positions: Optional[list[float]] = None
+    body_yaw: float
+    motor_mode: MotorControlMode
+    is_recording: bool
+    is_move_running: bool
+    face_target: FaceTarget
+    doa: Optional[DoaSnapshot] = None
+
+
+class PoseFrame(BaseModel):
+    """One pushed pose-stream frame.
+
+    The state snapshot plus a monotonic ``seq`` so clients can drop
+    stale/out-of-order frames on the unordered ``pose`` channel.
+    """
+
+    state: StateSnapshot
+    seq: int
+
+
 class DaemonStatus(BaseModel):
     """Status of the Reachy Mini daemon."""
 

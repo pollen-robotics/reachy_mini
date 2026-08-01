@@ -33,6 +33,7 @@ from reachy_mini.io.protocol import (
     CancelMoveCmd,
     ClearIncomingAudioCmd,
     DeleteHfTokenCmd,
+    DoaSnapshot,
     FaceTarget,
     GetHardwareIdCmd,
     GetImuCmd,
@@ -54,6 +55,7 @@ from reachy_mini.io.protocol import (
     PlaySoundCmd,
     PlayUploadedAudioCmd,
     PlayUploadedMoveCmd,
+    PoseFrame,
     ReadAudioParameterCmd,
     RecordedDataMsg,
     RestartDaemonCmd,
@@ -75,6 +77,7 @@ from reachy_mini.io.protocol import (
     SetWobblingCmd,
     StartRecordingCmd,
     StartUpdateCmd,
+    StateSnapshot,
     StopRecordingCmd,
     SubscribeLogsCmd,
     SubscribePoseCmd,
@@ -1426,8 +1429,8 @@ class Backend:
                 return None
             return self._last_doa
 
-    def _doa_snapshot(self) -> dict[str, Any] | None:
-        """Return the last cached DoA as ``{"angle", "speech_detected"}``.
+    def _doa_snapshot(self) -> DoaSnapshot | None:
+        """Return the last cached DoA reading.
 
         Never blocks: this feeds the ~30 Hz pose push. Registers demand so
         the poller (re)starts, and returns ``None`` when no ReSpeaker is
@@ -1441,7 +1444,7 @@ class Backend:
         if reading is None:
             return None
         angle, speech_detected = reading
-        return {"angle": angle, "speech_detected": speech_detected}
+        return DoaSnapshot(angle=angle, speech_detected=speech_detected)
 
     def read_doa(self) -> tuple[float, bool] | None:
         """Return a current DoA reading, blocking briefly if needed.
@@ -1473,7 +1476,7 @@ class Backend:
     # State snapshot (shared by get_state replies and the pose push)
     # ------------------------------------------------------------------
 
-    def build_state_dict(self) -> dict[str, Any]:
+    def build_state_snapshot(self) -> StateSnapshot:
         """Build the present-state snapshot sent to clients.
 
         Single source of truth for both the polled ``get_state`` reply and
@@ -1481,41 +1484,56 @@ class Backend:
         read cached motor values (``get_last_position``), so this is cheap
         and safe to call from a thread other than the motor loop.
         """
-        return {
-            "head_pose": self.get_present_head_pose().tolist()
+        return StateSnapshot(
+            head_pose=self.get_present_head_pose().tolist()
             if self.current_head_pose is not None
             else None,
-            "antennas": self.get_present_antenna_joint_positions().tolist()
+            antennas=self.get_present_antenna_joint_positions().tolist()
             if self.current_antenna_joint_positions is not None
             else None,
-            "body_yaw": self.get_present_body_yaw(),
-            "motor_mode": self.get_motor_control_mode().value,
-            "is_recording": self.is_recording,
-            "is_move_running": self.is_move_running,
-            "face_target": self.get_tracked_face().model_dump(),
+            # Per-motor head values (7, body yaw at [0]) so WebRTC clients
+            # can check the physical pose motor by motor without the LAN
+            # /ws/sdk stream. The antennas need no twin field: `antennas`
+            # already is the two motor values.
+            head_joint_positions=self.get_present_head_joint_positions().tolist()
+            if self.current_head_joint_positions is not None
+            else None,
+            body_yaw=self.get_present_body_yaw(),
+            motor_mode=self.get_motor_control_mode(),
+            is_recording=self.is_recording,
+            is_move_running=self.is_move_running,
+            face_target=self.get_tracked_face(),
             # Sound Direction of Arrival (ReSpeaker mic array), or None when
             # unavailable. Read from the ~10 Hz cache so this stays cheap on
             # the pose-push path (see _start_doa_poller).
-            "doa": self._doa_snapshot(),
-        }
+            doa=self._doa_snapshot(),
+        )
+
+    def build_state_dict(self) -> dict[str, Any]:
+        """JSON-safe dict view of :meth:`build_state_snapshot`.
+
+        Used by the ``get_state`` reply, whose envelope is assembled by the
+        transport as a plain dict.
+        """
+        return self.build_state_snapshot().model_dump(mode="json")
 
     def build_state_json(self) -> Optional[str]:
         """Serialize the present state as the client-facing envelope.
 
-        Returns the ``{"state": ...}`` payload, or ``None`` if it can't be
-        built yet. Wired into the media server as the pose-stream provider
-        (``set_pose_provider``) so the daemon can *push* pose over the
-        unreliable/unordered ``pose`` data channel at a steady rate instead
-        of the client round-tripping ``get_state`` over Wi-Fi. Returning
-        ``None`` (e.g. before the first kinematics update, or during
-        shutdown) simply skips that tick.
+        Returns the ``{"state": ..., "seq": ...}`` payload, or ``None`` if
+        it can't be built yet. Wired into the media server as the
+        pose-stream provider (``set_pose_provider``) so the daemon can
+        *push* pose over the unreliable/unordered ``pose`` data channel at
+        a steady rate instead of the client round-tripping ``get_state``
+        over Wi-Fi. Returning ``None`` (e.g. before the first kinematics
+        update, or during shutdown) simply skips that tick.
         """
         try:
-            state = self.build_state_dict()
+            snapshot = self.build_state_snapshot()
         except Exception:
             return None
         self._pose_seq += 1
-        return json.dumps({"state": state, "seq": self._pose_seq})
+        return PoseFrame(state=snapshot, seq=self._pose_seq).model_dump_json()
 
     # ------------------------------------------------------------------
     # Transport-agnostic command processing
