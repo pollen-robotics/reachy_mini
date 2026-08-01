@@ -385,6 +385,13 @@ export interface ReachyMiniInstance extends EventTarget {
     /** `true` iff `preselectedRobotId !== null`. UX branching helper. */
     readonly isEmbedded: boolean;
     /**
+     * Live RTCPeerConnection, or `null` between sessions. Read-only escape
+     * hatch for stats sampling (`getStats()`); mutating it is unsupported.
+     * Auto-reconnect re-dials REPLACE this object, so re-read it on every
+     * use — never capture it across ticks.
+     */
+    readonly peerConnection: RTCPeerConnection | null;
+    /**
      * Build version of this SDK (npm package `version`), injected from
      * package.json at build time. The JS SDK's OWN version — distinct from
      * `getVersion()`, which asks the DAEMON its version over the data
