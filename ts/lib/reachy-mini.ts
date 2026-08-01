@@ -219,6 +219,24 @@ const DC_SILENCE_FATAL_MS = 8000;
  */
 const SLOT_ROUNDTRIP_TIMEOUT_MS = 4000;
 
+/**
+ * Value type carried by each single-slot reply waiter (see `_replySlots`).
+ * These daemon replies are correlated by message TYPE — the legacy command
+ * set carries no request ids — so at most one call per slot is in flight.
+ */
+interface ReplySlotValues {
+    version: string | null;
+    hardware_id: string | null;
+    volume: number | null;
+    mic_volume: number | null;
+    tracked_face: FaceTarget | null;
+    robot_name: string | null;
+    delete_hf_token: boolean | null;
+    apply_audio_config: boolean | null;
+    read_audio_parameter: number[] | null;
+}
+type ReplySlotKey = keyof ReplySlotValues;
+
 export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Config ──────────────────────────────────────────────────────────
@@ -278,19 +296,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _dcWatchdogLastTickAt = 0;
     private _dcSilenceNudged = false;
 
-    // ─── Single-slot promise resolvers ───────────────────────────────────
-    private _versionResolve: ((v: string | null) => void) | null = null;
-    private _hardwareIdResolve: ((v: string | null) => void) | null = null;
-    private _volumeResolve: ((v: number | null) => void) | null = null;
-    private _micVolumeResolve: ((v: number | null) => void) | null = null;
-    private _trackedFaceResolve: ((v: FaceTarget | null) => void) | null = null;
-    private _robotNameResolve: ((v: string | null) => void) | null = null;
-    private _deleteHfTokenResolve: ((v: boolean | null) => void) | null = null;
-    // applyAudioConfig() / readAudioParameter() share the same single-slot
-    // pattern as the volume helpers. Separate slots so the two can be
-    // in-flight concurrently without collision.
-    private _applyAudioConfigResolve: ((v: boolean | null) => void) | null = null;
-    private _readAudioParameterResolve: ((v: number[] | null) => void) | null = null;
+    // ─── Single-slot reply waiters ───────────────────────────────────────
+    // One pending `_slotRoundtrip` settle closure per `ReplySlotKey`.
+    // Separate slots so unrelated commands can be in flight concurrently;
+    // a newer call on the SAME slot supersedes the older waiter with
+    // `null`. Every teardown path settles the whole map at once via
+    // `_settleAllReplySlots`.
+    private readonly _replySlots = new Map<ReplySlotKey, (v: unknown) => void>();
 
     // ─── Log subscribers ─────────────────────────────────────────────────
     private readonly _logSubscribers: Set<LogSubscriber> = new Set();
@@ -388,6 +400,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     get audioMuted(): boolean { return this._audioMuted; }
     get preselectedRobotId(): string | null { return this._preselectedRobotId; }
     get isEmbedded(): boolean { return this._preselectedRobotId !== null; }
+    /**
+     * Live RTCPeerConnection, or `null` between sessions. Read-only escape
+     * hatch for stats sampling (`getStats()`); mutating it is unsupported.
+     * Auto-reconnect re-dials REPLACE this object, so re-read it on every
+     * use — never capture it across ticks.
+     */
+    get peerConnection(): RTCPeerConnection | null { return this._pc; }
 
     /**
      * Build version of this SDK (npm package `version`), injected from
@@ -923,15 +942,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         // the in-flight dial attempt (if any) is rejected right below via
         // `_sessionReject`, and the loop exits on the cleared flag.
         this._cancelRedial();
-        if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
-        if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
-        if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
-        if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
-        if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
-        if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
-        if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
-        if (this._robotNameResolve) { this._robotNameResolve(null); this._robotNameResolve = null; }
-        if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
+        this._settleAllReplySlots();
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Session stopped'));
@@ -976,15 +987,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._cancelRedial();
         if (this._sseAbortController) { this._sseAbortController.abort(); this._sseAbortController = null; }
 
-        if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
-        if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
-        if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
-        if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
-        if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
-        if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
-        if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
-        if (this._robotNameResolve) { this._robotNameResolve(null); this._robotNameResolve = null; }
-        if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
+        this._settleAllReplySlots();
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Disconnected'));
@@ -1347,15 +1350,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * manual stop would produce.
      */
     private _teardownForRedial(): void {
-        if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
-        if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
-        if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
-        if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
-        if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
-        if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
-        if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
-        if (this._robotNameResolve) { this._robotNameResolve(null); this._robotNameResolve = null; }
-        if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
+        this._settleAllReplySlots();
         this._rejectPendingMotionCompletions(new Error('Session reconnecting'));
         this._rejectPendingRpc(new Error('Session reconnecting'));
         // A timed-out dial attempt leaves its startSession() promise
@@ -1673,11 +1668,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     getTrackedFace(): Promise<FaceTarget | null> {
-        return this._slotRoundtrip(
-            () => this._trackedFaceResolve,
-            (next) => { this._trackedFaceResolve = next; },
-            { type: 'get_tracked_face' },
-        );
+        return this._slotRoundtrip('tracked_face', { type: 'get_tracked_face' });
     }
 
     /**
@@ -1774,64 +1765,33 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         return true;
     }
 
+    /**
+     * Query the daemon version. Resolves `null` when the daemon predates
+     * `get_version` (fail-open on the shared slot timeout) or the reply is
+     * superseded by session teardown.
+     */
     getVersion(): Promise<string | null> {
-        return new Promise<string | null>((resolve, reject) => {
-            if (!this._dc || this._dc.readyState !== 'open') {
-                reject(new Error('Data channel not open'));
-                return;
-            }
-            if (this._versionResolve) {
-                this._versionResolve(null);
-            }
-            this._versionResolve = resolve;
-            this._sendCommand({ type: 'get_version' });
-        });
+        return this._slotRoundtrip('version', { type: 'get_version' });
     }
 
     getHardwareId(): Promise<string | null> {
-        return new Promise<string | null>((resolve, reject) => {
-            if (!this._dc || this._dc.readyState !== 'open') {
-                reject(new Error('Data channel not open'));
-                return;
-            }
-            if (this._hardwareIdResolve) {
-                this._hardwareIdResolve(null);
-            }
-            this._hardwareIdResolve = resolve;
-            this._sendCommand({ type: 'get_hardware_id' });
-        });
+        return this._slotRoundtrip('hardware_id', { type: 'get_hardware_id' });
     }
 
     getVolume(): Promise<number | null> {
-        return this._slotRoundtrip(
-            () => this._volumeResolve,
-            (next) => { this._volumeResolve = next; },
-            { type: 'get_volume' },
-        );
+        return this._slotRoundtrip('volume', { type: 'get_volume' });
     }
 
     setVolume(volume: number): Promise<number | null> {
-        return this._slotRoundtrip(
-            () => this._volumeResolve,
-            (next) => { this._volumeResolve = next; },
-            { type: 'set_volume', volume: clampVolume(volume) },
-        );
+        return this._slotRoundtrip('volume', { type: 'set_volume', volume: clampVolume(volume) });
     }
 
     getMicrophoneVolume(): Promise<number | null> {
-        return this._slotRoundtrip(
-            () => this._micVolumeResolve,
-            (next) => { this._micVolumeResolve = next; },
-            { type: 'get_microphone_volume' },
-        );
+        return this._slotRoundtrip('mic_volume', { type: 'get_microphone_volume' });
     }
 
     setMicrophoneVolume(volume: number): Promise<number | null> {
-        return this._slotRoundtrip(
-            () => this._micVolumeResolve,
-            (next) => { this._micVolumeResolve = next; },
-            { type: 'set_microphone_volume', volume: clampVolume(volume) },
-        );
+        return this._slotRoundtrip('mic_volume', { type: 'set_microphone_volume', volume: clampVolume(volume) });
     }
 
     /**
@@ -1840,11 +1800,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * the `get_robot_name` command.
      */
     getRobotName(): Promise<string | null> {
-        return this._slotRoundtrip(
-            () => this._robotNameResolve,
-            (next) => { this._robotNameResolve = next; },
-            { type: 'get_robot_name' },
-        );
+        return this._slotRoundtrip('robot_name', { type: 'get_robot_name' });
     }
 
     /**
@@ -1855,11 +1811,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * on the next start.
      */
     setRobotName(name: string): Promise<string | null> {
-        return this._slotRoundtrip(
-            () => this._robotNameResolve,
-            (next) => { this._robotNameResolve = next; },
-            { type: 'set_robot_name', name },
-        );
+        return this._slotRoundtrip('robot_name', { type: 'set_robot_name', name });
     }
 
     /**
@@ -1879,57 +1831,39 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * ahead of the ack.
      */
     signOut(): Promise<boolean | null> {
-        return this._slotRoundtrip(
-            () => this._deleteHfTokenResolve,
-            (next) => { this._deleteHfTokenResolve = next; },
-            { type: 'delete_hf_token' },
-        );
+        return this._slotRoundtrip('delete_hf_token', { type: 'delete_hf_token' });
     }
 
     applyAudioConfig(
         config: AudioConfigEntry[],
         { verify = true }: ApplyAudioConfigOptions = {},
     ): Promise<boolean> {
-        return this._slotRoundtrip(
-            () => this._applyAudioConfigResolve,
-            (next) => { this._applyAudioConfigResolve = next; },
-            { type: 'apply_audio_config', config, verify },
-        ).then((v) => v === true);
+        return this._slotRoundtrip('apply_audio_config', { type: 'apply_audio_config', config, verify })
+            .then((v) => v === true);
     }
 
     readAudioParameter(name: string): Promise<number[] | null> {
-        return this._slotRoundtrip(
-            () => this._readAudioParameterResolve,
-            (next) => { this._readAudioParameterResolve = next; },
-            { type: 'read_audio_parameter', name },
-        );
+        return this._slotRoundtrip('read_audio_parameter', { type: 'read_audio_parameter', name });
     }
 
     /**
      * Internal: send a command and await the matching daemon response in a
-     * named single-resolver slot. Used by the volume helpers and the
-     * XVF3800 audio-config helpers — every one of them has a strict
-     * request/response shape where a single in-flight call per slot is
-     * sufficient. If a previous request on the same slot is still
+     * named single-resolver slot (see `_replySlots`). Every caller has a
+     * strict request/response shape where a single in-flight call per slot
+     * is sufficient. If a previous request on the same slot is still
      * pending when a new one comes in, the older promise is resolved to
      * `null` so its caller doesn't hang forever.
-     *
-     * Slot access is passed in as getter/setter closures rather than a
-     * key into `this`: that keeps the helper fully generic-checked (T is
-     * inferred from the slot's resolver type at each call site) with no
-     * indexed-property casts.
      */
-    private _slotRoundtrip<T>(
-        getSlot: () => ((v: T | null) => void) | null,
-        setSlot: (next: ((v: T | null) => void) | null) => void,
+    private _slotRoundtrip<K extends ReplySlotKey>(
+        slot: K,
         command: Record<string, unknown>,
-    ): Promise<T | null> {
-        return new Promise<T | null>((resolve, reject) => {
+    ): Promise<ReplySlotValues[K] | null> {
+        return new Promise<ReplySlotValues[K] | null>((resolve, reject) => {
             if (!this._dc || this._dc.readyState !== 'open') {
                 reject(new Error('Data channel not open'));
                 return;
             }
-            const prev = getSlot();
+            const prev = this._replySlots.get(slot);
             if (prev) prev(null);
             let timer: ReturnType<typeof setTimeout> | undefined;
             // Single settle path shared by the daemon response, supersession
@@ -1943,18 +1877,43 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             // does not prevent a genuinely late daemon reply from being routed
             // to a newer same-command caller — that cross-talk is inherent to
             // the single-flight slot design and unchanged here.
-            const settle = (v: T | null): void => {
+            const settle = (v: unknown): void => {
                 if (timer !== undefined) {
                     clearTimeout(timer);
                     timer = undefined;
                 }
-                if (getSlot() === settle) setSlot(null);
-                resolve(v);
+                if (this._replySlots.get(slot) === settle) this._replySlots.delete(slot);
+                resolve(v as ReplySlotValues[K] | null);
             };
-            setSlot(settle);
+            this._replySlots.set(slot, settle);
             timer = setTimeout(() => settle(null), SLOT_ROUNDTRIP_TIMEOUT_MS);
             this._sendCommand(command);
         });
+    }
+
+    /**
+     * Deliver a daemon reply to the pending waiter for `slot`, if any.
+     * Returns `true` when a waiter consumed the value — some message-handler
+     * branches use that to decide whether the message was ours to swallow.
+     */
+    private _settleReplySlot<K extends ReplySlotKey>(slot: K, value: ReplySlotValues[K]): boolean {
+        const waiter = this._replySlots.get(slot);
+        if (!waiter) return false;
+        waiter(value);
+        return true;
+    }
+
+    /**
+     * Settle every pending reply slot with `null` — the "no answer" value
+     * all slot callers already handle (public wrappers coerce where needed,
+     * e.g. `applyAudioConfig` maps it to `false`). Called from every
+     * session-teardown path so no caller is left hanging on a dead channel.
+     */
+    private _settleAllReplySlots(): void {
+        for (const waiter of [...this._replySlots.values()]) {
+            waiter(null);
+        }
+        this._replySlots.clear();
     }
 
     sendRaw(data: unknown): boolean {
@@ -2626,69 +2585,49 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._handleRpcMessage(data);
             return;
         }
-        if ('version' in data && this._versionResolve) {
-            this._versionResolve(data.version as string | null);
-            this._versionResolve = null;
+        // Bare `version` / `hardware_id` replies carry no `command` key:
+        // only swallow them when a waiter is actually pending, otherwise
+        // let the message fall through to the branches below.
+        if ('version' in data
+            && this._settleReplySlot('version', (data.version as string | null) ?? null)) {
             return;
         }
-        if ('hardware_id' in data && this._hardwareIdResolve) {
-            this._hardwareIdResolve(data.hardware_id as string | null);
-            this._hardwareIdResolve = null;
+        if ('hardware_id' in data
+            && this._settleReplySlot('hardware_id', (data.hardware_id as string | null) ?? null)) {
             return;
         }
         if (data.command === 'get_volume' || data.command === 'set_volume') {
-            if (this._volumeResolve) {
-                this._volumeResolve(data.status === 'error' ? null : (data.volume as number));
-                this._volumeResolve = null;
-            }
+            this._settleReplySlot('volume', data.status === 'error' ? null : (data.volume as number));
             return;
         }
         if (data.command === 'get_microphone_volume' || data.command === 'set_microphone_volume') {
-            if (this._micVolumeResolve) {
-                this._micVolumeResolve(data.status === 'error' ? null : (data.volume as number));
-                this._micVolumeResolve = null;
-            }
+            this._settleReplySlot('mic_volume', data.status === 'error' ? null : (data.volume as number));
             return;
         }
         if (data.command === 'get_robot_name' || data.command === 'set_robot_name') {
-            if (this._robotNameResolve) {
-                this._robotNameResolve(
-                    data.status === 'error' ? null : ((data.name as string | null) ?? null),
-                );
-                this._robotNameResolve = null;
-            }
+            this._settleReplySlot(
+                'robot_name',
+                data.status === 'error' ? null : ((data.name as string | null) ?? null),
+            );
             return;
         }
         if (data.command === 'delete_hf_token') {
-            if (this._deleteHfTokenResolve) {
-                this._deleteHfTokenResolve(data.status === 'error' ? false : true);
-                this._deleteHfTokenResolve = null;
-            }
+            this._settleReplySlot('delete_hf_token', data.status !== 'error');
             return;
         }
         if (data.command === 'apply_audio_config') {
-            if (this._applyAudioConfigResolve) {
-                this._applyAudioConfigResolve(data.error ? false : !!data.applied);
-                this._applyAudioConfigResolve = null;
-            }
+            this._settleReplySlot('apply_audio_config', data.error ? false : !!data.applied);
             return;
         }
         if (data.command === 'read_audio_parameter') {
-            if (this._readAudioParameterResolve) {
-                this._readAudioParameterResolve(
-                    data.error ? null : ((data.values as number[] | undefined) ?? null),
-                );
-                this._readAudioParameterResolve = null;
-            }
+            this._settleReplySlot(
+                'read_audio_parameter',
+                data.error ? null : ((data.values as number[] | undefined) ?? null),
+            );
             return;
         }
         if (data.command === 'get_tracked_face') {
-            if (this._trackedFaceResolve) {
-                this._trackedFaceResolve(
-                    (data.face_target as FaceTarget | undefined) ?? null,
-                );
-                this._trackedFaceResolve = null;
-            }
+            this._settleReplySlot('tracked_face', (data.face_target as FaceTarget | undefined) ?? null);
             return;
         }
         if (
