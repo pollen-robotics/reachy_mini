@@ -10,6 +10,7 @@ import {
 } from '@huggingface/hub';
 
 import { degToRad, rpyToMatrix } from './math.js';
+import { SessionSupervisor } from './session-supervisor.js';
 import { SDK_VERSION } from './version.js';
 import {
     consumeFragmentCredentials,
@@ -103,41 +104,8 @@ interface OAuthRedirectResult {
 }
 
 // ─── Internal constants ──────────────────────────────────────────────────────
-
-/**
- * How long we tolerate `iceConnectionState === 'disconnected'` before
- * surfacing it as an error. The spec defines this state as transient
- * (browsers keep STUN keep-alives running and usually heal in 1-2 s
- * on WiFi blips, AP roams, brief 4G dropouts). Consumers watching
- * `iceStateChange` directly should outlive this window before
- * showing any fatal UI.
- */
-const ICE_DISCONNECT_GRACE_MS = 3000;
-
-/**
- * Grace before treating `iceConnectionState === 'failed'` as terminal.
- * The spec says `failed` IS terminal, but we've observed real
- * `failed → connected` flips on rapid AP roams and iOS BT route
- * changes — 1 s of debounce absorbs those without noticeably
- * delaying a real failure.
- */
-const ICE_FAILED_GRACE_MS = 1000;
-
-/**
- * Ceiling on how long we'll keep `_armIceGraceOnVisibility` waiting
- * for the tab to come back. The daemon's `webrtcsink` runs a STUN
- * consent-freshness check (RFC 7675, ~30 s default) and unilaterally
- * tears its side of the session down past that window, releasing the
- * producer slot on central. If the user backgrounded the tab for
- * longer than this, running another 3 s foreground grace is a lie —
- * the underlying transport is gone, nothing can recover. Give up
- * straight away so the host shows the real "session expired" UX
- * instead of a fake "Reconnecting…" badge that's never going to
- * heal. 60 s gives a 2× margin over the daemon-side timeout — long
- * enough to absorb a "phone in pocket for 45 s" case, short enough
- * to be honest with the user.
- */
-const MAX_VISIBILITY_DEFER_MS = 60_000;
+// Resilience tunables (ICE grace windows, re-dial backoff, DC-silence
+// watchdog thresholds) live in `session-supervisor.ts`.
 
 /**
  * How long a pushed pose frame keeps the periodic `get_state` poll on hold -
@@ -154,55 +122,6 @@ const MAX_VISIBILITY_DEFER_MS = 60_000;
  * flip it back and forth.
  */
 const POSE_STREAM_FRESH_MS = 750;
-
-/**
- * Backoff schedule for the automatic session re-dial (one entry per
- * attempt, in ms of wait BEFORE that attempt). A dead link on a phone
- * usually heals within the first two attempts (WiFi re-associates,
- * 4G comes back); the tail exists for slower recoveries like a router
- * reboot. Total window ≈ 22 s + dial time, capped so a genuinely gone
- * robot surfaces a terminal `sessionStopped` in well under a minute.
- */
-const REDIAL_BACKOFF_MS = [0, 2000, 4000, 8000, 8000] as const;
-
-/**
- * Ceiling on a single re-dial attempt (startSession handshake). The
- * signaling round-trip plus ICE + DTLS normally lands in 2-4 s; if an
- * attempt hasn't settled after this long the robot side is likely
- * still holding the previous (dead) session, so we tear the attempt
- * down and let the next backoff slot retry against a freed slot.
- */
-const REDIAL_DIAL_TIMEOUT_MS = 15_000;
-
-/**
- * Data-channel silence watchdog. ICE only notices a dead path when
- * STUN consent checks fail, which half-open links (NAT rebind, AP
- * roam onto a blackholing path, asymmetric loss) can dodge for tens
- * of seconds while `iceConnectionState` sits happily on 'connected'.
- * The application layer has a much better liveness signal for free:
- * during any streaming session the daemon talks to us constantly —
- * `get_state` poll replies every ≤500 ms and/or ~30 Hz pushed pose
- * frames. The watchdog measures the time since the LAST inbound
- * data-channel message and escalates in two steps:
- *
- *   - past `DC_SILENCE_NUDGE_MS`, send one extra `get_state` so a
- *     paused poll (fresh pose stream that just died) can't be
- *     mistaken for a dead link;
- *   - past `DC_SILENCE_FATAL_MS` of TOTAL silence, treat the
- *     transport as dead and hand over to the auto re-dial (or emit
- *     the classic fatal `error` when auto-reconnect is off).
- *
- * Hidden tabs throttle timers AND keep receiving messages
- * unpredictably, so silence measured there is meaningless: ticks
- * re-baseline while hidden, and a tick arriving after a large gap
- * (throttled / suspended timer) re-baselines too instead of judging
- * stale data. 8 s of zero inbound traffic on a link that normally
- * delivers 2-30 messages per second is unambiguous, and still ~4×
- * faster than the RFC 7675 consent-freshness teardown (~30 s).
- */
-const DC_WATCHDOG_TICK_MS = 1000;
-const DC_SILENCE_NUDGE_MS = 2500;
-const DC_SILENCE_FATAL_MS = 8000;
 
 /**
  * Fail-open ceiling for a single `_slotRoundtrip` request/response.
@@ -290,11 +209,6 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     // ─── Timers ──────────────────────────────────────────────────────────
     private _latencyMonitorId: ReturnType<typeof setInterval> | null = null;
     private _stateRefreshInterval: ReturnType<typeof setInterval> | null = null;
-    // Data-channel silence watchdog (see DC_WATCHDOG_TICK_MS block).
-    private _dcWatchdogId: ReturnType<typeof setInterval> | null = null;
-    private _lastDcInboundAt = 0;
-    private _dcWatchdogLastTickAt = 0;
-    private _dcSilenceNudged = false;
 
     // ─── Single-slot reply waiters ───────────────────────────────────────
     // One pending `_slotRoundtrip` settle closure per `ReplySlotKey`.
@@ -332,36 +246,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _iceConnected = false;
     private _dcOpen = false;
 
-    // ─── Resilience: ICE-blip debounce + network awareness ──────────────
-    // Backs `_scheduleIceGrace` / `_armIceGraceOnVisibility` and the
-    // `networkOnline` / `networkOffline` / `networkChange` forwarders.
-    // All three handler slots are scoped to the lifetime of a live
-    // session (installed in `startSession`, cleared in
-    // `stopSession` / `disconnect` / `_handleEndSession` /
-    // `_failSessionRejected`).
-    private _iceGraceTimer: ReturnType<typeof setTimeout> | null = null;
-    private _iceGraceReason: 'disconnected' | 'failed' | null = null;
-    private _pendingVisibilityHandler: (() => void) | null = null;
-    private _onlineHandler: (() => void) | null = null;
-    private _offlineHandler: (() => void) | null = null;
-    private _connectionChangeHandler: (() => void) | null = null;
-
-    // ─── Resilience: automatic session re-dial ──────────────────────────
-    // When an ESTABLISHED session's transport dies for good (ICE failed
-    // past its grace, stuck-disconnected past its grace, or expired
-    // while backgrounded), the SDK re-dials the same robot through the
-    // signaling server instead of surfacing a fatal error. See
-    // `_maybeBeginRedial` / `_runRedialLoop`. Mutable via
-    // `setAutoReconnect()` so flows that EXPECT a transport death (the
-    // daemon self-update reboot) can stand the machinery down.
-    private _autoReconnect: boolean;
-    private _redialing = false;
-    private _redialTimer: ReturnType<typeof setTimeout> | null = null;
-    private _redialWake: (() => void) | null = null;
-    // True while the redial loop itself is inside startSession(), so the
-    // "external startSession cancels a pending redial" guard can tell the
-    // two apart.
-    private _redialInternalDial = false;
+    // ─── Resilience ──────────────────────────────────────────────────────
+    // ICE-blip debounce, network awareness, automatic session re-dial and
+    // the data-channel silence watchdog all live in the supervisor; the
+    // class forwards pc/browser events to it and implements its deps as
+    // closures over the private state below (see the constructor).
+    private readonly _supervisor: SessionSupervisor;
 
     // ─── Motion completion plumbing (wake_up / goto_sleep) ───────────────
     private readonly _pendingMotionCompletions: Record<'wake_up' | 'goto_sleep', PendingMotion[]> = {
@@ -384,8 +274,35 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._videoJitterBufferTargetMs = options.videoJitterBufferTargetMs ?? 0;
         this._autoStartFromUrl = options.autoStartFromUrl === true;
         this._autoStartAttempted = false;
-        this._autoReconnect = options.autoReconnect !== false;
         this._preselectedRobotId = readPreselectedRobotIdFromUrl();
+        // Arrow closures so every dep call reads the CURRENT class state.
+        this._supervisor = new SessionSupervisor({
+            iceState: () => this._pc?.iceConnectionState ?? null,
+            hasPc: () => !!this._pc,
+            isStreaming: () => this._state === 'streaming',
+            isMidSetup: () => !!(this._sessionResolve || this._sessionReject),
+            isSignalingDown: () => this._state === 'disconnected',
+            selectedRobotId: () => this._selectedRobotId,
+            rejectPendingSession: (err) => {
+                if (!this._sessionReject) return false;
+                const reject = this._sessionReject;
+                this._sessionResolve = null;
+                this._sessionReject = null;
+                reject(err);
+                return true;
+            },
+            reconnectSignaling: () => this.connect(),
+            dial: (robotId) => this.startSession(robotId),
+            teardownForRedial: () => this._teardownForRedial(),
+            nudgeState: () => { this.requestState(); },
+            emitError: (error) => this._emit('error', { source: 'webrtc', error }),
+            emitReconnecting: (detail) => this._emit('sessionReconnecting', detail),
+            emitReconnected: (detail) => this._emit('sessionReconnected', detail),
+            emitSessionStopped: (detail) => this._emit('sessionStopped', detail),
+            emitNetworkOnline: () => this._emit('networkOnline', {}),
+            emitNetworkOffline: () => this._emit('networkOffline', {}),
+            emitNetworkChange: (detail) => this._emit('networkChange', detail),
+        }, { autoReconnect: options.autoReconnect !== false });
     }
 
     // ─── Read-only properties ────────────────────────────────────────────
@@ -731,9 +648,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     async startSession(robotId: string): Promise<void> {
-        // An explicit dial from the app supersedes any in-flight
-        // auto-reconnect (possibly towards a different robot).
-        if (this._redialing && !this._redialInternalDial) this._cancelRedial();
+        this._supervisor.noteExternalDial();
         if (this._state !== 'connected') throw new Error('Not connected');
         this._selectedRobotId = robotId;
         this._iceConnected = false;
@@ -783,7 +698,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
         // Scope `networkOnline` / `networkOffline` / `networkChange`
         // event forwarding to the lifetime of this session.
-        this._installNetworkListeners();
+        this._supervisor.installNetworkListeners();
 
         return new Promise<void>((resolve, reject) => {
             this._sessionResolve = resolve;
@@ -829,29 +744,17 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
                 if (s === 'connected' || s === 'completed') {
                     // Healed — cancel any pending grace from a previous blip.
-                    this._clearIceGrace();
+                    this._supervisor.onIceHealed();
                     this._iceConnected = true;
                     this._checkSessionReady();
                     return;
                 }
                 if (s === 'disconnected') {
-                    // TRANSIENT per spec — debounce before escalating.
-                    // If the tab is hidden, JS timers are throttled and
-                    // would fire unpredictably late, so defer the grace
-                    // window to the next foreground frame.
-                    if (typeof document !== 'undefined' && document.hidden) {
-                        this._armIceGraceOnVisibility();
-                    } else {
-                        this._scheduleIceGrace(ICE_DISCONNECT_GRACE_MS, 'disconnected');
-                    }
+                    this._supervisor.onIceDisconnected();
                     return;
                 }
                 if (s === 'failed') {
-                    // Terminal per spec, but in practice we've seen
-                    // `failed → connected` on rapid AP roams / BT route
-                    // changes on iOS. Give the ICE agent a short window
-                    // to surprise us before rejecting the session.
-                    this._scheduleIceGrace(ICE_FAILED_GRACE_MS, 'failed');
+                    this._supervisor.onIceFailed();
                     return;
                 }
             };
@@ -913,8 +816,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
         // Resilience teardown BEFORE closing `_pc` so a queued grace
         // callback can't dereference a dead handle.
-        this._clearIceGrace();
-        this._uninstallNetworkListeners();
+        this._supervisor.clearIceGrace();
+        this._supervisor.uninstallNetworkListeners();
         if (this._pc) { this._pc.close(); this._pc = null; }
         if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
         this._iceConnected = false;
@@ -925,7 +828,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         // During an auto-reconnect the rejection is expected noise (the
         // robot side may still hold the dead session for a few seconds) —
         // the loop retries, the app only sees `sessionReconnecting`.
-        if (!this._redialing) {
+        if (!this._supervisor.redialing) {
             this._emit('sessionRejected', { reason: msg.reason, activeApp: msg.activeApp });
         }
 
@@ -941,7 +844,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         // A deliberate stop always wins over a pending auto-reconnect:
         // the in-flight dial attempt (if any) is rejected right below via
         // `_sessionReject`, and the loop exits on the cleared flag.
-        this._cancelRedial();
+        this._supervisor.cancelRedial();
         this._settleAllReplySlots();
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
@@ -949,8 +852,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._rejectPendingRpc(new Error('Session stopped'));
         // Tear down resilience plumbing BEFORE closing `_pc` so a
         // queued grace callback can't dereference a dead handle.
-        this._clearIceGrace();
-        this._uninstallNetworkListeners();
+        this._supervisor.clearIceGrace();
+        this._supervisor.uninstallNetworkListeners();
         if (this._sessionReject) {
             this._sessionReject(new Error('Session stopped'));
             this._sessionResolve = null;
@@ -959,7 +862,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
         if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
         if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
-        this._stopDcWatchdog();
+        this._supervisor.stopDcWatchdog();
 
         if (this._sessionId) {
             await this._sendToServer({ type: 'endSession', sessionId: this._sessionId });
@@ -984,7 +887,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     disconnect(): void {
-        this._cancelRedial();
+        this._supervisor.cancelRedial();
         if (this._sseAbortController) { this._sseAbortController.abort(); this._sseAbortController = null; }
 
         this._settleAllReplySlots();
@@ -992,8 +895,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Disconnected'));
         // Mirrors the resilience teardown in `stopSession()`.
-        this._clearIceGrace();
-        this._uninstallNetworkListeners();
+        this._supervisor.clearIceGrace();
+        this._supervisor.uninstallNetworkListeners();
         if (this._sessionReject) {
             this._sessionReject(new Error('Disconnected'));
             this._sessionResolve = null;
@@ -1002,7 +905,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
         if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
         if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
-        this._stopDcWatchdog();
+        this._supervisor.stopDcWatchdog();
 
         if (this._sessionId && this._token) {
             this._sendToServer({ type: 'endSession', sessionId: this._sessionId });
@@ -1022,237 +925,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._emit('disconnected', { reason: 'user' });
     }
 
-    // ─── Resilience: ICE-blip debounce + network awareness ───────────────
-    //
-    // Both halves below are intentionally generic (they don't know about
-    // motion, audio, or the FSM): they just smooth out browser-level
-    // events so the consumer's own state machine doesn't get torn down
-    // by routine WiFi/4G/screen-off noise.
+    // ─── Resilience: supervisor delegation ───────────────────────────────
+    // The policy lives in `session-supervisor.ts`; only the transport
+    // teardown below stays here because it manipulates the class's own
+    // private state.
 
-    /**
-     * Cancel any pending ICE grace timer and visibility handler. Called
-     * on a healed `connected`/`completed` transition AND from the
-     * lifecycle teardown paths so a callback can't fire after `_pc`
-     * is closed.
-     */
-    private _clearIceGrace(): void {
-        if (this._iceGraceTimer !== null) {
-            clearTimeout(this._iceGraceTimer);
-            this._iceGraceTimer = null;
-        }
-        this._iceGraceReason = null;
-        if (this._pendingVisibilityHandler && typeof document !== 'undefined') {
-            document.removeEventListener('visibilitychange', this._pendingVisibilityHandler);
-        }
-        this._pendingVisibilityHandler = null;
-    }
-
-    /**
-     * Start a grace window. After `ms`, re-check the live ICE state:
-     *   - If we healed back to `connected`/`completed`, the timer was
-     *     already cancelled in `oniceconnectionstatechange`, so we
-     *     never get here.
-     *   - If we're still in the originally-observed bad state (or
-     *     worse), surface the error and reject any pending session
-     *     promise. The original code path is preserved verbatim so
-     *     downstream consumers see the same `error` payload shape.
-     */
-    private _scheduleIceGrace(ms: number, reason: 'disconnected' | 'failed'): void {
-        // Coalesce: if a grace is already pending and the reason hasn't
-        // changed, keep the original timer so a flurry of identical
-        // transitions doesn't reset the clock. If the reason changed
-        // (typically `disconnected` → `failed`, but also the reverse on
-        // some Android WebViews), replace the timer with the new
-        // (reason, ms) pair — the latest signal wins.
-        if (this._iceGraceTimer !== null) {
-            if (this._iceGraceReason === reason) return;
-            clearTimeout(this._iceGraceTimer);
-        }
-        this._iceGraceReason = reason;
-        this._iceGraceTimer = setTimeout(() => {
-            this._iceGraceTimer = null;
-            const r = this._iceGraceReason;
-            this._iceGraceReason = null;
-            const s = this._pc?.iceConnectionState;
-            if (s === 'connected' || s === 'completed') return; // healed
-            if (r === 'disconnected' && s === 'disconnected') {
-                if (this._maybeBeginRedial(`ICE stuck in 'disconnected' for > ${ms}ms`)) return;
-                this._emit('error', {
-                    source: 'webrtc',
-                    error: new Error(`ICE stuck in 'disconnected' for > ${ms}ms`),
-                });
-                return;
-            }
-            if (r === 'failed' || s === 'failed') {
-                const err = new Error('ICE connection failed');
-                if (this._sessionReject) {
-                    // Mid-setup failure: keep the promise contract — the
-                    // caller of startSession() owns the retry decision.
-                    // When that caller is the redial loop itself, skip
-                    // the fatal `error` emit: the loop retries and the
-                    // app only sees `sessionReconnecting`.
-                    this._sessionReject(err);
-                    this._sessionResolve = null;
-                    this._sessionReject = null;
-                    if (!this._redialing) {
-                        this._emit('error', { source: 'webrtc', error: err });
-                    }
-                    return;
-                }
-                if (this._maybeBeginRedial('ICE connection failed')) return;
-                this._emit('error', { source: 'webrtc', error: err });
-            }
-        }, ms);
-    }
-
-    /**
-     * `disconnected` while the tab is hidden. JS timers are throttled
-     * in background tabs (Chrome clamps to ~1 Hz, Safari can pause
-     * altogether), so a foreground grace timer would either miss the
-     * window or fire long after the connection healed. Wait for the
-     * tab to come back, then re-evaluate.
-     */
-    private _armIceGraceOnVisibility(): void {
-        if (this._pendingVisibilityHandler) return;
-        const deferredAt = Date.now();
-        const handler = (): void => {
-            if (typeof document !== 'undefined' && document.hidden) return;
-            document.removeEventListener('visibilitychange', handler);
-            this._pendingVisibilityHandler = null;
-            if (!this._pc) return;
-            const s = this._pc.iceConnectionState;
-            if (s === 'connected' || s === 'completed') return; // healed in bg
-
-            // Ceiling: if the user backgrounded past the daemon's
-            // ICE-consent freshness window the session is gone from
-            // the daemon's side regardless of what `_pc` reports
-            // locally. Running another foreground grace would tell
-            // the user "Reconnecting…" for a recovery that can never
-            // happen. Escalate immediately so the host renders the
-            // real "session expired" UX. See MAX_VISIBILITY_DEFER_MS.
-            if (Date.now() - deferredAt > MAX_VISIBILITY_DEFER_MS) {
-                const err = new Error(
-                    'Session expired while tab was backgrounded',
-                );
-                if (this._sessionReject) {
-                    this._sessionReject(err);
-                    this._sessionResolve = null;
-                    this._sessionReject = null;
-                    if (!this._redialing) {
-                        this._emit('error', { source: 'webrtc', error: err });
-                    }
-                    return;
-                }
-                // The transport is unrecoverable (daemon dropped its side
-                // past the consent-freshness window) but the user is BACK
-                // and looking at the app — the perfect moment to re-dial
-                // rather than render "session expired".
-                if (this._maybeBeginRedial('Session expired while tab was backgrounded')) return;
-                this._emit('error', { source: 'webrtc', error: err });
-                return;
-            }
-
-            if (s === 'failed') {
-                this._scheduleIceGrace(ICE_FAILED_GRACE_MS, 'failed');
-                return;
-            }
-            // Still disconnected when we came back — give it a normal
-            // foreground grace window now that timers fire reliably.
-            this._scheduleIceGrace(ICE_DISCONNECT_GRACE_MS, 'disconnected');
-        };
-        document.addEventListener('visibilitychange', handler);
-        this._pendingVisibilityHandler = handler;
-    }
-
-    /**
-     * Install browser-level network listeners and forward them as
-     * public `networkOnline` / `networkOffline` / `networkChange`
-     * events on this instance. Idempotent: called from
-     * `startSession()`, removed by `_uninstallNetworkListeners` on
-     * teardown. Reachable only when there's a live `window`
-     * (defensive guard for SSR / test environments).
-     *
-     * `online` / `offline` are semantically about CONNECTIVITY:
-     * "does the OS think we can reach the internet". They flip
-     * symmetrically.
-     *
-     * `connection.change` (NetworkInformation API, Chrome / Android
-     * WebView only) is semantically about the TRANSPORT: it fires
-     * on Wi-Fi → 4G swaps, AP roams, etc. without necessarily going
-     * through `offline`. We forward it as its own `networkChange`
-     * event rather than aliasing it onto `networkOnline`, so
-     * consumers don't have to guess whether they're seeing a real
-     * connectivity recovery or a silent transport swap.
-     */
-    private _installNetworkListeners(): void {
-        if (this._onlineHandler || typeof window === 'undefined') return;
-        const onOnline = (): void => this._emit('networkOnline', {});
-        const onOffline = (): void => this._emit('networkOffline', {});
-        window.addEventListener('online', onOnline);
-        window.addEventListener('offline', onOffline);
-        this._onlineHandler = onOnline;
-        this._offlineHandler = onOffline;
-
-        const conn = (navigator as Navigator & {
-            connection?: {
-                effectiveType?: string;
-                downlink?: number;
-                rtt?: number;
-                saveData?: boolean;
-                addEventListener?: (type: string, listener: () => void) => void;
-                removeEventListener?: (type: string, listener: () => void) => void;
-            };
-        }).connection;
-        if (conn && typeof conn.addEventListener === 'function') {
-            const onChange = (): void => this._emit('networkChange', {
-                effectiveType: conn.effectiveType,
-                downlink: conn.downlink,
-                rtt: conn.rtt,
-                saveData: conn.saveData,
-            });
-            conn.addEventListener('change', onChange);
-            this._connectionChangeHandler = onChange;
-        }
-    }
-
-    /** Counterpart to `_installNetworkListeners`. */
-    private _uninstallNetworkListeners(): void {
-        if (typeof window !== 'undefined') {
-            if (this._onlineHandler) {
-                window.removeEventListener('online', this._onlineHandler);
-            }
-            if (this._offlineHandler) {
-                window.removeEventListener('offline', this._offlineHandler);
-            }
-        }
-        const conn = (navigator as Navigator & {
-            connection?: {
-                removeEventListener?: (type: string, listener: () => void) => void;
-            };
-        }).connection;
-        if (conn && this._connectionChangeHandler && typeof conn.removeEventListener === 'function') {
-            conn.removeEventListener('change', this._connectionChangeHandler);
-        }
-        this._onlineHandler = null;
-        this._offlineHandler = null;
-        this._connectionChangeHandler = null;
-    }
-
-    // ─── Resilience: automatic session re-dial ───────────────────────────
-    //
-    // The daemon's `webrtcbin` cannot do a standards ICE restart (missing
-    // upstream support), so the recovery unit is the whole SESSION: tear
-    // down the dead RTCPeerConnection and dial the same robot again
-    // through central. Everything below runs inside the SDK so every
-    // consumer (host embed, mobile app, third-party apps) inherits it.
-
-    /**
-     * Escalation funnel for dead-transport signals. Returns `true` when
-     * the failure is being handled by a re-dial (callers should then skip
-     * their fatal `error` emit). Only fires for an ESTABLISHED session:
-     * mid-setup failures keep rejecting the startSession() promise so the
-     * original caller stays in charge of retries.
-     */
     /**
      * Enable/disable the automatic session re-dial at runtime.
      * Disabling also aborts any re-dial already in flight. Used by
@@ -1263,82 +940,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * against a robot that is rebooting anyway.
      */
     setAutoReconnect(enabled: boolean): void {
-        this._autoReconnect = enabled;
-        if (!enabled) this._cancelRedial();
-    }
-
-    private _maybeBeginRedial(cause: string): boolean {
-        if (!this._autoReconnect) return false;
-        if (this._redialing) return true; // already in progress
-        if (this._sessionResolve || this._sessionReject) return false; // mid-setup
-        const robotId = this._selectedRobotId;
-        if (!robotId || !this._pc) return false;
-        this._redialing = true;
-        console.info(`[reachy-mini] auto-reconnect: ${cause} — re-dialing ${robotId}`);
-        void this._runRedialLoop(robotId, cause);
-        return true;
-    }
-
-    /**
-     * The re-dial loop. One teardown, then up to REDIAL_BACKOFF_MS.length
-     * attempts, each preceded by its backoff slot. Every attempt re-runs
-     * the normal startSession() flow (and connect() first if the SSE feed
-     * died with the network), so a success is indistinguishable from a
-     * fresh session: `streaming` re-fires, videoTrack re-attaches, the
-     * pose subscription is re-asserted by `_checkSessionReady`.
-     *
-     * Exits early — without emitting anything further — when the user
-     * calls stopSession()/disconnect() or dials another robot, all of
-     * which flip `_redialing` off via `_cancelRedial`.
-     */
-    private async _runRedialLoop(robotId: string, cause: string): Promise<void> {
-        const maxAttempts = REDIAL_BACKOFF_MS.length;
-        this._teardownForRedial();
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            if (!this._redialing) return;
-            this._emit('sessionReconnecting', { attempt, maxAttempts, cause });
-            await this._redialSleep(REDIAL_BACKOFF_MS[attempt - 1]!);
-            if (!this._redialing) return;
-            try {
-                if (this._state === 'disconnected') {
-                    // The network drop also killed the signaling SSE feed —
-                    // re-establish it before dialing.
-                    await this.connect();
-                }
-                if (!this._redialing) return;
-                this._redialInternalDial = true;
-                try {
-                    await this._withTimeout(
-                        this.startSession(robotId),
-                        REDIAL_DIAL_TIMEOUT_MS,
-                        'auto-reconnect dial timed out',
-                    );
-                } finally {
-                    this._redialInternalDial = false;
-                }
-                if (!this._redialing) return;
-                this._redialing = false;
-                console.info(`[reachy-mini] auto-reconnect: recovered on attempt ${attempt}`);
-                this._emit('sessionReconnected', { attempt });
-                return;
-            } catch (e) {
-                console.warn(
-                    `[reachy-mini] auto-reconnect attempt ${attempt}/${maxAttempts} failed:`,
-                    e,
-                );
-                // A failed attempt can leave a half-open pc (e.g. the dial
-                // timed out mid-ICE). Clean it so the next attempt starts
-                // from a blank slate; also frees the robot-side slot via
-                // endSession when one was allocated.
-                if (this._redialing) this._teardownForRedial();
-            }
-        }
-        if (!this._redialing) return;
-        this._redialing = false;
-        const message = `Auto-reconnect gave up after ${maxAttempts} attempts (${cause})`;
-        console.warn(`[reachy-mini] ${message}`);
-        this._emit('sessionStopped', { reason: 'reconnect_failed', message });
-        this._emit('error', { source: 'webrtc', error: new Error(message) });
+        this._supervisor.setAutoReconnect(enabled);
     }
 
     /**
@@ -1364,11 +966,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             reject(new Error('Session reconnecting'));
         }
         this._sessionResolve = null;
-        this._clearIceGrace();
-        this._uninstallNetworkListeners();
+        this._supervisor.clearIceGrace();
+        this._supervisor.uninstallNetworkListeners();
         if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
         if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
-        this._stopDcWatchdog();
+        this._supervisor.stopDcWatchdog();
 
         // Free the robot-side slot: the relay refuses a second session
         // while it still tracks the dead one, and only endSession (or its
@@ -1388,125 +990,6 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._iceConnected = false;
         this._dcOpen = false;
         if (this._state === 'streaming') this._state = 'connected';
-    }
-
-    /** Cancellable backoff sleep — `_cancelRedial` wakes it immediately. */
-    private _redialSleep(ms: number): Promise<void> {
-        if (ms <= 0) return Promise.resolve();
-        return new Promise<void>((resolve) => {
-            this._redialWake = resolve;
-            this._redialTimer = setTimeout(() => {
-                this._redialTimer = null;
-                this._redialWake = null;
-                resolve();
-            }, ms);
-        });
-    }
-
-    /**
-     * Abort a pending re-dial. Called from stopSession(), disconnect()
-     * and an external startSession() — every path where the user (or the
-     * consumer app) takes over the session lifecycle.
-     */
-    private _cancelRedial(): void {
-        if (!this._redialing && !this._redialWake) return;
-        this._redialing = false;
-        if (this._redialTimer !== null) {
-            clearTimeout(this._redialTimer);
-            this._redialTimer = null;
-        }
-        if (this._redialWake) {
-            const wake = this._redialWake;
-            this._redialWake = null;
-            wake();
-        }
-    }
-
-    private _withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-        return new Promise<T>((resolve, reject) => {
-            const timer = setTimeout(() => reject(new Error(label)), ms);
-            p.then(
-                (v) => { clearTimeout(timer); resolve(v); },
-                (e) => { clearTimeout(timer); reject(e); },
-            );
-        });
-    }
-
-    // ─── Resilience: data-channel silence watchdog ───────────────────────
-    //
-    // Application-level heartbeat without any daemon change: a streaming
-    // session already receives constant inbound traffic (get_state poll
-    // replies and/or pushed pose frames), so prolonged TOTAL silence is a
-    // dead transport that ICE hasn't noticed yet (half-open path that
-    // still answers STUN consent checks, or answers nothing but hasn't
-    // hit the ~30 s RFC 7675 teardown). See the DC_WATCHDOG_TICK_MS
-    // constant block for the full rationale and thresholds.
-
-    /** (Re)start the watchdog. Called when a session reaches ready. */
-    private _startDcWatchdog(): void {
-        this._stopDcWatchdog();
-        const now = Date.now();
-        this._lastDcInboundAt = now;
-        this._dcWatchdogLastTickAt = now;
-        this._dcSilenceNudged = false;
-        this._dcWatchdogId = setInterval(() => this._dcWatchdogTick(), DC_WATCHDOG_TICK_MS);
-    }
-
-    private _stopDcWatchdog(): void {
-        if (this._dcWatchdogId !== null) {
-            clearInterval(this._dcWatchdogId);
-            this._dcWatchdogId = null;
-        }
-    }
-
-    private _dcWatchdogTick(): void {
-        const now = Date.now();
-        const tickGap = now - this._dcWatchdogLastTickAt;
-        this._dcWatchdogLastTickAt = now;
-
-        if (this._state !== 'streaming') return;
-
-        // A tick that arrives way late means the timer was throttled or
-        // suspended (hidden tab, iOS app switch). Whatever silence we
-        // measure against that stale baseline is meaningless — and the
-        // background-transport question is already owned by the
-        // visibility-deferred ICE grace. Re-baseline and judge again
-        // from the next healthy tick.
-        if (tickGap > DC_WATCHDOG_TICK_MS * 3) {
-            this._lastDcInboundAt = now;
-            this._dcSilenceNudged = false;
-            return;
-        }
-        if (typeof document !== 'undefined' && document.hidden) {
-            this._lastDcInboundAt = now;
-            this._dcSilenceNudged = false;
-            return;
-        }
-
-        const silence = now - this._lastDcInboundAt;
-        if (silence < DC_SILENCE_NUDGE_MS) return;
-
-        if (!this._dcSilenceNudged) {
-            // One extra get_state so a legitimately quiet channel (pose
-            // stream just died, poll on hold) gets a chance to answer
-            // before we call the transport dead. Any inbound message
-            // clears the flag via `_handleRobotMessage`.
-            this._dcSilenceNudged = true;
-            this.requestState();
-            return;
-        }
-
-        if (silence < DC_SILENCE_FATAL_MS) return;
-
-        // Dead transport. Stop judging (the re-dial tears this interval
-        // down anyway via `_teardownForRedial`; the error path keeps the
-        // session nominally up, so re-baseline to avoid a repeat every
-        // tick) and escalate through the same funnel as the ICE grace.
-        this._lastDcInboundAt = now;
-        this._dcSilenceNudged = false;
-        const cause = `No data-channel traffic for ${silence}ms`;
-        if (this._maybeBeginRedial(cause)) return;
-        this._emit('error', { source: 'webrtc', error: new Error(cause) });
     }
 
     // ─── Commands ────────────────────────────────────────────────────────
@@ -2423,7 +1906,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 if (Date.now() - this._lastPoseFrameAt < POSE_STREAM_FRESH_MS) return;
                 this.requestState();
             }, 500);
-            this._startDcWatchdog();
+            this._supervisor.startDcWatchdog();
             this._emit('streaming', { sessionId: this._sessionId!, robotId: this._selectedRobotId! });
             this._sessionResolve();
             this._sessionResolve = null;
@@ -2481,12 +1964,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             err.reason = reason ?? null;
             // Same suppression as _failSessionRejected: retries during an
             // auto-reconnect must not surface as `sessionRejected`.
-            if (!this._redialing) {
+            if (!this._supervisor.redialing) {
                 this._emit('sessionRejected', { reason, activeApp: null });
             }
             // Resilience teardown alongside the PC close path.
-            this._clearIceGrace();
-            this._uninstallNetworkListeners();
+            this._supervisor.clearIceGrace();
+            this._supervisor.uninstallNetworkListeners();
             if (this._pc) { this._pc.close(); this._pc = null; }
             if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
             this._iceConnected = false;
@@ -2577,8 +2060,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         // Liveness stamp for the data-channel silence watchdog: every
         // inbound message — control replies, broadcasts, pose frames —
         // proves the transport is alive.
-        this._lastDcInboundAt = Date.now();
-        this._dcSilenceNudged = false;
+        this._supervisor.stampDcInbound();
         // JSON-RPC frames (app control surface) are handled separately from
         // the legacy {command|type} robot messages that share this channel.
         if (data.jsonrpc === '2.0') {
