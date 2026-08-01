@@ -2323,7 +2323,7 @@
     "/api/state/doa": {
       "get": {
         "summary": "Get Doa",
-        "description": "Get the Direction of Arrival from the microphone array.\n\nReturns the angle in radians (0=left, \u03c0/2=front, \u03c0=right) and speech detection status.\nReturns None if the audio device is not available.",
+        "description": "Get the Direction of Arrival from the microphone array.\n\nReturns the angle in radians (0=left, \u03c0/2=front, \u03c0=right) and speech detection status.\nReturns None if the audio device is not available.\n\nReads through the backend's DoA cache (`read_doa`) so it can never\ninterleave with the background poller's USB conversation.",
         "operationId": "get_doa_api_state_doa_get",
         "responses": {
           "200": {
