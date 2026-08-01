@@ -35,6 +35,7 @@ from reachy_mini.io.protocol import (
     DeleteHfTokenCmd,
     FaceTarget,
     GetHardwareIdCmd,
+    GetImuCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
     GetRobotNameCmd,
@@ -44,6 +45,7 @@ from reachy_mini.io.protocol import (
     GetVolumeCmd,
     GotoSleepCmd,
     GotoTargetCmd,
+    ImuDataMsg,
     LogLineMsg,
     LogStreamErrorMsg,
     MockupSimBackendStatus,
@@ -521,6 +523,15 @@ class Backend:
 
         """
         self.imu_publisher = publisher
+
+    def get_imu_data(self) -> ImuDataMsg | None:
+        """Get the current IMU reading, or None when the backend has no IMU.
+
+        Overridden by the real-robot backend (BMI088 on the wireless
+        version); the default covers simulation backends and the Lite
+        version so `get_imu` can answer uniformly on every transport.
+        """
+        return None
 
     def update_target_head_joints_from_ik(
         self,
@@ -1688,6 +1699,19 @@ class Backend:
             from reachy_mini.utils.hardware_id import get_hardware_id
 
             send_response({"hardware_id": get_hardware_id()})
+
+        elif isinstance(cmd, GetImuCmd):
+            # `imu` is None on IMU-less hardware (Lite, simulation) so
+            # clients can tell "no IMU" from "no reply" (old daemon).
+            imu = self.get_imu_data()
+            send_response(
+                {
+                    "command": "get_imu",
+                    "imu": imu.model_dump(exclude={"type"})
+                    if imu is not None
+                    else None,
+                }
+            )
 
         elif isinstance(cmd, (GetRobotNameCmd, SetRobotNameCmd)):
             # Robot display name is a persistent, robot-wide string stored on
