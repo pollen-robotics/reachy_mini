@@ -1,26 +1,178 @@
 {
   "stats": {
-    "total": 763,
-    "passed": 748,
+    "total": 788,
+    "passed": 773,
+    "new": 25,
     "skipped": 15
   },
   "status": "passed",
-  "newTests": [],
+  "newTests": [
+    {
+      "id": "215cd6559b5b3d2503e582ab2eb6e1cb",
+      "name": "test_push_pose_skips_tick_when_provider_returns_none",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "abc5f67dbba8af666c2db0c695a250b9",
+      "name": "test_timer_rearms_after_disarming",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "d4ffe30033c384bfa5183d3163b4fb78",
+      "name": "test_unsubscribe_pose_delegates_to_media_server",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "b79e33ca21bdc29202b3c54af69acc7c",
+      "name": "test_state_dict_carries_no_duplicate_antenna_field",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "f4c5cdcfec9d82edd7e4f5fb7986c4b2",
+      "name": "test_arm_pose_push_is_idempotent",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "c33528b8dfdaffb26d035b7081f57c58",
+      "name": "test_close_tolerates_a_half_built_server",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "c6677b0b802292228c17ff37b79d81c9",
+      "name": "test_failed_channel_creation_drops_the_subscription",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "1e3f59bbe47789fbc56fcd1084b43302",
+      "name": "test_pose_channel_close_drops_channel_and_subscriber",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "91dd781ee6a4b05cc945f52c11a7efae",
+      "name": "test_pose_channel_is_opened_once_per_peer",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "be8029fc100ab5771c845f03b656e515",
+      "name": "test_build_state_json_returns_none_on_build_error",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "62d75560fed52fd5978ba97c88333532",
+      "name": "test_subscribe_pose_without_peer_id_is_noop_but_acks",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "78b13ed06f635d6aa51aba1b789c7711",
+      "name": "test_set_pose_subscription_add_and_remove_is_idempotent",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "61da3fec39f5641231230ce356aa889a",
+      "name": "test_subscribing_arms_the_push_timer",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "dc38ef224947c97b69278dee63e6a859",
+      "name": "test_push_pose_skips_subscriber_without_open_channel",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "9f61cf4cba54cc5a2cf501c1c1acd262",
+      "name": "test_subscribe_pose_delegates_to_media_server",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "0fe7ae35f4e747dc88302a4801ff6ffd",
+      "name": "test_consumer_removal_drops_pose_state",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "a9df786c150fb105c2277bccc8354c99",
+      "name": "test_push_pose_broadcasts_to_subscribed_channels",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "d2a4c916b0920d995f0e7fd2537542bf",
+      "name": "test_subscribing_opens_the_pose_channel",
+      "status": "passed",
+      "duration": 2
+    },
+    {
+      "id": "0e242af0fb8e05c04dd575e5d0c75376",
+      "name": "test_subscribe_without_a_known_peer_drops_the_subscription",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "c3a1c8e5a63802e135b0a513fa7555f7",
+      "name": "test_build_state_json_wraps_state_and_increments_seq",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "5b7a2ebe2969e3afe196872e8dd45ad6",
+      "name": "test_close_disarms_an_armed_push_timer",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "a1114861e8fe22922f08922733e83f3d",
+      "name": "test_set_pose_provider_arms_when_subscribers_already_waiting",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "702f8cf902e76b25bb08b67675381e1d",
+      "name": "test_push_pose_survives_a_failing_channel",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "f3723c035e2205117fb9ee13e2c4dcfa",
+      "name": "test_push_pose_disarms_without_provider",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "77384380e71c597bedb45094bac9d900",
+      "name": "test_push_pose_disarms_without_subscribers",
+      "status": "passed",
+      "duration": 1
+    }
+  ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 93442,
-  "createdAt": 1785484321265,
+  "duration": 92704,
+  "createdAt": 1785578781641,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "ea816616-97b7-42a0-a270-fbac02bae51c",
+    "reportId": "4ef81669-e566-410a-87a6-ee756ec79de5",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/30614079949",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/30694932221",
   "href": "awesome/",
-  "coverage": 52
+  "coverage": 53
 }
