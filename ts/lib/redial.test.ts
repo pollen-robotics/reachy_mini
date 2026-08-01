@@ -33,6 +33,7 @@ interface RedialInternals {
     _token: string | null;
     _maybeBeginRedial(cause: string): boolean;
     _cancelRedial(): void;
+    _teardownForRedial(): void;
     _sendToServer(msg: Record<string, unknown>): Promise<unknown>;
     startSession(robotId: string): Promise<void>;
     connect(token?: string): Promise<void>;
@@ -189,6 +190,38 @@ describe('auto-reconnect cancellation', () => {
         // No reconnect_failed: the stop was deliberate.
         expect(stopped.filter((d) => d.reason === 'reconnect_failed')).toEqual([]);
         expect(internals._redialing).toBe(false);
+    });
+
+    it('setAutoReconnect(false) aborts an in-flight re-dial and blocks new ones', async () => {
+        const { r, internals, dials } = makeStreamingInstance();
+        dials.mockRejectedValue(new Error('still dead'));
+        const stopped = events(r, 'sessionStopped');
+
+        internals._maybeBeginRedial('test');
+        await vi.advanceTimersByTimeAsync(100);
+        r.setAutoReconnect(false);
+        await vi.runAllTimersAsync();
+
+        expect(dials).toHaveBeenCalledTimes(1);
+        expect(stopped).toEqual([]);
+        expect(internals._redialing).toBe(false);
+        // And no new redial can start while disabled.
+        internals._pc = { close: vi.fn() };
+        expect(internals._maybeBeginRedial('again')).toBe(false);
+    });
+
+    it('teardown settles a pending dial promise instead of orphaning it', () => {
+        const { internals } = makeStreamingInstance();
+        // Simulate a timed-out attempt: startSession left its resolvers armed.
+        const reject = vi.fn();
+        internals._sessionResolve = vi.fn();
+        internals._sessionReject = reject;
+
+        internals._teardownForRedial();
+
+        expect(reject).toHaveBeenCalledTimes(1);
+        expect(internals._sessionResolve).toBeNull();
+        expect(internals._sessionReject).toBeNull();
     });
 
     it('an external startSession() supersedes a pending re-dial', async () => {

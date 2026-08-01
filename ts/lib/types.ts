@@ -416,6 +416,13 @@ export interface ReachyMiniInstance extends EventTarget {
 
     startSession(robotId: string): Promise<void>;
     stopSession(): Promise<void>;
+    /**
+     * Enable/disable the automatic session re-dial at runtime (see the
+     * `autoReconnect` constructor option). Disabling aborts any re-dial
+     * already in flight. Meant for flows that EXPECT the transport to
+     * die, e.g. a daemon self-update reboot.
+     */
+    setAutoReconnect(enabled: boolean): void;
 
     attachVideo(el: HTMLVideoElement): () => void;
 

@@ -304,8 +304,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     // past its grace, stuck-disconnected past its grace, or expired
     // while backgrounded), the SDK re-dials the same robot through the
     // signaling server instead of surfacing a fatal error. See
-    // `_maybeBeginRedial` / `_runRedialLoop`.
-    private readonly _autoReconnect: boolean;
+    // `_maybeBeginRedial` / `_runRedialLoop`. Mutable via
+    // `setAutoReconnect()` so flows that EXPECT a transport death (the
+    // daemon self-update reboot) can stand the machinery down.
+    private _autoReconnect: boolean;
     private _redialing = false;
     private _redialTimer: ReturnType<typeof setTimeout> | null = null;
     private _redialWake: (() => void) | null = null;
@@ -1046,10 +1048,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 if (this._sessionReject) {
                     // Mid-setup failure: keep the promise contract — the
                     // caller of startSession() owns the retry decision.
+                    // When that caller is the redial loop itself, skip
+                    // the fatal `error` emit: the loop retries and the
+                    // app only sees `sessionReconnecting`.
                     this._sessionReject(err);
                     this._sessionResolve = null;
                     this._sessionReject = null;
-                    this._emit('error', { source: 'webrtc', error: err });
+                    if (!this._redialing) {
+                        this._emit('error', { source: 'webrtc', error: err });
+                    }
                     return;
                 }
                 if (this._maybeBeginRedial('ICE connection failed')) return;
@@ -1091,7 +1098,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     this._sessionReject(err);
                     this._sessionResolve = null;
                     this._sessionReject = null;
-                    this._emit('error', { source: 'webrtc', error: err });
+                    if (!this._redialing) {
+                        this._emit('error', { source: 'webrtc', error: err });
+                    }
                     return;
                 }
                 // The transport is unrecoverable (daemon dropped its side
@@ -1204,6 +1213,20 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * mid-setup failures keep rejecting the startSession() promise so the
      * original caller stays in charge of retries.
      */
+    /**
+     * Enable/disable the automatic session re-dial at runtime.
+     * Disabling also aborts any re-dial already in flight. Used by
+     * flows that EXPECT the transport to die — e.g. the daemon
+     * self-update, whose `systemctl restart` teardown must surface as
+     * `sessionStopped` immediately (it's the "install done, rebooting"
+     * signal), not get absorbed by ~22 s of doomed reconnect attempts
+     * against a robot that is rebooting anyway.
+     */
+    setAutoReconnect(enabled: boolean): void {
+        this._autoReconnect = enabled;
+        if (!enabled) this._cancelRedial();
+    }
+
     private _maybeBeginRedial(cause: string): boolean {
         if (!this._autoReconnect) return false;
         if (this._redialing) return true; // already in progress
@@ -1298,6 +1321,17 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
         this._rejectPendingMotionCompletions(new Error('Session reconnecting'));
         this._rejectPendingRpc(new Error('Session reconnecting'));
+        // A timed-out dial attempt leaves its startSession() promise
+        // pending with the resolvers still armed; a late signaling
+        // reply could otherwise settle them against a closed pc, and
+        // the next attempt would silently orphan them.
+        if (this._sessionReject) {
+            const reject = this._sessionReject;
+            this._sessionResolve = null;
+            this._sessionReject = null;
+            reject(new Error('Session reconnecting'));
+        }
+        this._sessionResolve = null;
         this._clearIceGrace();
         this._uninstallNetworkListeners();
         if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }

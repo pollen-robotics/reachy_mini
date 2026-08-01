@@ -936,18 +936,55 @@ function startDaemonUpdateForHost(
     });
   };
 
+  // Stand the SDK's auto re-dial down for the duration of the update:
+  // a successful install ends with `systemctl restart`, and that
+  // teardown must surface as `sessionStopped` IMMEDIATELY (it's the
+  // "install done, rebooting" signal below) — not get absorbed by
+  // ~22 s of reconnect attempts against a robot that is rebooting.
+  // Feature-detected so an older SDK bundle is a no-op.
+  const setAutoReconnect = (enabled: boolean): void => {
+    const fn = (sdk as unknown as { setAutoReconnect?: (e: boolean) => void })
+      .setAutoReconnect;
+    if (typeof fn === 'function') {
+      try { fn.call(sdk, enabled); } catch { /* ignore */ }
+    }
+  };
+  setAutoReconnect(false);
+
+  // A successful install ends with `systemctl restart`, which kills the
+  // session before the daemon can report anything: the transport
+  // dropping IS the completion signal. Translate it into an explicit
+  // `rebooting` so the host stops waiting on a channel that will never
+  // speak again. The listener must NOT outlive a failed update: a
+  // leftover copy would fire on the user's next normal end-session and
+  // flip the (already failed) gate into a bogus reboot wait.
+  const onSessionStopped = (): void => {
+    sdk.removeEventListener('sessionStopped', onSessionStopped);
+    postProgress({ status: 'rebooting' });
+  };
+  const abandonUpdate = (): void => {
+    sdk.removeEventListener('sessionStopped', onSessionStopped);
+    setAutoReconnect(true);
+  };
+
   let sent: boolean;
   try {
     sent = sdk.startDaemonUpdate({
       preRelease,
-      onProgress: (event) =>
+      onProgress: (event) => {
+        // Terminal failure: the daemon is alive and NOT rebooting, so
+        // the session outlives the update. Restore normal resilience
+        // and drop the reboot translator.
+        if (event.status === 'failed') abandonUpdate();
         postProgress({
           status: event.status,
           line: event.line ?? null,
           error: event.error ?? null,
-        }),
+        });
+      },
     });
   } catch (err) {
+    abandonUpdate();
     postProgress({ status: 'failed', error: (err as Error)?.message ?? String(err) });
     return;
   }
@@ -955,19 +992,11 @@ function startDaemonUpdateForHost(
   // will ever report on it. Say so now rather than leaving the host to
   // time out on a job that was never started.
   if (!sent) {
+    abandonUpdate();
     postProgress({ status: 'failed', error: 'Data channel not open' });
     return;
   }
 
-  // A successful install ends with `systemctl restart`, which kills the
-  // session before the daemon can report anything: the transport
-  // dropping IS the completion signal. Translate it into an explicit
-  // `rebooting` so the host stops waiting on a channel that will never
-  // speak again.
-  const onSessionStopped = (): void => {
-    sdk.removeEventListener('sessionStopped', onSessionStopped);
-    postProgress({ status: 'rebooting' });
-  };
   try {
     sdk.addEventListener('sessionStopped', onSessionStopped);
   } catch {
