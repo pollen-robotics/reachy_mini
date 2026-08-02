@@ -19,6 +19,7 @@ Client->Server command types:
     set_speech_offsets, set_wobbling, set_head_tracking, get_tracked_face
 
 Server->Client message types:
+    welcome (pushed once when the data channel opens),
     joint_positions, head_pose, imu_data, recorded_data,
     daemon_status, task_progress, log_line, log_stream_error,
     update_progress
