@@ -36,7 +36,7 @@ import type { FaceTarget, ImuData } from './types.js';
  * congested phone link while still failing fast enough that a gated UI
  * doesn't feel hung.
  */
-const SLOT_ROUNDTRIP_TIMEOUT_MS = 4000;
+export const SLOT_ROUNDTRIP_TIMEOUT_MS = 4000;
 
 /**
  * Value type carried by each single-slot reply waiter. These daemon

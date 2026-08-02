@@ -10,7 +10,7 @@ import {
 } from '@huggingface/hub';
 
 import { degToRad, rpyToMatrix } from './math.js';
-import { PendingReplies } from './pending-replies.js';
+import { PendingReplies, SLOT_ROUNDTRIP_TIMEOUT_MS } from './pending-replies.js';
 import type { MotionCommand, ReplySlotKey, ReplySlotValues } from './pending-replies.js';
 import { SessionSupervisor } from './session-supervisor.js';
 import { SDK_VERSION } from './version.js';
@@ -53,6 +53,7 @@ import type {
     ReachyMiniEventMap,
     ReachyMiniInstance,
     ReachyMiniOptions,
+    RequestOptions,
     RobotInfo,
     RobotState,
     SessionRejectError,
@@ -1268,6 +1269,48 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     sendRaw(data: unknown): boolean {
         return this._sendCommand(data);
+    }
+
+    /**
+     * Generic command round-trip for daemon commands the SDK has no typed
+     * wrapper for (yet). Escape hatch so an app can use a newer daemon
+     * feature without waiting for an SDK release: sends `command` and
+     * resolves with the first robot message whose `command` field equals
+     * the sent `type` - the daemon's reply convention - or with `null` on
+     * the fail-open timeout (daemon predates the command, or the command
+     * is fire-and-forget and never replies).
+     *
+     * Rejects when the data channel isn't open or the session tears down
+     * mid-flight, mirroring the typed wrappers.
+     *
+     * Replies the SDK already consumes internally (`get_imu`,
+     * `get_volume`, ...) are swallowed by their own handlers and never
+     * reach this matcher - use the typed wrappers for those. Pass `match`
+     * for replies that don't follow the `command` echo convention.
+     */
+    request(
+        command: { type: string } & Record<string, unknown>,
+        { timeoutMs = SLOT_ROUNDTRIP_TIMEOUT_MS, match }: RequestOptions = {},
+    ): Promise<Record<string, unknown> | null> {
+        if (!this._dc || this._dc.readyState !== 'open') {
+            return Promise.reject(new Error('Data channel not open'));
+        }
+        const predicate = match
+            ?? ((m: Record<string, unknown>): boolean => m.command === command.type);
+        const reply = this._pending
+            .awaitBroadcast(predicate, { timeoutMs, debugLabel: `request(${command.type})` })
+            .then((m): Record<string, unknown> | null => m)
+            .catch((err: unknown): null => {
+                // Fail-open on the waiter timeout only; teardown rejections
+                // (settleAll) propagate to the caller like every other
+                // in-flight round-trip.
+                if (err instanceof Error && err.message.startsWith('broadcast timeout')) {
+                    return null;
+                }
+                throw err;
+            });
+        this._sendCommand(command);
+        return reply;
     }
 
     subscribeLogs({ onLine, onError }: SubscribeLogsOptions): () => void {
