@@ -64,6 +64,18 @@
 
 export { ReachyMini } from './lib/reachy-mini.js';
 export { degToRad, radToDeg, rpyToMatrix, matrixToRpy } from './lib/math.js';
+/** Fleet-watching SSE listener (roles=["listener"], no peer slot).
+ *  For pickers/scan screens that must NOT claim the token's 1:1
+ *  peer slot; close() it before starting an SDK session. */
+export { openCentralListener } from './lib/central-listener.js';
+export type {
+    CentralListenerHandle,
+    OpenCentralListenerOpts,
+    CentralStreamProducer,
+    CentralListEvent,
+    CentralPeerStatusChangedEvent,
+    CentralSessionStateChangedEvent,
+} from './lib/central-listener.js';
 /** Build version of this SDK (npm package `version`), build-injected from
  *  package.json. Also reachable as `ReachyMini.version` / a live
  *  instance's `.sdkVersion`. */
