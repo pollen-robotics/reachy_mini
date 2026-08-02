@@ -45,7 +45,7 @@ import {
   openCentralListener,
   type CentralListenerHandle,
   type CentralStreamProducer,
-} from '../lib/centralListener';
+} from '@pollen-robotics/reachy-mini-sdk';
 import { resolveSignalingUrl } from '../lib/signalingUrl';
 import type { RobotInfo } from '../lib/sdk-types';
 
@@ -161,6 +161,7 @@ export function useRobots(opts: {
     const handle: CentralListenerHandle = openCentralListener({
       token: hfToken,
       signalingUrl,
+      appName: 'Reachy Mini Host (picker)',
       onConnect: () => {
         if (droppedAtRef.current !== null) {
           droppedAtRef.current = null;

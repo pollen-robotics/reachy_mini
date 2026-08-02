@@ -1,39 +1,54 @@
 /**
  * Long-lived SSE listener channel to Hugging Face central.
  *
- * Ported from the Reachy Mini mobile app (`centralListenerStream.ts`).
- * Why this exists and how it relates to the SDK is documented in
- * the docstring of `useRobots.ts`; in short:
+ * Shared by every first-party surface that needs a realtime view of
+ * the user's robot fleet WITHOUT claiming a full peer slot:
  *
- *  - The host shell needs realtime updates of the user's robot
- *    fleet (online/offline, busy/free).
- *  - The ReachyMini SDK can do this, but only by also registering
- *    a peer slot at central, which then conflicts with the
- *    iframe's session WebRTC handshake.
- *  - Solution: open a *bare* SSE channel here, registered with
- *    `roles: ["listener"]` only. On `close()` (when the user
- *    selects a robot and we mount the iframe) central retires
- *    the listener slot via its `token → peer_id` 1:1 mapping, so
- *    the iframe's SDK opens a fresh slot without contention.
+ *  - the host shell's picker (`ts/host/src/hooks/useRobots.ts`)
+ *  - the mobile app's scan screen (`useRemoteRobots`)
+ *
+ * Both used to carry their own near-identical copy of this module;
+ * the copies drifted (the TTL-eviction fix below shipped in one but
+ * not the other), so the canonical implementation now lives in the
+ * SDK and is exported from the package root.
+ *
+ * Why not just use the `ReachyMini` SDK class? Its signaling stream
+ * registers a *peer* at central, and central enforces a 1:1
+ * `token → peer_id` mapping - so a fleet-watching UI that kept an
+ * SDK instance open would clobber the peer slot the next session's
+ * SDK needs for its WebRTC handshake. This module registers with
+ * `roles: ["listener"]` only, and callers `close()` it before any
+ * SDK session starts on the same token.
  *
  * Wire surface we listen for
  * ──────────────────────────
- *  - `welcome`              opening handshake, includes the assigned peerId
+ *  - `welcome`              opening handshake (heartbeat negotiation)
  *  - `list`                 initial robot snapshot
  *  - `peerStatusChanged`    a robot came online / went offline
  *  - `sessionStateChanged`  busy / free transition
+ *
+ * Transport notes
+ * ───────────────
+ * `fetch` + manual stream reader rather than the native `EventSource`
+ * so the HF token travels in the `Authorization` header instead of
+ * the URL (no secret in DevTools / proxy logs / browser history).
+ * The parser handles central's actual framing - one `data: ...\n`
+ * line per event - not the full SSE grammar (no multi-line `data:`,
+ * no `event:`/`id:` fields), matching the SDK's own signaling parser.
  *
  * Reconnect policy
  * ────────────────
  * Network blips, HF Space cold-restarts, and proxy idle culls all
  * surface as a stream EOF or fetch error. We retry with exponential
  * backoff capped at `MAX_BACKOFF_MS`, jittered to avoid thundering
- * herds on a central restart.
+ * herds on a central restart. Fatal auth errors (401/403) end the
+ * stream instead - retrying with the same bad token would only get
+ * us rate-limited.
  */
 
 const INITIAL_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 30_000;
-const LISTENER_APP_NAME = 'Reachy Mini Host (picker)';
+const DEFAULT_LISTENER_APP_NAME = 'Reachy Mini (listener)';
 
 // Heartbeat: the server runs a TTL sweeper that evicts peers whose
 // `last_seen` is older than `LEASE_SECONDS` (30 s by default; cf.
@@ -77,6 +92,11 @@ const negotiateHeartbeatIntervalMs = (
   return HEARTBEAT_DEFAULT_INTERVAL_MS;
 };
 
+/**
+ * Shape of a producer entry in the SSE `list` frame and in
+ * `/api/robot-status`. Mirrors `get_producers_list` server-side.
+ * Kept loose so future fields appear without a wire bump.
+ */
 export interface CentralStreamProducer {
   id: string;
   meta?: Record<string, unknown>;
@@ -103,9 +123,19 @@ export interface CentralSessionStateChangedEvent {
 
 export interface OpenCentralListenerOpts {
   token: string;
+  /** Central base URL, e.g. from the consumer's env/config. */
   signalingUrl: string;
+  /**
+   * `setPeerStatus(listener)` payload's `meta.name`. Surfaces in
+   * central logs as the listener identity - pass something that
+   * identifies the surface (e.g. "Reachy Mini Host (picker)").
+   */
+  appName?: string;
+  /** First batch of producers received after each (re)connect. */
   onList?: (event: CentralListEvent) => void;
+  /** A robot came online / went offline (same-owner). */
   onPeerStatusChanged?: (event: CentralPeerStatusChangedEvent) => void;
+  /** A robot transitioned busy ↔ free (same-owner). */
   onSessionStateChanged?: (event: CentralSessionStateChangedEvent) => void;
   /** SSE is open and `setPeerStatus(listener)` has been POSTed. */
   onConnect?: () => void;
@@ -126,6 +156,7 @@ export function openCentralListener(
   opts: OpenCentralListenerOpts,
 ): CentralListenerHandle {
   const { signalingUrl, token } = opts;
+  const appName = opts.appName ?? DEFAULT_LISTENER_APP_NAME;
   let closed = false;
   let abortController: AbortController | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -193,7 +224,7 @@ export function openCentralListener(
         body: JSON.stringify({
           type: 'setPeerStatus',
           roles: ['listener'],
-          meta: { name: LISTENER_APP_NAME },
+          meta: { name: appName },
         }),
         signal: abortController?.signal,
       });
@@ -223,13 +254,16 @@ export function openCentralListener(
         // returns HTTP 400 ("Connect to /events first"). The SSE is
         // still half-open from our side - keepalive pings keep it
         // looking alive on the wire even though the central no longer
-        // routes broadcasts to us. Aborting forces `runStream()` to
-        // unwind into `scheduleReconnect()`, which mints a fresh peer
-        // and replays `welcome` + `list`.
+        // routes broadcasts to us. Abort the dead stream AND schedule
+        // the reconnect ourselves: `runStream()` deliberately swallows
+        // aborts (they normally mean `close()`), so it would never
+        // reach its own `scheduleReconnect()` on this path. The
+        // reconnect mints a fresh peer and replays `welcome` + `list`.
         if (status !== null && status >= 400 && status < 500) {
           if (abortController !== null) {
             abortController.abort();
           }
+          scheduleReconnect(`listener evicted (HTTP ${status})`);
         }
       })();
     }, intervalMs);
@@ -241,12 +275,16 @@ export function openCentralListener(
     switch (msg.type) {
       case 'welcome':
         backoff = INITIAL_BACKOFF_MS;
+        // Register (central requires the SSE channel be established
+        // before it accepts a /send for this peer), THEN report
+        // connected - so `onConnect` consumers can immediately issue
+        // REST calls without racing the listener slot creation.
         void (async () => {
           await sendListenerRegistration();
           if (closed) return;
           startHeartbeat(negotiateHeartbeatIntervalMs(msg));
+          opts.onConnect?.();
         })();
-        opts.onConnect?.();
         return;
       case 'list':
         opts.onList?.({
@@ -342,7 +380,11 @@ export function openCentralListener(
           }
         }
       }
-      if (closed) return;
+      // `signal.aborted` covers both `close()` and the heartbeat's
+      // eviction path (which schedules its own reconnect); some fetch
+      // implementations surface an abort as a clean EOF rather than an
+      // AbortError, so check it here too to avoid double-scheduling.
+      if (closed || signal.aborted) return;
       scheduleReconnect('stream ended');
     } catch (err) {
       if (signal.aborted || closed) return;
