@@ -92,6 +92,7 @@ export type {
     AutoConnectResult,
     LoginOptions,
     MotionAwaitOptions,
+    RequestOptions,
     SubscribeLogsOptions,
     StartDaemonUpdateOptions,
     UpdateProgressEvent,
