@@ -211,6 +211,21 @@ export interface SubscribeLogsOptions {
     onError?: (error: string) => void;
 }
 
+/** `request()` options. */
+export interface RequestOptions {
+    /**
+     * Milliseconds to wait for a matching reply before fail-opening to
+     * `null`. Defaults to the SDK's shared command round-trip timeout (4 s).
+     */
+    timeoutMs?: number;
+    /**
+     * Override the reply matcher. Default: the first robot message whose
+     * `command` field equals the sent command's `type` (the daemon's
+     * reply convention).
+     */
+    match?: (msg: Record<string, unknown>) => boolean;
+}
+
 /** One progress event from an in-flight `startDaemonUpdate()`. */
 export interface UpdateProgressEvent {
     status: 'in_progress' | 'done' | 'failed';
@@ -475,6 +490,16 @@ export interface ReachyMiniInstance extends EventTarget {
     }): boolean;
     /** Send an arbitrary JSON message on the data channel. */
     sendRaw(data: unknown): boolean;
+    /**
+     * Generic command round-trip for daemon commands the SDK has no typed
+     * wrapper for: send `command` and await the matching reply, `null` on
+     * the fail-open timeout (daemon predates the command). Lets an app use
+     * a newer daemon feature without waiting for an SDK release.
+     */
+    request(
+        command: { type: string } & Record<string, unknown>,
+        options?: RequestOptions,
+    ): Promise<Record<string, unknown> | null>;
     /** Play a sound file on the robot's speakers (basename). */
     playSound(file: string): boolean;
     /** Drop incoming audio queued for the robot speaker (barge-in). */
