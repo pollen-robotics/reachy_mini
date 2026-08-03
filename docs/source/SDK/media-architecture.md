@@ -121,6 +121,9 @@ curl http://<robot>:8000/api/media/status   # reports camera_released
 > duration of the rebuild and WebRTC consumers have to reconnect, exactly as with
 > `release_media()` — so switch between activities, not mid-sentence. Both methods are idempotent.
 
+The daemon also does this on its own: the robot releases the camera when it goes to sleep and
+re-acquires it on wake-up, so an idle robot does not run its camera.
+
 ## Advanced Controls
 
 Please refer to the dedicated pages to fine-tune camera and microphone parameters for [Reachy Mini](../platforms/reachy_mini/media_advanced_controls.md) and [Reachy Mini Lite](../platforms/reachy_mini_lite/media_advanced_controls.md).

@@ -1155,6 +1155,11 @@ class Backend:
 
     async def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
+        # Restore the camera first: the rebuild interrupts audio, so it has to
+        # happen before the wake-up sound rather than during it.
+        if self._media_server is not None:
+            self._media_server.enable_camera()
+
         await asyncio.sleep(0.1)
 
         _, _, magic_distance = distance_between_poses(
@@ -1236,6 +1241,13 @@ class Backend:
 
         # Rest limp at the sleep pose, like a fresh boot.
         self.set_motor_control_mode(MotorControlMode.Disabled)
+
+        # Drop the camera last: a sleeping robot has no use for frames, and the
+        # capture branch costs CPU (and audible fan) even with no consumer.
+        # Done after the sound and the motion because it rebuilds the pipeline,
+        # which briefly interrupts audio. `wake_up` brings it back.
+        if self._media_server is not None:
+            self._media_server.disable_camera()
 
     # Motor control modes
     @abstractmethod
