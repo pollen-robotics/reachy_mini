@@ -45,6 +45,21 @@ export interface FaceTarget {
     ts?: number | null;
 }
 
+/**
+ * Sound Direction of Arrival from the robot's ReSpeaker microphone array.
+ * Streamed inside `RobotState` (wire shape), so it rides the same ~30 Hz
+ * pose push / `get_state` replies as the pose - no extra round-trip.
+ */
+export interface DoA {
+    /**
+     * Angle in radians (ReSpeaker convention): `0` = left, `π/2` =
+     * front/back, `π` = right.
+     */
+    angle: number;
+    /** Whether the array currently detects speech coming from that angle. */
+    speech_detected: boolean;
+}
+
 export interface RobotState {
     /** Flat row-major 4×4 head pose (16 numbers). */
     head?: number[];
@@ -55,6 +70,11 @@ export interface RobotState {
     motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';
     is_move_running?: boolean;
     face_target?: FaceTarget;
+    /**
+     * Sound Direction of Arrival, or absent when the robot has no mic array
+     * (or no reading yet). Refreshed by the daemon at ~10 Hz.
+     */
+    doa?: DoA;
 }
 
 /** SDK constructor options. */
@@ -404,6 +424,18 @@ export interface ReachyMiniInstance extends EventTarget {
     getHardwareId(): Promise<string | null>;
     /** Force a `state` event right now (background poll runs at 500 ms). */
     requestState(): boolean;
+    /**
+     * Ask the daemon to *push* the robot state (~30 Hz, delivered as `state`
+     * events) over the dedicated unreliable/unordered `pose` channel instead
+     * of polling `requestState` - immune to the Wi-Fi round-trip lag of the
+     * reliable control channel. Refcounted: pair every `subscribePose()` with
+     * exactly one `unsubscribePose()`; multiple consumers share one daemon-side
+     * subscription. No-op against a daemon that predates the pose channel (the
+     * SDK's ~2 Hz self-poll keeps `state` updated there).
+     */
+    subscribePose(): boolean;
+    /** Release one pose-stream consumer; sends `unsubscribe_pose` on the last. */
+    unsubscribePose(): boolean;
     /** Subscribe to daemon `journalctl` logs over the data channel. */
     subscribeLogs(options: SubscribeLogsOptions): () => void;
 
