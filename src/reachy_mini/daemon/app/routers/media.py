@@ -2,6 +2,9 @@
 
 Allows clients to tell the daemon to release camera and audio hardware
 for direct access (e.g. OpenCV, sounddevice), then re-acquire when done.
+The camera can also be released on its own, which keeps the microphone
+and speaker running — useful for audio-only apps, where an idle capture
+branch is pure CPU cost.
 
 Also provides endpoints for remote sound playback and file management
 so that WebRTC clients can upload, play, list and delete sound files on
@@ -52,12 +55,27 @@ async def acquire_media(daemon: Daemon = Depends(get_daemon)) -> dict[str, str]:
     return {"status": "ok"}
 
 
+@router.post("/camera/release")
+async def release_camera(daemon: Daemon = Depends(get_daemon)) -> dict[str, str]:
+    """Release the camera only, keeping the microphone and speaker running."""
+    daemon.release_camera()
+    return {"status": "ok"}
+
+
+@router.post("/camera/acquire")
+async def acquire_camera(daemon: Daemon = Depends(get_daemon)) -> dict[str, str]:
+    """Re-acquire the camera after a camera-only release."""
+    daemon.acquire_camera()
+    return {"status": "ok"}
+
+
 @router.get("/status")
 async def media_status(daemon: Daemon = Depends(get_daemon)) -> dict[str, bool]:
     """Get the current media status."""
     return {
         "available": not daemon.media_released and daemon._media_server is not None,
         "released": daemon.media_released,
+        "camera_released": daemon.camera_released,
         "no_media": daemon.no_media,
     }
 

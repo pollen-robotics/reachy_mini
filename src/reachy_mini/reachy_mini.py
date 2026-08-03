@@ -239,6 +239,33 @@ class ReachyMini:
         self._media_released = False
         self.logger.info("Media re-acquired by daemon.")
 
+    def release_camera(self) -> None:
+        """Tell the daemon to release the camera, keeping the microphone.
+
+        For an app that only needs audio, the camera is pure cost: the capture
+        branch runs at the sensor's framerate whether or not anyone reads it.
+        Audio, playback and the media backend are unaffected — only
+        ``media.get_frame()`` stops returning frames until ``acquire_camera()``.
+
+        Idempotent: safe to call multiple times.
+        """
+        if not self.client.release_camera():
+            self.logger.error("Failed to release the camera on daemon.")
+            return
+
+        self.logger.info("Camera released — audio still running.")
+
+    def acquire_camera(self) -> None:
+        """Tell the daemon to re-acquire the camera after `release_camera()`.
+
+        Idempotent: safe to call multiple times.
+        """
+        if not self.client.acquire_camera():
+            self.logger.error("Failed to re-acquire the camera on daemon.")
+            return
+
+        self.logger.info("Camera re-acquired by daemon.")
+
     def enable_wobbling(self) -> None:
         """Enable audio-reactive head wobbling.
 

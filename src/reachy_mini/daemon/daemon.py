@@ -168,6 +168,40 @@ class Daemon:
         self._status.media_released = False
         self.logger.info("Media hardware re-acquired.")
 
+    @property
+    def camera_released(self) -> bool:
+        """Whether the camera alone has been released, audio still running.
+
+        Derived from the media server rather than stored, so the flag stays
+        correct no matter who toggled the camera — REST, the SDK, or the
+        backend's own sleep handling.
+        """
+        return self._media_server is not None and not self._media_server.camera_enabled
+
+    def release_camera(self) -> None:
+        """Release the camera while keeping the microphone and speaker.
+
+        Unlike `release_media`, the audio branch, the WebRTC signalling and the
+        central relay all keep running: only the capture branch goes away.
+        Idempotent: no-op if already released or no media server.
+        """
+        if self._media_server is None:
+            return
+
+        self.logger.info("Releasing the camera, keeping audio...")
+        self._media_server.disable_camera()
+
+    def acquire_camera(self) -> None:
+        """Re-acquire the camera after a camera-only release.
+
+        Idempotent: no-op if the camera is not currently released.
+        """
+        if self._media_server is None:
+            return
+
+        self.logger.info("Re-acquiring the camera...")
+        self._media_server.enable_camera()
+
     def _setup_jsonrpc_relay(
         self, backend: "Backend", app_manager: "AppManager"
     ) -> None:
@@ -775,6 +809,8 @@ class Daemon:
 
     def status(self) -> "DaemonStatus":
         """Get the current status of the Reachy Mini daemon."""
+        self._status.camera_released = self.camera_released
+
         if self.backend is not None:
             self._status.backend_status = self.backend.get_status()
             self._status.face_target = self.backend.get_tracked_face()

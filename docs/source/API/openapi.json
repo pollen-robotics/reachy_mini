@@ -1501,6 +1501,52 @@
         }
       }
     },
+    "/api/media/camera/release": {
+      "post": {
+        "summary": "Release Camera",
+        "description": "Release the camera only, keeping the microphone and speaker running.",
+        "operationId": "release_camera_api_media_camera_release_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Release Camera Api Media Camera Release Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/camera/acquire": {
+      "post": {
+        "summary": "Acquire Camera",
+        "description": "Re-acquire the camera after a camera-only release.",
+        "operationId": "acquire_camera_api_media_camera_acquire_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Acquire Camera Api Media Camera Acquire Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/media/status": {
       "get": {
         "summary": "Media Status",
@@ -2986,6 +3032,11 @@
           "media_released": {
             "type": "boolean",
             "title": "Media Released",
+            "default": false
+          },
+          "camera_released": {
+            "type": "boolean",
+            "title": "Camera Released",
             "default": false
           },
           "camera_specs_name": {

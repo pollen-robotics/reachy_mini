@@ -316,6 +316,24 @@ class WSClient(AbstractClient):
         """
         return self._media_request("/api/media/acquire")
 
+    def release_camera(self) -> bool:
+        """Ask the daemon to release the camera, keeping audio running.
+
+        Returns:
+            True on success, False on failure.
+
+        """
+        return self._media_request("/api/media/camera/release")
+
+    def acquire_camera(self) -> bool:
+        """Ask the daemon to re-acquire the camera.
+
+        Returns:
+            True on success, False on failure.
+
+        """
+        return self._media_request("/api/media/camera/acquire")
+
     def _media_request(self, path: str) -> bool:
         """POST to a daemon media endpoint.
 
