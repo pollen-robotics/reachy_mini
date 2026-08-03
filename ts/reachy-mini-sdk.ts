@@ -71,6 +71,7 @@ export { SDK_VERSION } from './lib/version.js';
 export type {
     RobotInfo,
     RobotState,
+    ImuData,
     ReachyMiniOptions,
     ReachyMiniInstance,
     ReachyMiniConstructor,

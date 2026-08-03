@@ -43,6 +43,7 @@ import type {
     AutoConnectResult,
     AutoConnectRobotChoice,
     FaceTarget,
+    ImuData,
     LoginOptions,
     MotionAwaitOptions,
     MoveData,
@@ -1172,6 +1173,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         return this._slotRoundtrip('hardware_id', { type: 'get_hardware_id' });
     }
 
+    /**
+     * One-shot IMU reading (BMI088, wireless version only). Resolves `null`
+     * when the robot has no IMU (Lite, simulation) or the daemon predates
+     * the `get_imu` command (fail-open on the shared slot timeout).
+     */
+    getImu(): Promise<ImuData | null> {
+        return this._slotRoundtrip('imu', { type: 'get_imu' });
+    }
+
     getVolume(): Promise<number | null> {
         return this._slotRoundtrip('volume', { type: 'get_volume' });
     }
@@ -1924,6 +1934,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         }
         if (data.command === 'get_tracked_face') {
             this._pending.settleReplySlot('tracked_face', (data.face_target as FaceTarget | undefined) ?? null);
+            return;
+        }
+        if (data.command === 'get_imu') {
+            this._pending.settleReplySlot('imu', (data.imu as ImuData | null | undefined) ?? null);
             return;
         }
         if (
