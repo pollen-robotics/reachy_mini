@@ -147,6 +147,19 @@ class Backend:
         self.use_audio = use_audio
 
         self.doa = AudioDoA() if use_audio else None
+        # Latest Direction-of-Arrival reading, refreshed by a lightweight
+        # background poller. `get_DoA()` is a blocking USB control transfer, so
+        # we must NOT call it from `build_state_dict()` - that feeds the ~30 Hz
+        # pose push (`_push_pose`) on the media server's GLib loop, which has to
+        # stay cheap and non-blocking. Instead this thread samples DoA at
+        # ~10 Hz (matching the ReSpeaker's useful rate) and caches it here; the
+        # state snapshot just reads the cache under a lock.
+        self._doa_lock = threading.Lock()
+        self._last_doa: tuple[float, bool] | None = None
+        self._doa_stop = threading.Event()
+        self._doa_thread: threading.Thread | None = None
+        if self.doa is not None:
+            self._start_doa_poller()
 
         self.should_stop = threading.Event()
         self.ready = threading.Event()
@@ -431,6 +444,17 @@ class Backend:
         Subclasses must still implement their own cleanup for backend-specific resources.
         """
         self.logger.debug("Backend.close() - cleaning up resources")
+        # Stop the DoA poller and release the ReSpeaker USB handle.
+        self._doa_stop.set()
+        if self._doa_thread is not None:
+            self._doa_thread.join(timeout=1.0)
+            self._doa_thread = None
+        if self.doa is not None:
+            try:
+                self.doa.close()
+            except Exception:  # noqa: BLE001 - best-effort teardown
+                self.logger.debug("DoA close failed", exc_info=True)
+            self.doa = None
         self._media_server = None
 
     @property
@@ -1301,6 +1325,51 @@ class Backend:
         }
 
     # ------------------------------------------------------------------
+    # Direction of Arrival (cached, off the hot state path)
+    # ------------------------------------------------------------------
+
+    # ~10 Hz: fast enough to track a speaker turning, slow enough to keep the
+    # blocking ReSpeaker USB reads off the ~30 Hz pose-push loop.
+    DOA_POLL_INTERVAL_S = 0.1
+
+    def _start_doa_poller(self) -> None:
+        """Spawn the background thread that caches the latest DoA reading.
+
+        Runs until :meth:`close` sets ``_doa_stop``. Every failure path is
+        swallowed so a flaky USB read can never take the thread (or the state
+        stream that reads its cache) down.
+        """
+
+        def _loop() -> None:
+            # `wait()` returns True once stopped, False on timeout - so this
+            # both paces the poll and exits promptly on shutdown.
+            while not self._doa_stop.wait(self.DOA_POLL_INTERVAL_S):
+                try:
+                    reading = self.doa.get_DoA() if self.doa is not None else None
+                except Exception:  # noqa: BLE001 - never kill the poller
+                    reading = None
+                with self._doa_lock:
+                    self._last_doa = reading
+
+        self._doa_thread = threading.Thread(
+            target=_loop, name="doa-poller", daemon=True
+        )
+        self._doa_thread.start()
+
+    def _doa_snapshot(self) -> dict[str, Any] | None:
+        """Return the last cached DoA as ``{"angle", "speech_detected"}``.
+
+        ``None`` when no ReSpeaker is present or no reading has landed yet.
+        Matches the REST ``DoAInfo`` field names so both surfaces agree.
+        """
+        with self._doa_lock:
+            reading = self._last_doa
+        if reading is None:
+            return None
+        angle, speech_detected = reading
+        return {"angle": angle, "speech_detected": speech_detected}
+
+    # ------------------------------------------------------------------
     # State snapshot (shared by get_state replies and the pose push)
     # ------------------------------------------------------------------
 
@@ -1331,6 +1400,10 @@ class Backend:
             is_recording=self.is_recording,
             is_move_running=self.is_move_running,
             face_target=self.get_tracked_face(),
+            # Sound Direction of Arrival (ReSpeaker mic array), or None when
+            # unavailable. Read from the ~10 Hz cache so this stays cheap on
+            # the pose-push path (see _start_doa_poller).
+            doa=self._doa_snapshot(),
         )
 
     def build_state_dict(self) -> dict[str, Any]:

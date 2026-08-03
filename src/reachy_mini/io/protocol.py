@@ -97,6 +97,13 @@ class FaceTarget(BaseModel):
     ts: float | None = None
 
 
+class DoaSnapshot(BaseModel):
+    """Sound Direction of Arrival reading (ReSpeaker mic array)."""
+
+    angle: float
+    speech_detected: bool
+
+
 class StateSnapshot(BaseModel):
     """Present-state snapshot sent to WebRTC clients.
 
@@ -119,6 +126,7 @@ class StateSnapshot(BaseModel):
     is_recording: bool
     is_move_running: bool
     face_target: FaceTarget
+    doa: Optional[DoaSnapshot] = None
 
 
 class PoseFrame(BaseModel):
