@@ -21,7 +21,7 @@
  * path, because there is only one.
  */
 
-import type { FaceTarget } from './types.js';
+import type { FaceTarget, ImuData } from './types.js';
 
 /**
  * Fail-open ceiling for a single reply-slot request/response.
@@ -53,6 +53,7 @@ export interface ReplySlotValues {
     delete_hf_token: boolean | null;
     apply_audio_config: boolean | null;
     read_audio_parameter: number[] | null;
+    imu: ImuData | null;
 }
 export type ReplySlotKey = keyof ReplySlotValues;
 

@@ -60,6 +60,21 @@ export interface DoA {
     speech_detected: boolean;
 }
 
+/**
+ * One IMU reading from the robot's BMI088 (wireless version only).
+ * Wire shape of the daemon's `ImuDataMsg`, minus the `type` envelope.
+ */
+export interface ImuData {
+    /** [x, y, z] linear acceleration, m/s². */
+    accelerometer: number[];
+    /** [x, y, z] angular velocity, rad/s. */
+    gyroscope: number[];
+    /** [w, x, y, z] orientation estimate. */
+    quaternion: number[];
+    /** Sensor die temperature, °C. */
+    temperature: number;
+}
+
 export interface RobotState {
     /** Flat row-major 4×4 head pose (16 numbers). */
     head?: number[];
@@ -514,6 +529,12 @@ export interface ReachyMiniInstance extends EventTarget {
     getVersion(): Promise<string | null>;
     /** Hardware ID (USB serial), or `null` on developer machines. */
     getHardwareId(): Promise<string | null>;
+    /**
+     * One-shot IMU reading (accelerometer, gyroscope, quaternion,
+     * temperature). Resolves `null` when the robot has no IMU (Lite
+     * version, simulation) or the daemon predates the `get_imu` command.
+     */
+    getImu(): Promise<ImuData | null>;
     /** Force a `state` event right now (background poll runs at 500 ms). */
     requestState(): boolean;
     /**
