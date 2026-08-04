@@ -430,7 +430,9 @@ export interface ReachyMiniInstance extends EventTarget {
     readonly sdkVersion: string;
 
     /** Underlying RTCPeerConnection. Apps can read it to inspect
-     *  audio / video transceivers. */
+     *  audio / video transceivers.
+     *  @deprecated Use `peerConnection`. Kept for compatibility with
+     *  app bundles that predate the getter. */
     _pc: RTCPeerConnection | null;
     /** Silent placeholder MediaStream the SDK feeds the WebRTC audio
      *  sender so robot-speaker output can negotiate sendrecv. Apps inject

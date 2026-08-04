@@ -59,6 +59,14 @@ export type ReplySlotKey = keyof ReplySlotValues;
 
 export type MotionCommand = 'wake_up' | 'goto_sleep';
 
+/**
+ * Sentinel for a broadcast waiter that ran out its own timeout (as
+ * opposed to being rejected by a session teardown via `settleAll`).
+ * Callers that fail-open on timeout — `request()` — detect it by type
+ * instead of coupling to the message string.
+ */
+export class BroadcastTimeoutError extends Error {}
+
 interface PendingRpc {
     resolve: (v: unknown) => void;
     reject: (e: Error) => void;
@@ -239,7 +247,7 @@ export class PendingReplies {
                 timer: setTimeout(() => {
                     const i = this._broadcastWaiters.indexOf(slot);
                     if (i !== -1) this._broadcastWaiters.splice(i, 1);
-                    reject(new Error(`broadcast timeout (${timeoutMs} ms): ${debugLabel}`));
+                    reject(new BroadcastTimeoutError(`broadcast timeout (${timeoutMs} ms): ${debugLabel}`));
                 }, timeoutMs),
             };
             this._broadcastWaiters.push(slot);

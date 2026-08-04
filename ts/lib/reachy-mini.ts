@@ -10,7 +10,7 @@ import {
 } from '@huggingface/hub';
 
 import { degToRad, rpyToMatrix } from './math.js';
-import { PendingReplies, SLOT_ROUNDTRIP_TIMEOUT_MS } from './pending-replies.js';
+import { BroadcastTimeoutError, PendingReplies, SLOT_ROUNDTRIP_TIMEOUT_MS } from './pending-replies.js';
 import type { MotionCommand, ReplySlotKey, ReplySlotValues } from './pending-replies.js';
 import { SessionSupervisor } from './session-supervisor.js';
 import { SDK_VERSION } from './version.js';
@@ -358,7 +358,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         // `prompt=none` an already-authorized user comes straight back with
         // a code and no screen, anyone else comes back with `?error=...`
         // instead of landing on the HF login page.
-        if (options?.prompt) url += `&prompt=${options.prompt}`;
+        if (options?.prompt) {
+            const u = new URL(url);
+            u.searchParams.set('prompt', options.prompt);
+            url = u.toString();
+        }
         window.location.href = url;
     }
 
@@ -1296,25 +1300,23 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         command: { type: string } & Record<string, unknown>,
         { timeoutMs = SLOT_ROUNDTRIP_TIMEOUT_MS, match }: RequestOptions = {},
     ): Promise<Record<string, unknown> | null> {
-        if (!this._dc || this._dc.readyState !== 'open') {
+        // Send before registering the waiter (safe: replies arrive on a
+        // later task), so a channel closed mid-flight rejects instead of
+        // hanging a waiter to its timeout and resolving `null`.
+        if (!this._sendCommand(command)) {
             return Promise.reject(new Error('Data channel not open'));
         }
         const predicate = match
             ?? ((m: Record<string, unknown>): boolean => m.command === command.type);
-        const reply = this._pending
+        return this._pending
             .awaitBroadcast(predicate, { timeoutMs, debugLabel: `request(${command.type})` })
-            .then((m): Record<string, unknown> | null => m)
             .catch((err: unknown): null => {
                 // Fail-open on the waiter timeout only; teardown rejections
                 // (settleAll) propagate to the caller like every other
                 // in-flight round-trip.
-                if (err instanceof Error && err.message.startsWith('broadcast timeout')) {
-                    return null;
-                }
+                if (err instanceof BroadcastTimeoutError) return null;
                 throw err;
             });
-        this._sendCommand(command);
-        return reply;
     }
 
     subscribeLogs({ onLine, onError }: SubscribeLogsOptions): () => void {

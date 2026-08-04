@@ -95,6 +95,19 @@ export function clearStoredToken(): void {
 }
 
 /**
+ * OAuth error codes a `prompt=none` silent authorization can bounce
+ * back with. Gating on this set keeps `consumeOAuthErrorParams` from
+ * swallowing an app's own unrelated `?error=` param (and rewriting
+ * history for it) on a page load that has nothing to do with OAuth.
+ */
+const OAUTH_ERROR_CODES = new Set([
+    'login_required',
+    'consent_required',
+    'interaction_required',
+    'access_denied',
+]);
+
+/**
  * Detect an OAuth error return (`?error=...` from a `prompt=none`
  * silent authorization), strip the OAuth params from the URL, and
  * return the error code. Returns `null` when the URL carries no OAuth
@@ -104,7 +117,7 @@ export function consumeOAuthErrorParams(): string | null {
     try {
         const url = new URL(window.location.href);
         const error = url.searchParams.get('error');
-        if (error === null) return null;
+        if (error === null || !OAUTH_ERROR_CODES.has(error)) return null;
         url.searchParams.delete('error');
         url.searchParams.delete('error_description');
         url.searchParams.delete('state');
