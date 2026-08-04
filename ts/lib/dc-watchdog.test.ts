@@ -152,9 +152,11 @@ describe('dc silence watchdog - dead transport escalation', () => {
             /No data-channel traffic/,
         );
         expect(internals._supervisor.redialing).toBe(false);
-        // The error path keeps the session nominally up: the baseline was
-        // reset, so the very next tick doesn't re-emit.
-        await vi.advanceTimersByTimeAsync(2000);
+        // The fatal path stands the watchdog down: even a full extra
+        // escalation cycle (nudge at 2.5 s, fatal at 8 s) later, the
+        // error fired exactly once. Regression guard for the loop where
+        // the interval kept running and re-emitted every ~8 s forever.
+        await vi.advanceTimersByTimeAsync(10_000);
         expect(errors).toHaveLength(1);
         internals._supervisor.stopDcWatchdog();
     });

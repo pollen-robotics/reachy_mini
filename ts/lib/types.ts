@@ -458,6 +458,13 @@ export interface ReachyMiniInstance extends EventTarget {
      * `autoReconnect` constructor option). Disabling aborts any re-dial
      * already in flight. Meant for flows that EXPECT the transport to
      * die, e.g. a daemon self-update reboot.
+     *
+     * Sharp edge: aborting an in-flight re-dial leaves the session torn
+     * down (the loop closed the transport on entry) WITHOUT emitting
+     * `sessionStopped` or `error` — the caller owns the terminal event.
+     * The daemon-update flow relies on exactly that (its own
+     * `sessionStopped` arrives from the reboot); any other caller must
+     * surface the end of the session itself.
      */
     setAutoReconnect(enabled: boolean): void;
 

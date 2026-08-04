@@ -185,7 +185,11 @@ export function openCentralListener(
   };
 
   const scheduleReconnect = (reason: string): void => {
-    if (closed) return;
+    // The `reconnectTimer` check is a re-entrancy guard: stream EOF and
+    // an in-flight heartbeat's eviction branch can both land here in the
+    // same tick, and arming twice would spawn two concurrent runStream()
+    // loops (the abortController only tracks the latest).
+    if (closed || reconnectTimer !== null) return;
     // Stop the heartbeat eagerly: the SSE is dead, so any outstanding
     // setPeerStatus POST would fail anyway and the next welcome will
     // start a fresh interval with a freshly-negotiated cadence.

@@ -638,14 +638,12 @@ export class SessionSupervisor {
 
         if (silence < DC_SILENCE_FATAL_MS) return;
 
-        // Dead transport. Stop judging (the re-dial tears this interval
-        // down anyway via the class's teardown; the error path keeps the
-        // session nominally up, so re-baseline to avoid a repeat every
-        // tick) and escalate through the same funnel as the ICE grace.
-        this._lastDcInboundAt = now;
+        // Dead transport, and no redial to hand it to: emit once and
+        // stand down. The next startDcWatchdog() re-arms.
         this._dcSilenceNudged = false;
         const cause = `No data-channel traffic for ${silence}ms`;
         if (this.maybeBeginRedial(cause)) return;
+        this.stopDcWatchdog();
         this._deps.emitError(new Error(cause));
     }
 }

@@ -876,6 +876,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * `sessionStopped` immediately (it's the "install done, rebooting"
      * signal), not get absorbed by ~22 s of doomed reconnect attempts
      * against a robot that is rebooting anyway.
+     *
+     * Sharp edge: cancelling an in-flight re-dial leaves the session
+     * torn down without emitting `sessionStopped` or `error` — the
+     * caller owns the terminal event (see `ReachyMiniInstance`).
      */
     setAutoReconnect(enabled: boolean): void {
         this._supervisor.setAutoReconnect(enabled);
