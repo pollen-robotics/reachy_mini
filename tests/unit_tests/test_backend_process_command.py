@@ -11,6 +11,7 @@ and hardware-id seams are patched with in-memory stubs.
 """
 
 import asyncio
+import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
@@ -33,6 +34,7 @@ from reachy_mini.io.protocol import (
     GetVolumeCmd,
     GotoSleepCmd,
     ImuDataMsg,
+    MotorControlMode,
     PlaySoundCmd,
     ReadAudioParameterCmd,
     RestartDaemonCmd,
@@ -64,6 +66,16 @@ def _dispatch(backend: Any, cmd: Any, peer_id: str | None = None) -> list[dict]:
     responses: list[dict] = []
     backend.process_command(cmd, send_response=responses.append, peer_id=peer_id)
     return responses
+
+
+def _disabled_motor_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """Return only the diagnostics emitted for ignored disabled-motor motion."""
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if "motion command received while motors are disabled"
+        in record.getMessage().lower()
+    ]
 
 
 # ------------------------------------------------------------------
@@ -139,6 +151,48 @@ def test_set_target_ignored_when_move_running(sim_backend: Any) -> None:
     responses = _dispatch(sim_backend, SetTargetCmd(head=np.eye(4).flatten().tolist()))
     assert responses == [{"status": "ok", "command": "set_target"}]
     assert sim_backend.target_head_pose is None  # target left unchanged
+
+
+def test_motion_while_motors_disabled_warns_once(
+    sim_backend: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A high-rate target stream emits one actionable warning, not log spam."""
+    sim_backend.set_motor_control_mode(MotorControlMode.Disabled)
+
+    with caplog.at_level(logging.WARNING):
+        _dispatch(sim_backend, SetTargetCmd(head=np.eye(4).flatten().tolist()))
+        _dispatch(sim_backend, SetTargetCmd(head=np.eye(4).flatten().tolist()))
+
+    assert _disabled_motor_warnings(caplog) == [
+        "Motion command received while motors are disabled; call enable_motors() first."
+    ]
+
+
+def test_direct_motion_entry_point_warns_when_motors_disabled(
+    sim_backend: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    """REST-style direct backend calls receive the same diagnostic."""
+    sim_backend.set_motor_control_mode(MotorControlMode.Disabled)
+
+    with caplog.at_level(logging.WARNING):
+        sim_backend.set_target(head=np.eye(4))
+
+    assert len(_disabled_motor_warnings(caplog)) == 1
+
+
+def test_disabled_motor_warning_resets_after_mode_change(
+    sim_backend: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A later disabled-motor episode receives its own first-command warning."""
+    sim_backend.set_motor_control_mode(MotorControlMode.Disabled)
+
+    with caplog.at_level(logging.WARNING):
+        _dispatch(sim_backend, SetTargetCmd(head=np.eye(4).flatten().tolist()))
+        _dispatch(sim_backend, SetMotorModeCmd(mode="enabled"))
+        _dispatch(sim_backend, SetMotorModeCmd(mode="disabled"))
+        _dispatch(sim_backend, SetTargetCmd(head=np.eye(4).flatten().tolist()))
+
+    assert len(_disabled_motor_warnings(caplog)) == 2
 
 
 # ------------------------------------------------------------------
@@ -441,9 +495,7 @@ def test_get_imu_data_cache_freshness() -> None:
 # ------------------------------------------------------------------
 
 
-def test_delete_hf_token_ok(
-    sim_backend: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_delete_hf_token_ok(sim_backend: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """A successful delete_hf_token acks status ok."""
     import reachy_mini.apps.sources.hf_auth as hf_auth
 
@@ -562,7 +614,9 @@ def test_apply_audio_config_ok(
         config=[AudioParamPair(name="AGCGAIN", values=[1.0])], verify=False
     )
     responses = _dispatch(sim_backend, cmd)
-    respeaker.apply_audio_config.assert_called_once_with([("AGCGAIN", [1.0])], verify=False)
+    respeaker.apply_audio_config.assert_called_once_with(
+        [("AGCGAIN", [1.0])], verify=False
+    )
     respeaker.close.assert_called_once()
     assert responses == [
         {"status": "ok", "command": "apply_audio_config", "applied": True}
