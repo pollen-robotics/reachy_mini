@@ -98,7 +98,10 @@ class FaceTarget(BaseModel):
 
 
 class DoaSnapshot(BaseModel):
-    """Sound Direction of Arrival reading (ReSpeaker mic array)."""
+    """Sound Direction of Arrival reading (ReSpeaker mic array).
+
+    ``angle`` is in radians: 0 = left, π/2 = front, π = right.
+    """
 
     angle: float
     speech_detected: bool

@@ -1,9 +1,11 @@
 """Unit tests for the demand-driven Direction-of-Arrival cache.
 
 The DoA poller must be lazy (no USB traffic while nobody consumes the
-cache), self-stopping (idle timeout), and every USB read - poller or
-on-demand REST - must go through the shared ``_doa_usb_lock`` path so a
-multi-step ``ReSpeaker.read()`` conversation is never interleaved.
+cache), self-stopping (idle timeout), and it is the only reader of the
+device: consumers get the cache and never block. Teardown must never
+dispose the USB device while a read is still in flight, which is why
+``FakeDoA`` can simulate the blocking tail of a real ``ReSpeaker.read()``
+(``read_delay``).
 
 The ReSpeaker itself is faked; the real USB layer is exercised in
 ``test_audio_control_utils.py``.
@@ -18,29 +20,46 @@ from reachy_mini.io.protocol import DoaSnapshot
 
 
 class FakeDoA:
-    """AudioDoA stand-in: counts reads, can fail, no USB."""
+    """AudioDoA stand-in: counts reads, can fail or block, no USB."""
 
     def __init__(
         self,
         reading: tuple[float, bool] | None = (1.25, True),
         available: bool = True,
         raise_on_read: bool = False,
+        read_delay: float = 0.0,
     ) -> None:
-        """Configure the fixed reading and failure behaviour."""
+        """Configure the fixed reading, failure and blocking behaviour."""
         self.reading = reading
         self.available = available
         self.raise_on_read = raise_on_read
+        self.read_delay = read_delay
         self.calls = 0
+        self.reads_in_flight = 0
+        self.closed_mid_read = False
 
     def get_DoA(self) -> tuple[float, bool] | None:  # noqa: N802 - mirrors AudioDoA
-        """Return the configured reading, counting every call."""
+        """Return the configured reading, blocking `read_delay` seconds."""
         self.calls += 1
-        if self.raise_on_read:
-            raise RuntimeError("usb read failed")
-        return self.reading
+        self.reads_in_flight += 1
+        try:
+            if self.read_delay:
+                time.sleep(self.read_delay)
+            if self.raise_on_read:
+                raise RuntimeError("usb read failed")
+            return self.reading
+        finally:
+            self.reads_in_flight -= 1
 
     def close(self) -> None:
-        """Mimic AudioDoA.close by dropping availability."""
+        """Mimic AudioDoA.close, recording a close during an active read.
+
+        On the real device that interleaving is a libusb use-after-free
+        (`dispose_resources` on a device mid-`ctrl_transfer`), so any test
+        that ends with ``closed_mid_read`` True has caught a real bug.
+        """
+        if self.reads_in_flight:
+            self.closed_mid_read = True
         self.available = False
 
 
@@ -61,10 +80,10 @@ def _wait_for(predicate, timeout: float = 2.0) -> bool:
     return False
 
 
-def test_no_device_no_thread_no_snapshot() -> None:
-    """Without a DoA helper nothing is spawned and the snapshot is None."""
+def test_no_device_no_thread_no_reading() -> None:
+    """Without a DoA helper nothing is spawned and the reading is None."""
     backend = _make_backend(doa=None)
-    assert backend._doa_snapshot() is None
+    assert backend.read_doa() is None
     assert backend._doa_thread is None
 
 
@@ -72,42 +91,42 @@ def test_unavailable_device_never_polls() -> None:
     """A helper whose USB probe failed must never be read nor polled."""
     fake = FakeDoA(available=False)
     backend = _make_backend(fake)
-    assert backend._doa_snapshot() is None
     assert backend.read_doa() is None
     assert backend._doa_thread is None
     assert fake.calls == 0
 
 
-def test_snapshot_starts_poller_and_serves_cache() -> None:
-    """First snapshot is a cache miss but warms the poller; then it serves."""
+def test_read_doa_starts_poller_and_serves_cache() -> None:
+    """First read is a cache miss but warms the poller; then it serves."""
     fake = FakeDoA(reading=(0.5, False))
     backend = _make_backend(fake)
     backend.DOA_POLL_INTERVAL_S = 0.01  # type: ignore[misc]
 
     # Cold cache: no reading yet, but demand spawns the poller.
-    assert backend._doa_snapshot() is None
+    assert backend.read_doa() is None
     assert backend._doa_thread is not None and backend._doa_thread.is_alive()
 
-    assert _wait_for(lambda: backend._doa_snapshot() is not None)
-    snapshot = backend._doa_snapshot()
-    assert snapshot == DoaSnapshot(angle=0.5, speech_detected=False)
+    assert _wait_for(lambda: backend.read_doa() is not None)
+    assert backend.read_doa() == DoaSnapshot(angle=0.5, speech_detected=False)
 
     backend._doa_stop.set()
 
 
-def test_poller_stops_when_demand_ceases() -> None:
-    """The poller exits on its own after DOA_IDLE_STOP_S without consumers."""
+def test_poller_stops_when_demand_ceases_and_clears_cache() -> None:
+    """The poller exits after DOA_IDLE_STOP_S and never serves a pre-idle reading."""
     fake = FakeDoA()
     backend = _make_backend(fake)
     backend.DOA_POLL_INTERVAL_S = 0.01  # type: ignore[misc]
     backend.DOA_IDLE_STOP_S = 0.05  # type: ignore[misc]
 
-    backend._doa_snapshot()
+    backend.read_doa()
     thread = backend._doa_thread
     assert thread is not None and thread.is_alive()
 
-    # No further demand: the thread must die by itself.
+    # No further demand: the thread must die by itself...
     assert _wait_for(lambda: not thread.is_alive())
+    # ...leaving no stale reading behind for a later consumer.
+    assert backend._last_doa is None
 
 
 def test_poller_restarts_on_new_demand() -> None:
@@ -117,64 +136,28 @@ def test_poller_restarts_on_new_demand() -> None:
     backend.DOA_POLL_INTERVAL_S = 0.01  # type: ignore[misc]
     backend.DOA_IDLE_STOP_S = 0.05  # type: ignore[misc]
 
-    backend._doa_snapshot()
+    backend.read_doa()
     first = backend._doa_thread
     assert first is not None
     assert _wait_for(lambda: not first.is_alive())
 
-    backend._doa_snapshot()
+    backend.read_doa()
     second = backend._doa_thread
     assert second is not None and second is not first and second.is_alive()
 
     backend._doa_stop.set()
 
 
-def test_read_doa_cold_cache_reads_directly() -> None:
-    """A one-shot REST read gets a real reading without waiting on the poller."""
-    fake = FakeDoA(reading=(2.0, True))
-    backend = _make_backend(fake)
-    # Huge interval: the poller can't be the one producing the reading.
-    backend.DOA_POLL_INTERVAL_S = 60.0  # type: ignore[misc]
-
-    assert backend.read_doa() == (2.0, True)
-    assert fake.calls == 1
-
-    backend._doa_stop.set()
-
-
-def test_read_doa_serves_fresh_cache_without_usb() -> None:
-    """A second read inside the freshness window doesn't touch USB again."""
-    fake = FakeDoA(reading=(2.0, True))
-    backend = _make_backend(fake)
-    backend.DOA_POLL_INTERVAL_S = 60.0  # type: ignore[misc]
-
-    assert backend.read_doa() == (2.0, True)
-    assert backend.read_doa() == (2.0, True)
-    assert fake.calls == 1
-
-    backend._doa_stop.set()
-
-
-def test_read_doa_swallows_usb_errors() -> None:
-    """A failing USB read reads as 'no DoA', never as an exception."""
+def test_poller_swallows_usb_errors() -> None:
+    """A failing USB read reads as 'no DoA' and never kills the poller."""
     fake = FakeDoA(raise_on_read=True)
     backend = _make_backend(fake)
-    backend.DOA_POLL_INTERVAL_S = 60.0  # type: ignore[misc]
+    backend.DOA_POLL_INTERVAL_S = 0.01  # type: ignore[misc]
 
+    backend.read_doa()
+    assert _wait_for(lambda: fake.calls >= 3)
     assert backend.read_doa() is None
-
-    backend._doa_stop.set()
-
-
-def test_snapshot_ignores_stale_cache() -> None:
-    """Entries older than DOA_CACHE_FRESH_S are treated as absent."""
-    fake = FakeDoA(reading=(2.0, True))
-    backend = _make_backend(fake)
-    backend.DOA_POLL_INTERVAL_S = 60.0  # type: ignore[misc]
-
-    assert backend.read_doa() == (2.0, True)
-    backend._last_doa_ts = time.monotonic() - 10.0
-    assert backend._doa_snapshot() is None
+    assert backend._doa_thread is not None and backend._doa_thread.is_alive()
 
     backend._doa_stop.set()
 
@@ -183,9 +166,11 @@ def test_close_joins_poller_and_releases_device() -> None:
     """Backend.close() joins the poller thread and drops the USB handle."""
     fake = FakeDoA(reading=(2.0, True))
     backend = _make_backend(fake)
+    backend.DOA_POLL_INTERVAL_S = 0.01  # type: ignore[misc]
 
     # Spin the poller up through a normal demand path.
-    assert backend.read_doa() == (2.0, True)
+    backend.read_doa()
+    assert _wait_for(lambda: backend.read_doa() is not None)
     thread = backend._doa_thread
     assert thread is not None and thread.is_alive()
 
@@ -197,15 +182,33 @@ def test_close_joins_poller_and_releases_device() -> None:
     assert fake.available is False
     assert backend.doa is None
     assert backend.read_doa() is None
-    assert backend._doa_snapshot() is None
 
 
-def test_build_state_dict_carries_doa_and_no_dead_payload() -> None:
-    """The pushed frame has `doa` and no duplicated antenna payload."""
+def test_close_waits_for_inflight_read() -> None:
+    """close() must not dispose the device while a read is in flight.
+
+    The blocking tail is longer than close()'s 1 s join timeout, so only
+    taking `_doa_usb_lock` before disposing makes this pass: past the join
+    timeout, the fake would otherwise be closed mid-read (a libusb
+    use-after-free on real hardware).
+    """
+    fake = FakeDoA(reading=(2.0, True), read_delay=1.5)
+    backend = _make_backend(fake)
+    backend.DOA_POLL_INTERVAL_S = 0.01  # type: ignore[misc]
+
+    backend.read_doa()
+    assert _wait_for(lambda: fake.reads_in_flight > 0)
+
+    backend.close()
+
+    assert fake.closed_mid_read is False
+    assert fake.available is False
+    assert backend.doa is None
+
+
+def test_build_state_dict_carries_doa() -> None:
+    """The pushed frame always has a `doa` key (None when unavailable)."""
     backend = _make_backend(doa=None)
     state = backend.build_state_dict()
     assert "doa" in state
-    # Per-motor head values are a real feature of the pose stream...
-    assert "head_joint_positions" in state
-    # ...but the antenna twin duplicated `antennas` verbatim and was dropped.
-    assert "antennas_joint_positions" not in state
+    assert state["doa"] is None

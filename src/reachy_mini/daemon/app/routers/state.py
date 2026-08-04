@@ -64,15 +64,10 @@ async def get_doa(
     """Get the Direction of Arrival from the microphone array.
 
     Returns the angle in radians (0=left, π/2=front, π=right) and speech detection status.
-    Returns None if the audio device is not available.
-
-    Reads through the backend's DoA cache (`read_doa`) so it can never
-    interleave with the background poller's USB conversation.
+    Returns None if the audio device is not available or no reading has
+    landed yet (the first one lands within ~100 ms of the first request).
     """
-    result = backend.read_doa()
-    if result is None:
-        return None
-    return DoAInfo(angle=result[0], speech_detected=result[1])
+    return backend.read_doa()
 
 
 @router.get("/full")
@@ -123,9 +118,7 @@ async def get_full_state(
         else:
             result["passive_joints"] = None
     if with_doa:
-        doa_result = backend.read_doa()
-        if doa_result:
-            result["doa"] = DoAInfo(angle=doa_result[0], speech_detected=doa_result[1])
+        result["doa"] = backend.read_doa()
 
     result["timestamp"] = datetime.now(timezone.utc)
     return FullState.model_validate(result)
