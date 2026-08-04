@@ -250,7 +250,7 @@ class Daemon:
         except Exception as e:
             self.logger.debug(f"Error stopping central signaling relay: {e}")
 
-    def _on_robot_slot_free(self, expect_handoff: bool = False) -> None:
+    def _on_robot_slot_free(self, expect_handoff: bool) -> None:
         """Return the robot to a clean idle state when the app slot frees.
 
         Wired into ``robot_app_lock`` so that when a remote session ends/drops
@@ -439,20 +439,12 @@ class Daemon:
                     self.backend.set_start_update_callback(self._spawn_webrtc_update)
                 self._media_server.start()
 
-            # Wire the JSON-RPC app relay now that the backend + broadcast
-            # paths exist. Runs on this (the main) loop; the DataChannel
-            # transport schedules frames onto it.
-            if self.backend is not None and self.app_manager is not None:
-                self._setup_jsonrpc_relay(self.backend, self.app_manager)
-
-                # Start central signaling relay for remote WebRTC access
-                await self._start_central_signaling_relay()
-
             # Reset the robot to a clean idle state whenever the managed app
             # slot becomes free (remote session end/drop or local app exit), so
             # no client can leave it parked awake across sessions. Registered
             # after the backend loop is up (setup_media_server) so
-            # `request_idle_reset()` has a loop to hop onto.
+            # `request_idle_reset()` has a loop to hop onto, and *before* the
+            # relay starts so no remote session can slip through unwired.
             self.robot_app_lock.set_on_became_free_handler(self._on_robot_slot_free)
             # Counterpart: a remote successor taking the slot cancels any
             # pending idle reset right away, instead of relying on its first
@@ -461,6 +453,15 @@ class Daemon:
             self.robot_app_lock.set_on_remote_acquired_handler(
                 self._on_robot_slot_acquired
             )
+
+            # Wire the JSON-RPC app relay now that the backend + broadcast
+            # paths exist. Runs on this (the main) loop; the DataChannel
+            # transport schedules frames onto it.
+            if self.backend is not None and self.app_manager is not None:
+                self._setup_jsonrpc_relay(self.backend, self.app_manager)
+
+                # Start central signaling relay for remote WebRTC access
+                await self._start_central_signaling_relay()
 
             # Wire the wake-up hook before any wake can fire (on-start below, or
             # later via button/REST on the wireless unit, which boots asleep).
