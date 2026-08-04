@@ -126,6 +126,14 @@ jobs:
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
           npm version "$ver" --no-git-tag-version
 
+      # `prebuild:sdk` already ran gen-version.mjs during the build step
+      # above — but that was BEFORE `npm version` bumped package.json, so
+      # dist/version.js still holds the committed placeholder. Regenerate
+      # lib/version.ts from the bumped manifest and recompile the SDK so
+      # `ReachyMini.version` reports the real published version.
+      - name: Re-stamp SDK version after bump
+        run: npm run gen:version && npm run build:sdk
+
       # PR: pack to confirm the publish would succeed (tarball
       # layout, manifest validity, no missing files) without
       # actually publishing.
