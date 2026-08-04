@@ -41,10 +41,10 @@ Reachy Mini comes with an app store powered by Hugging Face Spaces. You can inst
 ### User guides
 * **[Installation](https://huggingface.co/docs/reachy_mini/SDK/installation)**: 5 minutes to set up your computer
 * **[Quickstart Guide](https://huggingface.co/docs/reachy_mini/SDK/quickstart)**: Run your first behavior on Reachy Mini
-* **[JavaScript SDK & Web Apps](https://huggingface.co/docs/reachy_mini/SDK/javascript-sdk)**: Build browser apps that drive the robot over WebRTC — **the recommended path for most apps**.
+* **[JavaScript SDK & Web Apps](https://huggingface.co/docs/reachy_mini/SDK/javascript-sdk)**: Build browser apps that drive the robot over WebRTC — **the easiest way to share your apps**.
 * **[AI Integrations](https://huggingface.co/docs/reachy_mini/SDK/integration)**: Connect LLMs, build Apps, and publish to Hugging Face.
 * **[Core Concepts](https://huggingface.co/docs/reachy_mini/SDK/core-concept)**: Architecture, coordinate systems, and safety limits.
-* **[Python SDK](https://huggingface.co/docs/reachy_mini/SDK/python-sdk)**: Lower-level on-robot control from Python.
+* **[Python SDK](https://huggingface.co/docs/reachy_mini/SDK/python-sdk)**: Full robot control from Python — scripts, control loops, and on-robot code.
 * 🤗[**Share your app with the community**](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps)
 * 📂 [**Browse the Examples Folder**](examples)
 * 📓 [**Tutorial Notebooks**](docs/notebooks): Step-by-step Jupyter notebooks covering connection, movement, camera, and audio
