@@ -407,6 +407,35 @@ def test_get_imu_with_reading(sim_backend: Any) -> None:
     ]
 
 
+def test_get_imu_data_cache_freshness() -> None:
+    """The robot backend serves the cache while fresh, absent once stale.
+
+    Stale means older than ``IMU_CACHE_FRESH_S``: the 50 Hz control loop
+    (the cache's only writer) has stalled, so the reading no longer
+    describes the present.
+    """
+    import time
+
+    from reachy_mini.daemon.backend.robot.backend import RobotBackend
+
+    b = RobotBackend.__new__(RobotBackend)
+    msg = ImuDataMsg(
+        accelerometer=[0.0, 0.0, 9.81],
+        gyroscope=[0.0, 0.0, 0.0],
+        quaternion=[1.0, 0.0, 0.0, 0.0],
+        temperature=30.0,
+    )
+
+    b._last_imu = None
+    assert RobotBackend.get_imu_data(b) is None
+
+    b._last_imu = (msg, time.monotonic())
+    assert RobotBackend.get_imu_data(b) is msg
+
+    b._last_imu = (msg, time.monotonic() - RobotBackend.IMU_CACHE_FRESH_S - 0.1)
+    assert RobotBackend.get_imu_data(b) is None
+
+
 # ------------------------------------------------------------------
 # Hugging Face sign-out
 # ------------------------------------------------------------------

@@ -135,18 +135,14 @@ class RobotBackend(Backend):
         else:
             self.bmi088 = None
 
-        # Latest IMU reading, refreshed by the control loop each tick and
-        # served to on-demand readers (`get_imu_data`). The loop is the only
-        # code that talks to the BMI088: its `get_quat(dt)` call integrates
-        # the orientation filter with a fixed loop period, so an on-demand
-        # read would both race the i2c conversation and inject a spurious
-        # integration step. Stored as (msg, monotonic ts) so a reader can
-        # judge freshness in one atomic reference grab.
+        # Latest IMU reading as (msg, monotonic ts), refreshed by the control
+        # loop and served by `get_imu_data`. Only `_read_imu` (see its
+        # docstring) may touch the BMI088.
         self._last_imu: tuple[ImuDataMsg, float] | None = None
 
-    # A cached reading older than this is treated as absent: the control
-    # loop refreshes at 50 Hz, so anything past a few periods means the
-    # loop is stalled and the data no longer describes the present.
+    # A cached reading older than this is treated as absent: 0.5 s is 25
+    # control-loop periods at 50 Hz, so the loop is stalled (e.g. died on a
+    # motor error) and the data no longer describes the present.
     IMU_CACHE_FRESH_S = 0.5
 
     def run(self) -> None:
@@ -271,6 +267,10 @@ class RobotBackend(Backend):
                         )
                     )
 
+                    # Note: this block inherits the joint/pose publisher
+                    # guards above, so the IMU cache is only refreshed once
+                    # `WSServer.start()` has wired the publishers (it sets
+                    # all four together).
                     if self.bmi088 is not None:
                         imu_msg = self._read_imu()
                         if imu_msg is not None:
@@ -513,13 +513,9 @@ class RobotBackend(Backend):
     def get_imu_data(self) -> ImuDataMsg | None:
         """Return the latest IMU reading cached by the control loop.
 
-        On-demand readers (the `get_imu` data-channel command) must not
-        touch the BMI088 themselves - see the `_last_imu` comment. A cache
-        entry older than ``IMU_CACHE_FRESH_S`` reads as absent so a stalled
-        loop can't keep serving a stale orientation.
-
         Returns:
-            An ImuDataMsg, or None if the IMU is missing or the cache is stale.
+            An ImuDataMsg, or None if the IMU is missing or the cache is
+            older than ``IMU_CACHE_FRESH_S``.
 
         """
         cached = self._last_imu
@@ -531,7 +527,13 @@ class RobotBackend(Backend):
         return msg
 
     def _read_imu(self) -> ImuDataMsg | None:
-        """Read the BMI088 directly. Control-loop only (see `_last_imu`).
+        """Read the BMI088 directly. Control-loop only.
+
+        The loop must stay the sensor's only reader: `get_quat(dt)`
+        integrates the orientation filter with a fixed loop period, so an
+        on-demand read would both race the i2c conversation and inject a
+        spurious integration step. Everyone else reads the `_last_imu`
+        cache through `get_imu_data`.
 
         Returns:
             An ImuDataMsg, or None if IMU is not available.

@@ -493,12 +493,7 @@ class Backend:
         self.imu_publisher = publisher
 
     def get_imu_data(self) -> ImuDataMsg | None:
-        """Get the current IMU reading, or None when the backend has no IMU.
-
-        Overridden by the real-robot backend (BMI088 on the wireless
-        version); the default covers simulation backends and the Lite
-        version so `get_imu` can answer uniformly on every transport.
-        """
+        """Latest IMU reading; None on backends without an IMU."""
         return None
 
     def update_target_head_joints_from_ik(
@@ -1557,14 +1552,8 @@ class Backend:
             # `imu` is None on IMU-less hardware (Lite, simulation) so
             # clients can tell "no IMU" from "no reply" (old daemon).
             imu = self.get_imu_data()
-            send_response(
-                {
-                    "command": "get_imu",
-                    "imu": imu.model_dump(exclude={"type"})
-                    if imu is not None
-                    else None,
-                }
-            )
+            payload = imu.model_dump(exclude={"type"}) if imu is not None else None
+            send_response({"command": "get_imu", "imu": payload})
 
         elif isinstance(cmd, (GetRobotNameCmd, SetRobotNameCmd)):
             # Robot display name is a persistent, robot-wide string stored on

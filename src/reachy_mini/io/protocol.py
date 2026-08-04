@@ -286,12 +286,7 @@ class GetHardwareIdCmd(BaseModel):
 
 
 class GetImuCmd(BaseModel):
-    """Query the current IMU reading (BMI088, wireless version only).
-
-    The response carries ``imu``: the `ImuDataMsg` payload
-    (accelerometer, gyroscope, quaternion, temperature) or ``None``
-    when the robot has no IMU (Lite version, simulation).
-    """
+    """Query the current IMU reading (`ImuDataMsg`; null on IMU-less robots)."""
 
     type: Literal["get_imu"] = "get_imu"
 
