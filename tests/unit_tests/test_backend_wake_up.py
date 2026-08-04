@@ -28,9 +28,11 @@ def _fake_backend(
 ) -> SimpleNamespace:
     if antennas is None:
         antennas = Backend.INIT_ANTENNAS_JOINT_POSITIONS.copy()
-    return SimpleNamespace(
+    fake = SimpleNamespace(
         INIT_HEAD_POSE=Backend.INIT_HEAD_POSE,
         INIT_ANTENNAS_JOINT_POSITIONS=Backend.INIT_ANTENNAS_JOINT_POSITIONS,
+        INIT_POSE_MAGIC_DISTANCE=Backend.INIT_POSE_MAGIC_DISTANCE,
+        INIT_ANTENNAS_TOLERANCE_RAD=Backend.INIT_ANTENNAS_TOLERANCE_RAD,
         get_current_head_pose=lambda: head_pose,
         get_present_antenna_joint_positions=lambda: antennas,
         get_motor_control_mode=lambda: motor_mode,
@@ -38,6 +40,9 @@ def _fake_backend(
         play_sound=MagicMock(),
         _on_wake_up_callback=MagicMock(),
     )
+    # Bind the real predicate so these tests exercise it, not a stub.
+    fake.is_awake_at_init_pose = lambda: Backend.is_awake_at_init_pose(fake)
+    return fake
 
 
 def _far_pose() -> np.ndarray:
@@ -99,6 +104,24 @@ async def test_wake_up_runs_when_disabled_even_at_init_pose() -> None:
         head_pose=Backend.INIT_HEAD_POSE.copy(),
     )
     await Backend.wake_up(fake)
+    assert fake.goto_target.await_count >= 1
+    fake.play_sound.assert_called_once_with("wake_up.wav")
+    fake._on_wake_up_callback.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_wake_up_force_replays_even_when_awake_at_init() -> None:
+    """force=True bypasses the stand-down: full emote on an awake robot.
+
+    Used by callers that enable the motors themselves right before waking
+    (antenna touch on a sleeping robot): enabling first would otherwise
+    satisfy the stand-down and swallow the wake they just decided on.
+    """
+    fake = _fake_backend(
+        motor_mode=MotorControlMode.Enabled,
+        head_pose=Backend.INIT_HEAD_POSE.copy(),
+    )
+    await Backend.wake_up(fake, force=True)
     assert fake.goto_target.await_count >= 1
     fake.play_sound.assert_called_once_with("wake_up.wav")
     fake._on_wake_up_callback.assert_called_once()

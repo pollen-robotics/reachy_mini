@@ -1153,47 +1153,50 @@ class Backend:
         ]
     )
 
-    async def wake_up(self) -> None:
-        """Wake up the robot - go to the initial head position and play the wake up emote and sound.
+    # Init-pose proximity in magic-mm (mm + deg), same empirical threshold as
+    # goto_sleep's stand-down (see SLEEP_POSE_MAGIC_DISTANCE, apps/manager.py).
+    INIT_POSE_MAGIC_DISTANCE: float = 10.0
+    # ~17° of antenna slack: absorbs sag/jitter while still catching a
+    # genuinely misplaced antenna (sleep parks them ~165° away).
+    INIT_ANTENNAS_TOLERANCE_RAD: float = 0.3
 
-        Skips the emote (and its "toudoum") when the robot is already awake and
-        standing at the init pose: clients routinely send ``wake_up`` on
-        session start, and now that a handoff keeps the robot awake between
-        sessions (see ``request_idle_reset``'s handoff grace), replaying the
-        animation on an already-awake robot reads as a glitch, not a wake.
-        Mirrors ``goto_sleep``, which likewise stands down near its target
-        pose. The wake-completed callback still fires so the "start app after
-        wake" hook keeps its semantics: the robot IS awake.
-        """
-        await asyncio.sleep(0.1)
-
-        _, _, magic_distance = distance_between_poses(
+    def is_awake_at_init_pose(self) -> bool:
+        """Motors on and head + antennas already home: nothing to wake."""
+        _, _, head_offset = distance_between_poses(
             self.get_current_head_pose(), self.INIT_HEAD_POSE
         )
-        # The goto below is also what re-homes the antennas, so the
-        # stand-down must check them too: head at init but antennas left
-        # askew by the previous app would otherwise stay askew all session.
-        antenna_offset = float(
-            np.max(
-                np.abs(
-                    self.get_present_antenna_joint_positions()
-                    - self.INIT_ANTENNAS_JOINT_POSITIONS
+        return (
+            self.get_motor_control_mode() == MotorControlMode.Enabled
+            and head_offset < self.INIT_POSE_MAGIC_DISTANCE
+            and bool(
+                np.allclose(
+                    self.get_present_antenna_joint_positions(),
+                    self.INIT_ANTENNAS_JOINT_POSITIONS,
+                    atol=self.INIT_ANTENNAS_TOLERANCE_RAD,
                 )
             )
         )
 
-        # Head: same empirical "close enough" threshold as goto_sleep's.
-        # Antennas: ~17° of slack absorbs sag/jitter while still catching a
-        # genuinely misplaced antenna (sleep parks them ~165° away).
-        if (
-            self.get_motor_control_mode() == MotorControlMode.Enabled
-            and magic_distance < 10
-            and antenna_offset < 0.3
-        ):
+    async def wake_up(self, *, force: bool = False) -> None:
+        """Wake up the robot - go to the initial head position and play the wake up emote and sound.
+
+        Stands down (silently - no motion, no sound) when the robot is already
+        awake at the init pose, so a boot-time ``wake_up`` after a session
+        handoff doesn't replay the emote. The wake-completed callback still
+        fires either way: the robot IS awake. ``force=True`` bypasses the
+        stand-down, e.g. for a deliberate replay or a caller that just
+        enabled the motors itself and knows a real wake is due.
+        """
+        await asyncio.sleep(0.1)
+
+        if not force and self.is_awake_at_init_pose():
             if self._on_wake_up_callback is not None:
                 self._on_wake_up_callback()
             return
 
+        _, _, magic_distance = distance_between_poses(
+            self.get_current_head_pose(), self.INIT_HEAD_POSE
+        )
         await self.goto_target(
             self.INIT_HEAD_POSE,
             antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
@@ -2643,22 +2646,9 @@ class Backend:
     # an intermediate pose.
     IDLE_RESET_DEBOUNCE_S: float = 1.5
 
-    # Longer grace used when the previous owner released the slot on purpose so
-    # another session could take over (see ``RobotAppLock.release_remote``).
-    # The canonical case is the mobile app dropping its own session to hand the
-    # robot to an app's iframe: the daemon only sees an empty slot, but a new
-    # session *is* coming - it just has to cold-start a Space (page load, auth,
-    # bundle, WebRTC handshake), which takes far longer than the debounce
-    # above. Sleeping in that window is exactly what the user doesn't want:
-    # they tapped an app, not "go to sleep". Long enough to cover a slow Space,
-    # short enough that a hand-off that never lands still parks the robot.
-    #
-    # Sized down from an initial 30 s after hardware testing: real handoffs
-    # re-acquire the slot within 1-4 s, and abrupt client deaths (tab kill)
-    # ride the same local endSession path as deliberate hang-ups - the relay
-    # cannot tell them apart - so this grace is also how long a crashed
-    # client keeps the robot needlessly awake. A Space colder than this just
-    # gets a legitimate wake animation when it finally connects.
+    # Longer grace used when the slot was released on purpose for a successor
+    # (covers a Space cold-start). Also bounds how long a client that died on
+    # the endSession path keeps the robot needlessly awake.
     IDLE_RESET_HANDOFF_GRACE_S: float = 15.0
 
     def request_idle_reset(self, *, expect_handoff: bool = False) -> None:
