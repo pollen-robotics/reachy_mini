@@ -1,1 +1,1 @@
-{"id":"fdac37dd337db6aaa29df0835f38ba53","fullName":"tests.unit_tests.test_autostart_app#test_start_failure_is_swallowed","name":"test_start_failure_is_swallowed","status":"passed","testResultsByEnv":{"default":"9febdfefd1f1115720fae642d2dcb4f2"}}
+{"id":"fdac37dd337db6aaa29df0835f38ba53","fullName":"tests.unit_tests.test_autostart_app#test_start_failure_is_swallowed","name":"test_start_failure_is_swallowed","status":"passed","testResultsByEnv":{"default":"4266d50869f197ed5a99b87e387b69cc"}}
