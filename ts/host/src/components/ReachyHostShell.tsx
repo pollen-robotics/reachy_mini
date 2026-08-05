@@ -65,10 +65,12 @@ import { TopBar, type HostPhase } from './TopBar';
 import { WelcomeBackOverlay } from './WelcomeBackOverlay';
 
 // Hard cap on how long the host stays on the leaving overlay waiting for the
-// embed's `embed:left` ack (app cleanup + host-owned sleep/disable). Larger
-// than the embed's own sleep hard-cap (~6.5 s) so a well-behaved embed's ack
-// wins the race; a wedged/older embed that never acks just falls through here.
-const LEAVING_ACK_CAP_MS = 8000;
+// embed's `embed:left` ack (app cleanup + host-owned sleep/disable). The
+// embed's worst case is SEQUENTIAL: the sleep race hard-cap (6.5 s) plus the
+// motors-disabled confirmation window (1 s) = 7.5 s, so the cap leaves ~2 s
+// for postMessage + a React commit - a well-behaved embed's ack always wins.
+// A wedged/older embed that never acks just falls through here.
+const LEAVING_ACK_CAP_MS = 9500;
 
 /** Fresh `EmbedAppState` for a phase reset (boot, or the optimistic
  *  `connecting` shown while the iframe mounts). Single source of truth
@@ -529,6 +531,12 @@ function ReachyHostShellNormal({
       setDaemonVersion(null);
       setUpdateProgress(null);
       setAwaitingReboot(null);
+      // Keep the documented invariant real: the watch is held at
+      // `waiting-offline` whenever `awaitingReboot` is null. Without
+      // this, a watch left pre-armed at `waiting-online` would let a
+      // STALE pre-reboot listing complete a later watch in a single
+      // observation - the exact regression rebootWatch.ts prevents.
+      setRebootWatch('waiting-offline');
       setGateKey((k) => k + 1);
       // The host never opened an SSE (picker uses REST), so the
       // iframe's SDK gets a clean central slot with no prior peer
@@ -595,6 +603,25 @@ function ReachyHostShellNormal({
     setUpdateProgress(null);
     bridge.sendStartUpdate(iframeRef.current);
   }, [bridge]);
+
+  /** The gate's stall timer gave up while the session is still alive:
+   *  tell the embed to disarm its update-mode plumbing (translator +
+   *  auto-reconnect stand-down) so a later normal end-session can't
+   *  replay a stale `rebooting` frame. */
+  const cancelDaemonUpdate = useCallback((): void => {
+    if (!iframeRef.current) return;
+    bridge.sendCancelUpdate(iframeRef.current);
+  }, [bridge]);
+
+  /** Escape from the gate's blocking tier. Clear `daemonVersion`
+   *  FIRST: `endSession` doesn't reset it (only the next `selectRobot`
+   *  does), so leaving it set would keep `severity === 'block'` true
+   *  and repaint the full-screen gate over the picker we just returned
+   *  to. */
+  const exitBlockedApp = useCallback((): void => {
+    setDaemonVersion(null);
+    void endSession('user-action');
+  }, [endSession]);
 
   /**
    * The daemon restarted, so the session is gone for good. Drop the
@@ -878,6 +905,8 @@ function ReachyHostShellNormal({
         robotBackOnline={rebootedRobotBack}
         appLive={hostPhase === 'embedded' && embedAppState.phase === 'live'}
         onStartUpdate={startDaemonUpdate}
+        onCancelUpdate={cancelDaemonUpdate}
+        onExitApp={exitBlockedApp}
         onSessionLost={handleUpdateSessionLost}
         onDismiss={dismissDaemonUpdate}
       />

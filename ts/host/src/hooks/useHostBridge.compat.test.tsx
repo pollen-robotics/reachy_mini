@@ -314,16 +314,17 @@ describe('useHostBridge outbound messages keep the v1 envelope', () => {
     unmount();
   });
 
-  it('sendThemeChanged / sendConfigChanged / sendLeaving / sendStartUpdate', () => {
+  it('sendThemeChanged / sendConfigChanged / sendLeaving / sendStartUpdate / sendCancelUpdate', () => {
     const { bridge, unmount } = mountBridge();
     const { iframe, sent } = makeIframe();
     bridge.sendThemeChanged(iframe, 'light');
     bridge.sendConfigChanged(iframe, { volume: 1 });
     bridge.sendLeaving(iframe, 'user-action', 5000);
     bridge.sendStartUpdate(iframe);
+    bridge.sendCancelUpdate(iframe);
 
     const msgs = sent();
-    expect(msgs).toHaveLength(4);
+    expect(msgs).toHaveLength(5);
     for (const msg of msgs) expect(accepted19(msg)).toBe(true);
     expect(msgs[0]).toEqual(
       expect.objectContaining({ type: 'host:theme-changed', theme: 'light' }),
@@ -343,6 +344,9 @@ describe('useHostBridge outbound messages keep the v1 envelope', () => {
     );
     expect(msgs[3]).toEqual(
       expect.objectContaining({ type: 'host:start-update', preRelease: false }),
+    );
+    expect(msgs[4]).toEqual(
+      expect.objectContaining({ type: 'host:cancel-update' }),
     );
     unmount();
   });

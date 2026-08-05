@@ -107,6 +107,10 @@ export interface HostBridge {
    *  Fire-and-forget: an embed too old to know the message ignores it,
    *  so callers MUST have their own timeout. */
   sendStartUpdate(iframe: HTMLIFrameElement, preRelease?: boolean): void;
+  /** `host:cancel-update`. The host gave up on the update (stall
+   *  timeout): the embed should disarm its update-mode plumbing.
+   *  Fire-and-forget, additive - older embeds ignore it. */
+  sendCancelUpdate(iframe: HTMLIFrameElement): void;
 }
 
 export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
@@ -240,12 +244,24 @@ export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
     [],
   );
 
+  const sendCancelUpdate = useCallback<HostBridge['sendCancelUpdate']>(
+    (iframe) => {
+      postToFrame(iframe, {
+        source: PROTOCOL_SOURCE,
+        type: 'host:cancel-update',
+        version: PROTOCOL_VERSION,
+      });
+    },
+    [],
+  );
+
   return {
     sendInit,
     sendThemeChanged,
     sendConfigChanged,
     sendLeaving,
     sendStartUpdate,
+    sendCancelUpdate,
   };
 }
 

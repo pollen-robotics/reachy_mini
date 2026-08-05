@@ -70,6 +70,20 @@ function readOAuthPendingOnce(): boolean {
 }
 
 /**
+ * How long the boot splash may wait for the SDK bundle before giving
+ * up on auth resolution. Every path that resolves `authResolved`
+ * requires an `sdk` instance; if the bundle never loads (blocked CDN,
+ * stale Space asset, broken build) nothing would ever flip it and the
+ * shell would hold its neutral splash forever. Past this grace we
+ * declare "not signed in" so the shell lands on SignInView - with its
+ * local-dev missing-config hint, the one screen that can explain the
+ * situation. A late-arriving SDK still runs `authenticate()` and
+ * upgrades the state; the SignInView flash in that race is the
+ * accepted cost of never spinning forever.
+ */
+export const SDK_LOAD_GRACE_MS = 8_000;
+
+/**
  * Should the boot leg auto-redirect into a silent sign-in
  * (`login({ prompt: 'none' })`) after `authenticate()` found no token?
  *
@@ -111,6 +125,19 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
   const [authResolved, setAuthResolved] = useState<boolean>(() =>
     Boolean(sdk?.isAuthenticated) || isUserSignedOut(),
   );
+
+  // 1b. Escape hatch: everything below waits on `sdk`, so a bundle
+  //     that never materialises would otherwise pin `authResolved`
+  //     false - and the boot splash up - forever. See
+  //     `SDK_LOAD_GRACE_MS` for the trade-off.
+  useEffect(() => {
+    if (sdk) return;
+    const t = window.setTimeout(
+      () => setAuthResolved(true),
+      SDK_LOAD_GRACE_MS,
+    );
+    return () => window.clearTimeout(t);
+  }, [sdk]);
 
   // 2. Try to authenticate from cached tokens once the SDK is
   //    available. Skip if the user explicitly signed out earlier.

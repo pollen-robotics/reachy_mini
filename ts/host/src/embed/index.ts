@@ -631,6 +631,13 @@ function createBridge(expectedOrigin: string, sdk: ReachyMiniInstance) {
         startDaemonUpdateForHost(sdk, msg.preRelease === true);
         break;
       }
+      case 'host:cancel-update': {
+        // The host's stall timer gave up on the job we started: put
+        // the update-mode plumbing back (sessionStopped translator,
+        // auto-reconnect). No-op when nothing is in flight.
+        disarmActiveUpdate?.();
+        break;
+      }
     }
   }
 
@@ -923,6 +930,17 @@ function postToHost(msg: EmbedToHostMsg): void {
  * session down mid-install, which is what a success looks like from
  * here.
  */
+/**
+ * Disarm handle for the in-flight `host:start-update` job, armed by
+ * `startDaemonUpdateForHost` and consumed by `host:cancel-update`.
+ * Null whenever no update is in flight (a cancel is then a no-op).
+ * The host sends the cancel when ITS stall timer gives up: only the
+ * host runs one, so without this hook a host-side timeout would leave
+ * the sessionStopped translator armed and auto-reconnect off for the
+ * rest of the session.
+ */
+let disarmActiveUpdate: (() => void) | null = null;
+
 function startDaemonUpdateForHost(
   sdk: ReachyMiniInstance,
   preRelease: boolean,
@@ -959,10 +977,12 @@ function startDaemonUpdateForHost(
   // leftover copy would fire on the user's next normal end-session and
   // flip the (already failed) gate into a bogus reboot wait.
   const onSessionStopped = (): void => {
+    disarmActiveUpdate = null;
     sdk.removeEventListener('sessionStopped', onSessionStopped);
     postProgress({ status: 'rebooting' });
   };
   const abandonUpdate = (): void => {
+    disarmActiveUpdate = null;
     sdk.removeEventListener('sessionStopped', onSessionStopped);
     setAutoReconnect(true);
   };
@@ -1002,6 +1022,7 @@ function startDaemonUpdateForHost(
   } catch {
     /* older SDK without the event: the host falls back to its stall timer */
   }
+  disarmActiveUpdate = abandonUpdate;
 }
 
 /**

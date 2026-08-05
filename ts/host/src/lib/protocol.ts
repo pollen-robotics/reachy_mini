@@ -185,12 +185,32 @@ export interface HostStartUpdateMsg {
   preRelease?: boolean;
 }
 
+/**
+ * The host gave up on the update it started (its own stall timer
+ * fired while the session was still alive). This does NOT abort the
+ * daemon-side job - nothing can, the install owns the robot - it
+ * disarms the embed's update-mode plumbing: the sessionStopped →
+ * `rebooting` translator and the auto-reconnect stand-down. Without
+ * it, the user's next NORMAL end-session would replay a stale
+ * `rebooting` frame into a host that already declared the update
+ * failed.
+ *
+ * Additive message (no version bump): an embed too old to know this
+ * type ignores it, and its own translator dies with the iframe.
+ */
+export interface HostCancelUpdateMsg {
+  source: typeof PROTOCOL_SOURCE;
+  type: 'host:cancel-update';
+  version: 1;
+}
+
 export type HostToEmbedMsg =
   | HostInitMsg
   | HostThemeChangedMsg
   | HostConfigChangedMsg
   | HostLeavingMsg
-  | HostStartUpdateMsg;
+  | HostStartUpdateMsg
+  | HostCancelUpdateMsg;
 
 /* ─────────────────── EMBED → HOST ─────────────────── */
 

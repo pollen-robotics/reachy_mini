@@ -54,8 +54,11 @@ const DESKTOP_APP_URL = 'https://huggingface.co/spaces/pollen-robotics/reachy-mi
 /** Public troubleshooting docs. */
 const TROUBLESHOOTING_URL = 'https://huggingface.co/docs/reachy_mini/troubleshooting';
 
-/** If the daemon acked the job but never restarted within this window,
- *  something failed silently - stop pretending it's still working. */
+/** If the update goes SILENT - no progress frame at all - for this
+ *  long, something failed; stop pretending it's still working. The
+ *  timer re-arms on every progress line, so it measures silence, not
+ *  total install time: a slow-but-reporting pip on weak wifi can run
+ *  as long as it keeps talking. */
 const UPDATE_STALL_TIMEOUT_MS = 180_000;
 
 /** Upper bound on the post-restart wait. A Reachy is back on central
@@ -100,6 +103,18 @@ export interface DaemonUpdateGateProps {
   appLive: boolean;
   /** Ask the embed to start the daemon update. */
   onStartUpdate(): void;
+  /** The gate gave up on the update (its stall timer fired with the
+   *  session still alive). The shell should relay `host:cancel-update`
+   *  so the embed disarms its update-mode plumbing (sessionStopped
+   *  translator + auto-reconnect stand-down) - otherwise the user's
+   *  next NORMAL end-session replays a stale `rebooting` frame. */
+  onCancelUpdate?(): void;
+  /** Escape from the blocking tier: end the session and return to the
+   *  picker. The block only paints AFTER `startSession()` succeeded
+   *  (that's when `daemonVersion` arrives), so a live session and an
+   *  awake robot sit behind the overlay - without this, closing the
+   *  tab is the only way to release the app-slot lock. */
+  onExitApp?(): void;
   /** The session is over (the daemon is restarting): drop the iframe
    *  and go back to the picker, keeping this overlay on top. */
   onSessionLost(): void;
@@ -114,6 +129,8 @@ export function DaemonUpdateGate({
   robotBackOnline,
   appLive,
   onStartUpdate,
+  onCancelUpdate,
+  onExitApp,
   onSessionLost,
   onDismiss,
 }: DaemonUpdateGateProps): JSX.Element | null {
@@ -121,8 +138,10 @@ export function DaemonUpdateGate({
   const [logLines, setLogLines] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
   /** Once cleared, stay cleared: a late version read must not reopen a
-   *  card the user already dismissed. */
-  const clearedRef = useRef(false);
+   *  card the user already dismissed. State, not a ref: the dismissed
+   *  card must disappear on OUR render, without counting on the
+   *  shell's onDismiss to happen to re-render the parent. */
+  const [cleared, setCleared] = useState(false);
   /** `onSessionLost` is a one-way door (it unmounts the iframe), and
    *  its identity changes as the shell tears state down, which would
    *  otherwise re-run the progress effect and fire it again. */
@@ -136,15 +155,20 @@ export function DaemonUpdateGate({
   // gate mounts, which reads as a flash of content the user isn't
   // supposed to act on.
   const shouldPrompt =
-    severity !== null &&
-    !clearedRef.current &&
-    (severity === 'block' || appLive);
+    severity !== null && !cleared && (severity === 'block' || appLive);
   const effectivePhase: Phase =
     phase === 'idle' && shouldPrompt ? 'prompt' : phase;
 
-  // Fold the progress stream into the local phase.
+  // Fold the progress stream into the local phase - but only while an
+  // update WE drove is actually in flight. Frames arriving in any
+  // other phase are stale: after a local stall timeout (`failed`) the
+  // embed's sessionStopped translator may still fire on the user's
+  // next NORMAL end-session, and folding that `rebooting` here would
+  // resurrect a dismissed gate over the picker and call onSessionLost
+  // in the middle of a clean leave.
   useEffect(() => {
     if (!progress) return;
+    if (phase !== 'updating' && phase !== 'rebooting') return;
     if (progress.status === 'in_progress') {
       const line = progress.line?.trim();
       if (line) setLogLines((prev) => [...prev, line].slice(-LOG_TAIL));
@@ -162,17 +186,20 @@ export function DaemonUpdateGate({
     if (sessionLostRef.current) return;
     sessionLostRef.current = true;
     onSessionLost();
-  }, [progress, onSessionLost]);
+  }, [progress, phase, onSessionLost]);
 
   // The robot answered central again: the new daemon is up.
   useEffect(() => {
     if (phase !== 'rebooting' || !robotBackOnline) return;
-    clearedRef.current = true;
+    setCleared(true);
     setPhase('done');
   }, [phase, robotBackOnline]);
 
-  // Safety nets. The daemon acked but never restarted, or it restarted
-  // and never came back - either way, stop spinning and say so.
+  // Safety nets. The update went silent, or the robot restarted and
+  // never came back - either way, stop spinning and say so. `progress`
+  // is a dependency ON PURPOSE: every frame re-arms the timer, so the
+  // updating budget bounds silence since the last line, not the whole
+  // install.
   useEffect(() => {
     if (phase !== 'updating' && phase !== 'rebooting') return;
     const budget =
@@ -180,13 +207,17 @@ export function DaemonUpdateGate({
     const t = window.setTimeout(() => {
       setFailure(
         phase === 'updating'
-          ? 'The robot never started the update.'
+          ? 'The robot stopped responding during the update.'
           : 'The robot did not come back online after the restart.',
       );
       setPhase('failed');
+      // The session is still alive in the updating case: tell the
+      // embed we gave up so it disarms its translator and restores
+      // auto-reconnect (fire-and-forget, older embeds ignore it).
+      if (phase === 'updating') onCancelUpdate?.();
     }, budget);
     return () => window.clearTimeout(t);
-  }, [phase]);
+  }, [phase, progress, onCancelUpdate]);
 
   const handleUpdateNow = useCallback(() => {
     setLogLines([]);
@@ -196,7 +227,7 @@ export function DaemonUpdateGate({
   }, [onStartUpdate]);
 
   const handleDismiss = useCallback(() => {
-    clearedRef.current = true;
+    setCleared(true);
     setPhase('idle');
     onDismiss();
   }, [onDismiss]);
@@ -302,6 +333,22 @@ export function DaemonUpdateGate({
                 Troubleshooting
               </Button>
             </>
+          )}
+          {effectivePhase === 'prompt' && onExitApp && (
+            // The blocking tier must not be a dead end: a live session
+            // (and an awake robot) sits behind this overlay. Give the
+            // user a way to release it without closing the tab.
+            <Button
+              onClick={onExitApp}
+              variant="outlined"
+              sx={{
+                textTransform: 'none',
+                fontSize: TYPO.sm,
+                mt: 1,
+              }}
+            >
+              Back to my Reachies
+            </Button>
           )}
         </Stack>
       </Stack>
