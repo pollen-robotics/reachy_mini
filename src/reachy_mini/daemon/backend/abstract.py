@@ -1340,8 +1340,11 @@ class Backend:
     # The poller exits after this long without a cache consumer. DoA rides
     # the state snapshot, so "demand" means any connected client reading
     # state; the gain is that an idle daemon (no client at all - the common
-    # state for an always-on robot) generates zero USB traffic.
-    DOA_IDLE_STOP_S = 5.0
+    # state for an always-on robot) generates zero USB traffic. Must stay
+    # comfortably above any plausible REST polling cadence: the idle exit
+    # clears the cache, so a client polling slower than this would only
+    # ever see the null it re-primed on its previous request.
+    DOA_IDLE_STOP_S = 60.0
 
     def _note_doa_demand(self) -> None:
         """Record cache demand and make sure the poller is running.
