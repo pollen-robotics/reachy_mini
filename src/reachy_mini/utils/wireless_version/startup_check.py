@@ -6,22 +6,45 @@ Also checks and updates the bluetooth service if needed.
 """
 
 import filecmp
+import hashlib
+import json
 import logging
+import os
 import subprocess
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 USER = "pollen"
 
+# The stamp certifies that the *expensive* startup checks (full /venvs
+# ownership scan, apps_venv SDK sync probe, restore-venv integrity) completed
+# successfully for the exact set of installed reachy_mini distributions
+# recorded in it. Any pip/uv (re)install rewrites the dist-info RECORD files,
+# which changes the signature and invalidates the stamp. The stamp lives
+# inside /venvs so that SOFTWARE_RESET.sh (rm -rf /venvs) and a re-flash
+# destroy it. Any error anywhere in the fast path falls back to the full
+# checks.
+DAEMON_VENV = Path("/venvs/mini_daemon")
+APPS_VENV = Path("/venvs/apps_venv")
+RESTORE_VENV = Path("/restore/venvs/mini_daemon")
+STAMP_PATH = DAEMON_VENV / ".startup_check_stamp.json"
+STAMP_FORMAT = 1
+
+# systemd unit self-healed on every boot (see check_and_update_gpio_shutdown_service).
+GPIO_SHUTDOWN_UNIT_TARGET = Path("/etc/systemd/system/gpio-shutdown-daemon.service")
+
 
 def check_and_fix_venvs_ownership(
     venvs_path: str = "/venvs", custom_logger: logging.Logger | None = None
-) -> None:
+) -> bool:
     """For wireless units, check if files under venvs_path are owned by user pollen and fix if needed.
 
     Args:
         venvs_path: Path to the virtual environments directory (default: /venvs)
         custom_logger: Optional logger to use instead of the module logger
+
+    Returns:
+        True when everything under venvs_path is (now) owned by USER.
 
     """
     import pwd
@@ -31,17 +54,17 @@ def check_and_fix_venvs_ownership(
         pollen_uid = pwd.getpwnam(USER).pw_uid
     except KeyError:
         print(f"User '{USER}' does not exist on this system")
-        return
+        return False
 
     venvs_dir = Path(venvs_path)
 
     if not venvs_dir.exists():
         print(f"Directory {venvs_path} does not exist")
-        return
+        return False
 
     if not venvs_dir.is_dir():
         print(f"{venvs_path} exists but is not a directory")
-        return
+        return False
 
     # Check if any files are not owned by pollen
     needs_fix = False
@@ -56,7 +79,7 @@ def check_and_fix_venvs_ownership(
                 print(f"Cannot check ownership of {item}: {e}")
     except (PermissionError, OSError) as e:
         print(f"Cannot access {venvs_path}: {e}")
-        return
+        return False
 
     if needs_fix:
         print(f"Fixing ownership of {venvs_path} to {USER}:{USER}")
@@ -69,12 +92,16 @@ def check_and_fix_venvs_ownership(
                 text=True,
             )
             print(f"Successfully fixed ownership of {venvs_path}")
+            return True
         except subprocess.CalledProcessError as e:
             print(f"Failed to fix ownership: {e.stderr}")
+            return False
         except Exception as e:
             print(f"Unexpected error while fixing ownership: {e}")
+            return False
     else:
         print(f"All files under {venvs_path} are owned by {USER}")
+        return True
 
 
 def check_and_update_bluetooth_service() -> None:
@@ -252,11 +279,90 @@ def check_and_update_wireless_launcher() -> None:
         print(f"Unexpected error while updating service: {e}")
 
 
-def check_and_sync_apps_venv_sdk() -> None:
+def check_and_update_gpio_shutdown_service() -> None:
+    """Check if the gpio-shutdown systemd unit needs updating and update if different.
+
+    Compares the packaged gpio-shutdown-daemon.service with the installed
+    version at /etc/systemd/system. Older images generated the unit at install
+    time with an ExecStart pointing at wherever the SDK lived back then, so
+    without this sync a stale unit keeps running old launcher code forever.
+    On a difference the packaged unit is copied over and the service is
+    restarted; a missing unit is installed and enabled.
+    """
+    source = (
+        Path(__file__).parent
+        / ".."
+        / ".."
+        / "daemon"
+        / "app"
+        / "services"
+        / "gpio_shutdown"
+        / "gpio-shutdown-daemon.service"
+    )
+    source = source.resolve()
+    target = GPIO_SHUTDOWN_UNIT_TARGET
+
+    if not source.exists():
+        print(f"Source gpio-shutdown service file not found at {source}")
+        return
+
+    target_missing = not target.exists()
+    if not target_missing:
+        try:
+            if filecmp.cmp(str(source), str(target), shallow=False):
+                print("gpio-shutdown service is up to date")
+                return
+            print("gpio-shutdown service has changed, updating...")
+        except Exception as e:
+            print(f"Error comparing gpio-shutdown service files: {e}")
+            return
+    else:
+        print(f"gpio-shutdown service not installed at {target}, installing...")
+
+    try:
+        print(f"Copying {source} to {target}")
+        subprocess.run(
+            ["sudo", "cp", str(source), str(target)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            ["sudo", "systemctl", "daemon-reload"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        if target_missing:
+            # Fresh install: enable so it also starts on subsequent boots.
+            subprocess.run(
+                ["sudo", "systemctl", "enable", "--now", "gpio-shutdown-daemon"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        else:
+            subprocess.run(
+                ["sudo", "systemctl", "restart", "gpio-shutdown-daemon"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        print("Successfully updated gpio-shutdown service")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to update gpio-shutdown service: {e.stderr}")
+    except Exception as e:
+        print(f"Unexpected error while updating gpio-shutdown service: {e}")
+
+
+def check_and_sync_apps_venv_sdk() -> bool:
     """Check if apps_venv SDK matches daemon install source and sync if needed.
 
     Compares both version AND install source (PyPI vs git ref). If daemon was
     installed from a git ref, apps_venv will be synced to the same ref.
+
+    Returns:
+        True when apps_venv is (now) in sync, or absent.
 
     """
     import json
@@ -270,13 +376,13 @@ def check_and_sync_apps_venv_sdk() -> None:
         daemon_info = get_install_source("reachy_mini")
     except Exception as e:
         print(f"Could not get daemon SDK info: {e}")
-        return
+        return False
 
     # Check apps_venv exists
-    apps_venv_python = Path("/venvs/apps_venv/bin/python")
+    apps_venv_python = APPS_VENV / "bin/python"
     if not apps_venv_python.exists():
         print("apps_venv not found, skipping SDK sync")
-        return
+        return True
 
     # Get apps_venv install info by reading metadata directly (avoid importing from apps_venv)
     try:
@@ -300,14 +406,14 @@ def check_and_sync_apps_venv_sdk() -> None:
         )
         if result.returncode != 0:
             print(f"Could not get apps_venv SDK info: {result.stderr}")
-            return
+            return False
         apps_info = json.loads(result.stdout.strip())
     except subprocess.TimeoutExpired:
         print("Timeout getting apps_venv SDK info")
-        return
+        return False
     except Exception as e:
         print(f"Error getting apps_venv SDK info: {e}")
-        return
+        return False
 
     print(
         f"Daemon: {daemon_info['version']} (source={daemon_info['source']}, ref={daemon_info.get('git_ref')})"
@@ -326,7 +432,7 @@ def check_and_sync_apps_venv_sdk() -> None:
 
     if not needs_sync:
         print("Apps venv SDK is up to date")
-        return
+        return True
 
     # Build install command
     cmd, extra_env = build_install_command(
@@ -342,26 +448,34 @@ def check_and_sync_apps_venv_sdk() -> None:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=300, env=resolved_env, cwd=Path.home())
         if result.returncode == 0:
             print("Successfully synced apps_venv SDK")
+            return True
         else:
             print(f"Failed to sync apps_venv SDK: {result.stderr}")
+            return False
     except subprocess.TimeoutExpired:
         print("Timeout syncing apps_venv SDK")
+        return False
     except Exception as e:
         print(f"Error syncing apps_venv SDK: {e}")
+        return False
 
 
-def check_and_fix_restore_venv() -> None:
+def check_and_fix_restore_venv() -> bool:
     """Check if restore venv has editable install and fix if needed.
 
     The restore partition at /restore/venvs should have a proper PyPI install,
     not an editable install. If an editable install is detected, reinstall
     from PyPI with a known good version.
+
+    Returns:
+        True when the restore venv is (now) correct, or absent.
+
     """
-    restore_python = Path("/restore/venvs/mini_daemon/bin/python")
+    restore_python = RESTORE_VENV / "bin/python"
 
     if not restore_python.exists():
         print("Restore venv not found, skipping")
-        return
+        return True
 
     # Check if editable install
     try:
@@ -373,10 +487,10 @@ def check_and_fix_restore_venv() -> None:
         )
     except subprocess.TimeoutExpired:
         print("Timeout checking restore venv")
-        return
+        return False
     except Exception as e:
         print(f"Error checking restore venv: {e}")
-        return
+        return False
 
     if "Editable project location" in result.stdout:
         print("Legacy editable install detected in restore venv, reinstalling...")
@@ -389,18 +503,159 @@ def check_and_fix_restore_venv() -> None:
                 timeout=300,
             )
             print("Successfully reinstalled reachy-mini in restore venv")
+            return True
         except subprocess.CalledProcessError as e:
             print(f"Failed to reinstall in restore venv: {e.stderr}")
+            return False
         except subprocess.TimeoutExpired:
             print("Timeout reinstalling in restore venv")
+            return False
         except Exception as e:
             print(f"Error reinstalling in restore venv: {e}")
+            return False
     else:
         print("Restore venv install is correct")
+        return True
+
+
+def clear_startup_stamp() -> None:
+    """Remove the startup-check stamp so the next boot runs the full checks."""
+    try:
+        STAMP_PATH.unlink(missing_ok=True)
+    except OSError as e:
+        print(f"Could not remove startup stamp: {e}")
+
+
+def _dist_record_sig(venv_root: Path) -> str | None:
+    """Stat-based signature of the reachy_mini dist-info RECORD file(s) in a venv.
+
+    Any pip/uv install, upgrade, downgrade or --force-reinstall rewrites the
+    dist-info directory, so (path, mtime_ns, size) of RECORD changes on every
+    (re)install. Returns None when no reachy_mini distribution is present.
+    """
+    records = sorted(
+        venv_root.glob("lib/python*/site-packages/reachy_mini-*.dist-info/RECORD")
+    )
+    if not records:
+        return None
+    parts = []
+    for record in records:
+        st = record.stat()
+        parts.append(f"{record}:{st.st_mtime_ns}:{st.st_size}")
+    return ";".join(parts)
+
+
+def _compute_stamp_signature() -> dict[str, object]:
+    """Compute the signature the stamp is compared against (a few stat calls).
+
+    Raises on anything unexpected: callers treat any exception as "no fast
+    path" and run the full checks.
+    """
+    from .update_available import get_install_source
+
+    daemon_info = get_install_source("reachy_mini")
+    if daemon_info.get("source") == "editable":
+        # Editable code can change without any metadata change: never fast-path.
+        raise RuntimeError("editable install detected, fast path disabled")
+
+    daemon_record = _dist_record_sig(DAEMON_VENV)
+    if daemon_record is None:
+        raise RuntimeError(f"no reachy_mini dist-info found in {DAEMON_VENV}")
+
+    return {
+        "format": STAMP_FORMAT,
+        # Invalidates the stamp whenever the check logic itself changes.
+        "checks_hash": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "daemon": daemon_info,
+        "daemon_record": daemon_record,
+        "apps_record": _dist_record_sig(APPS_VENV),
+        "restore_record": _dist_record_sig(RESTORE_VENV),
+    }
+
+
+def _quick_ownership_ok() -> bool:
+    """Cheap, bounded ownership probe used on the fast path (no full rglob)."""
+    import pwd
+
+    uid = pwd.getpwnam(USER).pw_uid
+    probes = [
+        Path("/venvs"),
+        DAEMON_VENV,
+        DAEMON_VENV / "bin/python",
+        APPS_VENV,
+        STAMP_PATH,
+    ]
+    for probe in probes:
+        if probe.exists() and probe.stat().st_uid != uid:
+            print(f"Fast path aborted: {probe} not owned by {USER}")
+            return False
+    return True
+
+
+def _startup_stamp_valid() -> bool:
+    """Check that the stored stamp matches the freshly computed signature."""
+    stored = json.loads(STAMP_PATH.read_text())
+    if stored != _compute_stamp_signature():
+        print("Startup stamp mismatch (install state changed); running full startup checks")
+        return False
+    return _quick_ownership_ok()
+
+
+def _write_startup_stamp() -> None:
+    """Atomically write the stamp after all expensive checks succeeded."""
+    signature = _compute_stamp_signature()
+    tmp = STAMP_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(signature, sort_keys=True))
+    os.replace(tmp, STAMP_PATH)
+    print(f"Startup stamp written to {STAMP_PATH}")
+
+
+def run_wireless_startup_checks(
+    custom_logger: logging.Logger | None = None,
+) -> None:
+    """Run wireless startup checks, skipping the expensive ones when nothing changed.
+
+    Cheap checks (bluetooth service files, wireless and gpio-shutdown systemd
+    units) always run: they guard files outside /venvs that a venv-keyed stamp
+    cannot see. The expensive ones (full /venvs ownership scan, apps_venv SDK
+    sync, restore-venv integrity) are skipped only when a stamp written by a
+    previous fully-successful run matches the current install signature.
+    Any error reading or matching the stamp falls back to the full checks.
+    """
+    try:
+        fast_path = _startup_stamp_valid()
+    except Exception as e:
+        print(f"Startup stamp not usable ({e}); running full startup checks")
+        fast_path = False
+
+    if fast_path:
+        print("Startup stamp valid, skipping expensive startup checks")
+        check_and_update_bluetooth_service()
+        check_and_update_wireless_launcher()
+        check_and_update_gpio_shutdown_service()
+        return
+
+    all_ok = check_and_fix_venvs_ownership(custom_logger=custom_logger)
+    check_and_update_bluetooth_service()
+    check_and_update_wireless_launcher()
+    check_and_update_gpio_shutdown_service()
+    all_ok = check_and_sync_apps_venv_sdk() and all_ok
+    all_ok = check_and_fix_restore_venv() and all_ok
+
+    if not all_ok:
+        print("Some startup checks did not succeed; not writing startup stamp")
+        clear_startup_stamp()
+        return
+
+    try:
+        _write_startup_stamp()
+    except Exception as e:
+        # Never fatal: worst case the full checks simply run again next boot.
+        # Drop any stale stamp so what's on disk is always fresh or absent.
+        print(f"Could not write startup stamp: {e}")
+        clear_startup_stamp()
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    check_and_fix_venvs_ownership()
-    check_and_update_bluetooth_service()
-    check_and_sync_apps_venv_sdk()
+    run_wireless_startup_checks()
