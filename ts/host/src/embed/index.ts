@@ -45,11 +45,6 @@ import {
   isProtocolMessage,
 } from '../lib/protocol';
 import { fetchRobotsFromCentral } from '../lib/centralRest';
-import {
-  fetchLatestDaemonVersion,
-  isDaemonOutdated,
-  parseSemver,
-} from '../lib/daemonRelease';
 import type {
   AppConnectingStep,
   AppPhase,
@@ -497,12 +492,6 @@ async function bootOnce(
   // of a dead frozen app. No-op against an older SDK bundle that doesn't
   // emit these events.
   installReconnectBridge(sdk);
-
-  // Self-serve staleness check: this runs INSIDE the app's iframe, so
-  // it covers every consumer (web shell, mobile app, anything else)
-  // without the parent lifting a finger. Fire-and-forget: the GitHub
-  // lookup must never delay or break going live.
-  void maybeWarnSdkOutdated();
 
   // 9. Start sampling our own WebRTC RTT and reporting it upstream so
   //    a host shell that handed its session off to us (mobile app)
@@ -1037,11 +1026,11 @@ let daemonVersion: string | null = null;
 
 /**
  * Version of the SDK bundle the app loaded (`instance.sdkVersion`),
- * captured at construction in `bootOnce`. Drives our own staleness
- * check (`maybeWarnSdkOutdated`) and is advertised on every app-state
- * for parents that update independently of the app (see `sdkVersion`
- * in protocol.ts). `null` against an SDK old enough not to carry the
- * field.
+ * captured at construction in `bootOnce`. Advertised on every
+ * app-state for parents that update independently of the app (see
+ * `sdkVersion` in protocol.ts) - the mobile app reads its ABSENCE as
+ * "bundle predates the field". `null` against an SDK old enough not
+ * to carry it.
  */
 let appSdkVersion: string | null = null;
 
@@ -1081,108 +1070,6 @@ function pushAppState(
     daemonVersion,
     sdkVersion: appSdkVersion,
   });
-}
-
-/* ─────────────────── SDK staleness self-check ─────────────────── */
-
-/**
- * Warn the user, from inside the iframe, when the SDK bundle this app
- * shipped trails the latest release.
- *
- * Why here and not in the parent: the embed is the only code that runs
- * identically under every host (web shell, mobile app WebView), so a
- * check living here needs zero integration on the parent's side. The
- * one case it structurally CANNOT cover is an app whose SDK predates
- * this very code - a frozen bundle can't warn about itself. Only a
- * parent that updates independently of the app could catch that (the
- * mobile app, via the absence of `sdkVersion` on app-state); the web
- * shell can't, being part of the same frozen bundle.
- *
- * Silent when: the version is a dev placeholder (`0.0.0-*`) or
- * unparseable, the latest release can't be fetched, or we're simply up
- * to date. Never blocks - one click dismisses it for the session.
- */
-async function maybeWarnSdkOutdated(): Promise<void> {
-  try {
-    const parsed = parseSemver(appSdkVersion);
-    if (!parsed || parsed.major === 0) return;
-    const latest = await fetchLatestDaemonVersion();
-    if (!isDaemonOutdated(appSdkVersion, latest)) return;
-    showSdkOutdatedOverlay(appSdkVersion as string, latest as string);
-  } catch {
-    /* purely advisory - never let it interfere with a live session */
-  }
-}
-
-/** Plain-DOM overlay (the embed is framework-agnostic): dark scrim,
- *  centred card, one dismiss button. Styling is self-contained so it
- *  renders the same over any app theme. */
-function showSdkOutdatedOverlay(current: string, latest: string): void {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById('reachy-sdk-outdated-overlay')) return;
-
-  const scrim = document.createElement('div');
-  scrim.id = 'reachy-sdk-outdated-overlay';
-  scrim.setAttribute('role', 'alertdialog');
-  scrim.setAttribute('aria-label', 'This app may be out of date');
-  scrim.style.cssText = [
-    'position:fixed',
-    'inset:0',
-    'z-index:2147483000',
-    'display:flex',
-    'align-items:center',
-    'justify-content:center',
-    'padding:16px',
-    'background:rgba(0,0,0,0.55)',
-    'font-family:system-ui,-apple-system,sans-serif',
-  ].join(';');
-
-  const card = document.createElement('div');
-  card.style.cssText = [
-    'background:#fff',
-    'color:#1a1a1a',
-    'border-radius:12px',
-    'padding:24px',
-    'max-width:400px',
-    'width:100%',
-    'text-align:center',
-    'box-shadow:0 8px 32px rgba(0,0,0,0.35)',
-  ].join(';');
-
-  const icon = document.createElement('div');
-  icon.textContent = '\u26A0\uFE0F';
-  icon.style.cssText = 'font-size:32px;line-height:1;margin-bottom:12px';
-
-  const title = document.createElement('div');
-  title.textContent = 'This app may be out of date';
-  title.style.cssText = 'font-size:17px;font-weight:700;margin-bottom:8px';
-
-  const body = document.createElement('div');
-  body.textContent =
-    `It was built with SDK v${current}, but v${latest} is the latest. ` +
-    'Some things may not behave as expected with your robot.';
-  body.style.cssText =
-    'font-size:13px;line-height:1.6;color:#555;margin-bottom:16px';
-
-  const button = document.createElement('button');
-  button.textContent = 'I understand, continue';
-  button.style.cssText = [
-    'width:100%',
-    'padding:10px 16px',
-    'border:none',
-    'border-radius:8px',
-    'background:#1a1a1a',
-    'color:#fff',
-    'font-size:13px',
-    'font-weight:600',
-    'cursor:pointer',
-  ].join(';');
-  button.addEventListener('click', () => scrim.remove());
-
-  card.append(icon, title, body, button);
-  scrim.appendChild(card);
-  document.body.appendChild(scrim);
-  button.focus();
 }
 
 /* ─────────────────── Live link latency monitor ─────────────────── */
