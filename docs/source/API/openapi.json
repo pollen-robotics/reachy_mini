@@ -2323,7 +2323,7 @@
     "/api/state/doa": {
       "get": {
         "summary": "Get Doa",
-        "description": "Get the Direction of Arrival from the microphone array.\n\nReturns the angle in radians (0=left, \u03c0/2=front, \u03c0=right) and speech detection status.\nReturns None if the audio device is not available.",
+        "description": "Get the Direction of Arrival from the microphone array.\n\nReturns the angle in radians (0=left, \u03c0/2=front, \u03c0=right) and speech detection status.\nReturns None if the audio device is not available or no reading has\nlanded yet (the first one lands within ~100 ms of the first request).",
         "operationId": "get_doa_api_state_doa_get",
         "responses": {
           "200": {
@@ -2333,7 +2333,7 @@
                 "schema": {
                   "anyOf": [
                     {
-                      "$ref": "#/components/schemas/DoAInfo"
+                      "$ref": "#/components/schemas/DoaSnapshot"
                     },
                     {
                       "type": "null"
@@ -3071,7 +3071,7 @@
         "title": "DaemonStatus",
         "description": "Status of the Reachy Mini daemon."
       },
-      "DoAInfo": {
+      "DoaSnapshot": {
         "properties": {
           "angle": {
             "type": "number",
@@ -3087,8 +3087,8 @@
           "angle",
           "speech_detected"
         ],
-        "title": "DoAInfo",
-        "description": "Direction of Arrival info from the microphone array."
+        "title": "DoaSnapshot",
+        "description": "Sound Direction of Arrival reading (ReSpeaker mic array).\n\n``angle`` is in radians: 0 = left, \u03c0/2 = front, \u03c0 = right."
       },
       "EnableTrackingRequest": {
         "properties": {
@@ -3336,7 +3336,7 @@
           "doa": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DoAInfo"
+                "$ref": "#/components/schemas/DoaSnapshot"
               },
               {
                 "type": "null"
