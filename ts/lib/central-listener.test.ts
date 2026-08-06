@@ -260,20 +260,19 @@ describe('event dispatch', () => {
     });
     await flush();
 
-    expect(onList).toHaveBeenCalledWith({
-      producers: [{ id: 'robot-1', meta: { name: 'Reachy' }, busy: false }],
-    });
-    expect(onPeerStatusChanged).toHaveBeenCalledWith({
-      peerId: 'robot-1',
-      roles: [],
-      meta: undefined,
-    });
-    expect(onSessionStateChanged).toHaveBeenCalledWith({
-      peerId: 'robot-1',
-      busy: true,
-      activeApp: 'conversation',
-      meta: undefined,
-    });
+    expect(onList).toHaveBeenCalledWith([
+      { id: 'robot-1', meta: { name: 'Reachy' }, busy: false },
+    ]);
+    expect(onPeerStatusChanged).toHaveBeenCalledWith(
+      expect.objectContaining({ peerId: 'robot-1', roles: [] }),
+    );
+    expect(onSessionStateChanged).toHaveBeenCalledWith(
+      expect.objectContaining({
+        peerId: 'robot-1',
+        busy: true,
+        activeApp: 'conversation',
+      }),
+    );
   });
 
   it('ignores unknown frame types and unparsable payloads', async () => {

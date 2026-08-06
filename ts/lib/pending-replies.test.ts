@@ -84,16 +84,30 @@ describe('reply slots', () => {
 });
 
 describe('JSON-RPC', () => {
+    /** Capture the id `rpcRoundtrip` mints for the send callback. */
+    function roundtrip(method: string, timeoutMs: number): { id: string; p: Promise<unknown> } {
+        let id = '';
+        const p = pending.rpcRoundtrip(method, timeoutMs, (mintedId) => {
+            id = mintedId;
+            return true;
+        });
+        return { id, p };
+    }
+
     it('routes a result response to its waiter by id', async () => {
-        const id = pending.nextRpcId();
-        const p = pending.registerRpc(id, 'apps.start', 1000);
+        const { id, p } = roundtrip('apps.start', 1000);
         expect(pending.settleRpcResponse({ id, result: { ok: true } })).toBe(true);
         await expect(p).resolves.toEqual({ ok: true });
     });
 
+    it('rejects immediately when the send reports a closed channel', async () => {
+        await expect(
+            pending.rpcRoundtrip('apps.start', 1000, () => false),
+        ).rejects.toThrow('rpcCall(apps.start): data channel not open');
+    });
+
     it('rejects with message and machine-readable reason on an error response', async () => {
-        const id = pending.nextRpcId();
-        const p = pending.registerRpc(id, 'apps.start', 1000);
+        const { id, p } = roundtrip('apps.start', 1000);
         expect(pending.settleRpcResponse({
             id,
             error: { message: 'nope', data: { reason: 'app_not_found' } },
@@ -105,8 +119,7 @@ describe('JSON-RPC', () => {
     });
 
     it('swallows a late reply to a timed-out call (still response-shaped)', async () => {
-        const id = pending.nextRpcId();
-        const p = pending.registerRpc(id, 'conversation.say', 1000);
+        const { id, p } = roundtrip('conversation.say', 1000);
         void p.catch(() => { /* asserted below */ });
         await vi.advanceTimersByTimeAsync(1000);
         await expect(p).rejects.toThrow(/timed out after 1000ms/);
@@ -120,8 +133,12 @@ describe('JSON-RPC', () => {
         expect(pending.settleRpcResponse({ id: 'rpc-1', method: 'x' })).toBe(false);
     });
 
-    it('generates unique correlation ids', () => {
-        expect(pending.nextRpcId()).not.toBe(pending.nextRpcId());
+    it('mints unique correlation ids', () => {
+        const first = roundtrip('a', 1000);
+        const second = roundtrip('b', 1000);
+        expect(first.id).not.toBe(second.id);
+        void first.p.catch(() => { /* timeout */ });
+        void second.p.catch(() => { /* timeout */ });
     });
 });
 
@@ -192,8 +209,7 @@ describe('broadcast waiters', () => {
 describe('settleAll (session teardown)', () => {
     it('settles all four ledgers in one call', async () => {
         const slot = pending.slotRoundtrip('version', vi.fn());
-        const rpcId = pending.nextRpcId();
-        const rpc = pending.registerRpc(rpcId, 'apps.start', 60_000);
+        const rpc = pending.rpcRoundtrip('apps.start', 60_000, () => true);
         const motion = pending.awaitMotion('wake_up', 60_000);
         const broadcast = pending.awaitBroadcast(() => true, { timeoutMs: 60_000 });
         // Pre-attach handlers so the synchronous rejections below don't

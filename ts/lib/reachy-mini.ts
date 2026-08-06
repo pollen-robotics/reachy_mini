@@ -233,16 +233,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 return true;
             },
             reconnectSignaling: () => this.connect(),
-            dial: (robotId) => this.startSession(robotId),
+            // The private dial skips the public startSession()'s
+            // cancelRedial, so the loop's own attempts don't cancel it.
+            dial: (robotId) => this._startSessionInternal(robotId),
             teardownForRedial: () => this._teardownForRedial(),
             nudgeState: () => { this.requestState(); },
-            emitError: (error) => this._emit('error', { source: 'webrtc', error }),
-            emitReconnecting: (detail) => this._emit('sessionReconnecting', detail),
-            emitReconnected: (detail) => this._emit('sessionReconnected', detail),
-            emitSessionStopped: (detail) => this._emit('sessionStopped', detail),
-            emitNetworkOnline: () => this._emit('networkOnline', {}),
-            emitNetworkOffline: () => this._emit('networkOffline', {}),
-            emitNetworkChange: (detail) => this._emit('networkChange', detail),
+            emit: (name, detail) => this._emit(name, detail),
         }, { autoReconnect: options.autoReconnect !== false });
     }
 
@@ -593,7 +589,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     async startSession(robotId: string): Promise<void> {
-        this._supervisor.noteExternalDial();
+        // An explicit dial from the app supersedes any in-flight
+        // auto-reconnect (possibly towards a different robot). The
+        // redial loop dials through `_startSessionInternal` directly,
+        // so its own attempts never trip this.
+        this._supervisor.cancelRedial();
+        return this._startSessionInternal(robotId);
+    }
+
+    private async _startSessionInternal(robotId: string): Promise<void> {
         if (this._state !== 'connected') throw new Error('Not connected');
         this._selectedRobotId = robotId;
         this._iceConnected = false;
@@ -750,6 +754,45 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         });
     }
 
+    /**
+     * Common transport teardown shared by every session-ending path
+     * (stopSession, disconnect, the auto-redial, a session rejection):
+     * settle the pending-reply ledger and the startSession() resolvers
+     * with `settleErr`, stand the resilience plumbing down, stop the
+     * session-scoped timers, release the mic placeholder and close the
+     * pc/dc. Returns the session id (already cleared on the instance)
+     * so each caller decides whether and how to send `endSession`.
+     * What else differs — events, subscriber wipes, where `_state`
+     * lands — stays with the callers.
+     */
+    private _closeTransport(settleErr: Error): string | null {
+        this._pending.settleAll(settleErr);
+        if (this._sessionReject) {
+            const reject = this._sessionReject;
+            this._sessionResolve = null;
+            this._sessionReject = null;
+            reject(settleErr);
+        }
+        this._sessionResolve = null;
+        // Resilience teardown BEFORE closing `_pc` so a queued grace
+        // callback can't dereference a dead handle.
+        this._supervisor.clearIceGrace();
+        this._supervisor.uninstallNetworkListeners();
+        this._supervisor.stopDcWatchdog();
+        if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
+        if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
+        if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
+        this._micMuted = true;
+        this._micSupported = false;
+        if (this._pc) { this._pc.close(); this._pc = null; }
+        if (this._dc) { this._dc.close(); this._dc = null; }
+        this._iceConnected = false;
+        this._dcOpen = false;
+        const sessionId = this._sessionId;
+        this._sessionId = null;
+        return sessionId;
+    }
+
     private _failSessionRejected(msg: SignalingMessage): void {
         const err = new Error(
             msg.reason === 'robot_busy'
@@ -759,16 +802,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         err.reason = msg.reason ?? null;
         err.activeApp = msg.activeApp ?? null;
 
-        // Resilience teardown BEFORE closing `_pc` so a queued grace
-        // callback can't dereference a dead handle.
-        this._supervisor.clearIceGrace();
-        this._supervisor.uninstallNetworkListeners();
-        if (this._pc) { this._pc.close(); this._pc = null; }
-        if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
-        this._iceConnected = false;
-        this._dcOpen = false;
-        this._micMuted = true;
-        this._micSupported = false;
+        // No endSession: the robot side never granted this session.
+        this._closeTransport(err);
 
         // During an auto-reconnect the rejection is expected noise (the
         // robot side may still hold the dead session for a few seconds) —
@@ -776,51 +811,20 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (!this._supervisor.redialing) {
             this._emit('sessionRejected', { reason: msg.reason, activeApp: msg.activeApp });
         }
-
-        if (this._sessionReject) {
-            const reject = this._sessionReject;
-            this._sessionResolve = null;
-            this._sessionReject = null;
-            reject(err);
-        }
     }
 
     async stopSession(): Promise<void> {
         // A deliberate stop always wins over a pending auto-reconnect:
-        // the in-flight dial attempt (if any) is rejected right below via
-        // `_sessionReject`, and the loop exits on the cleared flag.
+        // the in-flight dial attempt (if any) is rejected inside
+        // `_closeTransport`, and the loop exits on the cleared flag.
         this._supervisor.cancelRedial();
-        this._pending.settleAll(new Error('Session stopped'));
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
-        // Tear down resilience plumbing BEFORE closing `_pc` so a
-        // queued grace callback can't dereference a dead handle.
-        this._supervisor.clearIceGrace();
-        this._supervisor.uninstallNetworkListeners();
-        if (this._sessionReject) {
-            this._sessionReject(new Error('Session stopped'));
-            this._sessionResolve = null;
-            this._sessionReject = null;
+
+        const sessionId = this._closeTransport(new Error('Session stopped'));
+        if (sessionId) {
+            await this._sendToServer({ type: 'endSession', sessionId });
         }
-
-        if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
-        if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
-        this._supervisor.stopDcWatchdog();
-
-        if (this._sessionId) {
-            await this._sendToServer({ type: 'endSession', sessionId: this._sessionId });
-        }
-
-        if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
-        this._micMuted = true;
-        this._micSupported = false;
-
-        if (this._pc) { this._pc.close(); this._pc = null; }
-        if (this._dc) { this._dc.close(); this._dc = null; }
-
-        this._sessionId = null;
-        this._iceConnected = false;
-        this._dcOpen = false;
 
         const wasStreaming = this._state === 'streaming';
         if (wasStreaming) {
@@ -832,36 +836,14 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     disconnect(): void {
         this._supervisor.cancelRedial();
         if (this._sseAbortController) { this._sseAbortController.abort(); this._sseAbortController = null; }
-
-        this._pending.settleAll(new Error('Disconnected'));
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
-        // Mirrors the resilience teardown in `stopSession()`.
-        this._supervisor.clearIceGrace();
-        this._supervisor.uninstallNetworkListeners();
-        if (this._sessionReject) {
-            this._sessionReject(new Error('Disconnected'));
-            this._sessionResolve = null;
-            this._sessionReject = null;
+
+        const sessionId = this._closeTransport(new Error('Disconnected'));
+        if (sessionId && this._token) {
+            void this._sendToServer({ type: 'endSession', sessionId });
         }
 
-        if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
-        if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
-        this._supervisor.stopDcWatchdog();
-
-        if (this._sessionId && this._token) {
-            this._sendToServer({ type: 'endSession', sessionId: this._sessionId });
-        }
-
-        if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
-        if (this._pc) { this._pc.close(); this._pc = null; }
-        if (this._dc) { this._dc.close(); this._dc = null; }
-
-        this._sessionId = null;
-        this._micMuted = true;
-        this._micSupported = false;
-        this._iceConnected = false;
-        this._dcOpen = false;
         this._robots = [];
         this._state = 'disconnected';
         this._emit('disconnected', { reason: 'user' });
@@ -892,47 +874,23 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     /**
      * Transport-only teardown: everything stopSession() does EXCEPT the
      * user-facing state flip (`sessionStopped` is not emitted, `_state`
-     * falls back to 'connected' so startSession() accepts the re-dial).
+     * falls back to 'connected' so the re-dial can start a session).
      * Pending promises that ride the dead channel are settled just like
      * stopSession() settles them — callers see the same failure shape a
-     * manual stop would produce.
+     * manual stop would produce; that includes a timed-out dial
+     * attempt's own startSession() promise (its resolvers were left
+     * armed, and a late signaling reply could otherwise settle them
+     * against a closed pc).
      */
     private _teardownForRedial(): void {
-        this._pending.settleAll(new Error('Session reconnecting'));
-        // A timed-out dial attempt leaves its startSession() promise
-        // pending with the resolvers still armed; a late signaling
-        // reply could otherwise settle them against a closed pc, and
-        // the next attempt would silently orphan them.
-        if (this._sessionReject) {
-            const reject = this._sessionReject;
-            this._sessionResolve = null;
-            this._sessionReject = null;
-            reject(new Error('Session reconnecting'));
-        }
-        this._sessionResolve = null;
-        this._supervisor.clearIceGrace();
-        this._supervisor.uninstallNetworkListeners();
-        if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
-        if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
-        this._supervisor.stopDcWatchdog();
-
+        const sessionId = this._closeTransport(new Error('Session reconnecting'));
         // Free the robot-side slot: the relay refuses a second session
         // while it still tracks the dead one, and only endSession (or its
         // own consent-freshness timeout, ~30 s) clears it. Fire and
         // forget — _sendToServer never throws.
-        const sessionId = this._sessionId;
-        this._sessionId = null;
         if (sessionId && this._token) {
             void this._sendToServer({ type: 'endSession', sessionId });
         }
-
-        if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
-        this._micMuted = true;
-        this._micSupported = false;
-        if (this._pc) { this._pc.close(); this._pc = null; }
-        if (this._dc) { this._dc.close(); this._dc = null; }
-        this._iceConnected = false;
-        this._dcOpen = false;
         if (this._state === 'streaming') this._state = 'connected';
     }
 
@@ -1651,7 +1609,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     private _emit<K extends keyof ReachyMiniEventMap>(
         name: K,
-        detail: ReachyMiniEventMap[K] extends CustomEvent<infer D> ? D : never,
+        detail: ReachyMiniEventMap[K]['detail'],
     ): void {
         this.dispatchEvent(new CustomEvent(name, { detail }));
     }
@@ -1719,11 +1677,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         opts: { timeoutMs?: number } = {},
     ): Promise<T> {
         const timeoutMs = opts.timeoutMs ?? 20000;
-        const id = this._pending.nextRpcId();
-        if (!this._sendCommand({ jsonrpc: '2.0', id, method, params })) {
-            return Promise.reject(new Error(`rpcCall(${method}): data channel not open`));
-        }
-        return this._pending.registerRpc(id, method, timeoutMs) as Promise<T>;
+        return this._pending.rpcRoundtrip(method, timeoutMs, (id) =>
+            this._sendCommand({ jsonrpc: '2.0', id, method, params }),
+        ) as Promise<T>;
     }
 
     /**

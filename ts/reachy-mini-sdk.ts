@@ -72,7 +72,6 @@ export type {
     CentralListenerHandle,
     OpenCentralListenerOpts,
     CentralStreamProducer,
-    CentralListEvent,
     CentralPeerStatusChangedEvent,
     CentralSessionStateChangedEvent,
 } from './lib/central-listener.js';

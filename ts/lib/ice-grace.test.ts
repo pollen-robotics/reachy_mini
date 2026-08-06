@@ -41,16 +41,20 @@ function makeSupervisor(
         dial: vi.fn().mockResolvedValue(undefined),
         teardownForRedial: vi.fn(),
         nudgeState: vi.fn(),
-        emitError: vi.fn(),
-        emitReconnecting: vi.fn(),
-        emitReconnected: vi.fn(),
-        emitSessionStopped: vi.fn(),
-        emitNetworkOnline: vi.fn(),
-        emitNetworkOffline: vi.fn(),
-        emitNetworkChange: vi.fn(),
+        emit: vi.fn(),
         ...overrides,
     };
     return { sup: new SessionSupervisor(deps as unknown as SessionSupervisorDeps, options), deps };
+}
+
+/** Details of every `emit(name, …)` call, in order. */
+function emitted(deps: MockedDeps, name: string): unknown[] {
+    return deps.emit.mock.calls.filter((c) => c[0] === name).map((c) => c[1]);
+}
+
+/** The `error` emits, unwrapped to their Error payloads. */
+function emittedErrors(deps: MockedDeps): Error[] {
+    return (emitted(deps, 'error') as Array<{ error: Error }>).map((d) => d.error);
 }
 
 /** jsdom's document.hidden is read-only; swap in a controllable getter. */
@@ -74,11 +78,11 @@ describe('disconnected grace (foreground)', () => {
         sup.onIceDisconnected();
 
         await vi.advanceTimersByTimeAsync(2999);
-        expect(deps.emitError).not.toHaveBeenCalled();
+        expect(emittedErrors(deps)).toHaveLength(0);
 
         await vi.advanceTimersByTimeAsync(1);
-        expect(deps.emitError).toHaveBeenCalledTimes(1);
-        expect(String(deps.emitError.mock.calls[0]![0])).toMatch(/ICE stuck in 'disconnected'/);
+        expect(emittedErrors(deps)).toHaveLength(1);
+        expect(String(emittedErrors(deps)[0])).toMatch(/ICE stuck in 'disconnected'/);
     });
 
     it('funnels into the redial instead of the error when auto-reconnect is on', async () => {
@@ -86,10 +90,10 @@ describe('disconnected grace (foreground)', () => {
         sup.onIceDisconnected();
         await vi.runAllTimersAsync();
 
-        expect(deps.emitError).not.toHaveBeenCalled();
+        expect(emittedErrors(deps)).toHaveLength(0);
         expect(deps.teardownForRedial).toHaveBeenCalled();
         expect(deps.dial).toHaveBeenCalledWith('robot-1');
-        expect(deps.emitReconnected).toHaveBeenCalledWith({ attempt: 1 });
+        expect(emitted(deps, 'sessionReconnected')).toEqual([{ attempt: 1 }]);
     });
 
     it('stands down when ICE heals before the grace expires', async () => {
@@ -98,7 +102,7 @@ describe('disconnected grace (foreground)', () => {
         await vi.advanceTimersByTimeAsync(1000);
         sup.onIceHealed();
         await vi.runAllTimersAsync();
-        expect(deps.emitError).not.toHaveBeenCalled();
+        expect(emittedErrors(deps)).toHaveLength(0);
     });
 
     it('re-checks the live state at expiry (healed without an event)', async () => {
@@ -108,7 +112,7 @@ describe('disconnected grace (foreground)', () => {
         );
         sup.onIceDisconnected();
         await vi.runAllTimersAsync();
-        expect(deps.emitError).not.toHaveBeenCalled();
+        expect(emittedErrors(deps)).toHaveLength(0);
     });
 
     it('coalesces repeated identical transitions onto the original clock', async () => {
@@ -119,7 +123,7 @@ describe('disconnected grace (foreground)', () => {
         sup.onIceDisconnected();
         await vi.advanceTimersByTimeAsync(1000);
         // …so the grace fires 3 s after the FIRST transition.
-        expect(deps.emitError).toHaveBeenCalledTimes(1);
+        expect(emittedErrors(deps)).toHaveLength(1);
     });
 });
 
@@ -131,8 +135,8 @@ describe('failed grace', () => {
         );
         sup.onIceFailed();
         await vi.advanceTimersByTimeAsync(1000);
-        expect(deps.emitError).toHaveBeenCalledTimes(1);
-        expect(String(deps.emitError.mock.calls[0]![0])).toMatch(/ICE connection failed/);
+        expect(emittedErrors(deps)).toHaveLength(1);
+        expect(String(emittedErrors(deps)[0])).toMatch(/ICE connection failed/);
     });
 
     it('a disconnected → failed transition replaces the pending grace', async () => {
@@ -144,8 +148,8 @@ describe('failed grace', () => {
         sup.onIceFailed();
         // The failed grace (1 s) wins over the disconnected one (3 s).
         await vi.advanceTimersByTimeAsync(1000);
-        expect(deps.emitError).toHaveBeenCalledTimes(1);
-        expect(String(deps.emitError.mock.calls[0]![0])).toMatch(/ICE connection failed/);
+        expect(emittedErrors(deps)).toHaveLength(1);
+        expect(String(emittedErrors(deps)[0])).toMatch(/ICE connection failed/);
     });
 
     it('rejects a pending startSession() and leaves the retry to its caller', async () => {
@@ -161,7 +165,7 @@ describe('failed grace', () => {
         // Not an auto-reconnect case: the promise owner decides.
         expect(deps.dial).not.toHaveBeenCalled();
         // Outside a redial the classic fatal error still surfaces.
-        expect(deps.emitError).toHaveBeenCalledTimes(1);
+        expect(emittedErrors(deps)).toHaveLength(1);
     });
 });
 
@@ -173,15 +177,15 @@ describe('visibility-deferred grace (hidden tab)', () => {
 
         // Hidden: timers may be throttled, nothing may fire meanwhile.
         await vi.advanceTimersByTimeAsync(10_000);
-        expect(deps.emitError).not.toHaveBeenCalled();
+        expect(emittedErrors(deps)).toHaveLength(0);
 
         // Back to the foreground within the ceiling: a normal 3 s grace runs.
         hidden = false;
         document.dispatchEvent(new Event('visibilitychange'));
-        expect(deps.emitError).not.toHaveBeenCalled();
+        expect(emittedErrors(deps)).toHaveLength(0);
         await vi.advanceTimersByTimeAsync(3000);
-        expect(deps.emitError).toHaveBeenCalledTimes(1);
-        expect(String(deps.emitError.mock.calls[0]![0])).toMatch(/ICE stuck in 'disconnected'/);
+        expect(emittedErrors(deps)).toHaveLength(1);
+        expect(String(emittedErrors(deps)[0])).toMatch(/ICE stuck in 'disconnected'/);
     });
 
     it('does nothing when ICE healed while backgrounded', async () => {
@@ -192,7 +196,7 @@ describe('visibility-deferred grace (hidden tab)', () => {
         hidden = false;
         document.dispatchEvent(new Event('visibilitychange'));
         await vi.runAllTimersAsync();
-        expect(deps.emitError).not.toHaveBeenCalled();
+        expect(emittedErrors(deps)).toHaveLength(0);
     });
 
     it('past the ceiling, expires the session immediately (straight to redial)', async () => {
@@ -207,9 +211,9 @@ describe('visibility-deferred grace (hidden tab)', () => {
         await vi.runAllTimersAsync();
 
         // No extra foreground grace — the redial starts right away.
-        expect(deps.emitReconnecting).toHaveBeenCalledWith(
+        expect(emitted(deps, 'sessionReconnecting')).toEqual([
             expect.objectContaining({ cause: 'Session expired while tab was backgrounded' }),
-        );
+        ]);
         expect(deps.dial).toHaveBeenCalledWith('robot-1');
     });
 
@@ -222,7 +226,7 @@ describe('visibility-deferred grace (hidden tab)', () => {
         hidden = false;
         document.dispatchEvent(new Event('visibilitychange'));
         await vi.runAllTimersAsync();
-        expect(deps.emitError).not.toHaveBeenCalled();
+        expect(emittedErrors(deps)).toHaveLength(0);
     });
 });
 
@@ -233,12 +237,12 @@ describe('network listeners', () => {
 
         window.dispatchEvent(new Event('online'));
         window.dispatchEvent(new Event('offline'));
-        expect(deps.emitNetworkOnline).toHaveBeenCalledTimes(1);
-        expect(deps.emitNetworkOffline).toHaveBeenCalledTimes(1);
+        expect(emitted(deps, 'networkOnline')).toHaveLength(1);
+        expect(emitted(deps, 'networkOffline')).toHaveLength(1);
 
         sup.uninstallNetworkListeners();
         window.dispatchEvent(new Event('online'));
-        expect(deps.emitNetworkOnline).toHaveBeenCalledTimes(1);
+        expect(emitted(deps, 'networkOnline')).toHaveLength(1);
     });
 
     it('is idempotent: double install does not double the events', () => {
@@ -246,7 +250,7 @@ describe('network listeners', () => {
         sup.installNetworkListeners();
         sup.installNetworkListeners();
         window.dispatchEvent(new Event('online'));
-        expect(deps.emitNetworkOnline).toHaveBeenCalledTimes(1);
+        expect(emitted(deps, 'networkOnline')).toHaveLength(1);
         sup.uninstallNetworkListeners();
     });
 });

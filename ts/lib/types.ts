@@ -364,18 +364,6 @@ export interface SessionReconnectingEventDetail {
     /** Human-readable description of what killed the transport. */
     cause: string;
 }
-/**
- * Auto-reconnect succeeded. A fresh `streaming` event fires alongside
- * (same robot, new sessionId); video re-attaches automatically through
- * the `videoTrack` listener installed by `attachVideo()`. App-level
- * state that lives daemon-side per session (motor mode override, a
- * replaced audio sender track, …) must be re-asserted by the app.
- */
-export interface SessionReconnectedEventDetail {
-    /** The attempt number that got through (1-based). */
-    attempt: number;
-}
-
 /** Map of event names to their detail shapes. */
 export interface ReachyMiniEventMap {
     connected: CustomEvent<ConnectedEventDetail>;
@@ -393,7 +381,15 @@ export interface ReachyMiniEventMap {
     networkOffline: CustomEvent<Record<string, never>>;
     networkChange: CustomEvent<NetworkChangeEventDetail>;
     sessionReconnecting: CustomEvent<SessionReconnectingEventDetail>;
-    sessionReconnected: CustomEvent<SessionReconnectedEventDetail>;
+    /**
+     * Auto-reconnect succeeded; the detail is the 1-based attempt that
+     * got through. A fresh `streaming` event fires alongside (same
+     * robot, new sessionId); video re-attaches automatically through
+     * the `videoTrack` listener installed by `attachVideo()`. App-level
+     * state that lives daemon-side per session (motor mode override, a
+     * replaced audio sender track, …) must be re-asserted by the app.
+     */
+    sessionReconnected: CustomEvent<{ attempt: number }>;
 }
 
 /** Public surface of a ReachyMini SDK instance. */

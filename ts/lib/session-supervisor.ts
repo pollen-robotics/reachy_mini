@@ -27,88 +27,46 @@
  * class owns the transport, the supervisor owns the RECOVERY POLICY.
  */
 
+import type { ReachyMiniEventMap } from './types.js';
+
 /* ─── Tunables ─────────────────────────────────────────────────────── */
 
-/**
- * How long we tolerate `iceConnectionState === 'disconnected'` before
- * surfacing it as an error. The spec defines this state as transient
- * (browsers keep STUN keep-alives running and usually heal in 1-2 s
- * on WiFi blips, AP roams, brief 4G dropouts). Consumers watching
- * `iceStateChange` directly should outlive this window before
- * showing any fatal UI.
- */
+// ICE grace windows. `disconnected` is transient per spec (browsers
+// usually heal it in 1-2 s on WiFi blips / AP roams), so debounce it.
+// `failed` IS terminal per spec, but we've observed real
+// `failed → connected` flips on rapid AP roams and iOS BT route
+// changes — 1 s of debounce absorbs those without noticeably delaying
+// a real failure.
 const ICE_DISCONNECT_GRACE_MS = 3000;
-
-/**
- * Grace before treating `iceConnectionState === 'failed'` as terminal.
- * The spec says `failed` IS terminal, but we've observed real
- * `failed → connected` flips on rapid AP roams and iOS BT route
- * changes — 1 s of debounce absorbs those without noticeably
- * delaying a real failure.
- */
 const ICE_FAILED_GRACE_MS = 1000;
 
 /**
- * Ceiling on how long we'll keep `armIceGraceOnVisibility` waiting
- * for the tab to come back. The daemon's `webrtcsink` runs a STUN
- * consent-freshness check (RFC 7675, ~30 s default) and unilaterally
- * tears its side of the session down past that window, releasing the
- * producer slot on central. If the user backgrounded the tab for
- * longer than this, running another 3 s foreground grace is a lie —
- * the underlying transport is gone, nothing can recover. Give up
- * straight away so the host shows the real "session expired" UX
- * instead of a fake "Reconnecting…" badge that's never going to
- * heal. 60 s gives a 2× margin over the daemon-side timeout — long
- * enough to absorb a "phone in pocket for 45 s" case, short enough
- * to be honest with the user.
+ * Ceiling on how long `armIceGraceOnVisibility` waits for a hidden tab
+ * to come back. The daemon's `webrtcsink` runs a STUN consent-freshness
+ * check (RFC 7675, ~30 s default) and unilaterally tears its side of
+ * the session down past that window, releasing the producer slot on
+ * central — so after a long background stint the transport is gone and
+ * another foreground grace would be a lie. 60 s gives a 2× margin over
+ * the daemon-side timeout: long enough to absorb "phone in pocket for
+ * 45 s", short enough to be honest with the user.
  */
 const MAX_VISIBILITY_DEFER_MS = 60_000;
 
-/**
- * Backoff schedule for the automatic session re-dial (one entry per
- * attempt, in ms of wait BEFORE that attempt). A dead link on a phone
- * usually heals within the first two attempts (WiFi re-associates,
- * 4G comes back); the tail exists for slower recoveries like a router
- * reboot. Total window ≈ 22 s + dial time, capped so a genuinely gone
- * robot surfaces a terminal `sessionStopped` in well under a minute.
- */
+// Re-dial backoff (one entry per attempt, in ms of wait BEFORE that
+// attempt): ~22 s window + dial time. Each attempt is capped because
+// past ~15 s the robot side likely still holds the previous (dead)
+// session — tear the attempt down and retry against a freed slot.
 const REDIAL_BACKOFF_MS = [0, 2000, 4000, 8000, 8000] as const;
-
-/**
- * Ceiling on a single re-dial attempt (startSession handshake). The
- * signaling round-trip plus ICE + DTLS normally lands in 2-4 s; if an
- * attempt hasn't settled after this long the robot side is likely
- * still holding the previous (dead) session, so we tear the attempt
- * down and let the next backoff slot retry against a freed slot.
- */
 const REDIAL_DIAL_TIMEOUT_MS = 15_000;
 
-/**
- * Data-channel silence watchdog. ICE only notices a dead path when
- * STUN consent checks fail, which half-open links (NAT rebind, AP
- * roam onto a blackholing path, asymmetric loss) can dodge for tens
- * of seconds while `iceConnectionState` sits happily on 'connected'.
- * The application layer has a much better liveness signal for free:
- * during any streaming session the daemon talks to us constantly —
- * `get_state` poll replies every ≤500 ms and/or ~30 Hz pushed pose
- * frames. The watchdog measures the time since the LAST inbound
- * data-channel message and escalates in two steps:
- *
- *   - past `DC_SILENCE_NUDGE_MS`, send one extra `get_state` so a
- *     paused poll (fresh pose stream that just died) can't be
- *     mistaken for a dead link;
- *   - past `DC_SILENCE_FATAL_MS` of TOTAL silence, treat the
- *     transport as dead and hand over to the auto re-dial (or emit
- *     the classic fatal `error` when auto-reconnect is off).
- *
- * Hidden tabs throttle timers AND keep receiving messages
- * unpredictably, so silence measured there is meaningless: ticks
- * re-baseline while hidden, and a tick arriving after a large gap
- * (throttled / suspended timer) re-baselines too instead of judging
- * stale data. 8 s of zero inbound traffic on a link that normally
- * delivers 2-30 messages per second is unambiguous, and still ~4×
- * faster than the RFC 7675 consent-freshness teardown (~30 s).
- */
+// Data-channel silence watchdog. A streaming session receives constant
+// inbound traffic (`get_state` replies every ≤500 ms and/or ~30 Hz pose
+// frames), so prolonged TOTAL silence is a dead transport even while
+// ICE still reports 'connected' (half-open links dodge STUN consent
+// checks for tens of seconds). Past the nudge threshold send one extra
+// `get_state`; past the fatal threshold escalate — still ~4× faster
+// than the RFC 7675 consent-freshness teardown (~30 s). Hidden /
+// throttled tabs re-baseline instead of judging stale data.
 const DC_WATCHDOG_TICK_MS = 1000;
 const DC_SILENCE_NUDGE_MS = 2500;
 const DC_SILENCE_FATAL_MS = 8000;
@@ -148,18 +106,11 @@ export interface SessionSupervisorDeps {
     teardownForRedial(): void;
     /** Send one `get_state` probe over the data channel. */
     nudgeState(): void;
-    emitError(error: Error): void;
-    emitReconnecting(detail: { attempt: number; maxAttempts: number; cause: string }): void;
-    emitReconnected(detail: { attempt: number }): void;
-    emitSessionStopped(detail: { reason: string; message: string }): void;
-    emitNetworkOnline(): void;
-    emitNetworkOffline(): void;
-    emitNetworkChange(detail: {
-        effectiveType?: string;
-        downlink?: number;
-        rtt?: number;
-        saveData?: boolean;
-    }): void;
+    /** Emit one public event on the instance. */
+    emit<K extends keyof ReachyMiniEventMap>(
+        name: K,
+        detail: ReachyMiniEventMap[K]['detail'],
+    ): void;
 }
 
 /* ─── Supervisor ───────────────────────────────────────────────────── */
@@ -184,12 +135,7 @@ export class SessionSupervisor {
     // the machinery down.
     private _autoReconnect: boolean;
     private _redialing = false;
-    private _redialTimer: ReturnType<typeof setTimeout> | null = null;
     private _redialWake: (() => void) | null = null;
-    // True while the redial loop itself is inside dial(), so the
-    // "external startSession cancels a pending redial" guard can tell
-    // the two apart.
-    private _redialInternalDial = false;
 
     // Data-channel silence watchdog.
     private _dcWatchdogId: ReturnType<typeof setInterval> | null = null;
@@ -216,13 +162,9 @@ export class SessionSupervisor {
         if (!enabled) this.cancelRedial();
     }
 
-    /**
-     * An explicit dial from the app supersedes any in-flight
-     * auto-reconnect (possibly towards a different robot). No-op when
-     * the caller is the redial loop's own dial attempt.
-     */
-    noteExternalDial(): void {
-        if (this._redialing && !this._redialInternalDial) this.cancelRedial();
+    /** Fatal errors carry the classic webrtc `error` payload shape. */
+    private _emitError(error: Error): void {
+        this._deps.emit('error', { source: 'webrtc', error });
     }
 
     /* ─── ICE-blip debounce + network awareness ──────────────────────
@@ -310,7 +252,7 @@ export class SessionSupervisor {
             if (s === 'connected' || s === 'completed') return; // healed
             if (r === 'disconnected' && s === 'disconnected') {
                 if (this.maybeBeginRedial(`ICE stuck in 'disconnected' for > ${ms}ms`)) return;
-                this._deps.emitError(new Error(`ICE stuck in 'disconnected' for > ${ms}ms`));
+                this._emitError(new Error(`ICE stuck in 'disconnected' for > ${ms}ms`));
                 return;
             }
             if (r === 'failed' || s === 'failed') {
@@ -321,11 +263,11 @@ export class SessionSupervisor {
                     // When that caller is the redial loop itself, skip
                     // the fatal `error` emit: the loop retries and the
                     // app only sees `sessionReconnecting`.
-                    if (!this._redialing) this._deps.emitError(err);
+                    if (!this._redialing) this._emitError(err);
                     return;
                 }
                 if (this.maybeBeginRedial('ICE connection failed')) return;
-                this._deps.emitError(err);
+                this._emitError(err);
             }
         }, ms);
     }
@@ -358,7 +300,7 @@ export class SessionSupervisor {
             if (Date.now() - deferredAt > MAX_VISIBILITY_DEFER_MS) {
                 const err = new Error('Session expired while tab was backgrounded');
                 if (this._deps.rejectPendingSession(err)) {
-                    if (!this._redialing) this._deps.emitError(err);
+                    if (!this._redialing) this._emitError(err);
                     return;
                 }
                 // The transport is unrecoverable (daemon dropped its side
@@ -366,7 +308,7 @@ export class SessionSupervisor {
                 // and looking at the app — the perfect moment to re-dial
                 // rather than render "session expired".
                 if (this.maybeBeginRedial('Session expired while tab was backgrounded')) return;
-                this._deps.emitError(err);
+                this._emitError(err);
                 return;
             }
 
@@ -404,8 +346,8 @@ export class SessionSupervisor {
      */
     installNetworkListeners(): void {
         if (this._onlineHandler || typeof window === 'undefined') return;
-        const onOnline = (): void => this._deps.emitNetworkOnline();
-        const onOffline = (): void => this._deps.emitNetworkOffline();
+        const onOnline = (): void => this._deps.emit('networkOnline', {});
+        const onOffline = (): void => this._deps.emit('networkOffline', {});
         window.addEventListener('online', onOnline);
         window.addEventListener('offline', onOffline);
         this._onlineHandler = onOnline;
@@ -422,7 +364,7 @@ export class SessionSupervisor {
             };
         }).connection;
         if (conn && typeof conn.addEventListener === 'function') {
-            const onChange = (): void => this._deps.emitNetworkChange({
+            const onChange = (): void => this._deps.emit('networkChange', {
                 effectiveType: conn.effectiveType,
                 downlink: conn.downlink,
                 rtt: conn.rtt,
@@ -494,7 +436,7 @@ export class SessionSupervisor {
         this._deps.teardownForRedial();
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             if (!this._redialing) return;
-            this._deps.emitReconnecting({ attempt, maxAttempts, cause });
+            this._deps.emit('sessionReconnecting', { attempt, maxAttempts, cause });
             await this._redialSleep(REDIAL_BACKOFF_MS[attempt - 1]!);
             if (!this._redialing) return;
             try {
@@ -504,20 +446,15 @@ export class SessionSupervisor {
                     await this._deps.reconnectSignaling();
                 }
                 if (!this._redialing) return;
-                this._redialInternalDial = true;
-                try {
-                    await withTimeout(
-                        this._deps.dial(robotId),
-                        REDIAL_DIAL_TIMEOUT_MS,
-                        'auto-reconnect dial timed out',
-                    );
-                } finally {
-                    this._redialInternalDial = false;
-                }
+                await withTimeout(
+                    this._deps.dial(robotId),
+                    REDIAL_DIAL_TIMEOUT_MS,
+                    'auto-reconnect dial timed out',
+                );
                 if (!this._redialing) return;
                 this._redialing = false;
                 console.info(`[reachy-mini] auto-reconnect: recovered on attempt ${attempt}`);
-                this._deps.emitReconnected({ attempt });
+                this._deps.emit('sessionReconnected', { attempt });
                 return;
             } catch (e) {
                 console.warn(
@@ -535,18 +472,21 @@ export class SessionSupervisor {
         this._redialing = false;
         const message = `Auto-reconnect gave up after ${maxAttempts} attempts (${cause})`;
         console.warn(`[reachy-mini] ${message}`);
-        this._deps.emitSessionStopped({ reason: 'reconnect_failed', message });
-        this._deps.emitError(new Error(message));
+        this._deps.emit('sessionStopped', { reason: 'reconnect_failed', message });
+        this._emitError(new Error(message));
     }
 
-    /** Cancellable backoff sleep — `cancelRedial` wakes it immediately. */
+    /**
+     * Cancellable backoff sleep — `cancelRedial` wakes it immediately.
+     * A timer firing after a cancel is harmless: the loop re-checks
+     * `_redialing` right after every sleep.
+     */
     private _redialSleep(ms: number): Promise<void> {
         if (ms <= 0) return Promise.resolve();
         return new Promise<void>((resolve) => {
             this._redialWake = resolve;
-            this._redialTimer = setTimeout(() => {
-                this._redialTimer = null;
-                this._redialWake = null;
+            setTimeout(() => {
+                if (this._redialWake === resolve) this._redialWake = null;
                 resolve();
             }, ms);
         });
@@ -560,10 +500,6 @@ export class SessionSupervisor {
     cancelRedial(): void {
         if (!this._redialing && !this._redialWake) return;
         this._redialing = false;
-        if (this._redialTimer !== null) {
-            clearTimeout(this._redialTimer);
-            this._redialTimer = null;
-        }
         if (this._redialWake) {
             const wake = this._redialWake;
             this._redialWake = null;
@@ -644,17 +580,14 @@ export class SessionSupervisor {
         const cause = `No data-channel traffic for ${silence}ms`;
         if (this.maybeBeginRedial(cause)) return;
         this.stopDcWatchdog();
-        this._deps.emitError(new Error(cause));
+        this._emitError(new Error(cause));
     }
 }
 
 /** Reject `p` with `label` if it hasn't settled within `ms`. */
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error(label)), ms);
-        p.then(
-            (v) => { clearTimeout(timer); resolve(v); },
-            (e) => { clearTimeout(timer); reject(e); },
-        );
-    });
+    return Promise.race([
+        p,
+        new Promise<T>((_, rj) => setTimeout(() => rj(new Error(label)), ms)),
+    ]);
 }

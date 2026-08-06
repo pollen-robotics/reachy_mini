@@ -1,49 +1,20 @@
 /**
- * Long-lived SSE listener channel to Hugging Face central.
- *
- * Shared by every first-party surface that needs a realtime view of
- * the user's robot fleet WITHOUT claiming a full peer slot:
- *
- *  - the host shell's picker (`ts/host/src/hooks/useRobots.ts`)
- *  - the mobile app's scan screen (`useRemoteRobots`)
- *
- * Both used to carry their own near-identical copy of this module;
- * the copies drifted (the TTL-eviction fix below shipped in one but
- * not the other), so the canonical implementation now lives in the
- * SDK and is exported from the package root.
+ * Long-lived SSE listener channel to Hugging Face central: a realtime
+ * view of the user's robot fleet WITHOUT claiming a peer slot. The
+ * canonical implementation shared by every first-party picker / scan
+ * screen (the per-app copies used to drift).
  *
  * Why not just use the `ReachyMini` SDK class? Its signaling stream
  * registers a *peer* at central, and central enforces a 1:1
- * `token → peer_id` mapping - so a fleet-watching UI that kept an
- * SDK instance open would clobber the peer slot the next session's
- * SDK needs for its WebRTC handshake. This module registers with
- * `roles: ["listener"]` only, and callers `close()` it before any
- * SDK session starts on the same token.
+ * `token → peer_id` mapping - so a fleet-watching UI that kept an SDK
+ * instance open would clobber the peer slot the next session's WebRTC
+ * handshake needs. This module registers with `roles: ["listener"]`
+ * only, and callers `close()` it before any SDK session starts on the
+ * same token.
  *
- * Wire surface we listen for
- * ──────────────────────────
- *  - `welcome`              opening handshake (heartbeat negotiation)
- *  - `list`                 initial robot snapshot
- *  - `peerStatusChanged`    a robot came online / went offline
- *  - `sessionStateChanged`  busy / free transition
- *
- * Transport notes
- * ───────────────
  * `fetch` + manual stream reader rather than the native `EventSource`
  * so the HF token travels in the `Authorization` header instead of
  * the URL (no secret in DevTools / proxy logs / browser history).
- * The parser handles central's actual framing - one `data: ...\n`
- * line per event - not the full SSE grammar (no multi-line `data:`,
- * no `event:`/`id:` fields), matching the SDK's own signaling parser.
- *
- * Reconnect policy
- * ────────────────
- * Network blips, HF Space cold-restarts, and proxy idle culls all
- * surface as a stream EOF or fetch error. We retry with exponential
- * backoff capped at `MAX_BACKOFF_MS`, jittered to avoid thundering
- * herds on a central restart. Fatal auth errors (401/403) end the
- * stream instead - retrying with the same bad token would only get
- * us rate-limited.
  */
 
 const INITIAL_BACKOFF_MS = 1_000;
@@ -62,32 +33,21 @@ const DEFAULT_LISTENER_APP_NAME = 'Reachy Mini (listener)';
 // `busy=false` because the listener slot has been reaped by then.
 //
 // Mirror the daemon's `_heartbeat_loop` (cf. `central_signaling_relay.py`):
-// re-emit `setPeerStatus(listener)` periodically. Cadence is negotiated
-// from the welcome (`recommended_heartbeat_interval_seconds`, with a
-// `lease_seconds / 3` fallback) and clamped to a sane envelope so a
-// misconfigured central can neither ask us to spam (cadence too low)
-// nor lull us into a cadence so slow we'd be evicted before the next
-// fire.
+// re-emit `setPeerStatus(listener)` periodically, at the cadence the
+// welcome recommends (`recommended_heartbeat_interval_seconds`, with a
+// `lease_seconds / 3` fallback).
 const HEARTBEAT_DEFAULT_INTERVAL_MS = 10_000;
-const HEARTBEAT_MIN_INTERVAL_MS = 1_000;
-const HEARTBEAT_MAX_INTERVAL_MS = 60_000;
-
-const clampHeartbeatIntervalMs = (value: number): number =>
-  Math.max(
-    HEARTBEAT_MIN_INTERVAL_MS,
-    Math.min(HEARTBEAT_MAX_INTERVAL_MS, value),
-  );
 
 const negotiateHeartbeatIntervalMs = (
   welcomeMsg: Record<string, unknown>,
 ): number => {
   const raw = welcomeMsg['recommended_heartbeat_interval_seconds'];
   if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
-    return clampHeartbeatIntervalMs(raw * 1000);
+    return raw * 1000;
   }
   const lease = welcomeMsg['lease_seconds'];
   if (typeof lease === 'number' && Number.isFinite(lease) && lease > 0) {
-    return clampHeartbeatIntervalMs((lease * 1000) / 3);
+    return (lease * 1000) / 3;
   }
   return HEARTBEAT_DEFAULT_INTERVAL_MS;
 };
@@ -104,10 +64,6 @@ export interface CentralStreamProducer {
   activeApp?: string | null;
 }
 
-export interface CentralListEvent {
-  producers: CentralStreamProducer[];
-}
-
 export interface CentralPeerStatusChangedEvent {
   peerId: string;
   roles: string[];
@@ -117,7 +73,7 @@ export interface CentralPeerStatusChangedEvent {
 export interface CentralSessionStateChangedEvent {
   peerId: string;
   busy: boolean;
-  activeApp: string | null;
+  activeApp?: string | null;
   meta?: Record<string, unknown>;
 }
 
@@ -132,7 +88,7 @@ export interface OpenCentralListenerOpts {
    */
   appName?: string;
   /** First batch of producers received after each (re)connect. */
-  onList?: (event: CentralListEvent) => void;
+  onList?: (producers: CentralStreamProducer[]) => void;
   /** A robot came online / went offline (same-owner). */
   onPeerStatusChanged?: (event: CentralPeerStatusChangedEvent) => void;
   /** A robot transitioned busy ↔ free (same-owner). */
@@ -290,34 +246,25 @@ export function openCentralListener(
           opts.onConnect?.();
         })();
         return;
+      // Frames come from the first-party central, so they are cast, not
+      // field-validated — same trust level as the SDK's own signaling
+      // parser.
       case 'list':
-        opts.onList?.({
-          producers: Array.isArray(msg.producers)
+        opts.onList?.(
+          Array.isArray(msg.producers)
             ? (msg.producers as CentralStreamProducer[])
             : [],
-        });
+        );
         return;
       case 'peerStatusChanged':
-        opts.onPeerStatusChanged?.({
-          peerId: typeof msg.peerId === 'string' ? msg.peerId : '',
-          roles: Array.isArray(msg.roles) ? (msg.roles as string[]) : [],
-          meta:
-            msg.meta && typeof msg.meta === 'object'
-              ? (msg.meta as Record<string, unknown>)
-              : undefined,
-        });
+        opts.onPeerStatusChanged?.(
+          msg as unknown as CentralPeerStatusChangedEvent,
+        );
         return;
       case 'sessionStateChanged':
-        opts.onSessionStateChanged?.({
-          peerId: typeof msg.peerId === 'string' ? msg.peerId : '',
-          busy: msg.busy === true,
-          activeApp:
-            typeof msg.activeApp === 'string' ? msg.activeApp : null,
-          meta:
-            msg.meta && typeof msg.meta === 'object'
-              ? (msg.meta as Record<string, unknown>)
-              : undefined,
-        });
+        opts.onSessionStateChanged?.(
+          msg as unknown as CentralSessionStateChangedEvent,
+        );
         return;
       // Other types (`peer`, `startSession`, `endSession`, `ping`)
       // only fire when this peer becomes consumer / producer. As

@@ -36,7 +36,7 @@ interface RedialInternals {
     _supervisor: SessionSupervisor;
     _teardownForRedial(): void;
     _sendToServer(msg: Record<string, unknown>): Promise<unknown>;
-    startSession(robotId: string): Promise<void>;
+    _startSessionInternal(robotId: string): Promise<void>;
     connect(token?: string): Promise<void>;
 }
 
@@ -55,8 +55,11 @@ function makeStreamingInstance(
     internals._token = 'hf_test';
     // No network in tests: endSession and friends resolve null.
     internals._sendToServer = vi.fn().mockResolvedValue(null);
+    // The redial loop dials through the private path (the public
+    // startSession cancels a pending redial, see below).
     const dials = vi.fn().mockResolvedValue(undefined);
-    internals.startSession = dials as unknown as RedialInternals['startSession'];
+    internals._startSessionInternal =
+        dials as unknown as RedialInternals['_startSessionInternal'];
     return { r, internals, dials };
 }
 
@@ -225,21 +228,32 @@ describe('auto-reconnect cancellation', () => {
         expect(internals._sessionReject).toBeNull();
     });
 
+    it('teardown without a token skips the fire-and-forget endSession', () => {
+        const { internals } = makeStreamingInstance();
+        internals._token = null;
+
+        internals._teardownForRedial();
+
+        expect(internals._sendToServer).not.toHaveBeenCalled();
+        expect(internals._sessionId).toBeNull();
+    });
+
     it('an external startSession() supersedes a pending re-dial', async () => {
         const { r, internals, dials } = makeStreamingInstance();
         dials.mockRejectedValue(new Error('still dead'));
 
         internals._supervisor.maybeBeginRedial('test');
         await vi.advanceTimersByTimeAsync(100);
-        // The app dials another robot: the loop must stand down. The
-        // stubbed startSession still runs the redial-cancel guard from
-        // the real method, so call the private cancel path the way the
-        // real one does.
-        internals._supervisor.cancelRedial();
+        // The app dials another robot mid-backoff: the public
+        // startSession cancels the pending re-dial, then dials through
+        // the internal path itself.
+        dials.mockResolvedValueOnce(undefined);
+        await r.startSession('robot-2');
         await vi.runAllTimersAsync();
 
-        expect(dials).toHaveBeenCalledTimes(1);
+        // Attempt 1 of the loop, then the external dial — nothing after.
+        expect(dials).toHaveBeenCalledTimes(2);
+        expect(dials).toHaveBeenLastCalledWith('robot-2');
         expect(internals._supervisor.redialing).toBe(false);
-        void r;
     });
 });

@@ -40,7 +40,7 @@ interface WatchdogInternals {
     _sendToServer(msg: Record<string, unknown>): Promise<unknown>;
     _handleRobotMessage(data: Record<string, unknown>): void;
     requestState(): boolean;
-    startSession(robotId: string): Promise<void>;
+    _startSessionInternal(robotId: string): Promise<void>;
 }
 
 function makeStreamingInstance(
@@ -64,7 +64,8 @@ function makeStreamingInstance(
     const nudges = vi.fn().mockReturnValue(true);
     internals.requestState = nudges as unknown as WatchdogInternals['requestState'];
     const dials = vi.fn().mockResolvedValue(undefined);
-    internals.startSession = dials as unknown as WatchdogInternals['startSession'];
+    internals._startSessionInternal =
+        dials as unknown as WatchdogInternals['_startSessionInternal'];
     return { r, internals, nudges, dials };
 }
 

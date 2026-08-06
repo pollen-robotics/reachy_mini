@@ -149,13 +149,21 @@ export class PendingReplies {
 
     /* ─── JSON-RPC ───────────────────────────────────────────────────── */
 
-    /** Fresh correlation id for one rpcCall. */
-    nextRpcId(): string {
-        return `rpc-${++this._rpcCounter}`;
-    }
-
-    /** Register the waiter for `id`; rejects on timeout. */
-    registerRpc(id: string, method: string, timeoutMs: number): Promise<unknown> {
+    /**
+     * One JSON-RPC round-trip: mint the correlation id, hand it to
+     * `send` (which reports `false` when the channel isn't open — the
+     * promise then rejects immediately), and await the matching
+     * response; rejects on timeout. Same shape as `slotRoundtrip`.
+     */
+    rpcRoundtrip(
+        method: string,
+        timeoutMs: number,
+        send: (id: string) => boolean,
+    ): Promise<unknown> {
+        const id = `rpc-${++this._rpcCounter}`;
+        if (!send(id)) {
+            return Promise.reject(new Error(`rpcCall(${method}): data channel not open`));
+        }
         return new Promise<unknown>((resolve, reject) => {
             const timer = setTimeout(() => {
                 this._pendingRpc.delete(id);
