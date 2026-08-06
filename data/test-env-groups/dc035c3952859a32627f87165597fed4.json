@@ -1,1 +1,1 @@
-{"id":"dc035c3952859a32627f87165597fed4","fullName":"tests.unit_tests.test_central_signaling_relay#test_get_relay_returns_the_singleton","name":"test_get_relay_returns_the_singleton","status":"passed","testResultsByEnv":{"default":"42b0fc747ae9ae11ae1951d721552eca"}}
+{"id":"dc035c3952859a32627f87165597fed4","fullName":"tests.unit_tests.test_central_signaling_relay#test_get_relay_returns_the_singleton","name":"test_get_relay_returns_the_singleton","status":"passed","testResultsByEnv":{"default":"ee219a9e2972d4341a6100fcc268595e"}}

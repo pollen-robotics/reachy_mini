@@ -1,1 +1,1 @@
-{"id":"156af29d3e964b0037779c39f424f93b","fullName":"tests.unit_tests.test_backend_process_command#test_set_antennas_updates_target","name":"test_set_antennas_updates_target","status":"passed","testResultsByEnv":{"default":"30b1eb8051b6aa9ad5bf654d26365968"}}
+{"id":"156af29d3e964b0037779c39f424f93b","fullName":"tests.unit_tests.test_backend_process_command#test_set_antennas_updates_target","name":"test_set_antennas_updates_target","status":"passed","testResultsByEnv":{"default":"20cec36bd9745bdb5167893b9d8e8d58"}}

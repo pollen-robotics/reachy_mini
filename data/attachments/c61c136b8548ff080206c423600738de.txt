@@ -1,0 +1,3 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:161 Using AnalyticalKinematics kinematics engine
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:1905 upload_audio: evicted stale slot old (TTL exceeded)
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:1924 upload_audio: evicted orphaned audio orph (TTL exceeded)
