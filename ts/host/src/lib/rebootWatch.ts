@@ -16,14 +16,10 @@
  * observations: the dying relay connection makes central drop the old
  * registration (realtime SSE `roles: []` event), and only then does the
  * rebooted daemon re-register under a fresh id. So the watch requires
- * seeing the robot ABSENT from the list at least once before accepting
- * its presence as "back online".
- *
- * State machine, advanced on every settled robots-list observation
- * (callers must skip observations while the list is still in its
- * initial-loading window, where an empty array means "no data yet"):
- *
- *   waiting-offline ──not listed──▶ waiting-online ──listed──▶ back
+ * seeing the robot ABSENT from the list at least once (the sticky
+ * `sawTargetOffline` boolean) before accepting its presence as "back
+ * online". Callers must skip observations while the list is still in
+ * its initial-loading window, where an empty array means "no data yet".
  *
  * If central never drops the stale entry (not observed in practice -
  * the relay socket dies with the daemon), the watch never completes and
@@ -39,8 +35,6 @@ export interface RebootTarget {
   /** Advertised name, fallback for daemons without a hardware id. */
   name: string | null;
 }
-
-export type RebootWatchPhase = 'waiting-offline' | 'waiting-online' | 'back';
 
 /**
  * Is the rebooting robot present in the central listing? Matched on
@@ -61,17 +55,10 @@ export function isTargetListed(
   return robots.length > 0;
 }
 
-/** Advance the watch with one settled observation of the listing. */
-export function advanceRebootWatch(
-  phase: RebootWatchPhase,
-  targetListed: boolean,
-): RebootWatchPhase {
-  switch (phase) {
-    case 'waiting-offline':
-      return targetListed ? 'waiting-offline' : 'waiting-online';
-    case 'waiting-online':
-      return targetListed ? 'back' : 'waiting-online';
-    case 'back':
-      return 'back';
-  }
+/** Sticky offline latch, advanced on every settled observation: once
+ *  the target has been seen absent, it stays seen. The watch completes
+ *  when `sawTargetOffline(...) && isTargetListed(...)` - never on a run
+ *  of presence-only observations (the stale-listing regression). */
+export function sawTargetOffline(prev: boolean, targetListed: boolean): boolean {
+  return prev || !targetListed;
 }

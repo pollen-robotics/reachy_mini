@@ -176,18 +176,6 @@ describe('DaemonUpdateGate update flow', () => {
     expect(screen.getByText('Updating your Reachy…')).toBeTruthy();
   });
 
-  it('keeps only the last 6 in_progress lines in the log tail', () => {
-    const h = setup();
-    startUpdate(h);
-    for (let i = 1; i <= 7; i += 1) {
-      h.deliver({ status: 'in_progress', line: `pip step ${i}` });
-    }
-    const log = document.querySelector('pre');
-    expect(log?.textContent).toContain('pip step 7');
-    expect(log?.textContent).toContain('pip step 2');
-    expect(log?.textContent).not.toContain('pip step 1');
-  });
-
   it('daemon-reported failure lands on the failed screen with the error', () => {
     const h = setup();
     startUpdate(h);

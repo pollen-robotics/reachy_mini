@@ -1006,11 +1006,10 @@ function startDaemonUpdateForHost(
     return;
   }
 
-  try {
-    sdk.addEventListener('sessionStopped', onSessionStopped);
-  } catch {
-    /* older SDK without the event: the host falls back to its stall timer */
-  }
+  // On an SDK bundle old enough not to emit `sessionStopped` this
+  // listener simply never fires (the host falls back to its stall
+  // timer) - `addEventListener` itself never throws.
+  sdk.addEventListener('sessionStopped', onSessionStopped);
   disarmActiveUpdate = abandonUpdate;
 }
 
@@ -1160,11 +1159,7 @@ function startLiveLinkMonitor(sdk: ReachyMiniInstance): void {
     stopped = true;
     window.clearInterval(interval);
   };
-  try {
-    sdk.addEventListener('sessionStopped', stop);
-  } catch {
-    /* ignore - sampler will keep running until pagehide */
-  }
+  sdk.addEventListener('sessionStopped', stop);
   window.addEventListener('pagehide', stop, { once: true });
 }
 
@@ -1353,26 +1348,16 @@ function createRobotMedia(sdk: ReachyMiniInstance): RobotMedia {
  * `sessionStopped { reason: 'reconnect_failed' }` we report a fatal
  * error so the shell offers reload / back-to-picker.
  *
- * Registered with plain string event names so an app that shipped an
- * OLDER SDK bundle (no such events) is a silent no-op.
+ * Registered with plain string event names: on an app that shipped an
+ * OLDER SDK bundle (no such events) the listeners simply never fire -
+ * `addEventListener` on an unknown event name is a silent no-op, never
+ * a throw.
  */
 function installReconnectBridge(sdk: ReachyMiniInstance): void {
-  const on = (
-    name: string,
-    cb: (e: { detail?: Record<string, unknown> }) => void,
-  ): void => {
-    try {
-      (sdk as unknown as {
-        addEventListener: (n: string, c: (e: unknown) => void) => void;
-      }).addEventListener(name, cb as (e: unknown) => void);
-    } catch {
-      /* older SDK bundle */
-    }
-  };
-
-  on('sessionReconnecting', (e) => {
-    const attempt = Number(e.detail?.attempt ?? 1);
-    const max = Number(e.detail?.maxAttempts ?? 1);
+  sdk.addEventListener('sessionReconnecting', (e) => {
+    const detail = (e as CustomEvent<Record<string, unknown>>).detail;
+    const attempt = Number(detail?.attempt ?? 1);
+    const max = Number(detail?.maxAttempts ?? 1);
     pushAppState(
       'connecting',
       'session',
@@ -1382,19 +1367,20 @@ function installReconnectBridge(sdk: ReachyMiniInstance): void {
     );
   });
 
-  on('sessionReconnected', () => {
+  sdk.addEventListener('sessionReconnected', () => {
     pushAppState('live', null);
   });
 
-  on('sessionStopped', (e) => {
-    if (e.detail?.reason !== 'reconnect_failed') return;
+  sdk.addEventListener('sessionStopped', (e) => {
+    const detail = (e as CustomEvent<Record<string, unknown>>).detail;
+    if (detail?.reason !== 'reconnect_failed') return;
     postToHost({
       source: PROTOCOL_SOURCE,
       type: 'embed:error',
       version: PROTOCOL_VERSION,
       message: 'Lost the connection to the robot and could not reconnect.',
       fatal: true,
-      detail: typeof e.detail?.message === 'string' ? e.detail.message : undefined,
+      detail: typeof detail?.message === 'string' ? detail.message : undefined,
     });
   });
 }

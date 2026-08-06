@@ -735,8 +735,17 @@ tags:
   recommended: the default (8 hours) forces a re-auth round trip several
   times a day. The host's silent sign-in makes those round trips
   invisible for logged-in users, but a long-lived token avoids them
-  entirely; the SDK bounds the effective session with a 24 h sliding
-  idle window regardless.
+  entirely. Two properties bound the exposure of that long-lived token:
+  - **Scope.** Don't set `hf_oauth_scopes`; the token then carries only
+    `openid profile` - identity (username, avatar) and nothing else. It
+    cannot read private repos, write to the Hub, or call the Inference
+    API, so a leaked token identifies the user but grants no account
+    access.
+  - **Idle window.** The SDK stores the token in `sessionStorage`
+    (tab-scoped, dies with the tab) and additionally drops any token
+    unused for more than 24 h (`TOKEN_MAX_IDLE_MS` in the SDK's token
+    store). A tab resurrected days later via session restore re-auths;
+    a plain reload does not.
 - The **`reachy_mini_js_app` tag is mandatory** for mobile-catalog
   discovery. The catalog API filters on this exact string.
 - Apps in the `pollen-robotics/*` namespace are automatically tagged

@@ -23,8 +23,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import Box from '@mui/material/Box';
+import CircularProgress from '@mui/material/CircularProgress';
 import GlobalStyles from '@mui/material/GlobalStyles';
 import Stack from '@mui/material/Stack';
+import { alpha } from '@mui/material/styles';
 
 import type { ReachyMiniInstance, RobotInfo } from '../lib/sdk-types';
 import {
@@ -38,10 +40,9 @@ import {
 } from '../lib/protocol';
 import { resolveSignalingUrl } from '../lib/signalingUrl';
 import {
-  advanceRebootWatch,
   isTargetListed,
+  sawTargetOffline,
   type RebootTarget,
-  type RebootWatchPhase,
 } from '../lib/rebootWatch';
 import { useLatestDaemonVersion } from '../hooks/useLatestDaemonVersion';
 import { useHfProfile } from '../hooks/useHfProfile';
@@ -234,11 +235,10 @@ function ReachyHostShellNormal({
    *  is set: the robot must be seen ABSENT once before its presence
    *  counts as "back online", so a stale pre-reboot listing can't
    *  complete the update gate prematurely (see `lib/rebootWatch.ts`).
-   *  Held at `waiting-offline` whenever `awaitingReboot` is null: the
-   *  advancing effect is gated on it, and `dismissDaemonUpdate` (the
-   *  only path clearing `awaitingReboot`) resets the watch with it. */
-  const [rebootWatch, setRebootWatch] =
-    useState<RebootWatchPhase>('waiting-offline');
+   *  Held `false` whenever `awaitingReboot` is null: the advancing
+   *  effect is gated on it, and every path touching `awaitingReboot`
+   *  (`selectRobot`, `dismissDaemonUpdate`) resets it alongside. */
+  const [sawOffline, setSawOffline] = useState<boolean>(false);
   /** Remounts `DaemonUpdateGate` on every selection so its "user
    *  already dismissed this" latch doesn't leak into the next robot. */
   const [gateKey, setGateKey] = useState(0);
@@ -246,20 +246,15 @@ function ReachyHostShellNormal({
     message: string;
     detail?: unknown;
   } | null>(null);
-  /** Sticky flag: turns true once the boot-time OAuth-pending
-   *  flag fires, stays true until the WelcomeBackOverlay's
-   *  fade-out completes. Decoupled from `useOAuth`'s
-   *  `isPostOauthReturn` (which flips false the moment the SDK
-   *  reports authenticated) so the celebratory beat plays out
-   *  even on a fast auth confirmation. */
-  const [welcomeBackShown, setWelcomeBackShown] = useState<boolean>(false);
-  /** Latches true once the WelcomeBackOverlay has finished (its
-   *  `onDone`). Needed because `welcomeBackShown` flips back to
-   *  false on `onDone` while `isPostOauthReturn` stays true in the
-   *  real-OAuth path - without this the post-OAuth splash would
-   *  re-trigger in `picking` and loop "Signing you in…" forever.
-   *  Reset on sign-out so a re-sign-in replays the sequence. */
-  const [welcomeBackDone, setWelcomeBackDone] = useState<boolean>(false);
+  /** One-way welcome-back sequence, advanced `idle → showing → done`.
+   *  `showing` mounts the WelcomeBackOverlay; `done` (set by its
+   *  `onDone`) is terminal because `isPostOauthReturn` stays true for
+   *  the rest of the page load - without the terminal position the
+   *  post-OAuth splash would re-trigger in `picking` and loop
+   *  "Signing you in…" forever. Reset to `idle` on sign-out so a
+   *  re-sign-in replays the sequence. */
+  const [welcomeBack, setWelcomeBack] =
+    useState<'idle' | 'showing' | 'done'>('idle');
   /** Latches true once the initial boot has reached its first stable
    *  view (SignInView when unauthenticated, or the picker with its
    *  first central response settled). Lets the boot splash stay up
@@ -278,13 +273,6 @@ function ReachyHostShellNormal({
   /** Set when `embed:ready` is observed before the iframe ref
    *  is available, so we can flush as soon as the ref binds. */
   const embedReadyPendingRef = useRef<boolean>(false);
-  /** One-shot latch for the welcome-back overlay. Without this,
-   *  `isPostOauthReturn` can stay `true` after the overlay's
-   *  fade-out (the dev sign-in path doesn't redirect, so nothing
-   *  naturally clears the flag) and the effect re-fires the
-   *  overlay in a loop. The ref is reset when the user signs out
-   *  so a subsequent sign-in plays the anim again. */
-  const welcomeBackShownOnceRef = useRef<boolean>(false);
   /** Resolver for the in-flight `endSession` waiting on the embed's
    *  `embed:left` ack. Set while a leave is pending; the `onLeft`
    *  bridge callback calls it to let the host unmount immediately. */
@@ -326,39 +314,34 @@ function ReachyHostShellNormal({
   // Without the gate the overlay mounts with "Welcome back" and
   // visibly flickers to "Hello, X" the next frame.
   //
-  // The `welcomeBackShownOnceRef` guard makes this a one-shot
-  // per auth session: after `onDone` flips `welcomeBackShown`
-  // back to false, we MUST NOT re-mount the overlay even if
-  // `isPostOauthReturn` is still true.
+  // The sequence only ever advances from `idle`, which makes it a
+  // one-shot per auth session: after `onDone` moves it to `done`,
+  // the overlay MUST NOT re-mount even though `isPostOauthReturn`
+  // is still true.
   //
   // The 800 ms fallback timer is a defensive cap: if the SDK
   // somehow authenticates without resolving a username, we
   // still show the (generic) overlay rather than swallowing the
   // welcome moment forever.
   useEffect(() => {
-    if (welcomeBackShown || welcomeBackShownOnceRef.current) return;
-    if (!isPostOauthReturn) return;
+    if (welcomeBack !== 'idle' || !isPostOauthReturn) return;
 
     if (userName) {
-      welcomeBackShownOnceRef.current = true;
-      setWelcomeBackShown(true);
+      setWelcomeBack('showing');
       return;
     }
 
     const t = window.setTimeout(() => {
-      if (welcomeBackShownOnceRef.current) return;
-      welcomeBackShownOnceRef.current = true;
-      setWelcomeBackShown(true);
+      setWelcomeBack((prev) => (prev === 'idle' ? 'showing' : prev));
     }, 800);
     return () => window.clearTimeout(t);
-  }, [isPostOauthReturn, welcomeBackShown, userName]);
+  }, [isPostOauthReturn, welcomeBack, userName]);
 
-  // Reset the one-shot latch on sign-out so the next sign-in
-  // can play the welcome anim again in the same tab.
+  // Reset the sequence on sign-out so the next sign-in can play
+  // the welcome anim again in the same tab.
   useEffect(() => {
     if (!isAuthenticated) {
-      welcomeBackShownOnceRef.current = false;
-      setWelcomeBackDone(false);
+      setWelcomeBack('idle');
       setBootSplashDone(false);
     }
   }, [isAuthenticated]);
@@ -531,12 +514,12 @@ function ReachyHostShellNormal({
       setDaemonVersion(null);
       setUpdateProgress(null);
       setAwaitingReboot(null);
-      // Keep the documented invariant real: the watch is held at
-      // `waiting-offline` whenever `awaitingReboot` is null. Without
-      // this, a watch left pre-armed at `waiting-online` would let a
-      // STALE pre-reboot listing complete a later watch in a single
-      // observation - the exact regression rebootWatch.ts prevents.
-      setRebootWatch('waiting-offline');
+      // Keep the documented invariant real: the latch is held `false`
+      // whenever `awaitingReboot` is null. Without this, a latch left
+      // pre-armed would let a STALE pre-reboot listing complete a later
+      // watch in a single observation - the exact regression
+      // rebootWatch.ts prevents.
+      setSawOffline(false);
       setGateKey((k) => k + 1);
       // The host never opened an SSE (picker uses REST), so the
       // iframe's SDK gets a clean central slot with no prior peer
@@ -563,19 +546,15 @@ function ReachyHostShellNormal({
       // gotoSleep + motors disabled) and ack via `embed:left`, so the robot is
       // actually asleep before we drop the session. Bounded by
       // `LEAVING_ACK_CAP_MS` so a wedged or older embed (which never acks)
-      // still falls through and unmounts.
-      await new Promise<void>((resolve) => {
-        let settled = false;
-        const done = (): void => {
-          if (settled) return;
-          settled = true;
-          leftAckResolveRef.current = null;
-          window.clearTimeout(timer);
-          resolve();
-        };
-        const timer = window.setTimeout(done, LEAVING_ACK_CAP_MS);
-        leftAckResolveRef.current = done;
-      });
+      // still falls through and unmounts. `race` ignores the loser, so no
+      // double-settle guard is needed.
+      await Promise.race([
+        new Promise<void>((resolve) => {
+          leftAckResolveRef.current = resolve;
+        }),
+        sleep(LEAVING_ACK_CAP_MS),
+      ]);
+      leftAckResolveRef.current = null;
 
       // Unmount iframe (selectedRobotId = null) and clean up.
       // CRITICAL: do NOT call `wipeHfSessionStorage()` here. The
@@ -647,11 +626,11 @@ function ReachyHostShellNormal({
 
   const dismissDaemonUpdate = useCallback((): void => {
     setAwaitingReboot(null);
-    setRebootWatch('waiting-offline');
+    setSawOffline(false);
     setUpdateProgress(null);
   }, []);
 
-  // Advance the reboot watch on every settled view of the central
+  // Advance the offline latch on every settled view of the central
   // listing. Central may keep the robot's pre-reboot registration
   // listed for a while after the daemon goes down, so presence alone
   // is not "back online": the watch first requires one observation
@@ -664,10 +643,13 @@ function ReachyHostShellNormal({
       return;
     }
     const listed = isTargetListed(robots, awaitingReboot);
-    setRebootWatch((prev) => advanceRebootWatch(prev, listed));
+    setSawOffline((prev) => sawTargetOffline(prev, listed));
   }, [awaitingReboot, hostPhase, robotsLoading, robots]);
 
-  const rebootedRobotBack = awaitingReboot !== null && rebootWatch === 'back';
+  const rebootedRobotBack =
+    awaitingReboot !== null &&
+    sawOffline &&
+    isTargetListed(robots, awaitingReboot);
 
   /* ─────────────────── Iframe URL ─────────────────── */
 
@@ -750,8 +732,7 @@ function ReachyHostShellNormal({
   //     `picking` (`isAuthenticated` true while still `signing-in`).
   const showPostOAuthSplash =
     isPostOauthReturn &&
-    !welcomeBackShown &&
-    !welcomeBackDone &&
+    welcomeBack === 'idle' &&
     (hostPhase === 'signing-in' || hostPhase === 'picking');
   // Boot splash covers the whole first boot continuously, so the
   // auto-login path reads as splash → list with no intermediate bare
@@ -765,11 +746,10 @@ function ReachyHostShellNormal({
   // later returns to the picker use its own spinner instead.
   const showBootSplash =
     !isPostOauthReturn &&
-    !welcomeBackShown &&
+    welcomeBack !== 'showing' &&
     !bootSplashDone &&
     ((hostPhase === 'signing-in' && (!authResolved || isAuthenticated)) ||
       (hostPhase === 'picking' && isAuthenticated && robotsLoading));
-  const showAuthSplash = showPostOAuthSplash || showBootSplash;
 
   return (
     <>
@@ -843,7 +823,6 @@ function ReachyHostShellNormal({
             <PickerView
               robots={robots}
               isRefreshing={robotsLoading || robotsRefreshing}
-              isLoading={robotsLoading}
               error={robotsError}
               preselectedRobotId={sdk?.preselectedRobotId ?? null}
               onSelect={selectRobot}
@@ -872,22 +851,35 @@ function ReachyHostShellNormal({
         </Box>
       </Stack>
 
-      {/* Covering splash for both boot legs (post-OAuth return AND
-       *  auto-login), so the "Continue with Hugging Face" button and
-       *  a naked picker never flash while `authenticate()` resolves
-       *  and the phase transitions. Hands off to WelcomeBackOverlay
-       *  (zIndex 1300) once the username lands. The plain boot leg is
-       *  `neutral` (bare spinner, no HF logo, no heading): before
+      {/* Covering splashes for both boot legs, so the "Continue with
+       *  Hugging Face" button and a naked picker never flash while
+       *  `authenticate()` resolves and the phase transitions. The OAuth
+       *  return leg - where the user really did just sign in - shows
+       *  the branded PostOAuthSplash and hands off to WelcomeBackOverlay
+       *  (zIndex 1300) once the username lands. The plain boot leg is a
+       *  bare neutral spinner (PickerView's quiet-wait style): before
        *  `authResolved` we don't know whether a session exists, and an
        *  already-signed-in user must never see OAuth branding on a
        *  plain reload (nor a first-time visitor read "Signing you in…"
-       *  right before landing on the sign-in button). Only the OAuth
-       *  return leg - where the user really did just sign in - keeps
-       *  the HF logo and the heading. */}
-      {showAuthSplash && (
-        <PostOAuthSplash
-          variant={showPostOAuthSplash ? 'signing-in' : 'neutral'}
-        />
+       *  right before landing on the sign-in button). */}
+      {showPostOAuthSplash && <PostOAuthSplash />}
+      {showBootSplash && (
+        <Box
+          sx={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1290,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'background.default',
+          }}
+        >
+          <CircularProgress
+            thickness={2.5}
+            sx={{ color: (theme) => alpha(theme.palette.text.primary, 0.3) }}
+          />
+        </Box>
       )}
 
       {/* Web-only by construction: the mobile app never mounts this
@@ -911,13 +903,10 @@ function ReachyHostShellNormal({
         onDismiss={dismissDaemonUpdate}
       />
 
-      {welcomeBackShown && (
+      {welcomeBack === 'showing' && (
         <WelcomeBackOverlay
           userName={userName}
-          onDone={() => {
-            setWelcomeBackShown(false);
-            setWelcomeBackDone(true);
-          }}
+          onDone={() => setWelcomeBack('done')}
         />
       )}
     </>
@@ -925,6 +914,10 @@ function ReachyHostShellNormal({
 }
 
 /* ─────────────────── helpers ─────────────────── */
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 function readToken(): string | null {
   try {

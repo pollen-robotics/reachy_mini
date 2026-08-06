@@ -1,25 +1,10 @@
 /**
- * Daemon version gate for the standalone web shell.
- *
- * Web-only by construction
- * ────────────────────────
- * This lives in the shell, and the shell only renders on a direct
- * browser visit: the mobile app points its iframe straight at the
- * embed entry (`?embedded=1`), plays the host role itself, and runs its
- * own gate before an app can even be opened. So there is nothing to
- * disable here for the embedded case - the component is never mounted.
- *
- * Two tiers, unlike the mobile app
- * ────────────────────────────────
- * The mobile gate blocks as soon as the daemon trails the latest GitHub
- * release. Applied to public Spaces that would turn every daemon
- * release into a global kill switch, so the web policy splits:
- *
- *   block  - below `MIN_SUPPORTED_DAEMON_VERSION`. Full-screen, no way
- *            past it. Such a daemon also predates the OTA command, so
- *            the only honest advice is the desktop app.
- *   notice - merely behind the latest release. A dismissable card; the
- *            app stays fully usable and the update is an offer.
+ * Daemon version gate for the standalone web shell. Two tiers: `block`
+ * below `MIN_SUPPORTED_DAEMON_VERSION`, a dismissable `notice` when
+ * merely behind latest - policy and rationale live in
+ * `lib/daemonRelease.ts` (and APP_CREATION_GUIDE §13.6). Web-only by
+ * construction: the mobile app points its iframe straight at the embed
+ * entry and runs its own gate, so this component is never mounted there.
  *
  * How an update ends
  * ──────────────────
@@ -65,10 +50,6 @@ const UPDATE_STALL_TIMEOUT_MS = 180_000;
  *  well inside this; past it, telling the user to check on the robot
  *  beats an eternal spinner. */
 const REBOOT_TIMEOUT_MS = 240_000;
-
-/** Tail of install log lines kept on screen. Enough to show progress is
- *  real without turning the overlay into a console. */
-const LOG_TAIL = 6;
 
 /**
  * `updating` and later are driven by the flow; `prompt` is derived from
@@ -135,7 +116,6 @@ export function DaemonUpdateGate({
   onDismiss,
 }: DaemonUpdateGateProps): JSX.Element | null {
   const [phase, setPhase] = useState<Phase>('idle');
-  const [logLines, setLogLines] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
   /** Once cleared, stay cleared: a late version read must not reopen a
    *  card the user already dismissed. State, not a ref: the dismissed
@@ -169,11 +149,9 @@ export function DaemonUpdateGate({
   useEffect(() => {
     if (!progress) return;
     if (phase !== 'updating' && phase !== 'rebooting') return;
-    if (progress.status === 'in_progress') {
-      const line = progress.line?.trim();
-      if (line) setLogLines((prev) => [...prev, line].slice(-LOG_TAIL));
-      return;
-    }
+    // `in_progress` frames only matter as liveness: they re-arm the
+    // stall timer below (which depends on `progress`).
+    if (progress.status === 'in_progress') return;
     if (progress.status === 'failed') {
       setFailure(progress.error ?? null);
       setPhase('failed');
@@ -220,7 +198,6 @@ export function DaemonUpdateGate({
   }, [phase, progress, onCancelUpdate]);
 
   const handleUpdateNow = useCallback(() => {
-    setLogLines([]);
     setFailure(null);
     setPhase('updating');
     onStartUpdate();
@@ -247,6 +224,15 @@ export function DaemonUpdateGate({
     );
   }
 
+  // `idle` returned null above and the notice tier returned the card,
+  // so only full-screen phases reach this point.
+  const copy = COPY[effectivePhase as Exclude<Phase, 'idle'>];
+  const copyCtx: CopyCtx = {
+    canSelfUpdate,
+    current: currentVersion,
+    failure,
+  };
+
   return (
     <Box
       sx={{
@@ -272,7 +258,13 @@ export function DaemonUpdateGate({
           maxWidth: LAYOUT.contentMaxWidth,
         }}
       >
-        <PhaseIcon phase={effectivePhase} />
+        {copy.icon === 'spinner' ? (
+          <CircularProgress size={32} sx={{ color: 'text.secondary' }} />
+        ) : (
+          <Box component="div" aria-hidden sx={{ fontSize: 56, lineHeight: 1 }}>
+            {copy.icon}
+          </Box>
+        )}
 
         <Stack spacing={1} sx={{ alignItems: 'center' }}>
           <Typography
@@ -283,7 +275,7 @@ export function DaemonUpdateGate({
               letterSpacing: '-0.2px',
             }}
           >
-            {titleFor(effectivePhase, canSelfUpdate)}
+            {copy.title(copyCtx)}
           </Typography>
           <Typography
             sx={{
@@ -292,22 +284,20 @@ export function DaemonUpdateGate({
               lineHeight: 1.5,
             }}
           >
-            {bodyFor(effectivePhase, currentVersion, failure)}
+            {copy.body(copyCtx)}
           </Typography>
         </Stack>
 
-        {effectivePhase === 'updating' && logLines.length > 0 && (
-          <InstallLog lines={logLines} />
-        )}
-
         <Stack spacing={1} sx={{ width: '100%', alignItems: 'center' }}>
           {effectivePhase === 'prompt' && canSelfUpdate && (
-            <PrimaryButton onClick={handleUpdateNow}>Update now</PrimaryButton>
+            <Button variant="contained" sx={PRIMARY_SX} onClick={handleUpdateNow}>
+              Update now
+            </Button>
           )}
           {(effectivePhase === 'done' || effectivePhase === 'failed') && (
-            <PrimaryButton onClick={handleDismiss}>
+            <Button variant="contained" sx={PRIMARY_SX} onClick={handleDismiss}>
               {effectivePhase === 'done' ? 'Back to my Reachies' : 'Close'}
-            </PrimaryButton>
+            </Button>
           )}
           {((effectivePhase === 'prompt' && !canSelfUpdate) ||
             effectivePhase === 'failed') && (
@@ -410,98 +400,59 @@ function UpdateNoticeCard({
   );
 }
 
-function InstallLog({ lines }: { lines: string[] }): JSX.Element {
-  return (
-    <Box
-      component="pre"
-      aria-live="polite"
-      sx={{
-        width: '100%',
-        m: 0,
-        p: 1.5,
-        textAlign: 'left',
-        fontSize: TYPO.tiny,
-        lineHeight: 1.6,
-        color: 'text.secondary',
-        bgcolor: 'action.hover',
-        borderRadius: `${RADIUS.md}px`,
-        overflowX: 'auto',
-      }}
-    >
-      {lines.join('\n')}
-    </Box>
-  );
+const PRIMARY_SX = {
+  textTransform: 'none',
+  fontWeight: FONT_WEIGHT.semibold,
+  borderRadius: `${RADIUS.pill}px`,
+  px: 3,
+} as const;
+
+interface CopyCtx {
+  canSelfUpdate: boolean;
+  current: string | null;
+  failure: string | null;
 }
 
-function PrimaryButton({
-  onClick,
-  children,
-}: {
-  onClick(): void;
-  children: React.ReactNode;
-}): JSX.Element {
-  return (
-    <Button
-      onClick={onClick}
-      variant="contained"
-      sx={{
-        textTransform: 'none',
-        fontWeight: FONT_WEIGHT.semibold,
-        borderRadius: `${RADIUS.pill}px`,
-        px: 3,
-      }}
-    >
-      {children}
-    </Button>
-  );
-}
-
-function PhaseIcon({ phase }: { phase: Phase }): JSX.Element {
-  if (phase === 'updating' || phase === 'rebooting') {
-    return <CircularProgress size={32} sx={{ color: 'text.secondary' }} />;
-  }
-  return (
-    <Box component="div" aria-hidden sx={{ fontSize: 56, lineHeight: 1 }}>
-      {phase === 'done' ? '✅' : phase === 'failed' ? '⚠️' : '🤖'}
-    </Box>
-  );
-}
-
-function titleFor(phase: Phase, canSelfUpdate: boolean): string {
-  switch (phase) {
-    case 'updating':
-      return 'Updating your Reachy…';
-    case 'rebooting':
-      return 'Reachy is rebooting…';
-    case 'done':
-      return 'Reachy is up to date';
-    case 'failed':
-      return "Update didn't finish";
-    default:
-      return canSelfUpdate ? 'Update required' : 'Update from the desktop app';
-  }
-}
-
-function bodyFor(
-  phase: Phase,
-  current: string | null,
-  failure: string | null,
-): string {
-  switch (phase) {
-    case 'updating':
-      return 'Installing the latest software. Keep this tab open - the robot reboots when it is done, which takes a minute or two.';
-    case 'rebooting':
-      return 'The robot is restarting to finish the update. It will show up in your list again as soon as it is back.';
-    case 'done':
-      return 'Pick your Reachy again to start the app.';
-    case 'failed':
-      return failure
-        ? `${failure} You can update it from the Reachy desktop app instead.`
-        : 'You can update it from the Reachy desktop app instead.';
-    default:
-      // `prompt`, blocking tier only: the soft tier renders as a card.
-      return current
+/** Icon + title + body per full-screen phase, indexed once at render.
+ *  `'spinner'` renders a CircularProgress instead of an emoji glyph.
+ *  The `prompt` entries cover the blocking tier only - the soft tier
+ *  renders as `UpdateNoticeCard`. */
+const COPY: Record<
+  Exclude<Phase, 'idle'>,
+  { icon: string; title(ctx: CopyCtx): string; body(ctx: CopyCtx): string }
+> = {
+  prompt: {
+    icon: '🤖',
+    title: ({ canSelfUpdate }) =>
+      canSelfUpdate ? 'Update required' : 'Update from the desktop app',
+    body: ({ current }) =>
+      current
         ? `This Reachy runs v${current}, which is too old to run web apps. Version v${MIN_SUPPORTED_DAEMON_VERSION} or newer is required. Install the Reachy desktop app to update it, then come back.`
-        : `This Reachy needs version v${MIN_SUPPORTED_DAEMON_VERSION} or newer. Install the Reachy desktop app to update it, then come back.`;
-  }
-}
+        : `This Reachy needs version v${MIN_SUPPORTED_DAEMON_VERSION} or newer. Install the Reachy desktop app to update it, then come back.`,
+  },
+  updating: {
+    icon: 'spinner',
+    title: () => 'Updating your Reachy…',
+    body: () =>
+      'Installing the latest software. Keep this tab open - the robot reboots when it is done, which takes a minute or two.',
+  },
+  rebooting: {
+    icon: 'spinner',
+    title: () => 'Reachy is rebooting…',
+    body: () =>
+      'The robot is restarting to finish the update. It will show up in your list again as soon as it is back.',
+  },
+  done: {
+    icon: '✅',
+    title: () => 'Reachy is up to date',
+    body: () => 'Pick your Reachy again to start the app.',
+  },
+  failed: {
+    icon: '⚠️',
+    title: () => "Update didn't finish",
+    body: ({ failure }) =>
+      failure
+        ? `${failure} You can update it from the Reachy desktop app instead.`
+        : 'You can update it from the Reachy desktop app instead.',
+  },
+};

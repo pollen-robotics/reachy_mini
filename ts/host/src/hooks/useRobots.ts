@@ -59,8 +59,6 @@ export interface RobotsState {
   isRefreshing: boolean;
   /** Last error message or null. */
   error: string | null;
-  /** Trigger an immediate REST refresh. */
-  refresh(): void;
 }
 
 export function useRobots(opts: {
@@ -206,11 +204,6 @@ export function useRobots(opts: {
     return () => handle.close();
   }, [doFetch, enabled, hfToken]);
 
-  const refresh = useCallback((): void => {
-    if (!enabled || !hfToken) return;
-    void doFetch();
-  }, [doFetch, enabled, hfToken]);
-
   // Report "loading" for the whole first-fetch window of an `enabled`
   // session - including the transition frame before the fetch effect has run -
   // so the picker never flashes its empty state between `picking` and the
@@ -222,7 +215,6 @@ export function useRobots(opts: {
     isLoading: isLoading || isInitialLoading,
     isRefreshing,
     error,
-    refresh,
   };
 }
 

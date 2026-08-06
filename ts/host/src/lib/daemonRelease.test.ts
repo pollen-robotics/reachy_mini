@@ -6,9 +6,8 @@
  * "unknown" input MUST resolve to inaction (fail-open) - that
  * discipline is asserted here, not just documented.
  *
- * `fetchLatestDaemonVersion` keeps a module-level memo, so the fetch
- * suite re-imports the module per test (`vi.resetModules`) to start
- * from a cold cache.
+ * The fetch suite re-imports the module per test (`vi.resetModules`)
+ * and clears localStorage so every test starts from a cold cache.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -124,7 +123,7 @@ describe('fetchLatestDaemonVersion', () => {
     const fetchFn = mockFetchOnce({ ok: true, json: { tag_name: 'v1.9.0' } });
 
     expect(await mod.fetchLatestDaemonVersion()).toBe('1.9.0');
-    // Second call: served from memo, no network.
+    // Second call: served from the localStorage cache, no network.
     expect(await mod.fetchLatestDaemonVersion()).toBe('1.9.0');
     expect(fetchFn).toHaveBeenCalledTimes(1);
     // And the cache survives a page reload (localStorage).

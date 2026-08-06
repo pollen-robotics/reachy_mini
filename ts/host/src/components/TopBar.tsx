@@ -321,6 +321,10 @@ function AccountChip({
           @{username}
         </Typography>
       </Stack>
+      {/* One-click sign-out, deliberately: mobile parity, and the cost
+          of a mis-click is one silent-auth round trip, not data loss.
+          (The previous menu-behind-avatar guard traded that for a
+          hidden action nobody found.) */}
       <IconButton
         onClick={onLogout}
         disabled={disabled}

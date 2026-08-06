@@ -64,8 +64,9 @@ export interface UseHostBridgeOptions {
   onRequestLeave(): void;
   /** App finished its `host:leaving` tear-down (onLeave + the SDK's
    *  host-owned sleep/disable). The host can unmount now instead of
-   *  waiting out its safety cap. */
-  onLeft(): void;
+   *  waiting out its safety cap. Optional, like every additive
+   *  callback: implementers outside this repo stay source-compatible. */
+  onLeft?(): void;
   /** App reported an error. Fatal errors should switch the host
    *  to ErrorView; non-fatal can be toasted or logged. */
   onError(payload: { message: string; fatal: boolean; detail?: unknown }): void;
@@ -144,7 +145,7 @@ export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
           callbacks.current.onRequestLeave();
           return;
         case 'embed:left':
-          callbacks.current.onLeft();
+          callbacks.current.onLeft?.();
           return;
         case 'embed:error':
           callbacks.current.onError({

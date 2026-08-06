@@ -26,15 +26,14 @@
  *    (realtime SSE + a 60 s safety-net poll in `useRobots`), so the
  *    former sticky "Refresh" button was pure redundancy. Mirroring
  *    the mobile ScanScreen, it's now a discreet NON-interactive
- *    spinner to the right of the title, shown only while a fetch is
- *    in flight (with a min-visible floor + trailing debounce so a
- *    fast fetch isn't clipped and a burst reads as one spin).
+ *    spinner to the right of the title, faded in while a fetch is
+ *    in flight.
  *  - Quiet initial load: the very first fetch (no data yet) collapses
  *    the whole screen to a single centered spinner - no hero, no
  *    header - so the first paint is calm while we wait on central.
  */
 import type { JSX } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Box,
   CircularProgress,
@@ -58,13 +57,9 @@ export interface PickerViewProps {
   robots: RobotInfo[];
   /** Any in-flight central fetch (initial load, safety-net poll, or
    *  SSE-triggered refetch). Drives the discreet auto-spinner to the
-   *  right of the title. */
+   *  right of the title; with no data yet, also the quiet initial
+   *  paint (a bare centered spinner, no hero / header). */
   isRefreshing: boolean;
-  /** `true` only on the very first fetch with no data yet. Drives the
-   *  quiet initial paint (a bare centered spinner, no hero / header).
-   *  Distinct from `isRefreshing`, which is also `true` on background
-   *  polls once the list is populated. */
-  isLoading?: boolean;
   /** Last error message from the central listener / REST fetch,
    *  or `null` if everything's healthy. Surfaces as an error state
    *  card when the list is empty so the user knows the screen is
@@ -77,14 +72,13 @@ export interface PickerViewProps {
 export function PickerView({
   robots,
   isRefreshing,
-  isLoading = false,
   error,
   preselectedRobotId,
   onSelect,
 }: PickerViewProps): JSX.Element {
   const hasRobots = robots.length > 0;
-  // First-ever fetch, nothing to show yet → quiet, chrome-free paint.
-  const isInitialLoading = !hasRobots && isLoading;
+  // Fetch in flight with nothing to show yet → quiet, chrome-free paint.
+  const isInitialLoading = !hasRobots && isRefreshing;
 
   // Auto-select a preselected robot when it appears free.
   useEffect(() => {
@@ -283,21 +277,9 @@ function RobotsHeader({
 
 /* ─────────────────── Refresh activity indicator ─────────────────── */
 
-// Floor we keep the indicator on screen once a refresh starts, so an
-// instant (cached) fetch still shows a complete, smooth turn instead of
-// a one-frame flash that reads as "cut off".
-const MIN_VISIBLE_MS = 900;
-
-// Trailing debounce: a single logical refresh often fires two fetches
-// back-to-back (a poll plus an SSE-driven refetch), so `isRefreshing`
-// flips true→false→true. We hold the spinner for this long after
-// activity STOPS; any follow-up fetch within the window re-arms it,
-// coalescing the burst into one continuous spinner.
-const TAIL_DEBOUNCE_MS = 600;
-
 // Opacity cross-fade on enter / leave so the glyph eases in and out
-// instead of popping. It stays mounted (still spinning) through the
-// fade-out, then unmounts once fully transparent.
+// instead of popping. The fade-out also coalesces the common two-fetch
+// burst (poll + SSE-driven refetch) into one continuous appearance.
 const FADE_MS = 320;
 const REST_OPACITY = 0.32;
 
@@ -310,68 +292,15 @@ const refreshSpinKeyframes = keyframes`
  * Discreet, NON-interactive refresh indicator to the right of the
  * title. There's nothing to tap: the list refreshes on its own
  * (realtime SSE push + a 60 s safety-net poll in `useRobots`), so this
- * is pure feedback - the slowly-spinning arrows show ONLY while a fetch
- * is in flight and are absent otherwise. Lives in a fixed-width slot so
- * the title stays optically centered whether or not it shows. Mirrors
- * the mobile `ScanScreen` `RefreshIndicator`.
+ * is pure feedback. The icon stays mounted (still spinning) and only
+ * its opacity tracks `isRefreshing`, inside a fixed-width slot so the
+ * title stays optically centered whether or not it shows. Decorative:
+ * `aria-hidden`, the list content itself is the accessible signal.
  */
 function RefreshIndicator({ isRefreshing }: { isRefreshing: boolean }): JSX.Element {
-  const [visible, setVisible] = useState(false);
-  const startedAtRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (isRefreshing) {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-      if (!visible) {
-        startedAtRef.current = Date.now();
-        setVisible(true);
-      }
-    } else if (visible && !timerRef.current) {
-      const sinceStart = Date.now() - startedAtRef.current;
-      const delay = Math.max(MIN_VISIBLE_MS - sinceStart, TAIL_DEBOUNCE_MS);
-      timerRef.current = setTimeout(() => {
-        setVisible(false);
-        timerRef.current = null;
-      }, delay);
-    }
-  }, [isRefreshing, visible]);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []);
-
-  // Fade layer: `mounted` keeps the glyph in the DOM through its
-  // fade-out, `shown` drives the opacity target. Toggling `shown` one
-  // frame after mount lets the CSS transition animate the enter.
-  const [mounted, setMounted] = useState(false);
-  const [shown, setShown] = useState(false);
-  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (fadeTimerRef.current) {
-      clearTimeout(fadeTimerRef.current);
-      fadeTimerRef.current = null;
-    }
-    if (visible) {
-      setMounted(true);
-      const id = requestAnimationFrame(() => setShown(true));
-      return () => cancelAnimationFrame(id);
-    }
-    setShown(false);
-    fadeTimerRef.current = setTimeout(() => setMounted(false), FADE_MS);
-    return () => {
-      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
-    };
-  }, [visible]);
-
   return (
     <Box
+      aria-hidden
       sx={{
         width: 40,
         flexShrink: 0,
@@ -379,21 +308,17 @@ function RefreshIndicator({ isRefreshing }: { isRefreshing: boolean }): JSX.Elem
         alignItems: 'center',
         justifyContent: 'center',
       }}
-      aria-hidden={!visible}
     >
-      {mounted && (
-        <RefreshIcon
-          aria-label="Refreshing robot list"
-          sx={{
-            fontSize: 22,
-            color: 'text.disabled',
-            opacity: shown ? REST_OPACITY : 0,
-            transition: `opacity ${FADE_MS}ms ease`,
-            transformOrigin: 'center',
-            animation: `${refreshSpinKeyframes} 1.4s linear infinite`,
-          }}
-        />
-      )}
+      <RefreshIcon
+        sx={{
+          fontSize: 22,
+          color: 'text.disabled',
+          opacity: isRefreshing ? REST_OPACITY : 0,
+          transition: `opacity ${FADE_MS}ms ease`,
+          transformOrigin: 'center',
+          animation: `${refreshSpinKeyframes} 1.4s linear infinite`,
+        }}
+      />
     </Box>
   );
 }

@@ -67,43 +67,18 @@ export class HostErrorBoundary extends Component<
         }}
       >
         <Stack
-          spacing={3}
+          spacing={2}
           sx={{ alignItems: 'center', textAlign: 'center', maxWidth: 520 }}
         >
-          <Box
-            component="div"
-            sx={{ fontSize: 56, lineHeight: 1, filter: 'grayscale(0.4)' }}
-            aria-hidden
-          >
+          <Box component="div" sx={{ fontSize: 56, lineHeight: 1 }} aria-hidden>
             ⚠️
           </Box>
-          <Stack spacing={1} sx={{ alignItems: 'center' }}>
-            <Typography variant="h5">Something went wrong</Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              The app hit an unexpected error and needs to reload.
-            </Typography>
-          </Stack>
-          {error.message && (
-            <Box
-              component="pre"
-              sx={{
-                maxWidth: '100%',
-                overflowX: 'auto',
-                fontSize: 12,
-                p: 2,
-                bgcolor: 'action.hover',
-                borderRadius: 1,
-                textAlign: 'left',
-                fontFamily:
-                  '"JetBrains Mono", "Fira Code", ui-monospace, monospace',
-              }}
-            >
-              {error.message}
-            </Box>
-          )}
+          <Typography variant="h5">Something went wrong</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            The app hit an unexpected error and needs to reload.
+          </Typography>
           <Button
-            variant="outlined"
-            color="primary"
+            variant="contained"
             onClick={this.handleReload}
             sx={{ borderRadius: `${RADIUS.md}px` }}
           >

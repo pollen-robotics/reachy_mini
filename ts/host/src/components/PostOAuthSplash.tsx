@@ -1,27 +1,20 @@
 /**
- * Covering splash shown while the host can't render a definite view
- * yet. Two variants, one frame:
- *
- *   `signing-in` - the OAuth return leg, while the SDK resolves the
- *     cached token via `authenticate()`. Shows the HF logo and the
- *     "Signing you in…" heading: the user DID just authorise on
- *     huggingface.co, so both are promises we know we're keeping.
- *   `neutral` - the plain boot leg, while the auth state is still
- *     unknown (or auth is settled and the first robot list is in
- *     flight). Spinner ONLY - no HF logo and no heading: a returning
- *     user with a live session (cached token, or the silent-auth
- *     round trip) must never see OAuth branding, and a first-time
- *     visitor must not read "Signing you in…" right before landing
- *     on the sign-in button.
+ * Covering splash for the OAuth return leg, while the SDK resolves the
+ * cached token via `authenticate()`. Shows the HF logo and the
+ * "Signing you in…" heading: the user DID just authorise on
+ * huggingface.co, so both are promises we know we're keeping. (The
+ * plain boot leg - auth state still unknown - renders a bare neutral
+ * spinner inlined in `ReachyHostShell` instead: no OAuth branding for
+ * a user who didn't just sign in.)
  *
  * Without this splash the host would render `SignInView` (the
  * "Continue with Hugging Face" button) for the ~30-500 ms the
  * in-flight `authenticate()` takes, so an authenticated user would
  * briefly bounce back to the sign-in button.
  *
- * The `signing-in` variant deliberately mirrors `WelcomeBackOverlay`'s
- * frame (same `background.default` fill, same centred HF logo) so the
- * transition reads as one continuous beat:
+ * It deliberately mirrors `WelcomeBackOverlay`'s frame (same
+ * `background.default` fill, same centred HF logo) so the transition
+ * reads as one continuous beat:
  *
  *   PostOAuthSplash (logo + spinner, no name)
  *     → WelcomeBackOverlay ("Hello, <name>")
@@ -38,7 +31,6 @@ import {
   CircularProgress,
   Stack,
   Typography,
-  alpha,
   keyframes,
 } from '@mui/material';
 
@@ -68,17 +60,7 @@ const pulseKeyframes = keyframes`
   }
 `;
 
-export interface PostOAuthSplashProps {
-  /** `signing-in` shows the HF logo + "Signing you in…" heading
-   *  (OAuth return leg); `neutral` shows a bare spinner (plain boot,
-   *  auth state not known yet - no OAuth branding). Defaults to
-   *  `signing-in`. */
-  variant?: 'signing-in' | 'neutral';
-}
-
-export function PostOAuthSplash({
-  variant = 'signing-in',
-}: PostOAuthSplashProps = {}): JSX.Element {
+export function PostOAuthSplash(): JSX.Element {
   return (
     <Box
       sx={{
@@ -97,21 +79,19 @@ export function PostOAuthSplash({
         touchAction: 'none',
       }}
     >
-      {variant === 'signing-in' && (
-        <Box
-          component="img"
-          src={hfLogoSvg}
-          alt=""
-          aria-hidden
-          sx={{
-            width: 72,
-            height: 72,
-            mb: 3,
-            display: 'block',
-            animation: `${pulseKeyframes} 1.6s ease-in-out infinite`,
-          }}
-        />
-      )}
+      <Box
+        component="img"
+        src={hfLogoSvg}
+        alt=""
+        aria-hidden
+        sx={{
+          width: 72,
+          height: 72,
+          mb: 3,
+          display: 'block',
+          animation: `${pulseKeyframes} 1.6s ease-in-out infinite`,
+        }}
+      />
       <Stack
         spacing={1}
         sx={{
@@ -119,35 +99,23 @@ export function PostOAuthSplash({
           justifyContent: 'center',
           minHeight: CONTENT_MIN_HEIGHT
         }}>
-        {variant === 'signing-in' && (
-          <Typography
-            component="h1"
-            sx={{
-              fontSize: TYPO.hero,
-              fontWeight: FONT_WEIGHT.bold,
-              letterSpacing: '-0.3px',
-              textAlign: 'center',
-              m: 0,
-            }}
-          >
-            Signing you in…
-          </Typography>
-        )}
-        {variant === 'signing-in' ? (
-          <CircularProgress
-            size={22}
-            thickness={5}
-            sx={{ color: 'text.secondary' }}
-          />
-        ) : (
-          // Neutral boot leg: the spinner IS the whole splash, so it
-          // takes the app-wide "quiet wait" style (PickerView's list
-          // spinner): default 40 px, thin stroke, low-alpha ink.
-          <CircularProgress
-            thickness={2.5}
-            sx={{ color: (theme) => alpha(theme.palette.text.primary, 0.3) }}
-          />
-        )}
+        <Typography
+          component="h1"
+          sx={{
+            fontSize: TYPO.hero,
+            fontWeight: FONT_WEIGHT.bold,
+            letterSpacing: '-0.3px',
+            textAlign: 'center',
+            m: 0,
+          }}
+        >
+          Signing you in…
+        </Typography>
+        <CircularProgress
+          size={22}
+          thickness={5}
+          sx={{ color: 'text.secondary' }}
+        />
       </Stack>
     </Box>
   );

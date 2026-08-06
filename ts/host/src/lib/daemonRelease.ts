@@ -133,9 +133,7 @@ interface CacheEntry {
   at: number;
 }
 
-let memo: CacheEntry | null = null;
-
-function readLocalStorage(): CacheEntry | null {
+function readCache(): CacheEntry | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
@@ -150,34 +148,16 @@ function readLocalStorage(): CacheEntry | null {
   }
 }
 
-function writeCache(entry: CacheEntry): void {
-  memo = entry;
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
-  } catch {
-    /* storage full / unavailable - memory cache still applies */
-  }
-}
-
-function isFresh(entry: CacheEntry | null): boolean {
-  return entry !== null && Date.now() - entry.at < TTL_MS;
-}
-
 /**
  * Resolve the latest published daemon version (e.g. `"1.8.2"`), or
- * `null` when it can't be determined. Cached in memory + localStorage
- * for `TTL_MS`: the unauthenticated GitHub API allows 60 requests per
+ * `null` when it can't be determined. Cached in localStorage for
+ * `TTL_MS`: the unauthenticated GitHub API allows 60 requests per
  * hour per IP, and a Space reloads far more often than daemons ship.
  * Never throws.
  */
 export async function fetchLatestDaemonVersion(): Promise<string | null> {
-  if (memo && isFresh(memo)) return memo.value;
-
-  const stored = readLocalStorage();
-  if (stored && isFresh(stored)) {
-    memo = stored;
-    return stored.value;
-  }
+  const stored = readCache();
+  if (stored && Date.now() - stored.at < TTL_MS) return stored.value;
 
   try {
     const res = await fetch(LATEST_URL, {
@@ -191,15 +171,13 @@ export async function fetchLatestDaemonVersion(): Promise<string | null> {
     const json = (await res.json()) as { tag_name?: unknown };
     const tag = typeof json.tag_name === 'string' ? json.tag_name : null;
     const value = tag ? tag.replace(/^v/i, '') : null;
-    writeCache({ value, at: Date.now() });
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ value, at: Date.now() }));
+    } catch {
+      /* storage full / unavailable - next call refetches */
+    }
     return value;
   } catch {
     return stored?.value ?? null;
   }
-}
-
-/** Cached latest-version value when still fresh, `null` otherwise.
- *  Lets the React hook seed its state synchronously on mount. */
-export function cachedLatestDaemonVersion(): string | null {
-  return memo && isFresh(memo) ? memo.value : null;
 }

@@ -5,20 +5,15 @@
  */
 import { useEffect, useState } from 'react';
 
-import {
-  cachedLatestDaemonVersion,
-  fetchLatestDaemonVersion,
-} from '../lib/daemonRelease';
+import { fetchLatestDaemonVersion } from '../lib/daemonRelease';
 
 /**
  * Latest daemon version, or `null` until it resolves / when it can't be
- * determined. Kicks off a single fetch on mount and serves the cached
- * value synchronously on subsequent mounts.
+ * determined. Kicks off a single fetch on mount; `fetchLatestDaemonVersion`
+ * serves its localStorage cache when fresh, so this is usually instant.
  */
 export function useLatestDaemonVersion(): string | null {
-  const [latest, setLatest] = useState<string | null>(
-    cachedLatestDaemonVersion,
-  );
+  const [latest, setLatest] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
