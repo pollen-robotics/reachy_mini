@@ -24,6 +24,7 @@ from reachy_mini.io.protocol import (
     ClearIncomingAudioCmd,
     DeleteHfTokenCmd,
     GetHardwareIdCmd,
+    GetImuCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
     GetStateCmd,
@@ -31,6 +32,7 @@ from reachy_mini.io.protocol import (
     GetVersionCmd,
     GetVolumeCmd,
     GotoSleepCmd,
+    ImuDataMsg,
     PlaySoundCmd,
     ReadAudioParameterCmd,
     RestartDaemonCmd,
@@ -369,6 +371,69 @@ def test_get_hardware_id(sim_backend: Any, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(hw, "get_hardware_id", lambda: "HW-1234")
     responses = _dispatch(sim_backend, GetHardwareIdCmd())
     assert responses == [{"hardware_id": "HW-1234"}]
+
+
+def test_get_imu_without_imu(sim_backend: Any) -> None:
+    """GetImuCmd on an IMU-less backend answers imu None (not silence).
+
+    The explicit None is what lets a client tell "no IMU" apart from
+    "old daemon that never replies".
+    """
+    responses = _dispatch(sim_backend, GetImuCmd())
+    assert responses == [{"command": "get_imu", "imu": None}]
+
+
+def test_get_imu_with_reading(sim_backend: Any) -> None:
+    """GetImuCmd serializes the backend's reading without the type envelope."""
+    sim_backend.get_imu_data = Mock(
+        return_value=ImuDataMsg(
+            accelerometer=[0.01, -0.02, 9.81],
+            gyroscope=[0.001, 0.002, -0.003],
+            quaternion=[1.0, 0.0, 0.0, 0.0],
+            temperature=31.5,
+        )
+    )
+    responses = _dispatch(sim_backend, GetImuCmd())
+    assert responses == [
+        {
+            "command": "get_imu",
+            "imu": {
+                "accelerometer": [0.01, -0.02, 9.81],
+                "gyroscope": [0.001, 0.002, -0.003],
+                "quaternion": [1.0, 0.0, 0.0, 0.0],
+                "temperature": 31.5,
+            },
+        }
+    ]
+
+
+def test_get_imu_data_cache_freshness() -> None:
+    """The robot backend serves the cache while fresh, absent once stale.
+
+    Stale means older than ``IMU_CACHE_FRESH_S``: the 50 Hz control loop
+    (the cache's only writer) has stalled, so the reading no longer
+    describes the present.
+    """
+    import time
+
+    from reachy_mini.daemon.backend.robot.backend import RobotBackend
+
+    b = RobotBackend.__new__(RobotBackend)
+    msg = ImuDataMsg(
+        accelerometer=[0.0, 0.0, 9.81],
+        gyroscope=[0.0, 0.0, 0.0],
+        quaternion=[1.0, 0.0, 0.0, 0.0],
+        temperature=30.0,
+    )
+
+    b._last_imu = None
+    assert RobotBackend.get_imu_data(b) is None
+
+    b._last_imu = (msg, time.monotonic())
+    assert RobotBackend.get_imu_data(b) is msg
+
+    b._last_imu = (msg, time.monotonic() - RobotBackend.IMU_CACHE_FRESH_S - 0.1)
+    assert RobotBackend.get_imu_data(b) is None
 
 
 # ------------------------------------------------------------------

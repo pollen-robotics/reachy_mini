@@ -7,7 +7,7 @@ Client->Server command types:
     goto_target, wake_up, goto_sleep, play_sound,
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
-    get_state, get_version, start_recording, stop_recording, append_record,
+    get_state, get_version, get_imu, start_recording, stop_recording, append_record,
     get_robot_name, set_robot_name, delete_hf_token,
     subscribe_logs, unsubscribe_logs, subscribe_pose, unsubscribe_pose,
     restart_daemon, start_update,
@@ -19,6 +19,7 @@ Client->Server command types:
     set_speech_offsets, set_wobbling, set_head_tracking, get_tracked_face
 
 Server->Client message types:
+    welcome (pushed once when the data channel opens),
     joint_positions, head_pose, imu_data, recorded_data,
     daemon_status, task_progress, log_line, log_stream_error,
     update_progress
@@ -282,6 +283,12 @@ class GetHardwareIdCmd(BaseModel):
     """Query the robot's unique hardware ID (Pollen audio device serial)."""
 
     type: Literal["get_hardware_id"] = "get_hardware_id"
+
+
+class GetImuCmd(BaseModel):
+    """Query the current IMU reading (`ImuDataMsg`; null on IMU-less robots)."""
+
+    type: Literal["get_imu"] = "get_imu"
 
 
 class StartRecordingCmd(BaseModel):
@@ -832,6 +839,7 @@ AnyCommand = Annotated[
     | GetStateCmd
     | GetVersionCmd
     | GetHardwareIdCmd
+    | GetImuCmd
     | StartRecordingCmd
     | StopRecordingCmd
     | AppendRecordCmd
