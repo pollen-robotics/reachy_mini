@@ -156,6 +156,7 @@ class DaemonStatus(BaseModel):
     mockup_sim_enabled: Optional[bool]
     no_media: bool = False
     media_released: bool = False
+    camera_released: bool = False
     camera_specs_name: str = ""
     backend_status: Optional[
         RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus

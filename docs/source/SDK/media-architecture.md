@@ -91,6 +91,39 @@ frame = mini.media.get_frame()
 
 For a complete example with both OpenCV and sounddevice, see [Custom Media Manager](../examples/custom_media_manager.md).
 
+## Releasing the Camera Only
+
+An app that only needs audio — a voice assistant, a conversation app — still pays for the camera.
+The capture branch is driven by a live source, so it produces frames at the sensor's rate whether or
+not anything reads them; on a Wireless unit that is a continuous CPU cost with an audible fan.
+
+`release_camera()` drops the video branch and leaves the microphone, the speaker and the WebRTC
+signalling untouched:
+
+```python
+with ReachyMini() as mini:
+    mini.release_camera()
+    # Microphone and speaker keep working; media.get_frame() returns nothing.
+
+    mini.acquire_camera()
+    frame = mini.media.get_frame()
+```
+
+The same switch is available over REST, which is handy for a quick check on a Wireless robot:
+
+```bash
+curl -X POST http://<robot>:8000/api/media/camera/release
+curl -X POST http://<robot>:8000/api/media/camera/acquire
+curl http://<robot>:8000/api/media/status   # reports camera_released
+```
+
+> **⚠️ Note:** Toggling the camera rebuilds the GStreamer pipeline. Audio is interrupted for the
+> duration of the rebuild and WebRTC consumers have to reconnect, exactly as with
+> `release_media()` — so switch between activities, not mid-sentence. Both methods are idempotent.
+
+The daemon also does this on its own: the robot releases the camera when it goes to sleep and
+re-acquires it on wake-up, so an idle robot does not run its camera.
+
 ## Advanced Controls
 
 Please refer to the dedicated pages to fine-tune camera and microphone parameters for [Reachy Mini](../platforms/reachy_mini/media_advanced_controls.md) and [Reachy Mini Lite](../platforms/reachy_mini_lite/media_advanced_controls.md).

@@ -224,6 +224,13 @@ class GstMediaServer:
             raise RuntimeError("Failed to get default camera resolution.")
 
         self._cam_path = cam_path
+        # When False, `_build_pipeline` omits the whole video branch and the
+        # camera is never opened, while audio keeps running. Toggled by
+        # `disable_camera` / `enable_camera`.
+        self._camera_enabled = True
+        # Whether `start()` has run without a matching `stop()`. Toggling the
+        # camera only rebuilds a pipeline that is actually playing.
+        self._pipeline_running = False
 
         self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
         self._on_data_message: Optional[Callable[[str, str], None]] = None
@@ -291,7 +298,10 @@ class GstMediaServer:
 
         webrtcsink = self._configure_webrtc(self._pipeline_sender)
 
-        self._configure_video(self._cam_path, self._pipeline_sender, webrtcsink)
+        if self._camera_enabled:
+            self._configure_video(self._cam_path, self._pipeline_sender, webrtcsink)
+        else:
+            self._logger.info("Camera disabled: building an audio-only pipeline.")
         self._configure_audio(self._pipeline_sender, webrtcsink)
 
         self._logger.debug("Pipeline built")
@@ -1251,12 +1261,55 @@ class GstMediaServer:
         self._logger.debug("Starting WebRTC (rebuilding pipeline)")
         self._build_pipeline()
         self._pipeline_sender.set_state(Gst.State.PLAYING)
+        self._pipeline_running = True
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def stop(self) -> None:
         """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
         self._pipeline_sender.set_state(Gst.State.NULL)
+        self._pipeline_running = False
+
+    @property
+    def camera_enabled(self) -> bool:
+        """Whether the video branch is part of the pipeline."""
+        return self._camera_enabled
+
+    def disable_camera(self) -> None:
+        """Rebuild the pipeline without the video branch, keeping audio.
+
+        The camera source is a live source: it produces frames at the sensor's
+        rate whether or not anything consumes them, so an idle capture branch
+        still costs CPU. Dropping it leaves the microphone and speaker running.
+
+        Idempotent. When the pipeline is running, audio is interrupted for the
+        duration of the rebuild and WebRTC consumers must reconnect, as with
+        `stop()` / `start()`.
+        """
+        self._set_camera_enabled(False)
+
+    def enable_camera(self) -> None:
+        """Rebuild the pipeline with the video branch restored.
+
+        Idempotent; same rebuild caveats as `disable_camera`.
+        """
+        self._set_camera_enabled(True)
+
+    def _set_camera_enabled(self, enabled: bool) -> None:
+        if self._camera_enabled == enabled:
+            return
+
+        self._logger.info("%s camera branch", "Enabling" if enabled else "Disabling")
+        self._camera_enabled = enabled
+
+        # A stopped pipeline (media released, or not started yet) must stay
+        # stopped, so rebuild it in place rather than through start(): building
+        # only creates elements, it does not open any device.
+        if self._pipeline_running:
+            self.stop()
+            self.start()
+        else:
+            self._build_pipeline()
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker.
