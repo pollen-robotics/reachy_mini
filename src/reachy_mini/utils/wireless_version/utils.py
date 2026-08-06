@@ -90,10 +90,7 @@ def build_install_command(
         if not _check_uv_available():
             step3_args += ["--upgrade-strategy", "only-if-needed"]
         step3 = shlex.join(step3_args)
-        # Group steps 2-3 explicitly: with the bare `step1 && step2 || step3`
-        # shell precedence, a FAILED step1 would run step3 (a plain PyPI
-        # upgrade), silently replacing the requested git ref with the latest
-        # wheel and masking the failure behind step3's exit code.
+        # Grouped: a failed step1 must not fall through to step3.
         cmd = f"{step1} && ( {step2} || {step3} )"
         logger.info(f"Git ref install: {cmd}")
         extra_env: dict[str, str] = {"GIT_LFS_SKIP_SMUDGE": "1"}
@@ -130,10 +127,7 @@ async def call_logger_wrapper(
         env: Optional environment variables dict. If None, inherits current environment.
 
     Raises:
-        RuntimeError: If the command exits with a non-zero code, so callers
-            (the update flow) can surface a real failure instead of carrying
-            on - e.g. restarting the daemon after a failed install and
-            reporting the job as done.
+        RuntimeError: If the command exits with a non-zero code.
 
     """
     logger.info(f"Running: {command}")
@@ -164,6 +158,4 @@ async def call_logger_wrapper(
     await asyncio.gather(*tasks)
     returncode = await process.wait()
     if returncode != 0:
-        message = f"Command failed with exit code {returncode}: {command}"
-        logger.error(message)
-        raise RuntimeError(message)
+        raise RuntimeError(f"Command failed with exit code {returncode}: {command}")

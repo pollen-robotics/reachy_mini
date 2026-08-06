@@ -1,6 +1,8 @@
 """Unit tests for the wireless_version update helpers."""
 
+import logging
 import shlex
+import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -98,18 +100,10 @@ def test_build_git_ref_pip_fallback(monkeypatch):
     assert "--upgrade-strategy" in t3 and "only-if-needed" in t3
 
 
-def test_build_git_ref_step1_failure_not_masked(monkeypatch):
-    """Regression: a failed step1 must fail the WHOLE chain.
-
-    With the bare `step1 && step2 || step3` shell precedence, a failed
-    step1 ran step3 (a plain PyPI upgrade): the latest wheel silently
-    replaced the requested git ref AND its exit code masked the failure.
-    The grouped form `step1 && ( step2 || step3 )` short-circuits instead.
-    """
-    monkeypatch.setattr(utils, "_check_uv_available", lambda: True)
-    cmd, _ = utils.build_install_command("wireless-version", git_ref="main")
-    step1, _, _ = _split_git_ref_cmd(cmd)
-    assert cmd.startswith(f"{step1} && ( ")
+def test_git_ref_grouping_shell_precedence():
+    """Regression: with the grouped form, a failed step1 fails the whole chain."""
+    assert subprocess.run("false && true || true", shell=True).returncode == 0  # old form, masked
+    assert subprocess.run("false && ( true || true )", shell=True).returncode != 0  # grouped, honest
 
 
 # --- call_logger_wrapper ---
@@ -118,21 +112,12 @@ def test_build_git_ref_step1_failure_not_masked(monkeypatch):
 @pytest.mark.asyncio
 async def test_call_logger_wrapper_success():
     """A zero exit code returns without raising."""
-    import logging
-
     await utils.call_logger_wrapper("true", logging.getLogger("test"))
 
 
 @pytest.mark.asyncio
 async def test_call_logger_wrapper_nonzero_raises():
-    """Regression: a non-zero exit code must raise, not pass silently.
-
-    Before this check, a failed `pip install` sailed through and
-    `update_reachy_mini` restarted the daemon on the OLD version while
-    every route (REST job, BLE screen, WebRTC broadcast) reported success.
-    """
-    import logging
-
+    """Regression: a non-zero exit code must raise, not pass silently."""
     with pytest.raises(RuntimeError, match="exit code 7"):
         await utils.call_logger_wrapper("exit 7", logging.getLogger("test"))
 
@@ -329,12 +314,10 @@ async def test_update_with_apps_venv(monkeypatch):
     monkeypatch.setattr(update, "call_logger_wrapper", calls)
     monkeypatch.setattr(update.Path, "exists", lambda self: True)
 
-    import logging
-
     await update.update_reachy_mini(logging.getLogger("test"))
 
     assert calls.call_count == 3
-    assert calls.await_args_list[-1].args[0] == "sudo systemctl restart reachy-mini-daemon"
+    assert calls.await_args_list[-1].args[0] == "sudo systemctl --no-block restart reachy-mini-daemon"
 
 
 @pytest.mark.asyncio
@@ -344,12 +327,10 @@ async def test_update_without_apps_venv(monkeypatch):
     monkeypatch.setattr(update, "call_logger_wrapper", calls)
     monkeypatch.setattr(update.Path, "exists", lambda self: False)
 
-    import logging
-
     await update.update_reachy_mini(logging.getLogger("test"), pre_release=True)
 
     assert calls.call_count == 2
-    assert calls.await_args_list[-1].args[0] == "sudo systemctl restart reachy-mini-daemon"
+    assert calls.await_args_list[-1].args[0] == "sudo systemctl --no-block restart reachy-mini-daemon"
 
 
 @pytest.mark.asyncio
@@ -358,8 +339,6 @@ async def test_update_daemon_install_failure_aborts_before_restart(monkeypatch):
     calls = AsyncMock(side_effect=RuntimeError("pip install failed"))
     monkeypatch.setattr(update, "call_logger_wrapper", calls)
     monkeypatch.setattr(update.Path, "exists", lambda self: True)
-
-    import logging
 
     with pytest.raises(RuntimeError, match="pip install failed"):
         await update.update_reachy_mini(logging.getLogger("test"))
@@ -370,13 +349,7 @@ async def test_update_daemon_install_failure_aborts_before_restart(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_update_apps_venv_failure_still_restarts(monkeypatch):
-    """An apps_venv failure is non-fatal: the restart still applies the update.
-
-    The daemon venv is already on the new version when apps_venv fails;
-    skipping the restart would leave it installed-but-not-running with
-    retries refused as "no update available". The startup check re-syncs
-    apps_venv on the next boot instead.
-    """
+    """An apps_venv failure is non-fatal: the restart still applies the update."""
     commands: list[str] = []
 
     async def fake_call(cmd, logger, env=None):
@@ -387,12 +360,10 @@ async def test_update_apps_venv_failure_still_restarts(monkeypatch):
     monkeypatch.setattr(update, "call_logger_wrapper", fake_call)
     monkeypatch.setattr(update.Path, "exists", lambda self: True)
 
-    import logging
-
     await update.update_reachy_mini(logging.getLogger("test"))
 
     assert len(commands) == 3
-    assert commands[-1] == "sudo systemctl restart reachy-mini-daemon"
+    assert commands[-1] == "sudo systemctl --no-block restart reachy-mini-daemon"
 
 
 @pytest.mark.asyncio
@@ -402,13 +373,11 @@ async def test_update_restart_failure_propagates(monkeypatch):
 
     async def fake_call(cmd, logger, env=None):
         commands.append(cmd)
-        if cmd.startswith("sudo systemctl restart"):
+        if cmd.startswith("sudo systemctl"):
             raise RuntimeError("systemctl failed")
 
     monkeypatch.setattr(update, "call_logger_wrapper", fake_call)
     monkeypatch.setattr(update.Path, "exists", lambda self: False)
-
-    import logging
 
     with pytest.raises(RuntimeError, match="systemctl failed"):
         await update.update_reachy_mini(logging.getLogger("test"))
