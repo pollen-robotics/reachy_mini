@@ -33,8 +33,10 @@ from reachy_mini.io.protocol import (
     CancelMoveCmd,
     ClearIncomingAudioCmd,
     DeleteHfTokenCmd,
+    DoaSnapshot,
     FaceTarget,
     GetHardwareIdCmd,
+    GetImuCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
     GetRobotNameCmd,
@@ -44,6 +46,7 @@ from reachy_mini.io.protocol import (
     GetVolumeCmd,
     GotoSleepCmd,
     GotoTargetCmd,
+    ImuDataMsg,
     LogLineMsg,
     LogStreamErrorMsg,
     MockupSimBackendStatus,
@@ -147,6 +150,20 @@ class Backend:
         self.use_audio = use_audio
 
         self.doa = AudioDoA() if use_audio else None
+        # Cache for the latest DoA reading, refreshed by a demand-driven
+        # poller thread (see `_doa_poll_loop` for the rationale and the
+        # locking rules).
+        self._doa_lock = threading.Lock()
+        # Serializes every daemon-side ReSpeaker USB conversation (DoA reads
+        # and audio-config commands): `ReSpeaker.read()` is a multi-step
+        # conversation on a non-thread-safe pyusb device, so two of them must
+        # never interleave.
+        self._doa_usb_lock = threading.Lock()
+        self._last_doa: tuple[float, bool] | None = None
+        # Monotonic time of the last cache consumer; keeps the poller alive.
+        self._doa_demand_ts: float = 0.0
+        self._doa_stop = threading.Event()
+        self._doa_thread: threading.Thread | None = None
 
         self.should_stop = threading.Event()
         self.ready = threading.Event()
@@ -431,6 +448,21 @@ class Backend:
         Subclasses must still implement their own cleanup for backend-specific resources.
         """
         self.logger.debug("Backend.close() - cleaning up resources")
+        # Stop the DoA poller and release the ReSpeaker USB handle.
+        self._doa_stop.set()
+        if self._doa_thread is not None:
+            self._doa_thread.join(timeout=1.0)
+            self._doa_thread = None
+        # `join(timeout=...)` can return with a wedged USB read still in
+        # flight, so only the lock proves the poller isn't mid-`ctrl_transfer`
+        # when the device is disposed.
+        with self._doa_usb_lock:
+            if self.doa is not None:
+                try:
+                    self.doa.close()
+                except Exception:  # noqa: BLE001 - best-effort teardown
+                    self.logger.debug("DoA close failed", exc_info=True)
+                self.doa = None
         self._media_server = None
 
     @property
@@ -489,6 +521,10 @@ class Backend:
 
         """
         self.imu_publisher = publisher
+
+    def get_imu_data(self) -> ImuDataMsg | None:
+        """Latest IMU reading; None on backends without an IMU."""
+        return None
 
     def update_target_head_joints_from_ik(
         self,
@@ -1301,6 +1337,91 @@ class Backend:
         }
 
     # ------------------------------------------------------------------
+    # Direction of Arrival (cached, off the hot state path)
+    # ------------------------------------------------------------------
+
+    # ~10 Hz: fast enough to track a speaker turning, slow enough to keep the
+    # blocking ReSpeaker USB reads off the ~30 Hz pose-push loop.
+    DOA_POLL_INTERVAL_S = 0.1
+    # The poller exits after this long without a cache consumer. DoA rides
+    # the state snapshot, so "demand" means any connected client reading
+    # state; the gain is that an idle daemon (no client at all - the common
+    # state for an always-on robot) generates zero USB traffic. Must stay
+    # comfortably above any plausible REST polling cadence: the idle exit
+    # clears the cache, so a client polling slower than this would only
+    # ever see the null it re-primed on its previous request.
+    DOA_IDLE_STOP_S = 60.0
+
+    def _note_doa_demand(self) -> None:
+        """Record cache demand and make sure the poller is running.
+
+        Spawning is guarded by ``_doa_lock`` so the ~30 Hz push loop and
+        concurrent REST requests can't start two threads.
+        """
+        now = time.monotonic()
+        with self._doa_lock:
+            self._doa_demand_ts = now
+            if self._doa_thread is not None and self._doa_thread.is_alive():
+                return
+            self._doa_thread = threading.Thread(
+                target=self._doa_poll_loop, name="doa-poller", daemon=True
+            )
+            self._doa_thread.start()
+
+    def _doa_poll_loop(self) -> None:
+        """Cache the latest DoA reading until shutdown or idle timeout.
+
+        ``get_DoA()`` is a blocking USB control transfer with no bounded
+        latency (retry handshake of up to 100 attempts, 100 s worst-case
+        transfer timeout), so it must never run on the ~30 Hz pose-push
+        path or the HTTP event loop. This thread is the only place the
+        daemon reads DoA; every consumer goes through the cache (see
+        :meth:`read_doa`). Reads hold ``_doa_usb_lock`` so they never
+        interleave with the audio-config commands' own ReSpeaker
+        conversation, and every failure path is swallowed so a flaky USB
+        read can never take the thread down.
+        """
+        while not self._doa_stop.is_set():
+            with self._doa_lock:
+                idle_for = time.monotonic() - self._doa_demand_ts
+            if idle_for > self.DOA_IDLE_STOP_S:
+                with self._doa_lock:
+                    # Never serve a pre-idle reading to a late consumer.
+                    self._last_doa = None
+                return
+            try:
+                with self._doa_usb_lock:
+                    reading = self.doa.get_DoA() if self.doa is not None else None
+            except Exception:  # noqa: BLE001 - never kill the poller
+                reading = None
+            with self._doa_lock:
+                self._last_doa = reading
+            # `wait()` returns True once stopped, False on timeout - so this
+            # both paces the poll and exits promptly on shutdown.
+            if self._doa_stop.wait(self.DOA_POLL_INTERVAL_S):
+                return
+
+    def read_doa(self) -> DoaSnapshot | None:
+        """Return the latest cached DoA reading, or ``None``.
+
+        Never blocks: serves both the ~30 Hz pose push (via
+        :meth:`build_state_snapshot`) and the REST surface (`/state/doa`,
+        `/state/full?with_doa=true`). Registers demand so the poller
+        (re)starts, and returns ``None`` when no ReSpeaker is present or
+        the first poll hasn't landed yet (~one ``DOA_POLL_INTERVAL_S``
+        after the first demand).
+        """
+        if self.doa is None or not self.doa.available:
+            return None
+        self._note_doa_demand()
+        with self._doa_lock:
+            reading = self._last_doa
+        if reading is None:
+            return None
+        angle, speech_detected = reading
+        return DoaSnapshot(angle=angle, speech_detected=speech_detected)
+
+    # ------------------------------------------------------------------
     # State snapshot (shared by get_state replies and the pose push)
     # ------------------------------------------------------------------
 
@@ -1331,6 +1452,9 @@ class Backend:
             is_recording=self.is_recording,
             is_move_running=self.is_move_running,
             face_target=self.get_tracked_face(),
+            # Sound Direction of Arrival (ReSpeaker mic array), or None when
+            # unavailable. Cached, never blocks (see _doa_poll_loop).
+            doa=self.read_doa(),
         )
 
     def build_state_dict(self) -> dict[str, Any]:
@@ -1542,6 +1666,13 @@ class Backend:
 
             send_response({"hardware_id": get_hardware_id()})
 
+        elif isinstance(cmd, GetImuCmd):
+            # `imu` is None on IMU-less hardware (Lite, simulation) so
+            # clients can tell "no IMU" from "no reply" (old daemon).
+            imu = self.get_imu_data()
+            payload = imu.model_dump(exclude={"type"}) if imu is not None else None
+            send_response({"command": "get_imu", "imu": payload})
+
         elif isinstance(cmd, (GetRobotNameCmd, SetRobotNameCmd)):
             # Robot display name is a persistent, robot-wide string stored on
             # disk. A rename is applied live below (status + central relay +
@@ -1652,54 +1783,73 @@ class Backend:
         elif isinstance(cmd, (ApplyAudioConfigCmd, ReadAudioParameterCmd)):
             from reachy_mini.media.audio_control_utils import init_respeaker_usb
 
-            try:
-                respeaker = init_respeaker_usb()
-            except Exception as e:
-                self.logger.warning("ReSpeaker init failed: %s", e)
-                send_response(
-                    {"error": f"ReSpeaker init failed: {e}", "command": cmd.type}
-                )
-                return
+            # This is a multi-transfer ReSpeaker conversation, so it holds
+            # `_doa_usb_lock` end to end: it must never interleave with the
+            # DoA poller (see _doa_poll_loop). Reuse the long-lived DoA
+            # handle when the probe found a device; fall back to a transient
+            # handle otherwise (no DoA handle also means no poller).
+            with self._doa_usb_lock:
+                transient = None
+                if self.doa is not None and self.doa.available:
+                    respeaker = self.doa.respeaker
+                else:
+                    try:
+                        transient = init_respeaker_usb()
+                    except Exception as e:
+                        self.logger.warning("ReSpeaker init failed: %s", e)
+                        send_response(
+                            {
+                                "error": f"ReSpeaker init failed: {e}",
+                                "command": cmd.type,
+                            }
+                        )
+                        return
+                    respeaker = transient
 
-            if respeaker is None:
-                send_response(
-                    {
-                        "error": "ReSpeaker audio board not available",
-                        "command": cmd.type,
-                    }
-                )
-                return
-
-            try:
-                if isinstance(cmd, ApplyAudioConfigCmd):
-                    config = [(p.name, p.values) for p in cmd.config]
-                    applied = respeaker.apply_audio_config(config, verify=cmd.verify)
+                if respeaker is None:
                     send_response(
                         {
-                            "status": "ok" if applied else "error",
-                            "command": "apply_audio_config",
-                            "applied": applied,
+                            "error": "ReSpeaker audio board not available",
+                            "command": cmd.type,
                         }
                     )
-                else:  # ReadAudioParameterCmd
-                    values = respeaker.read_values(cmd.name)
+                    return
+
+                try:
+                    if isinstance(cmd, ApplyAudioConfigCmd):
+                        config = [(p.name, p.values) for p in cmd.config]
+                        applied = respeaker.apply_audio_config(
+                            config, verify=cmd.verify
+                        )
+                        send_response(
+                            {
+                                "status": "ok" if applied else "error",
+                                "command": "apply_audio_config",
+                                "applied": applied,
+                            }
+                        )
+                    else:  # ReadAudioParameterCmd
+                        values = respeaker.read_values(cmd.name)
+                        send_response(
+                            {
+                                "command": "read_audio_parameter",
+                                "name": cmd.name,
+                                "values": list(values) if values is not None else None,
+                            }
+                        )
+                except Exception as e:
+                    self.logger.warning(
+                        "Audio config command %s failed: %s", cmd.type, e
+                    )
                     send_response(
                         {
-                            "command": "read_audio_parameter",
-                            "name": cmd.name,
-                            "values": list(values) if values is not None else None,
+                            "error": f"Audio config command failed: {e}",
+                            "command": cmd.type,
                         }
                     )
-            except Exception as e:
-                self.logger.warning("Audio config command %s failed: %s", cmd.type, e)
-                send_response(
-                    {
-                        "error": f"Audio config command failed: {e}",
-                        "command": cmd.type,
-                    }
-                )
-            finally:
-                respeaker.close()
+                finally:
+                    if transient is not None:
+                        transient.close()
 
         elif isinstance(cmd, StartRecordingCmd):
             self.start_recording()

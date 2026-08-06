@@ -1,5 +1,7 @@
 # Python SDK Reference
 
+> **Heads up:** The Python and **[JavaScript](javascript-sdk.md)** SDKs both give you full control of the robot — they simply target different audiences. If you want to build apps that are easy to share (zero-install, open a link in a browser), the JavaScript/Web path is usually the better fit. The Python SDK shines for scripting, control loops, and code running directly on the robot.
+
 > **💡 Reminder:** The SDK now auto-detects whether it should connect over USB/localhost or over the network, so `ReachyMini()` works out of the box. You can still force a mode with `ReachyMini(connection_mode="localhost_only" | "network")` if needed.
 
 ## Movement
