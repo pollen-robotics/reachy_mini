@@ -192,7 +192,8 @@ async def wake_or_start_startup_app_if_idle(
         return False
 
     try:
-        # Decide before touching the motors: enabling them first would flip
+        # Decide before touching the motors: enabling them pins the targets
+        # to the measured pose, which for a robot resting at init could flip
         # the awake predicate and turn the wake below into a silent no-op.
         if backend.is_awake_at_init_pose():
             # Already up: just ack the touch with the wake sound.

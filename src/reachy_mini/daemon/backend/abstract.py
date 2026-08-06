@@ -1153,26 +1153,34 @@ class Backend:
         ]
     )
 
-    # Init-pose proximity in magic-mm (mm + deg), same empirical threshold as
-    # goto_sleep's stand-down (see SLEEP_POSE_MAGIC_DISTANCE, apps/manager.py).
-    INIT_POSE_MAGIC_DISTANCE: float = 10.0
-    # ~17° of antenna slack: absorbs sag/jitter while still catching a
-    # genuinely misplaced antenna (sleep parks them ~165° away).
-    INIT_ANTENNAS_TOLERANCE_RAD: float = 0.3
+    # Bounds the goto interpolation tail, not the hardware: play_move never
+    # evaluates a move at exactly t=duration, so the last written target sits
+    # a (velocity-eased) tick short of the commanded endpoint.
+    INIT_TARGET_ATOL: float = 1e-2
 
     def is_awake_at_init_pose(self) -> bool:
-        """Motors on and head + antennas already home: nothing to wake."""
-        _, _, head_offset = distance_between_poses(
-            self.get_current_head_pose(), self.INIT_HEAD_POSE
-        )
+        """Motors on and init is the pose the controller is actively holding.
+
+        Compares the commanded targets, not the measured pose: a head sagging
+        a few mm under its own weight while commanded to init IS standing at
+        init, and per-unit calibration residual must not flip the answer.
+        """
+        if self.target_head_pose is None or self.target_antenna_joint_positions is None:
+            return False
         return (
             self.get_motor_control_mode() == MotorControlMode.Enabled
-            and head_offset < self.INIT_POSE_MAGIC_DISTANCE
             and bool(
                 np.allclose(
-                    self.get_present_antenna_joint_positions(),
+                    self.target_head_pose,
+                    self.INIT_HEAD_POSE,
+                    atol=self.INIT_TARGET_ATOL,
+                )
+            )
+            and bool(
+                np.allclose(
+                    self.target_antenna_joint_positions,
                     self.INIT_ANTENNAS_JOINT_POSITIONS,
-                    atol=self.INIT_ANTENNAS_TOLERANCE_RAD,
+                    atol=self.INIT_TARGET_ATOL,
                 )
             )
         )

@@ -3,8 +3,11 @@
 Clients routinely send ``wake_up`` on session start. Since the idle-reset
 handoff grace keeps the robot awake between sessions, that boot-time wake
 would replay the emote (goto + "toudoum" + roll) on a robot that never
-slept. ``wake_up`` must stand down when the motors are enabled and the head
-is already at the init pose - and still run in full from any other state.
+slept. ``wake_up`` must stand down when the motors are enabled and the
+controller is actively holding the init pose - and still run in full from
+any other state. The predicate reads the commanded targets, not the
+measured pose, so per-unit calibration residual can't flip the answer
+(hardware-verified in #1311 review).
 
 Same lightweight-fake approach as ``test_backend_idle_reset``: the method
 only touches a handful of ``self`` attributes, so it is exercised unbound.
@@ -23,18 +26,22 @@ from reachy_mini.io.protocol import MotorControlMode
 def _fake_backend(
     *,
     motor_mode: MotorControlMode,
-    head_pose: np.ndarray,
+    head_pose: np.ndarray | None,
     antennas: np.ndarray | None = None,
 ) -> SimpleNamespace:
-    if antennas is None:
+    if antennas is None and head_pose is not None:
         antennas = Backend.INIT_ANTENNAS_JOINT_POSITIONS.copy()
     fake = SimpleNamespace(
         INIT_HEAD_POSE=Backend.INIT_HEAD_POSE,
         INIT_ANTENNAS_JOINT_POSITIONS=Backend.INIT_ANTENNAS_JOINT_POSITIONS,
-        INIT_POSE_MAGIC_DISTANCE=Backend.INIT_POSE_MAGIC_DISTANCE,
-        INIT_ANTENNAS_TOLERANCE_RAD=Backend.INIT_ANTENNAS_TOLERANCE_RAD,
-        get_current_head_pose=lambda: head_pose,
-        get_present_antenna_joint_positions=lambda: antennas,
+        INIT_TARGET_ATOL=Backend.INIT_TARGET_ATOL,
+        # The predicate reads the commanded targets; the full wake path still
+        # measures the present pose to size its goto duration.
+        target_head_pose=head_pose,
+        target_antenna_joint_positions=antennas,
+        get_current_head_pose=lambda: (
+            head_pose if head_pose is not None else Backend.SLEEP_HEAD_POSE.copy()
+        ),
         get_motor_control_mode=lambda: motor_mode,
         goto_target=AsyncMock(),
         play_sound=MagicMock(),
@@ -46,7 +53,7 @@ def _fake_backend(
 
 
 def _far_pose() -> np.ndarray:
-    """Build a pose ~50 magic-mm away from init - well past the 10 threshold."""
+    """Build a pose 50 mm away from init - well past the target atol."""
     pose = Backend.INIT_HEAD_POSE.copy()
     pose[0, 3] += 0.05  # +50 mm along x
     return pose
@@ -54,7 +61,7 @@ def _far_pose() -> np.ndarray:
 
 @pytest.mark.asyncio
 async def test_wake_up_stands_down_when_already_awake_at_init() -> None:
-    """Enabled motors + head at init pose: no motion, no sound."""
+    """Enabled motors + init is the commanded target: no motion, no sound."""
     fake = _fake_backend(
         motor_mode=MotorControlMode.Enabled,
         head_pose=Backend.INIT_HEAD_POSE.copy(),
@@ -64,6 +71,44 @@ async def test_wake_up_stands_down_when_already_awake_at_init() -> None:
     fake.play_sound.assert_not_called()
     # The "robot is awake" hook keeps firing so a configured startup app
     # still launches whatever path the wake took.
+    fake._on_wake_up_callback.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_wake_up_stands_down_despite_calibration_residual() -> None:
+    """A goto's interpolation tail (< atol) must not defeat the stand-down.
+
+    The predicate compares commanded targets exactly so hardware residual is
+    out of the picture, but the target itself lands one eased tick short of
+    the endpoint (play_move never evaluates at t=duration). That tail must
+    stay inside INIT_TARGET_ATOL.
+    """
+    near_init = Backend.INIT_HEAD_POSE.copy()
+    near_init[0, 3] += 0.005  # half the atol
+    fake = _fake_backend(
+        motor_mode=MotorControlMode.Enabled,
+        head_pose=near_init,
+    )
+    await Backend.wake_up(fake)
+    fake.goto_target.assert_not_awaited()
+    fake.play_sound.assert_not_called()
+    fake._on_wake_up_callback.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_wake_up_runs_when_no_target_commanded_yet() -> None:
+    """Enabled motors but no target ever commanded (fresh boot): full wake.
+
+    Also covers --sim, where the mujoco backend hardcodes motor mode to
+    Enabled: the None guard keeps wake_up_on_start audible there.
+    """
+    fake = _fake_backend(
+        motor_mode=MotorControlMode.Enabled,
+        head_pose=None,
+    )
+    await Backend.wake_up(fake)
+    assert fake.goto_target.await_count >= 1
+    fake.play_sound.assert_called_once_with("wake_up.wav")
     fake._on_wake_up_callback.assert_called_once()
 
 
@@ -94,10 +139,10 @@ async def test_wake_up_runs_when_enabled_but_off_pose() -> None:
 
 @pytest.mark.asyncio
 async def test_wake_up_runs_when_disabled_even_at_init_pose() -> None:
-    """Disabled motors + head at init: must still wake in full.
+    """Disabled motors + init target still in place: must wake in full.
 
-    Locks the `and` in the stand-down condition: a limp robot that happens
-    to rest at the init pose is asleep, not awake.
+    Locks the `and` in the stand-down condition: a limp robot whose last
+    commanded target was init is asleep, not awake.
     """
     fake = _fake_backend(
         motor_mode=MotorControlMode.Disabled,
@@ -129,7 +174,7 @@ async def test_wake_up_force_replays_even_when_awake_at_init() -> None:
 
 @pytest.mark.asyncio
 async def test_wake_up_runs_when_antennas_off_init() -> None:
-    """Enabled + head at init but antennas askew: the wake must run.
+    """Enabled + head target at init but antennas targeted askew: must run.
 
     The wake's goto is what re-homes the antennas; standing down here
     would leave them wherever the previous app parked them.
