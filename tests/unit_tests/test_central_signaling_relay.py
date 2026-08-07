@@ -630,13 +630,16 @@ class _FakeLock:
         self._acquire = acquire
         self.acquired = 0
         self.released = 0
+        self.handoff_releases = 0
 
     def try_acquire_remote(self, app_name: str) -> bool:
         self.acquired += 1
         return self._acquire
 
-    def release_remote(self) -> None:
+    def release_remote(self, *, expect_handoff: bool = False) -> None:
         self.released += 1
+        if expect_handoff:
+            self.handoff_releases += 1
 
 
 def _make_relay_with_journals(
@@ -756,6 +759,9 @@ def test_central_end_session_cleans_up_and_releases_lock() -> None:
     assert relay._session_to_local_peer == {}
     assert local.sent == [{"type": "endSession", "sessionId": "ls1"}]
     assert lock.released == 1
+    # A deliberate hang-up: flagged as a hand-off so the daemon gives a
+    # successor session time to arrive before sleeping the robot.
+    assert lock.handoff_releases == 1
 
 
 # ---- local -> central direction ----
@@ -832,6 +838,7 @@ def test_local_end_session_forwards_to_central_and_releases_lock() -> None:
     assert relay._central_to_local_session == {}
     assert central.sent == [{"type": "endSession", "sessionId": "cs1"}]
     assert lock.released == 1
+    assert lock.handoff_releases == 1
 
 
 # ---------------------------------------------------------------------------
