@@ -67,11 +67,12 @@ jobs:
           fi
 
       # pyproject.toml is the single source of truth for the version.
-      # Release (stable X.Y.Z)  → publish <py_ver>            on `latest`.
-      # Release (prerelease)    → publish <py_ver>            on `rc`
+      # Release (stable X.Y.Z)  → publish <py_ver>                on `latest`.
+      # Release (prerelease)    → publish <py_ver>                on `rc`
       #                           (npm refuses prereleases on `latest`).
-      # Push to main            → publish <py_ver>-main.<sha> on `main`.
-      # Pull request            → dry-run only (no publish).
+      # Push to main            → publish <py_ver>-main.<sha>     on `main`.
+      # Pull request            → pack <py_ver>-pr.<num>.<sha> and upload it
+      #                           as a workflow artifact (no publish).
       - name: Compute and apply version from pyproject.toml
         id: ver
         run: |
@@ -98,15 +99,25 @@ jobs:
           print(base + ('-' + '.'.join(parts) if parts else ''))
           PY
           )
-          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
-            sha=$(echo "${{ github.sha }}" | cut -c1-7)
+          # Build a per-event marker so the version identifies where the
+          # bundle came from: `main.<sha>` for pushes to main, and
+          # `pr.<num>.<sha>` for pull requests (head sha, so it points at
+          # the branch tip rather than the ephemeral merge commit).
+          if [ "${{ github.event_name }}" = "push" ]; then
+            marker="main.$(echo "${{ github.sha }}" | cut -c1-7)"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            marker="pr.${{ github.event.pull_request.number }}.$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-7)"
+          else
+            marker=""
+          fi
+          if [ -n "$marker" ]; then
             # semver permits only one '-': when the normalized version
             # already carries a prerelease, append the build marker as
             # extra dot-separated identifiers instead of a second '-'.
             if [[ "$semver" == *-* ]]; then
-              ver="${semver}.main.${sha}"
+              ver="${semver}.${marker}"
             else
-              ver="${semver}-main.${sha}"
+              ver="${semver}-${marker}"
             fi
           else
             ver="${semver}"
@@ -120,12 +131,32 @@ jobs:
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
           npm version "$ver" --no-git-tag-version
 
-      # PR: pack to confirm the publish would succeed (tarball
-      # layout, manifest validity, no missing files) without
-      # actually publishing.
-      - name: Verify tarball (PR dry-run)
+      # PR: build a real tarball. This still validates that a publish
+      # would succeed (tarball layout, manifest validity, no missing
+      # files) - but instead of discarding it, we keep the .tgz and
+      # upload it as a workflow artifact below, so the SDK/host bundle of
+      # any branch can be downloaded and installed locally
+      # (`npm install ./<file>.tgz`) without publishing to the public
+      # registry. Works for fork PRs too (no npm token / OIDC needed).
+      - name: Pack tarball (PR)
         if: github.event_name == 'pull_request'
-        run: npm pack --dry-run
+        id: pack
+        run: |
+          npm pack
+          tarball=$(ls -t ./*.tgz | head -1)
+          echo "tarball=${tarball#./}" >> "$GITHUB_OUTPUT"
+          echo "Packed ${tarball#./}"
+
+      # Downloadable from the PR's checks / Actions run summary. Install
+      # it in a consumer app with:
+      #   npm install ./reachy-mini-sdk-pr-<num>/<file>.tgz
+      - name: Upload SDK/host bundle (PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: reachy-mini-sdk-pr-${{ github.event.pull_request.number }}
+          path: ts/${{ steps.pack.outputs.tarball }}
+          if-no-files-found: error
 
       - name: Publish (release)
         if: github.event_name == 'release'
