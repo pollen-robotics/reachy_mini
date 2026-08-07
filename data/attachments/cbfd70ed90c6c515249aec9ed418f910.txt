@@ -1,0 +1,7 @@
+WARNING  reachy_mini.daemon.robot_app_lock:robot_app_lock.py:152 RobotAppLock: on_became_free handler raised
+Traceback (most recent call last):
+  File "/home/runner/work/reachy_mini/reachy_mini/src/reachy_mini/daemon/robot_app_lock.py", line 150, in _fire_became_free
+    handler(expect_handoff)
+  File "/home/runner/work/reachy_mini/reachy_mini/tests/unit_tests/test_robot_app_lock.py", line 401, in handler
+    raise RuntimeError("boom")
+RuntimeError: boom

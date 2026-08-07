@@ -1,2 +1,0 @@
-INFO     reachy_mini.daemon.backend.abstract:abstract.py:161 Using AnalyticalKinematics kinematics engine
-WARNING  reachy_mini.daemon.backend.abstract:abstract.py:2112 upload_move_finish: no such slot nope

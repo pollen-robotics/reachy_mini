@@ -1,1 +1,1 @@
-{"id":"35b07996c07b6fd8e5aaea969cdc1413","fullName":"tests.unit_tests.test_apps_hf_auth#test_save_hf_token_unexpected_error","name":"test_save_hf_token_unexpected_error","status":"passed","testResultsByEnv":{"default":"9284a213c061032a7f1b91fb9ec0755e"}}
+{"id":"35b07996c07b6fd8e5aaea969cdc1413","fullName":"tests.unit_tests.test_apps_hf_auth#test_save_hf_token_unexpected_error","name":"test_save_hf_token_unexpected_error","status":"passed","testResultsByEnv":{"default":"ef3744060e17d62c177071f922da511b"}}

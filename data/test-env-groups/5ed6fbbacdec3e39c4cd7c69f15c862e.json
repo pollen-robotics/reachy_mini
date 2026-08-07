@@ -1,1 +1,1 @@
-{"id":"5ed6fbbacdec3e39c4cd7c69f15c862e","fullName":"tests.unit_tests.test_volume_control#test_factory_returns_correct_subclass","name":"test_factory_returns_correct_subclass[pulsectl]","status":"skipped","testResultsByEnv":{"default":"eedbc904368d2faf0287d8604e902e2c"}}
+{"id":"5ed6fbbacdec3e39c4cd7c69f15c862e","fullName":"tests.unit_tests.test_volume_control#test_factory_returns_correct_subclass","name":"test_factory_returns_correct_subclass[alsa]","status":"skipped","testResultsByEnv":{"default":"eee842798e19699121349a8abb475ee7"}}

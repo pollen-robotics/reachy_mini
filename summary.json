@@ -1,46 +1,184 @@
 {
   "stats": {
-    "total": 791,
-    "passed": 776,
-    "skipped": 15,
-    "new": 3
+    "total": 816,
+    "passed": 801,
+    "new": 26,
+    "skipped": 15
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "db88a880f5903c38e0d8eb4c616598b9",
-      "name": "test_get_imu_with_reading",
+      "id": "5cbe08642413e3d8d380436c17fda0ac",
+      "name": "test_wake_up_runs_when_no_target_commanded_yet",
+      "status": "passed",
+      "duration": 204
+    },
+    {
+      "id": "33c8eeadaf11ef9b6d7c4d0cb5b09c55",
+      "name": "test_remote_acquired_handler_not_fired_on_refused_acquire",
       "status": "passed",
       "duration": 0
     },
     {
-      "id": "89725d5e48b13363a7ac47c8b00bc695",
-      "name": "test_get_imu_data_cache_freshness",
+      "id": "e410a5efe6168eb7023bf5dac8e62bb5",
+      "name": "test_no_device_no_thread_no_reading",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "4288e507c605cee64f21d1aab6f9ce66",
+      "name": "test_wake_up_runs_when_disabled_even_at_init_pose",
+      "status": "passed",
+      "duration": 205
+    },
+    {
+      "id": "a461629318efa34650aa876a63cb840b",
+      "name": "test_poller_swallows_usb_errors",
+      "status": "passed",
+      "duration": 21
+    },
+    {
+      "id": "3606804ffb2b69d80cededd4f2f87138",
+      "name": "test_handoff_grace_reset_fires_when_no_successor_arrives",
+      "status": "passed",
+      "duration": 302
+    },
+    {
+      "id": "9ea0c2137a9c81a3e6a4ae4444957567",
+      "name": "test_remote_acquire_cancels_pending_handoff_grace_reset",
+      "status": "passed",
+      "duration": 302
+    },
+    {
+      "id": "d70a86187b35f6fc1e69fb7fa3c80ffb",
+      "name": "test_became_free_handler_reports_handoff_intent",
       "status": "passed",
       "duration": 0
     },
     {
-      "id": "bb6326295e3997e5b8b1aa9de139d851",
-      "name": "test_get_imu_without_imu",
+      "id": "6d160bb222b011d762f3389af2946b85",
+      "name": "test_poller_restarts_on_new_demand",
+      "status": "passed",
+      "duration": 52
+    },
+    {
+      "id": "6c8bdc56d12ffe32fe79f6aea5ec908c",
+      "name": "test_wake_up_runs_in_full_when_asleep",
+      "status": "passed",
+      "duration": 204
+    },
+    {
+      "id": "69485a670c88b9dfb71554f54a43cd2c",
+      "name": "test_antenna_touch_full_wake_when_enabled_but_off_pose",
       "status": "passed",
       "duration": 0
+    },
+    {
+      "id": "bf856b50cbf2275f51c8164a72adbda6",
+      "name": "test_close_joins_poller_and_releases_device",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "4e66af1630bac1e11796b7408be78688",
+      "name": "test_wake_up_runs_when_enabled_but_off_pose",
+      "status": "passed",
+      "duration": 203
+    },
+    {
+      "id": "18cda895b466fdb9a46bc68e4aa976d0",
+      "name": "test_remote_acquired_handler_fires_on_successful_acquire",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "962e3dc6dcee82d8fd0f9e0a7b9531c2",
+      "name": "test_remote_acquired_handler_exception_is_swallowed",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "9f7ac02abdcf6d3f8d97616cb5f912ea",
+      "name": "test_wake_up_stands_down_when_already_awake_at_init",
+      "status": "passed",
+      "duration": 102
+    },
+    {
+      "id": "6cad50683b1f1f8bba56f2ac951087da",
+      "name": "test_unavailable_device_never_polls",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "168598e969c9ca7203033a21b01fc143",
+      "name": "test_build_state_dict_carries_doa",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "59e40ffcb7c8e2f5e672a3cebd2c2ff3",
+      "name": "test_poller_stops_when_demand_ceases_and_clears_cache",
+      "status": "passed",
+      "duration": 52
+    },
+    {
+      "id": "100c1ec30431b0fcf84e874fb3897664",
+      "name": "test_close_waits_for_inflight_read",
+      "status": "passed",
+      "duration": 1501
+    },
+    {
+      "id": "0e5452665245d66ff030e5d9cdde5535",
+      "name": "test_remote_acquired_handler_not_fired_on_local_acquire",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "0dc52c4d4c472cc10a57ce97804f8826",
+      "name": "test_handoff_release_gets_the_long_grace",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "7f7a50dacdcde0308138341bea337ae1",
+      "name": "test_wake_up_runs_when_antennas_off_init",
+      "status": "passed",
+      "duration": 203
+    },
+    {
+      "id": "eff55aeead12e5c63f4ae2ba7bc93c9f",
+      "name": "test_wake_up_force_replays_even_when_awake_at_init",
+      "status": "passed",
+      "duration": 203
+    },
+    {
+      "id": "8d963e335760ff7bb429d976266ac7fa",
+      "name": "test_wake_up_stands_down_despite_calibration_residual",
+      "status": "passed",
+      "duration": 102
+    },
+    {
+      "id": "7313c7cc1e4cf3fef099a66e67ea7953",
+      "name": "test_read_doa_starts_poller_and_serves_cache",
+      "status": "passed",
+      "duration": 6
     }
   ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 94861,
-  "createdAt": 1786000641994,
+  "duration": 98786,
+  "createdAt": 1786091084442,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "0f55e105-29db-4a48-8ae4-19e978a01e8c",
+    "reportId": "34995957-29bc-4ead-bec2-e2990112d3a9",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31080091064",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31161310132",
   "href": "awesome/",
   "coverage": 53
 }

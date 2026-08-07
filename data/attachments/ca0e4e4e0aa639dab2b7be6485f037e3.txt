@@ -1,0 +1,2 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:176 Using AnalyticalKinematics kinematics engine
+ERROR    reachy_mini.daemon.backend.abstract:abstract.py:1963 start_update callback failed: boom

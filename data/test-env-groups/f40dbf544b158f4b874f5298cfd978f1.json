@@ -1,1 +1,1 @@
-{"id":"f40dbf544b158f4b874f5298cfd978f1","fullName":"tests.unit_tests.test_router_hf_auth#test_delete_token_success","name":"test_delete_token_success","status":"passed","testResultsByEnv":{"default":"5cd10299ed2a3c3ea3f4c2f7ce88e3e1"}}
+{"id":"f40dbf544b158f4b874f5298cfd978f1","fullName":"tests.unit_tests.test_router_hf_auth#test_delete_token_success","name":"test_delete_token_success","status":"passed","testResultsByEnv":{"default":"21914bd3c33dd041d4c7f1cc414827f6"}}
