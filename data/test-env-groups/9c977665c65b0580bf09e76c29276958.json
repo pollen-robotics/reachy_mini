@@ -1,1 +1,1 @@
-{"id":"9c977665c65b0580bf09e76c29276958","fullName":"tests.unit_tests.test_head_tracking_backend#test_tracking_face_loss_holds_last_target","name":"test_tracking_face_loss_holds_last_target","status":"passed","testResultsByEnv":{"default":"f330bc91b3f3f15ff1a5c805f5cb3dc9"}}
+{"id":"9c977665c65b0580bf09e76c29276958","fullName":"tests.unit_tests.test_head_tracking_backend#test_tracking_face_loss_holds_last_target","name":"test_tracking_face_loss_holds_last_target","status":"passed","testResultsByEnv":{"default":"35a6b0a7b8ddab29742c313b1d6dd17c"}}
