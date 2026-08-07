@@ -11,6 +11,7 @@ module also kicks off ``ensure_wifi_on_startup()`` on a real thread that shells
 out to ``sudo nmcli``; we neutralise ``threading.Thread`` during import so the
 test never touches WiFi hardware.
 """
+
 import importlib.util
 import sys
 import threading
@@ -63,6 +64,16 @@ def _import_wifi_config():
 # Imported once at module scope; only runs on Linux thanks to the guard.
 if sys.platform == "linux":
     wifi = _import_wifi_config()
+
+
+def test_nmcli_locale_preserves_non_ascii_ssids(monkeypatch):
+    """Nmcli must keep English output without degrading Unicode network names."""
+    set_lang = MagicMock()
+    monkeypatch.setattr(wifi.nmcli, "set_lang", set_lang)
+
+    wifi._configure_nmcli_locale()
+
+    set_lang.assert_called_once_with("C.UTF-8")
 
 
 @pytest.fixture
