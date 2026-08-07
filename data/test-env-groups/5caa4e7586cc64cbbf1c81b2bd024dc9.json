@@ -1,1 +1,1 @@
-{"id":"5caa4e7586cc64cbbf1c81b2bd024dc9","fullName":"tests.unit_tests.test_robot_app_lock#test_remote_acquired_handler_exception_is_swallowed","name":"test_remote_acquired_handler_exception_is_swallowed","status":"passed","testResultsByEnv":{"default":"962e3dc6dcee82d8fd0f9e0a7b9531c2"}}
+{"id":"5caa4e7586cc64cbbf1c81b2bd024dc9","fullName":"tests.unit_tests.test_robot_app_lock#test_remote_acquired_handler_exception_is_swallowed","name":"test_remote_acquired_handler_exception_is_swallowed","status":"passed","testResultsByEnv":{"default":"8651c42303bbe3c92b05fb3eadddef36"}}
