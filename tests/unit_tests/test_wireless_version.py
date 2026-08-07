@@ -122,6 +122,29 @@ async def test_call_logger_wrapper_nonzero_raises():
         await utils.call_logger_wrapper("exit 7", logging.getLogger("test"))
 
 
+@pytest.mark.asyncio
+async def test_call_logger_wrapper_tolerated_returncode():
+    """A code listed in ok_returncodes does not raise (the restart's 143/-15)."""
+    # 143 = exit status relayed by the shell.
+    await utils.call_logger_wrapper("exit 143", logging.getLogger("test"), ok_returncodes=(0, -15, 143))
+    # -15 = process killed by SIGTERM (asyncio reports the negated signal), the
+    # real self-inflicted signal seen inside the daemon's cgroup.
+    await utils.call_logger_wrapper("kill -TERM $$", logging.getLogger("test"), ok_returncodes=(0, -15, 143))
+    # A code outside the list still raises.
+    with pytest.raises(RuntimeError, match="exit code 5"):
+        await utils.call_logger_wrapper("exit 5", logging.getLogger("test"), ok_returncodes=(0, -15, 143))
+
+
+def test_restart_argv_matches_sudoers_whitelist():
+    """The restart argv is whitelisted verbatim in /etc/sudoers.d/010-pollen-reachy.
+
+    Any extra flag (e.g. --no-block) stops sudo matching the NOPASSWD rule, so the
+    restart fails with "a password is required" and the update never applies.
+    """
+    src = Path(update.__file__).read_text()
+    assert '"sudo systemctl restart reachy-mini-daemon"' in src
+
+
 # --- _semver_version ---
 
 
@@ -317,7 +340,7 @@ async def test_update_with_apps_venv(monkeypatch):
     await update.update_reachy_mini(logging.getLogger("test"))
 
     assert calls.call_count == 3
-    assert calls.await_args_list[-1].args[0] == "sudo systemctl --no-block restart reachy-mini-daemon"
+    assert calls.await_args_list[-1].args[0] == "sudo systemctl restart reachy-mini-daemon"
 
 
 @pytest.mark.asyncio
@@ -330,7 +353,7 @@ async def test_update_without_apps_venv(monkeypatch):
     await update.update_reachy_mini(logging.getLogger("test"), pre_release=True)
 
     assert calls.call_count == 2
-    assert calls.await_args_list[-1].args[0] == "sudo systemctl --no-block restart reachy-mini-daemon"
+    assert calls.await_args_list[-1].args[0] == "sudo systemctl restart reachy-mini-daemon"
 
 
 @pytest.mark.asyncio
@@ -352,7 +375,7 @@ async def test_update_apps_venv_failure_still_restarts(monkeypatch):
     """An apps_venv failure is non-fatal: the restart still applies the update."""
     commands: list[str] = []
 
-    async def fake_call(cmd, logger, env=None):
+    async def fake_call(cmd, logger, env=None, ok_returncodes=(0,)):
         commands.append(cmd)
         if len(commands) == 2:  # second call = apps_venv install
             raise RuntimeError("apps_venv install failed")
@@ -363,7 +386,7 @@ async def test_update_apps_venv_failure_still_restarts(monkeypatch):
     await update.update_reachy_mini(logging.getLogger("test"))
 
     assert len(commands) == 3
-    assert commands[-1] == "sudo systemctl --no-block restart reachy-mini-daemon"
+    assert commands[-1] == "sudo systemctl restart reachy-mini-daemon"
 
 
 @pytest.mark.asyncio
@@ -371,7 +394,7 @@ async def test_update_restart_failure_propagates(monkeypatch):
     """A failed restart command surfaces as a failed job, not a silent pass."""
     commands: list[str] = []
 
-    async def fake_call(cmd, logger, env=None):
+    async def fake_call(cmd, logger, env=None, ok_returncodes=(0,)):
         commands.append(cmd)
         if cmd.startswith("sudo systemctl"):
             raise RuntimeError("systemctl failed")

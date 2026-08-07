@@ -118,6 +118,7 @@ async def call_logger_wrapper(
     command: str,
     logger: logging.Logger,
     env: dict[str, str] | None = None,
+    ok_returncodes: tuple[int, ...] = (0,),
 ) -> None:
     """Run a shell command asynchronously, streaming stdout and stderr to logger in real time.
 
@@ -125,9 +126,11 @@ async def call_logger_wrapper(
         command: Shell command string.
         logger: logger object with .info and .error methods
         env: Optional environment variables dict. If None, inherits current environment.
+        ok_returncodes: Exit codes treated as success. Only the daemon restart
+            needs more than ``(0,)`` - see ``update_reachy_mini``.
 
     Raises:
-        RuntimeError: If the command exits with a non-zero code.
+        RuntimeError: If the command exits with a code outside *ok_returncodes*.
 
     """
     logger.info(f"Running: {command}")
@@ -157,5 +160,5 @@ async def call_logger_wrapper(
 
     await asyncio.gather(*tasks)
     returncode = await process.wait()
-    if returncode != 0:
+    if returncode not in ok_returncodes:
         raise RuntimeError(f"Command failed with exit code {returncode}: {command}")

@@ -57,10 +57,14 @@ async def update_reachy_mini(
     else:
         logger.info("apps_venv not found, skipping")
 
-    # Restart daemon to apply updates. --no-block: a blocking restart SIGTERMs
-    # our own cgroup (the systemctl child included), so it can exit 143 on a
-    # SUCCESSFUL update; --no-block returns once the job is queued, so a
-    # non-zero exit is a real failure.
+    # Restart daemon to apply updates. Two constraints, both load-bearing:
+    # - the argv must match /etc/sudoers.d/010-pollen-reachy exactly (any extra
+    #   flag, --no-block included, makes sudo demand a password and fail);
+    # - systemd SIGTERMs our own cgroup, killing this systemctl child, so
+    #   143/-15 means "the restart we asked for is happening", not a failure.
+    # Everything else (unknown unit, sudo refusal) still raises.
     await call_logger_wrapper(
-        "sudo systemctl --no-block restart reachy-mini-daemon", logger
+        "sudo systemctl restart reachy-mini-daemon",
+        logger,
+        ok_returncodes=(0, -15, 143),
     )
