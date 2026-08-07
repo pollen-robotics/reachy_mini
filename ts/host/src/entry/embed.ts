@@ -22,10 +22,11 @@
  * working — we only assign when the global is missing.
  */
 import { ReachyMini } from '@pollen-robotics/reachy-mini-sdk';
-import { connectToHost } from '../embed';
+import { connectToHost, connectToHostCredsOnly } from '../embed';
 import type {
   ConnectedHandle,
   ConnectToHostOptions,
+  CredsOnlyHandle,
 } from '../embed';
 
 declare global {
@@ -34,6 +35,9 @@ declare global {
       connectToHost<TConfig = unknown>(
         opts?: ConnectToHostOptions,
       ): Promise<ConnectedHandle<TConfig>>;
+      connectToHostCredsOnly<TConfig = unknown>(
+        opts?: ConnectToHostOptions,
+      ): Promise<CredsOnlyHandle<TConfig>>;
     };
   }
 }
@@ -43,8 +47,8 @@ if (typeof window !== 'undefined') {
     window.ReachyMini = ReachyMini;
     window.dispatchEvent(new Event('reachymini:ready'));
   }
-  window.ReachyMiniHostEmbed = { connectToHost };
+  window.ReachyMiniHostEmbed = { connectToHost, connectToHostCredsOnly };
 }
 
-export { connectToHost };
-export type { ConnectedHandle, ConnectToHostOptions };
+export { connectToHost, connectToHostCredsOnly };
+export type { ConnectedHandle, ConnectToHostOptions, CredsOnlyHandle };
