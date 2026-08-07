@@ -1,0 +1,11 @@
+INFO     reachy_mini.media.media_manager:media_manager.py:163 Using LOCAL backend (GStreamer IPC camera + GStreamer audio).
+WARNING  reachy_mini.media.camera_gstreamer:camera_gstreamer.py:118 No camera_specs provided — defaulting to ReachyMiniLiteCamSpecs.
+WARNING  reachy_mini.media.camera_gstreamer:camera_gstreamer.py:220 GStreamer pipeline error (domain=gst-core-error-quark, code=4): GStreamer error: state change failed and some element failed to post a proper error message with the reason for the failure.
+INFO     reachy_mini.media.camera_gstreamer:camera_gstreamer.py:238 Pipeline latency (live=False, min_latency=0, max_latency=18446744073709551615)
+ERROR    reachy_mini.media.audio_control_utils:audio_control_utils.py:556 No USB backend was found! Make sure libusb_package is correctly installed with `pip install libusb_package`.
+INFO     reachy_mini.media.audio_gstreamer:audio_gstreamer.py:152 Using .asoundrc audio source: reachymini_audio_src
+INFO     reachy_mini.media.audio_gstreamer:audio_gstreamer.py:234 Using .asoundrc audio sink: reachymini_audio_sink
+INFO     reachy_mini.media.camera_gstreamer:camera_gstreamer.py:238 Pipeline latency (live=False, min_latency=0, max_latency=18446744073709551615)
+WARNING  reachy_mini.media.media_manager:media_manager.py:356 Audio samples arrays must have at most 2 dimensions and at least 1 dimension, got 0
+WARNING  reachy_mini.media.media_manager:media_manager.py:356 Audio samples arrays must have at most 2 dimensions and at least 1 dimension, got 3
+INFO     reachy_mini.media.audio_gstreamer:audio_gstreamer.py:478 Audio pipeline latency (live=True, min_latency=149000000, max_latency=1200000000)

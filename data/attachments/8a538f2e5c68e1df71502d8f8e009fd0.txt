@@ -1,0 +1,1 @@
+ERROR    test:update.py:54 apps_venv SDK update failed (will re-sync on next boot): apps_venv install failed
