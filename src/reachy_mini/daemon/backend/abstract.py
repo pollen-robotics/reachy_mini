@@ -132,6 +132,18 @@ class _PlaybackCancelToken:
         self.cancelled = False
 
 
+_MOTION_COMMAND_TYPES = (
+    SetTargetCmd,
+    SetHeadJointsCmd,
+    SetBodyYawCmd,
+    SetAntennasCmd,
+    SetFullTargetCmd,
+    GotoTargetCmd,
+    WakeUpCmd,
+    PlayUploadedMoveCmd,
+)
+
+
 class Backend:
     """Base class for robot backends, simulated or real."""
 
@@ -167,6 +179,7 @@ class Backend:
 
         self.should_stop = threading.Event()
         self.ready = threading.Event()
+        self._disabled_motion_warning_emitted = False
 
         self.check_collision = (
             check_collision  # Flag to enable/disable collision checking
@@ -470,6 +483,19 @@ class Backend:
         """Return True if a move is currently executing."""
         return self._active_move_depth > 0
 
+    def _warn_if_motors_disabled(self) -> None:
+        """Log once when motion is requested while motor torque is disabled."""
+        if self.get_motor_control_mode() != MotorControlMode.Disabled:
+            self._disabled_motion_warning_emitted = False
+            return
+        if self._disabled_motion_warning_emitted:
+            return
+        self.logger.warning(
+            "Motion command received while motors are disabled; "
+            "call enable_motors() first."
+        )
+        self._disabled_motion_warning_emitted = True
+
     def _try_start_move(self) -> bool:
         """Attempt to acquire the move guard, returning False if another client already owns it."""
         if not self._play_move_lock.acquire(blocking=False):
@@ -630,6 +656,7 @@ class Backend:
         body_yaw: float | None = None,  # Body yaw angle in radians
     ) -> None:
         """Set the target head pose and/or antenna positions and/or body_yaw."""
+        self._warn_if_motors_disabled()
         if head is not None:
             self.set_target_head_pose(head)
 
@@ -821,6 +848,7 @@ class Backend:
             cancel_token (_PlaybackCancelToken, optional): If provided, the inner loop polls ``cancel_token.cancelled`` every tick and exits when flipped. Used by ``_async_play_uploaded_move`` to wire ``cancel_move`` to a specific upload_id; direct callers (goto_target, etc.) pass None and stay non-cancellable.
 
         """
+        self._warn_if_motors_disabled()
         if not self._try_start_move():
             self.logger.warning("Ignoring play_move request: another move is running.")
             return
@@ -922,6 +950,7 @@ class Backend:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
 
         """
+        self._warn_if_motors_disabled()
         return await self.play_move(
             move=GotoMove(
                 start_head_pose=self.get_present_head_pose(),
@@ -1231,6 +1260,7 @@ class Backend:
         stand-down, e.g. for a deliberate replay or a caller that just
         enabled the motors itself and knows a real wake is due.
         """
+        self._warn_if_motors_disabled()
         await asyncio.sleep(0.1)
 
         if not force and self.is_awake_at_init_pose():
@@ -1551,6 +1581,9 @@ class Backend:
                 no-ops without one.
 
         """
+        if isinstance(cmd, _MOTION_COMMAND_TYPES):
+            self._warn_if_motors_disabled()
+
         block_targets = self.is_move_running
 
         def _maybe_ignore(field: str) -> bool:
@@ -1668,6 +1701,7 @@ class Backend:
 
         elif isinstance(cmd, SetMotorModeCmd):
             self.set_motor_control_mode(MotorControlMode(cmd.mode))
+            self._disabled_motion_warning_emitted = False
             send_response({"motor_mode": cmd.mode, "status": "ok"})
 
         elif isinstance(cmd, SetTorqueCmd):
@@ -1675,8 +1709,10 @@ class Backend:
                 self.set_motor_torque_ids(cmd.ids, cmd.on)
             elif cmd.on:
                 self.set_motor_control_mode(MotorControlMode.Enabled)
+                self._disabled_motion_warning_emitted = False
             else:
                 self.set_motor_control_mode(MotorControlMode.Disabled)
+                self._disabled_motion_warning_emitted = False
             send_response({"status": "ok", "command": "set_torque"})
 
         elif isinstance(cmd, GetMotorModeCmd):
@@ -1688,6 +1724,7 @@ class Backend:
                     self.set_motor_control_mode(MotorControlMode.GravityCompensation)
                 else:
                     self.set_motor_control_mode(MotorControlMode.Enabled)
+                self._disabled_motion_warning_emitted = False
             except ValueError as e:
                 send_response({"error": str(e), "command": "set_gravity_compensation"})
                 return
