@@ -69,6 +69,7 @@ app's UI** and nothing else.
     4. [Standalone exit hooks (`installShutdownHandler`)](#144-standalone-exit-hooks-installshutdownhandler)
     5. [Daemon parity warning](#145-daemon-parity-warning)
     6. [Anti-patterns](#146-anti-patterns)
+    7. [Backgrounded tabs: clock robot logic off a Web Worker](#147-backgrounded-tabs-clock-robot-logic-off-a-web-worker)
 
 ---
 
@@ -1793,3 +1794,57 @@ strict mode, silently no-op otherwise).
 | `await safelyReturnToPose(...)` expecting the move to complete. | It resolves after **dispatch**, not after motion finishes. `await sleep(plan.duration * 1000)` or subscribe to `state` if you need to wait. |
 | Carry degrees through your motion code. | Convert at the UI boundary; speak radians + magic-mm everywhere below it. |
 | Pass `null` head / antennas / body_yaw to opt a channel out of a `gotoTarget`. | Use `PartialPose` and **omit** the channel. The SDK treats omission as "hold previous target". |
+
+### 14.7 Backgrounded tabs: clock robot logic off a Web Worker
+
+When the user switches tabs (or the phone locks), the browser throttles
+your app hard: `requestAnimationFrame` **pauses entirely** and
+`setInterval`/`setTimeout` are clamped to **~1 tick per second**. If your
+pose streaming, audio pipeline, or stream-health watchdog is clocked by
+either of them, the robot freezes mid-motion and stalls go unnoticed until
+the tab comes back.
+
+The fix is to split your loop in two:
+
+- **Logic** (pose computation + `setTarget`, audio gain, health checks,
+  reconnects): clock it from a **Web Worker**. Worker timers are *not*
+  visibility-throttled, and the `message` events they post are delivered
+  on the main thread even while the tab is hidden.
+- **Visuals** (DOM updates, canvas, meters): keep them on `rAF`. It pauses
+  when hidden - which is exactly what you want for work nobody can see -
+  and resumes on its own.
+
+```ts
+// pose-heartbeat.worker.ts - the whole file:
+const INTERVAL_MS = 25; // ~40 Hz; the main thread down-samples as needed
+setInterval(() => postMessage(0), INTERVAL_MS);
+```
+
+```ts
+// embed.ts
+let worker: Worker | null = null;
+try {
+  worker = new Worker(new URL("./pose-heartbeat.worker.ts", import.meta.url), { type: "module" });
+  worker.onmessage = () => stepLogic(performance.now());
+} catch {
+  // Workers unavailable (rare): degrade to a throttled interval.
+  setInterval(() => stepLogic(performance.now()), 25);
+}
+
+const renderVisuals = () => { /* DOM/canvas only - no robot commands */ };
+const rafLoop = () => { renderVisuals(); requestAnimationFrame(rafLoop); };
+requestAnimationFrame(rafLoop);
+```
+
+Two companion rules make this robust:
+
+- **Clamp your `dt`.** After a long hidden stretch the first tick sees a
+  huge time delta; clamp it (e.g. `Math.min(dt, 100)`) so filters and
+  interpolators don't jump.
+- **Resync on `visibilitychange`.** When the tab returns, call
+  `reachy.requestState()` and run one logic step immediately instead of
+  waiting for the next scheduled tick, so the UI repaints from fresh state.
+
+Remember to `worker.terminate()` in your `onLeave` cleanup. A complete
+reference implementation lives in the `reachy_mini_radio_js` app
+(`src/embed.ts` + `src/pose-heartbeat.worker.ts`).

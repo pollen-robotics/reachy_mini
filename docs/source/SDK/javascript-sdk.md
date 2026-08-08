@@ -130,8 +130,8 @@ new ReachyMini({
 | `setMotorMode(mode)` | `boolean` | `"enabled"` (position control), `"disabled"` (limp), or `"gravity_compensation"` (float by hand) |
 | `setMotorTorque(on, ids?)` | `boolean` | Toggle torque; per-motor when `ids` is given, else global |
 | `wakeUp(opts?)` / `gotoSleep(opts?)` | `Promise<void>` | Play the wake-up / sleep trajectory; resolves on daemon completion (rejects after `opts.timeoutMs`, default 8000). `wakeUp` enables motors first |
-| `isAwake()` | `boolean` | Awake state derived from the cached `motor_mode` |
-| `ensureAwake(timeoutMs?)` | `Promise<boolean>` | Idempotent wake-up: no-op if already awake; does not await the trajectory |
+| `isAwake()` | `boolean` | Awake state derived from the cached `motor_mode` (`gravity_compensation` counts as awake) |
+| `ensureAwake(timeoutMs?)` | `Promise<boolean>` | Idempotent bring-up to position control: awaits the wake trajectory when asleep, flips `gravity_compensation` back to `enabled` (no emote), no-op when already there. Never rejects |
 | `playSound(filename)` | `boolean` | Play a sound file on the robot |
 | `clearIncomingAudio()` | `boolean` | Drop audio queued for the robot speaker (barge-in) |
 | `sendRaw(data)` | `boolean` | Send arbitrary JSON via data channel |
@@ -203,6 +203,21 @@ Beyond the typed surface above, the runtime object exposes lower-level hooks (no
 - `rpcCall(method, params?, { timeoutMs? })` — send a JSON-RPC request over the data channel and await the correlated result (e.g. app-defined methods).
 - `onNotification(method, cb)` — subscribe to one-way JSON-RPC notifications pushed by the robot/app (e.g. `conversation.turn`); returns an unsubscribe fn.
 - `startDaemonUpdate({ preRelease?, onProgress? })` — trigger a PyPI update of the daemon. It restarts on success (which tears the session down), so treat a successful reconnect as the "done" signal; `onProgress` fires with `status: "failed"` if the install errors first.
+
+### Debug logging
+
+Every SDK log line is prefixed `[reachy:<ns>]` (`reachy:sdk`, `reachy:session` for auto-reconnect, `reachy:embed` / `reachy:host` for the host shell), so a devtools console filter on `reachy:` isolates the whole stack. The default level is `info`: a handful of lifecycle lines per session (boot phases, wake/sleep steps, reconnects). To see per-message traffic (every command, reply, and SSE event):
+
+```js
+// From the devtools console (persists across reloads):
+localStorage.setItem("reachy-log", "debug"); location.reload();
+
+// Or from code:
+import { setLogLevel } from "@pollen-robotics/reachy-mini-sdk";
+setLogLevel("debug"); // "debug" | "info" | "warn" | "error" | "silent"
+```
+
+Debug lines use `console.debug`, so also enable the "Verbose" level in the devtools console filter to see them.
 
 ## Daemon-side recorded-move playback
 
