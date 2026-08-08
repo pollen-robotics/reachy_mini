@@ -169,8 +169,8 @@ export function useRobots(opts: {
       onDisconnect: () => {
         droppedAtRef.current = Date.now();
       },
-      onList: (event) => {
-        setRobots(event.producers.map(producerToRobotInfo));
+      onList: (producers) => {
+        setRobots(producers.map(producerToRobotInfo));
         setError(null);
         hasLoadedRef.current = true;
       },
