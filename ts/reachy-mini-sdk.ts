@@ -79,6 +79,11 @@ export type {
  *  package.json. Also reachable as `ReachyMini.version` / a live
  *  instance's `.sdkVersion`. */
 export { SDK_VERSION } from './lib/version.js';
+/** Leveled console logging. Default level `info` (lifecycle only);
+ *  `setLogLevel('debug')` — or `localStorage.setItem('reachy-log',
+ *  'debug')` + reload — turns on per-message traffic. */
+export { setLogLevel, getLogLevel, createLogger } from './lib/logger.js';
+export type { LogLevel, Logger } from './lib/logger.js';
 export type {
     RobotInfo,
     RobotState,

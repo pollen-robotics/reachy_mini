@@ -204,6 +204,21 @@ Beyond the typed surface above, the runtime object exposes lower-level hooks (no
 - `onNotification(method, cb)` — subscribe to one-way JSON-RPC notifications pushed by the robot/app (e.g. `conversation.turn`); returns an unsubscribe fn.
 - `startDaemonUpdate({ preRelease?, onProgress? })` — trigger a PyPI update of the daemon. It restarts on success (which tears the session down), so treat a successful reconnect as the "done" signal; `onProgress` fires with `status: "failed"` if the install errors first.
 
+### Debug logging
+
+Every SDK log line is prefixed `[reachy:<ns>]` (`reachy:sdk`, `reachy:session` for auto-reconnect, `reachy:embed` / `reachy:host` for the host shell), so a devtools console filter on `reachy:` isolates the whole stack. The default level is `info`: a handful of lifecycle lines per session (boot phases, wake/sleep steps, reconnects). To see per-message traffic (every command, reply, and SSE event):
+
+```js
+// From the devtools console (persists across reloads):
+localStorage.setItem("reachy-log", "debug"); location.reload();
+
+// Or from code:
+import { setLogLevel } from "@pollen-robotics/reachy-mini-sdk";
+setLogLevel("debug"); // "debug" | "info" | "warn" | "error" | "silent"
+```
+
+Debug lines use `console.debug`, so also enable the "Verbose" level in the devtools console filter to see them.
+
 ## Daemon-side recorded-move playback
 
 Long recorded moves (and any move with audio) should play **server-side on the daemon's local clock**, not by streaming `set_target` frames from the browser. The browser uploads the move once over the WebRTC data channel and the daemon ticks the inner loop at the requested frequency — no per-frame round-trip, smooth on wireless robots. When audio is attached the daemon plays it on the same GStreamer pipeline, so motion and audio share a single clock (no cross-network drift).

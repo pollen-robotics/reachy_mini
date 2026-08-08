@@ -9,6 +9,7 @@ import {
     oauthLoginUrl,
 } from '@huggingface/hub';
 
+import { createLogger } from './logger.js';
 import { degToRad, rpyToMatrix } from './math.js';
 import { BroadcastTimeoutError, PendingReplies, SLOT_ROUNDTRIP_TIMEOUT_MS } from './pending-replies.js';
 import type { MotionCommand, ReplySlotKey, ReplySlotValues } from './pending-replies.js';
@@ -62,6 +63,8 @@ import type {
     UpdateProgressEvent,
     UploadAudioOptions,
 } from './types.js';
+
+const log = createLogger('sdk');
 
 interface LogSubscriber {
     onLine: (entry: { timestamp: string; line: string }) => void;
@@ -303,7 +306,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         setTimeout(() => {
             if (this._state !== 'connected') return;
             this.startSession(peerId).catch((err) => {
-                console.warn('[reachy-mini] autoStartFromUrl: startSession rejected:', err);
+                log.warn('autoStartFromUrl: startSession rejected:', err);
             });
         }, 0);
     }
@@ -320,7 +323,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             // to the cached-token check below then reports "not signed in".
             const silentError = consumeOAuthErrorParams();
             if (silentError) {
-                console.info('[reachy-mini] silent sign-in declined:', silentError);
+                log.info('silent sign-in declined:', silentError);
             }
 
             const result = (await oauthHandleRedirectIfPresent()) as OAuthRedirectResult | false | null;
@@ -350,7 +353,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             }
             return false;
         } catch (e) {
-            console.error('Auth error:', e);
+            log.error('authenticate failed:', e);
             return false;
         }
     }
@@ -524,7 +527,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
             if (wakeOnConnect && typeof this.ensureAwake === 'function') {
                 try { await this.ensureAwake(); }
-                catch (e) { console.warn('[reachy-mini] autoConnect: ensureAwake failed:', e); }
+                catch (e) { log.warn('autoConnect: ensureAwake failed:', e); }
             }
 
             return { robotId, robotName, isEmbedded: this.isEmbedded };
@@ -568,7 +571,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 (a, b) => (a.lastSeenAgeSeconds ?? Infinity) - (b.lastSeenAgeSeconds ?? Infinity),
             );
         } catch (e) {
-            console.warn('[reachy-mini] /api/robot-status unavailable, using SSE list:', e);
+            log.warn('/api/robot-status unavailable, using SSE list:', e);
             return (this._robots || []).map((r) => ({
                 id: r.id,
                 name: r.meta?.name ?? null,
@@ -647,7 +650,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._micStream = stream;
             this._micMuted = true;
         } catch (e) {
-            console.warn('Audio sender placeholder setup failed:', e);
+            log.warn('audio sender placeholder setup failed:', e);
             this._micStream = null;
         }
 
@@ -1141,22 +1144,30 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         // up, and the daemon pins targets to the measured pose on the way in,
         // so nothing snaps.
         if (this._robotState?.motor_mode === 'gravity_compensation') {
+            log.info('ensureAwake: gravity compensation inherited, flipping to enabled (no emote)');
             this.setMotorMode('enabled');
             // Refresh the cache so a caller reading isAwake() right after us
             // doesn't see the mode we just left.
             this.requestState();
             return true;
         }
-        if (this.isAwake()) return true;
+        if (this.isAwake()) {
+            log.info('ensureAwake: already awake, nothing to do');
+            return true;
+        }
         // Await the trajectory: callers treat resolution as "robot ready for
         // position targets", and the emote keeps moving the head for ~2 s
         // after the command is acked - an app that starts commanding poses
         // under it fights it. Failures are swallowed: a torn-down session or
         // a daemon that never acks must not take the whole boot down with it.
+        log.info(`ensureAwake: robot asleep (motor_mode=${this._robotState?.motor_mode ?? 'unknown'}), playing wake-up`);
+        const wakeStartedAt = Date.now();
         try {
             await this.wakeUp({ timeoutMs: WAKE_TRAJECTORY_BUDGET_MS });
-        } catch {
+            log.info(`ensureAwake: wake-up trajectory done in ${Date.now() - wakeStartedAt}ms`);
+        } catch (e) {
             /* timed out, or the session went away under us */
+            log.warn(`ensureAwake: wake-up not confirmed after ${Date.now() - wakeStartedAt}ms (continuing):`, e);
         }
         return true;
     }
@@ -1541,7 +1552,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 has_audio: startedAck.has_audio === true,
             });
         } catch (e) {
-            console.warn('playMove.onStarted threw:', e);
+            log.warn('playMove.onStarted threw:', e);
         }
         onProgress({ phase: 'playing', duration_s: startedAck.duration_s as number });
 
@@ -1680,14 +1691,14 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             if (!res.ok) {
                 let body = '';
                 try { body = await res.text(); } catch { /* ignore */ }
-                console.warn(
-                    `[reachy-mini] /send rejected (${res.status}) for type=${(message as { type?: string })?.type}; body=${body || '<empty>'}`,
+                log.warn(
+                    `/send rejected (${res.status}) for type=${(message as { type?: string })?.type}; body=${body || '<empty>'}`,
                 );
                 return null;
             }
             return await res.json() as SignalingMessage;
         } catch (e) {
-            console.error('Send error:', e);
+            log.error('signaling /send failed:', e);
             return null;
         }
     }
@@ -1745,7 +1756,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 try {
                     cb(params);
                 } catch (e) {
-                    console.error(`onNotification(${data.method}) threw:`, e);
+                    log.error(`onNotification(${data.method}) threw:`, e);
                 }
             }
         }
@@ -1889,7 +1900,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                         try {
                             await this._pc.addIceCandidate(new RTCIceCandidate(ice));
                         } catch (err) {
-                            console.warn('[reachy-mini] buffered ICE candidate rejected:', err);
+                            log.warn('buffered ICE candidate rejected:', err);
                         }
                     }
                 }
@@ -1909,7 +1920,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 }
             }
         } catch (e) {
-            console.error('WebRTC error:', e);
+            log.error('webrtc signaling failed:', e);
             this._emit('error', { source: 'webrtc', error: e as Error });
         }
     }
@@ -1990,7 +2001,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 try {
                     sub.onLine({ timestamp: data.timestamp as string, line: data.line as string });
                 } catch (e) {
-                    console.error('subscribeLogs onLine threw:', e);
+                    log.error('subscribeLogs onLine threw:', e);
                 }
             }
             return;
@@ -1999,7 +2010,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             for (const sub of this._logSubscribers) {
                 if (typeof sub.onError === 'function') {
                     try { sub.onError(data.error as string); }
-                    catch (e) { console.error('subscribeLogs onError threw:', e); }
+                    catch (e) { log.error('subscribeLogs onError threw:', e); }
                 }
             }
             return;
@@ -2013,7 +2024,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 const event: UpdateProgressEvent = { status: 'failed', error: data.error };
                 for (const cb of this._updateProgressSubscribers) {
                     try { cb(event); }
-                    catch (e) { console.error('startDaemonUpdate onProgress threw:', e); }
+                    catch (e) { log.error('startDaemonUpdate onProgress threw:', e); }
                 }
             }
             return;
@@ -2026,7 +2037,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             };
             for (const cb of this._updateProgressSubscribers) {
                 try { cb(event); }
-                catch (e) { console.error('startDaemonUpdate onProgress threw:', e); }
+                catch (e) { log.error('startDaemonUpdate onProgress threw:', e); }
             }
             return;
         }
@@ -2078,7 +2089,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 const end = buf.end(buf.length - 1);
                 const lag = end - video.currentTime;
                 if (lag > 0.5) {
-                    console.log(`Latency correction: was ${lag.toFixed(2)}s behind`);
+                    log.debug(`video latency correction: was ${lag.toFixed(2)}s behind`);
                     video.currentTime = end - 0.1;
                 }
             }

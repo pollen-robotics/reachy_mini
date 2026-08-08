@@ -27,7 +27,10 @@
  * class owns the transport, the supervisor owns the RECOVERY POLICY.
  */
 
+import { createLogger } from './logger.js';
 import type { ReachyMiniEventMap } from './types.js';
+
+const log = createLogger('session');
 
 /* ─── Tunables ─────────────────────────────────────────────────────── */
 
@@ -414,7 +417,7 @@ export class SessionSupervisor {
         const robotId = this._deps.selectedRobotId();
         if (!robotId || !this._deps.hasPc()) return false;
         this._redialing = true;
-        console.info(`[reachy-mini] auto-reconnect: ${cause} — re-dialing ${robotId}`);
+        log.info(`auto-reconnect: ${cause} - re-dialing ${robotId}`);
         void this._runRedialLoop(robotId, cause);
         return true;
     }
@@ -453,12 +456,12 @@ export class SessionSupervisor {
                 );
                 if (!this._redialing) return;
                 this._redialing = false;
-                console.info(`[reachy-mini] auto-reconnect: recovered on attempt ${attempt}`);
+                log.info(`auto-reconnect: recovered on attempt ${attempt}`);
                 this._deps.emit('sessionReconnected', { attempt });
                 return;
             } catch (e) {
-                console.warn(
-                    `[reachy-mini] auto-reconnect attempt ${attempt}/${maxAttempts} failed:`,
+                log.warn(
+                    `auto-reconnect attempt ${attempt}/${maxAttempts} failed:`,
                     e,
                 );
                 // A failed attempt can leave a half-open pc (e.g. the dial
@@ -471,7 +474,7 @@ export class SessionSupervisor {
         if (!this._redialing) return;
         this._redialing = false;
         const message = `Auto-reconnect gave up after ${maxAttempts} attempts (${cause})`;
-        console.warn(`[reachy-mini] ${message}`);
+        log.warn(message);
         this._deps.emit('sessionStopped', { reason: 'reconnect_failed', message });
         this._emitError(new Error(message));
     }
