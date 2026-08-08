@@ -13,6 +13,7 @@
  *    `window.location.origin` (same-origin deployment).
  */
 import { useCallback, useEffect, useRef } from 'react';
+import { createLogger } from '@pollen-robotics/reachy-mini-sdk';
 
 import {
   PROTOCOL_SOURCE,
@@ -24,10 +25,13 @@ import type {
   AppPhase,
   ConfigPayload,
   EmbedToHostMsg,
+  EmbedUpdateProgressMsg,
   HostInitMsg,
   LeavingReason,
   ThemeMode,
 } from '../lib/protocol';
+
+const log = createLogger('host');
 
 export interface EmbedAppState {
   phase: AppPhase;
@@ -39,6 +43,16 @@ export interface EmbedAppState {
    *  TRUE link-latency signal available; `null` when not yet measured
    *  or unavailable (e.g. iOS WKWebView). */
   rttMs: number | null;
+  /** Daemon version the embed read over its data channel, or `null`
+   *  while unknown (not yet resolved, or a daemon predating
+   *  `get_version`). The shell has no channel of its own, so this is
+   *  its only version signal - see `DaemonUpdateGate`. */
+  daemonVersion: string | null;
+  /** Build version of the SDK bundle the app loaded, or `null` when
+   *  the SDK predates the field (see `sdkVersion` in protocol.ts).
+   *  The web shell itself has no use for it (same bundle as the
+   *  embed); parsed for consumers that update independently. */
+  sdkVersion: string | null;
 }
 
 export interface UseHostBridgeOptions {
@@ -51,9 +65,25 @@ export interface UseHostBridgeOptions {
   /** App requests a clean leave (in-app button, etc.). Host
    *  should run the same tear-down as a user-initiated end. */
   onRequestLeave(): void;
+  /** App finished its `host:leaving` tear-down (onLeave + the SDK's
+   *  host-owned sleep/disable). The host can unmount now instead of
+   *  waiting out its safety cap. Optional, like every additive
+   *  callback: implementers outside this repo stay source-compatible. */
+  onLeft?(): void;
   /** App reported an error. Fatal errors should switch the host
    *  to ErrorView; non-fatal can be toasted or logged. */
   onError(payload: { message: string; fatal: boolean; detail?: unknown }): void;
+  /** Progress of a daemon update the host asked for via
+   *  `sendStartUpdate`. Optional: hosts that never trigger one will
+   *  never see these. */
+  onUpdateProgress?(payload: EmbedUpdateProgress): void;
+}
+
+/** Payload of an `embed:update-progress` envelope. */
+export interface EmbedUpdateProgress {
+  status: EmbedUpdateProgressMsg['status'];
+  line: string | null;
+  error: string | null;
 }
 
 export interface HostBridge {
@@ -76,6 +106,15 @@ export interface HostBridge {
     reason: LeavingReason,
     timeoutMs: number,
   ): void;
+  /** `host:start-update`. Ask the embed to run the daemon's PyPI
+   *  self-update on our behalf (only it holds a data channel).
+   *  Fire-and-forget: an embed too old to know the message ignores it,
+   *  so callers MUST have their own timeout. */
+  sendStartUpdate(iframe: HTMLIFrameElement, preRelease?: boolean): void;
+  /** `host:cancel-update`. The host gave up on the update (stall
+   *  timeout): the embed should disarm its update-mode plumbing.
+   *  Fire-and-forget, additive - older embeds ignore it. */
+  sendCancelUpdate(iframe: HTMLIFrameElement): void;
 }
 
 export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
@@ -101,16 +140,28 @@ export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
             connectingStep: data.connectingStep ?? null,
             message: data.message ?? null,
             rttMs: data.rttMs ?? null,
+            daemonVersion: data.daemonVersion ?? null,
+            sdkVersion: data.sdkVersion ?? null,
           });
           return;
         case 'embed:request-leave':
           callbacks.current.onRequestLeave();
+          return;
+        case 'embed:left':
+          callbacks.current.onLeft?.();
           return;
         case 'embed:error':
           callbacks.current.onError({
             message: data.message,
             fatal: data.fatal,
             detail: data.detail,
+          });
+          return;
+        case 'embed:update-progress':
+          callbacks.current.onUpdateProgress?.({
+            status: data.status,
+            line: data.line ?? null,
+            error: data.error ?? null,
           });
           return;
         default: {
@@ -126,7 +177,13 @@ export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
             } catch {
               asJson = '<unserializable>';
             }
-            console.info(`[host-debug] embed:${msg.tag ?? '?'} ${asJson}`);
+            // Mirror of the embed's diagnostic channel, one level up so it
+            // shows in the parent page's console. Same leveling as the
+            // embed side: lifecycle tags at info, traffic at debug.
+            const tag = msg.tag ?? '?';
+            const line = `embed ${tag} ${asJson}`;
+            if (tag.startsWith('boot:') || tag.startsWith('leave:')) log.info(line);
+            else log.debug(line);
           }
           return;
         }
@@ -185,7 +242,37 @@ export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
     [],
   );
 
-  return { sendInit, sendThemeChanged, sendConfigChanged, sendLeaving };
+  const sendStartUpdate = useCallback<HostBridge['sendStartUpdate']>(
+    (iframe, preRelease = false) => {
+      postToFrame(iframe, {
+        source: PROTOCOL_SOURCE,
+        type: 'host:start-update',
+        version: PROTOCOL_VERSION,
+        preRelease,
+      });
+    },
+    [],
+  );
+
+  const sendCancelUpdate = useCallback<HostBridge['sendCancelUpdate']>(
+    (iframe) => {
+      postToFrame(iframe, {
+        source: PROTOCOL_SOURCE,
+        type: 'host:cancel-update',
+        version: PROTOCOL_VERSION,
+      });
+    },
+    [],
+  );
+
+  return {
+    sendInit,
+    sendThemeChanged,
+    sendConfigChanged,
+    sendLeaving,
+    sendStartUpdate,
+    sendCancelUpdate,
+  };
 }
 
 function postToFrame(iframe: HTMLIFrameElement, msg: unknown): void {
@@ -193,6 +280,6 @@ function postToFrame(iframe: HTMLIFrameElement, msg: unknown): void {
   try {
     iframe.contentWindow.postMessage(msg, window.location.origin);
   } catch (err) {
-    console.warn('[reachy-mini-sdk/host] postMessage to embed failed', err);
+    log.warn('postMessage to embed failed', err);
   }
 }

@@ -714,6 +714,7 @@ app_build_command: npm ci && npm run build   # HF runs this on its builder
 app_file: dist/index.html                     # HF serves the build output as entry
 pinned: false
 hf_oauth: true
+hf_oauth_expiration_minutes: 43200   # 30 days (max); default is only 8 h
 short_description: One-line description shown in the mobile catalog.
 tags:
   - reachy_mini
@@ -730,6 +731,21 @@ tags:
   build completes**. For a Vite-built SPA that's `dist/index.html`.
 - `hf_oauth: true` is what triggers `__OAUTH_CLIENT_ID__` substitution
   inside HTML files in the served output (post-build).
+- `hf_oauth_expiration_minutes` sets the OAuth token lifetime. Strongly
+  recommended: the default (8 hours) forces a re-auth round trip several
+  times a day. The host's silent sign-in makes those round trips
+  invisible for logged-in users, but a long-lived token avoids them
+  entirely. Two properties bound the exposure of that long-lived token:
+  - **Scope.** Don't set `hf_oauth_scopes`; the token then carries only
+    `openid profile` - identity (username, avatar) and nothing else. It
+    cannot read private repos, write to the Hub, or call the Inference
+    API, so a leaked token identifies the user but grants no account
+    access.
+  - **Idle window.** The SDK stores the token in `sessionStorage`
+    (tab-scoped, dies with the tab) and additionally drops any token
+    unused for more than 24 h (`TOKEN_MAX_IDLE_MS` in the SDK's token
+    store). A tab resurrected days later via session restore re-auths;
+    a plain reload does not.
 - The **`reachy_mini_js_app` tag is mandatory** for mobile-catalog
   discovery. The catalog API filters on this exact string.
 - Apps in the `pollen-robotics/*` namespace are automatically tagged
@@ -1505,6 +1521,8 @@ before trusting the payload.
 | host  → embed   | `host:leaving`                | Tear-down request with `timeoutMs`            |
 | embed → host    | `embed:request-leave`         | App requests end-of-session                   |
 | embed → host    | `embed:error`                 | Error report (`{ message, fatal, detail? }`)  |
+| host  → embed   | `host:start-update`           | Run the daemon's PyPI self-update (only the embed holds a data channel) |
+| embed → host    | `embed:update-progress`       | Install progress, plus `rebooting` when the restart kills the session |
 
 Intentionally **not** in the v1 protocol:
 
@@ -1531,6 +1549,31 @@ Intentionally **not** in the v1 protocol:
   every time.
 - `host:init` may arrive twice (rare: bridge re-arm); the embed
   treats the latest as authoritative and re-applies theme / config.
+
+#### Daemon update gate (Mode A only)
+
+The shell checks the robot's daemon version against the latest
+GitHub release and can interrupt the app. App authors don't wire
+anything up - `connectToHost()` reports the version for them - but
+should know the two outcomes exist:
+
+- **Below `MIN_SUPPORTED_DAEMON_VERSION`** (`host/src/lib/daemonRelease.ts`):
+  a full-screen block. Such a daemon predates the OTA command, so
+  the only way out is the desktop app. The app never becomes
+  interactive.
+- **Merely behind the latest release**: a dismissable card once the
+  app is `live`. The app keeps running; the user may start an
+  update, which reboots the robot and drops the session.
+
+This is deliberately softer than the mobile app, which blocks on
+any version behind the latest. A Space is public: applying that
+rule here would make every daemon release a global kill switch for
+robots that were working a minute earlier.
+
+Mode B needs none of this. The mobile app never mounts the shell -
+it points its iframe straight at `?embedded=1` and runs its own
+gate before an app can be opened - so the component simply doesn't
+exist in that path.
 
 ### 13.7 Non-goals
 

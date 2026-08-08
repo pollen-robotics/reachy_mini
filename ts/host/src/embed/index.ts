@@ -23,8 +23,9 @@
  *  5. Wait for `host:init` (2 s soft timeout; on hit we proceed
  *     from the hash creds alone via `liveStateFromCreds`, which
  *     carries the same fields as `liveStateFromInit`).
- *  6. `connect()` → `startSession()` → `ensureAwake()`, emitting
- *     `embed:app-state` at each step.
+ *  6. `connect()` → `startSession()` → wake (awaiting the full wake-up
+ *     trajectory, not fire-and-forget), emitting `embed:app-state` at each
+ *     step.
  *  7. Resolve `connectToHost()` with the live SDK handle.
  *
  * Strict Mode safety (APP_CREATION_GUIDE §13.5.4): the function is idempotent
@@ -43,12 +44,15 @@ import {
   decodeCredsFromHash,
   isProtocolMessage,
 } from '../lib/protocol';
+import { fetchRobotsFromCentral } from '../lib/centralRest';
+import { createLogger } from '@pollen-robotics/reachy-mini-sdk';
 import type {
   AppConnectingStep,
   AppPhase,
   ConfigPayload,
   CredsBundle,
   EmbedToHostMsg,
+  EmbedUpdateProgressMsg,
   HostInitMsg,
   HostToEmbedMsg,
   ThemeMode,
@@ -64,6 +68,94 @@ const SDK_READY_TIMEOUT_MS = 8000;
 // in <100 ms; 2 s is comfortable defensive slack.
 const HOST_INIT_TIMEOUT_MS = 2000;
 const TOKEN_TTL_MS = 15 * 60 * 1000;
+// Budget for the `get_version` round-trip we run between session-up and
+// wake. Short on purpose: the answer only feeds the host's update gate,
+// so an unresponsive or too-old daemon must cost the boot a blink, not a
+// stall. Mirrors the mobile app's own bring-up version read.
+const DAEMON_VERSION_TIMEOUT_MS = 2500;
+// Sleep-on-leave budget. The host layer owns wake/sleep, so on an explicit
+// graceful leave the embed plays goto_sleep itself (immediate) then forces
+// motors disabled - mirroring the mobile app (`sleepAndDisableRobot`). We wait
+// for it to finish BEFORE letting the host unmount, so the motors are already
+// `Disabled` *at the sleep pose* when the app-slot lock frees: the daemon's
+// idle-reset predicate ("Disabled AND at the sleep pose") then skips, so
+// there's no double trajectory / go_sleep sound. If the goto_sleep below
+// times out and we disable mid-pose instead, that same predicate makes the
+// daemon pick the robot up and park it properly - degraded but self-healing.
+// SDK-level timeout on the goto_sleep move + a slightly larger JS hard cap so a
+// wedged daemon can't stall the leave forever.
+const LEAVE_SLEEP_TIMEOUT_MS = 6000;
+const LEAVE_SLEEP_HARD_TIMEOUT_MS = 6500;
+// How long we wait for the daemon to echo the motors-off state back before
+// acking the leave. `setMotorMode` is fire-and-forget: it queues the command
+// on the data channel and returns, so acking on the next line lets the host
+// unmount this iframe - tearing the peer connection down - while the command
+// may still be sitting in the SCTP send queue. Losing it is precisely what
+// the sequence below relies on NOT happening, since the daemon would then
+// still see `Enabled` when the app-slot lock frees and replay its own
+// goto_sleep. Small enough that the whole leave stays under the host's own
+// `LEAVING_ACK_CAP_MS` even stacked on the sleep hard cap above.
+//
+// Sized against the slowest confirmation path rather than the typical one.
+// With a pose stream running the state lands within a frame (~33 ms), and
+// with no stream a poll reply takes about one RTT. But an app that releases
+// its pose subscription from `onLeave` leaves the SDK's `POSE_STREAM_FRESH_MS`
+// window (750 ms) still armed, and poll replies are ignored for its remainder,
+// so the confirmation can legitimately take a beat under a second.
+const LEAVE_DISABLE_CONFIRM_TIMEOUT_MS = 1000;
+
+/**
+ * Land the user in a *settled* robot.
+ *
+ * The whole bring-up contract now lives in `sdk.ensureAwake()`: it awaits
+ * the wake trajectory to the daemon's `completed` ack (internal budget,
+ * never rejects - a daemon that won't confirm still lets the app land,
+ * degraded but reachable), and flips an inherited `gravity_compensation`
+ * back to position control without replaying the emote. Kept as a named
+ * boot-phase step for the wake logging around its call site.
+ */
+async function awaitFullyAwake(sdk: ReachyMiniInstance): Promise<void> {
+  await sdk.ensureAwake();
+}
+
+/**
+ * Wait until the daemon echoes back `motor_mode: 'disabled'`.
+ *
+ * Used to close a graceful leave: a state frame carrying the new mode is
+ * proof that the fire-and-forget `set_motor_mode` actually reached the
+ * daemon, rather than having been dropped with the peer connection when the
+ * host unmounted us (see `LEAVE_DISABLE_CONFIRM_TIMEOUT_MS`).
+ *
+ * We nudge `requestState()` on a short interval rather than trusting the
+ * SDK's own 500 ms poll, which stands down while a pose stream is feeding
+ * state and would otherwise leave us waiting on the next pushed frame.
+ * A timeout resolves anyway: the leave must never hang on this, and the
+ * daemon's idle-reset remains the backstop.
+ */
+async function awaitMotorsDisabled(sdk: ReachyMiniInstance): Promise<void> {
+  if (sdk.robotState.motor_mode === 'disabled') return;
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    let pollId = 0;
+    let timerId = 0;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      sdk.removeEventListener('state', onState);
+      window.clearInterval(pollId);
+      window.clearTimeout(timerId);
+      resolve();
+    };
+    // Hoisted so `finish` can unregister it.
+    function onState(): void {
+      if (sdk.robotState.motor_mode === 'disabled') finish();
+    }
+    sdk.addEventListener('state', onState);
+    timerId = window.setTimeout(finish, LEAVE_DISABLE_CONFIRM_TIMEOUT_MS);
+    pollId = window.setInterval(() => sdk.requestState(), 120);
+    sdk.requestState();
+  });
+}
 
 /**
  * Stable surface for the robot's WebRTC media. All accessors are
@@ -287,9 +379,14 @@ async function bootOnce(
     signalingUrl: creds.signalingUrl,
     ...options.sdkOptions,
   });
+  // Not OUR build version: the embed rides whatever `window.ReachyMini`
+  // the app loaded, and that bundle is what talks to the robot. Latched
+  // module-level so every app-state re-advertises it (same lifecycle as
+  // `daemonVersion` below). SDKs that predate the field leave it null.
+  appSdkVersion = typeof sdk.sdkVersion === 'string' ? sdk.sdkVersion : null;
 
   // 5. Build the bridge (subscriber registry) + post ready.
-  const bridge = createBridge(expectedOrigin);
+  const bridge = createBridge(expectedOrigin, sdk);
   postToHost({
     source: PROTOCOL_SOURCE,
     type: 'embed:ready',
@@ -308,7 +405,7 @@ async function bootOnce(
   //    `liveStateFromInit` (verified in `liveStateFrom*` below).
   const live = await bridge.awaitHostInit(HOST_INIT_TIMEOUT_MS, creds);
 
-  // 7. Sequence: connect → startSession → ensureAwake.
+  // 7. Sequence: connect → startSession → wake (await full trajectory).
   pushAppState('connecting', 'link');
   postDebug('boot:link:start', { robotPeerId: live.robotPeerId });
   await sdk.authenticate();
@@ -319,11 +416,24 @@ async function bootOnce(
     robots: ((sdk as { robots?: unknown[] }).robots ?? []).length,
   });
 
+  // Re-resolve the CURRENT peer id from central by the robot's stable
+  // hardware id before dialing. The `robotPeerId` we were handed is a
+  // snapshot the host captured earlier (picker selection / mobile
+  // handoff); the central peer id rotates on every relay reconnect, so
+  // after a Space cold-start it is frequently dead. Matching on
+  // `hardware_id` self-heals against that rotation. A `null` hardware
+  // id (older daemon) or any central hiccup falls back to the handed-in
+  // peer id unchanged.
+  const targetPeerId = await resolveLivePeerId(live, creds);
   pushAppState('connecting', 'session');
-  postDebug('boot:session:start', { robotPeerId: live.robotPeerId });
+  postDebug('boot:session:start', {
+    robotPeerId: targetPeerId,
+    handedPeerId: live.robotPeerId,
+    reresolved: targetPeerId !== live.robotPeerId,
+  });
   installSdkProbe(sdk);
   try {
-    await sdk.startSession(live.robotPeerId);
+    await sdk.startSession(targetPeerId);
     postDebug('boot:session:ok');
   } catch (err) {
     postDebug('boot:session:error', {
@@ -332,15 +442,31 @@ async function bootOnce(
     throw err;
   }
 
+  // Read the daemon version now that the data channel is up, and before
+  // the wake, so a host that gates on it (the web shell's update gate)
+  // can decide while the user is still on the connecting splash rather
+  // than after the app has painted. Fail-open: stays `null` on timeout.
+  daemonVersion = await readDaemonVersion(sdk);
+  postDebug('boot:daemon-version', { daemonVersion });
+
+  // Await the wake-up trajectory to completion (not fire-and-forget) so the
+  // app is only revealed once the robot has finished its wake animation.
   pushAppState('connecting', 'wake');
   postDebug('boot:wake:start');
-  await sdk.ensureAwake();
-  postDebug('boot:wake:ok');
+  await awaitFullyAwake(sdk);
+  postDebug('boot:wake:ok', { awake: sdk.isAwake() });
 
   // 8. We're live. Wire pagehide cleanup so the SDK releases the
   //    robot if the browser kills the tab.
   bridge.attachPageHide(sdk);
   pushAppState('live', null);
+
+  // Surface the SDK's automatic session re-dial to the host: the shell
+  // already renders a full-screen ConnectingView whenever we report the
+  // `connecting` phase, so a reconnect reads as "Reconnecting…" instead
+  // of a dead frozen app. No-op against an older SDK bundle that doesn't
+  // emit these events.
+  installReconnectBridge(sdk);
 
   // 9. Start sampling our own WebRTC RTT and reporting it upstream so
   //    a host shell that handed its session off to us (mobile app)
@@ -359,6 +485,9 @@ interface LiveState {
   hostName: string;
   userName: string | null;
   robotPeerId: string;
+  /** Stable hardware id used to re-resolve `robotPeerId` at dial time.
+   *  `null` when the host didn't provide one (older daemon). */
+  robotHardwareId: string | null;
 }
 
 function liveStateFromCreds(creds: CredsBundle): LiveState {
@@ -369,6 +498,7 @@ function liveStateFromCreds(creds: CredsBundle): LiveState {
     hostName: creds.hostName,
     userName: creds.userName ?? null,
     robotPeerId: creds.robotPeerId,
+    robotHardwareId: creds.robotHardwareId ?? null,
   };
 }
 
@@ -380,10 +510,45 @@ function liveStateFromInit(msg: HostInitMsg): LiveState {
     hostName: msg.hostName,
     userName: msg.userName ?? null,
     robotPeerId: msg.robotPeerId,
+    robotHardwareId: msg.robotHardwareId ?? null,
   };
 }
 
-function createBridge(expectedOrigin: string) {
+/**
+ * Re-resolve the live central peer id for the target robot from its
+ * stable hardware id, right before `startSession()`.
+ *
+ * The handed-in `live.robotPeerId` is a snapshot: central rotates a
+ * robot's peer id on every relay reconnect, so by the time the iframe
+ * has cold-started and reached this point the id can already be dead.
+ * We fetch the current robot list from central and match on
+ * `hardware_id` (stable per physical robot) to recover the fresh id.
+ *
+ * Fail-open: no hardware id (older daemon), no token, central
+ * unreachable, or no match all return the handed-in peer id unchanged,
+ * so this can only ever improve on the previous behaviour.
+ */
+async function resolveLivePeerId(
+  live: LiveState,
+  creds: CredsBundle,
+): Promise<string> {
+  const hardwareId = live.robotHardwareId;
+  const hfToken = creds.hfToken;
+  if (!hardwareId || !hfToken) return live.robotPeerId;
+  try {
+    const res = await fetchRobotsFromCentral({
+      signalingUrl: creds.signalingUrl,
+      hfToken,
+    });
+    if (!res.ok) return live.robotPeerId;
+    const match = res.robots.find((r) => r.hardwareId === hardwareId);
+    return match?.id ?? live.robotPeerId;
+  } catch {
+    return live.robotPeerId;
+  }
+}
+
+function createBridge(expectedOrigin: string, sdk: ReachyMiniInstance) {
   type LeaveCb = () => void | Promise<void>;
   type ThemeCb = (t: ThemeMode) => void;
   type ConfigCb = (c: unknown) => void;
@@ -394,6 +559,7 @@ function createBridge(expectedOrigin: string) {
 
   let current: LiveState | null = null;
   let leaveTriggered = false;
+  let graceLeaveStarted = false;
 
   // Listener installed lazily so `embed:ready` is the only
   // outgoing event before the host has time to respond.
@@ -422,7 +588,18 @@ function createBridge(expectedOrigin: string) {
         break;
       }
       case 'host:leaving': {
-        runLeaveOnce();
+        void runGracefulLeave();
+        break;
+      }
+      case 'host:start-update': {
+        startDaemonUpdateForHost(sdk, msg.preRelease === true);
+        break;
+      }
+      case 'host:cancel-update': {
+        // The host's stall timer gave up on the job we started: put
+        // the update-mode plumbing back (sessionStopped translator,
+        // auto-reconnect). No-op when nothing is in flight.
+        disarmActiveUpdate?.();
         break;
       }
     }
@@ -431,14 +608,82 @@ function createBridge(expectedOrigin: string) {
   function runLeaveOnce(): void {
     if (leaveTriggered) return;
     leaveTriggered = true;
-    // Fire and forget; the host doesn't wait for an ack, it just
-    // unmounts the iframe after `timeoutMs`.
+    // App-level cleanup. Fire and forget: the host budgets its own
+    // teardown deadline, it doesn't wait on individual `onLeave` cbs.
     leaveListeners.forEach((cb) => {
       try {
         void cb();
       } catch (err) {
-        console.warn('[reachy-mini-sdk/host/embed] onLeave threw', err);
+        embedLog.warn('onLeave threw', err);
       }
+    });
+  }
+
+  /**
+   * Graceful `host:leaving` teardown. The host layer owns the wake/sleep
+   * contract, so on an explicit leave the SDK - not the app - puts the robot
+   * to sleep, mirroring the mobile app's `sleepAndDisableRobot`:
+   *
+   *   1. Run the app's `onLeave` callbacks (their own cleanup).
+   *   2. Dispatch `gotoSleep` immediately so the robot starts sleeping the
+   *      instant the user leaves (no waiting on the daemon idle-reset debounce),
+   *      bounded by a hard cap so a wedged daemon can't stall us.
+   *   3. Force motors `Disabled` - deterministic off-switch, and it lands while
+   *      the WebRTC session is still up, so the app-slot lock frees only AFTER
+   *      the robot is already asleep. The daemon's idle-reset then sees
+   *      `Disabled` and skips, so there's no second goto_sleep (no double
+   *      trajectory / go_sleep sound) - all without any daemon-side change.
+   *   4. Wait for the daemon to confirm the new motor mode, so we don't ack a
+   *      command that never left the send queue (see `awaitMotorsDisabled`).
+   *   5. Post `embed:left` so the host can unmount right away instead of waiting
+   *      out its safety cap.
+   *
+   * Only wired to the explicit `host:leaving` path - `pagehide` (tab kill) has
+   * no time to play a trajectory, so the daemon idle-reset covers that instead.
+   */
+  async function runGracefulLeave(): Promise<void> {
+    if (graceLeaveStarted) return;
+    graceLeaveStarted = true;
+
+    postDebug('leave:start');
+    runLeaveOnce();
+
+    const sleepStartedAt = Date.now();
+    let sleepOutcome: 'ok' | 'hard-timeout' | 'error' = 'ok';
+    try {
+      sleepOutcome = await Promise.race([
+        sdk.gotoSleep({ timeoutMs: LEAVE_SLEEP_TIMEOUT_MS }).then(() => 'ok' as const),
+        new Promise<'hard-timeout'>((resolve) =>
+          window.setTimeout(() => resolve('hard-timeout'), LEAVE_SLEEP_HARD_TIMEOUT_MS),
+        ),
+      ]);
+    } catch {
+      /* wedged/older daemon: fall through to the explicit disable */
+      sleepOutcome = 'error';
+    }
+    postDebug('leave:sleep', { outcome: sleepOutcome, ms: Date.now() - sleepStartedAt });
+
+    const disableStartedAt = Date.now();
+    let disableConfirmed = false;
+    try {
+      sdk.setMotorMode('disabled');
+      // Only ack once the daemon has echoed the mode back: the host unmounts
+      // this iframe on the ack, which would kill the command in flight.
+      await awaitMotorsDisabled(sdk);
+      disableConfirmed = true;
+    } catch {
+      /* channel may already be closing - best effort */
+    }
+    postDebug('leave:motors-disabled', {
+      confirmed: disableConfirmed,
+      ms: Date.now() - disableStartedAt,
+    });
+
+    postDebug('leave:ack');
+    postToHost({
+      source: PROTOCOL_SOURCE,
+      type: 'embed:left',
+      version: PROTOCOL_VERSION,
     });
   }
 
@@ -649,7 +894,150 @@ function postToHost(msg: EmbedToHostMsg): void {
   try {
     window.parent.postMessage(msg, parentTargetOrigin);
   } catch (err) {
-    console.warn('[reachy-mini-sdk/host/embed] postMessage to host failed', err);
+      embedLog.warn('postMessage to host failed', err);
+  }
+}
+
+/**
+ * Run the daemon self-update on the host's behalf and relay its
+ * progress back over the bridge.
+ *
+ * The host asks for this because only we hold a data channel. Daemon
+ * events are forwarded verbatim; on top of them we synthesise the one
+ * the daemon can't send - `rebooting`, when the restart takes the
+ * session down mid-install, which is what a success looks like from
+ * here.
+ */
+/**
+ * Disarm handle for the in-flight `host:start-update` job, armed by
+ * `startDaemonUpdateForHost` and consumed by `host:cancel-update`.
+ * Null whenever no update is in flight (a cancel is then a no-op).
+ * The host sends the cancel when ITS stall timer gives up: only the
+ * host runs one, so without this hook a host-side timeout would leave
+ * the sessionStopped translator armed and auto-reconnect off for the
+ * rest of the session.
+ */
+let disarmActiveUpdate: (() => void) | null = null;
+
+function startDaemonUpdateForHost(
+  sdk: ReachyMiniInstance,
+  preRelease: boolean,
+): void {
+  const postProgress = (msg: Omit<EmbedUpdateProgressMsg, 'source' | 'type' | 'version'>): void => {
+    postToHost({
+      source: PROTOCOL_SOURCE,
+      type: 'embed:update-progress',
+      version: PROTOCOL_VERSION,
+      ...msg,
+    });
+  };
+
+  // Stand the SDK's auto re-dial down for the duration of the update:
+  // a successful install ends with `systemctl restart`, and that
+  // teardown must surface as `sessionStopped` IMMEDIATELY (it's the
+  // "install done, rebooting" signal below) — not get absorbed by
+  // ~22 s of reconnect attempts against a robot that is rebooting.
+  // Feature-detected so an older SDK bundle is a no-op.
+  const setAutoReconnect = (enabled: boolean): void => {
+    const fn = (sdk as unknown as { setAutoReconnect?: (e: boolean) => void })
+      .setAutoReconnect;
+    if (typeof fn === 'function') {
+      try { fn.call(sdk, enabled); } catch { /* ignore */ }
+    }
+  };
+  setAutoReconnect(false);
+
+  // A successful install ends with `systemctl restart`, which kills the
+  // session before the daemon can report anything: the transport
+  // dropping IS the completion signal. Translate it into an explicit
+  // `rebooting` so the host stops waiting on a channel that will never
+  // speak again. The listener must NOT outlive a failed update: a
+  // leftover copy would fire on the user's next normal end-session and
+  // flip the (already failed) gate into a bogus reboot wait.
+  const onSessionStopped = (): void => {
+    disarmActiveUpdate = null;
+    sdk.removeEventListener('sessionStopped', onSessionStopped);
+    postProgress({ status: 'rebooting' });
+  };
+  const abandonUpdate = (): void => {
+    disarmActiveUpdate = null;
+    sdk.removeEventListener('sessionStopped', onSessionStopped);
+    setAutoReconnect(true);
+  };
+
+  let sent: boolean;
+  try {
+    sent = sdk.startDaemonUpdate({
+      preRelease,
+      onProgress: (event) => {
+        // Terminal failure: the daemon is alive and NOT rebooting, so
+        // the session outlives the update. Restore normal resilience
+        // and drop the reboot translator.
+        if (event.status === 'failed') abandonUpdate();
+        postProgress({
+          status: event.status,
+          line: event.line ?? null,
+          error: event.error ?? null,
+        });
+      },
+    });
+  } catch (err) {
+    abandonUpdate();
+    postProgress({ status: 'failed', error: (err as Error)?.message ?? String(err) });
+    return;
+  }
+  // Channel closed: the daemon never saw the request, so nothing else
+  // will ever report on it. Say so now rather than leaving the host to
+  // time out on a job that was never started.
+  if (!sent) {
+    abandonUpdate();
+    postProgress({ status: 'failed', error: 'Data channel not open' });
+    return;
+  }
+
+  // On an SDK bundle old enough not to emit `sessionStopped` this
+  // listener simply never fires (the host falls back to its stall
+  // timer) - `addEventListener` itself never throws.
+  sdk.addEventListener('sessionStopped', onSessionStopped);
+  disarmActiveUpdate = abandonUpdate;
+}
+
+/**
+ * Daemon version of the robot we're talking to, resolved once the
+ * session is up (see `readDaemonVersion`). Module-level so every
+ * subsequent `pushAppState` re-advertises it: the host has no data
+ * channel of its own, so this is its only way to learn what software
+ * the robot runs. `null` until resolved, or forever against a daemon
+ * that predates `get_version`.
+ */
+let daemonVersion: string | null = null;
+
+/**
+ * Version of the SDK bundle the app loaded (`instance.sdkVersion`),
+ * captured at construction in `bootOnce`. Advertised on every
+ * app-state for parents that update independently of the app (see
+ * `sdkVersion` in protocol.ts) - the mobile app reads its ABSENCE as
+ * "bundle predates the field". `null` against an SDK old enough not
+ * to carry it.
+ */
+let appSdkVersion: string | null = null;
+
+/**
+ * Ask the daemon its version, bounded so a silent or too-old daemon
+ * can't stall the boot. Fail-open: any timeout / rejection resolves
+ * `null`, which every consumer reads as "unknown, carry on".
+ */
+async function readDaemonVersion(sdk: ReachyMiniInstance): Promise<string | null> {
+  try {
+    const version = await Promise.race([
+      sdk.getVersion(),
+      new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), DAEMON_VERSION_TIMEOUT_MS),
+      ),
+    ]);
+    return typeof version === 'string' && version.length > 0 ? version : null;
+  } catch {
+    return null;
   }
 }
 
@@ -667,6 +1055,8 @@ function pushAppState(
     connectingStep,
     message,
     rttMs,
+    daemonVersion,
+    sdkVersion: appSdkVersion,
   });
 }
 
@@ -728,14 +1118,19 @@ async function sampleRttMs(pc: RTCPeerConnection): Promise<number | null> {
  */
 function startLiveLinkMonitor(sdk: ReachyMiniInstance): void {
   if (typeof window === 'undefined') return;
-  const pc = (sdk as unknown as { _pc?: RTCPeerConnection | null })._pc;
-  if (!pc) return;
+  // Re-read on every tick (not captured once): the SDK's auto-reconnect
+  // replaces the RTCPeerConnection mid-session, and a sampler pinned to
+  // the old pc would freeze the RTT forever.
+  const livePc = (): RTCPeerConnection | null => livePeerConnection(sdk);
+  if (!livePc()) return;
 
   const windowMs: number[] = [];
   let stopped = false;
 
   const tick = async (): Promise<void> => {
     if (stopped) return;
+    const pc = livePc();
+    if (!pc || pc.connectionState === 'closed') return;
     const sample = await sampleRttMs(pc);
     if (sample === null) return;
     windowMs.push(sample);
@@ -753,20 +1148,44 @@ function startLiveLinkMonitor(sdk: ReachyMiniInstance): void {
     stopped = true;
     window.clearInterval(interval);
   };
-  try {
-    sdk.addEventListener('sessionStopped', stop);
-  } catch {
-    /* ignore - sampler will keep running until pagehide */
-  }
+  sdk.addEventListener('sessionStopped', stop);
   window.addEventListener('pagehide', stop, { once: true });
+}
+
+/**
+ * Live RTCPeerConnection of the SDK bundle the app shipped. Prefers the
+ * public `peerConnection` getter; falls back to the private `_pc` field
+ * for bundles that predate it (the embed rides whatever SDK the app
+ * bundled, so both shapes are in the wild). `null` between sessions.
+ */
+function livePeerConnection(sdk: ReachyMiniInstance): RTCPeerConnection | null {
+  const s = sdk as unknown as {
+    peerConnection?: RTCPeerConnection | null;
+    _pc?: RTCPeerConnection | null;
+  };
+  return s.peerConnection ?? s._pc ?? null;
+}
+
+const embedLog = createLogger('embed');
+
+/**
+ * Is this diagnostic tag a lifecycle transition (a handful of lines per
+ * session) rather than per-message traffic (one line per command / SSE
+ * event)? Lifecycle logs at `info` - visible by default; traffic logs at
+ * `debug` - opt-in via `localStorage.setItem('reachy-log', 'debug')`.
+ */
+function isLifecycleTag(tag: string): boolean {
+  return tag.startsWith('boot:') || tag.startsWith('leave:');
 }
 
 /**
  * Dev-only diagnostic channel. Forwards a tag + payload to the host
  * so the parent's console (visible to devtools and the Cursor MCP
- * browser) shows the embed's boot progression. The host's
- * `ReachyHostShell` listens for `embed:debug` and `console.info`s
- * the payload.
+ * browser) shows the embed's boot progression - the host's
+ * `useHostBridge` listens for `embed:debug` and mirrors it. Locally the
+ * tag is logged through the shared `[reachy:embed]` logger: lifecycle
+ * tags (`boot:*`, `leave:*`) at `info`, everything else at `debug` so
+ * per-message traffic doesn't flood the console by default.
  */
 function postDebug(tag: string, payload: Record<string, unknown> = {}): void {
   if (typeof window === 'undefined') return;
@@ -791,7 +1210,9 @@ function postDebug(tag: string, payload: Record<string, unknown> = {}): void {
     } catch {
       asJson = '<unserializable>';
     }
-    console.info(`[embed-debug] ${tag} ${asJson}`);
+    const line = `${tag} ${asJson}`;
+    if (isLifecycleTag(tag)) embedLog.info(line);
+    else embedLog.debug(line);
   } catch {
     /* ignore */
   }
@@ -842,12 +1263,11 @@ function createRobotMedia(sdk: ReachyMiniInstance): RobotMedia {
   let cached: MediaStream | null = null;
 
   const sdkInternals = sdk as unknown as {
-    _pc: RTCPeerConnection | null;
     _micStream: MediaStream | null;
   };
 
   const buildFromReceivers = (): MediaStream | null => {
-    const pc = sdkInternals._pc;
+    const pc = livePeerConnection(sdk);
     if (!pc) return null;
     const tracks = pc
       .getReceivers()
@@ -874,7 +1294,9 @@ function createRobotMedia(sdk: ReachyMiniInstance): RobotMedia {
 
   // Drop the cache as soon as the daemon tears down - keeps
   // `media.robotStream` honest if anything reads it after
-  // `sessionStopped`.
+  // `sessionStopped`. Same on `sessionReconnecting`: the SDK's
+  // auto re-dial replaces the RTCPeerConnection, so the cached
+  // tracks are dead and must be rebuilt from the new receivers.
   const onSessionStopped = (): void => {
     if (cached) {
       cached = null;
@@ -882,6 +1304,7 @@ function createRobotMedia(sdk: ReachyMiniInstance): RobotMedia {
     }
   };
   sdk.addEventListener('sessionStopped', onSessionStopped);
+  sdk.addEventListener('sessionReconnecting', onSessionStopped);
 
   return {
     attachVideo(el: HTMLVideoElement): () => void {
@@ -919,6 +1342,55 @@ function createRobotMedia(sdk: ReachyMiniInstance): RobotMedia {
 }
 
 /**
+ * Mirror the SDK's automatic session re-dial into host app-states.
+ *
+ * The SDK (>= the version carrying `autoReconnect`) re-dials the robot
+ * by itself when an established session's transport dies. While it
+ * retries, the app iframe is functionally frozen — motion/RPC calls
+ * fail — so the honest UX is the same connecting splash the boot flow
+ * uses. On success the SDK re-fires `streaming` (video re-attaches on
+ * its own) and we flip back to `live`; on a terminal
+ * `sessionStopped { reason: 'reconnect_failed' }` we report a fatal
+ * error so the shell offers reload / back-to-picker.
+ *
+ * Registered with plain string event names: on an app that shipped an
+ * OLDER SDK bundle (no such events) the listeners simply never fire -
+ * `addEventListener` on an unknown event name is a silent no-op, never
+ * a throw.
+ */
+function installReconnectBridge(sdk: ReachyMiniInstance): void {
+  sdk.addEventListener('sessionReconnecting', (e) => {
+    const detail = (e as CustomEvent<Record<string, unknown>>).detail;
+    const attempt = Number(detail?.attempt ?? 1);
+    const max = Number(detail?.maxAttempts ?? 1);
+    pushAppState(
+      'connecting',
+      'session',
+      attempt > 1
+        ? `Reconnecting to the robot (attempt ${attempt}/${max})`
+        : 'Connection lost — reconnecting to the robot',
+    );
+  });
+
+  sdk.addEventListener('sessionReconnected', () => {
+    pushAppState('live', null);
+  });
+
+  sdk.addEventListener('sessionStopped', (e) => {
+    const detail = (e as CustomEvent<Record<string, unknown>>).detail;
+    if (detail?.reason !== 'reconnect_failed') return;
+    postToHost({
+      source: PROTOCOL_SOURCE,
+      type: 'embed:error',
+      version: PROTOCOL_VERSION,
+      message: 'Lost the connection to the robot and could not reconnect.',
+      fatal: true,
+      detail: typeof detail?.message === 'string' ? detail.message : undefined,
+    });
+  });
+}
+
+/**
  * One-shot SDK probe used while we hunt the "stuck at session" bug.
  * Subscribes to every internal event the SDK is known to emit and
  * forwards them to the host via `embed:debug`. No-op in production
@@ -931,6 +1403,8 @@ function installSdkProbe(sdk: ReachyMiniInstance): void {
     'streaming',
     'sessionStopped',
     'sessionRejected',
+    'sessionReconnecting',
+    'sessionReconnected',
     'robotsChanged',
     'error',
     'state',
