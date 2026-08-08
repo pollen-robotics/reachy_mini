@@ -67,11 +67,6 @@ const SDK_READY_TIMEOUT_MS = 8000;
 // in <100 ms; 2 s is comfortable defensive slack.
 const HOST_INIT_TIMEOUT_MS = 2000;
 const TOKEN_TTL_MS = 15 * 60 * 1000;
-// Upper bound on how long we wait for the wake-up trajectory to finish
-// before revealing the app anyway. Matches the SDK's own `wakeUp` default
-// (and the ConnectingView "slow hint" at ~6 s), so a slow or older daemon
-// degrades into "land the user" rather than trapping them on the splash.
-const WAKE_TRAJECTORY_TIMEOUT_MS = 8000;
 // Budget for the `get_version` round-trip we run between session-up and
 // wake. Short on purpose: the answer only feeds the host's update gate,
 // so an unresponsive or too-old daemon must cost the boot a blink, not a
@@ -81,8 +76,11 @@ const DAEMON_VERSION_TIMEOUT_MS = 2500;
 // graceful leave the embed plays goto_sleep itself (immediate) then forces
 // motors disabled - mirroring the mobile app (`sleepAndDisableRobot`). We wait
 // for it to finish BEFORE letting the host unmount, so the motors are already
-// `Disabled` when the app-slot lock frees: the daemon's idle-reset then skips
-// (no double trajectory / go_sleep sound), with no daemon-side change needed.
+// `Disabled` *at the sleep pose* when the app-slot lock frees: the daemon's
+// idle-reset predicate ("Disabled AND at the sleep pose") then skips, so
+// there's no double trajectory / go_sleep sound. If the goto_sleep below
+// times out and we disable mid-pose instead, that same predicate makes the
+// daemon pick the robot up and park it properly - degraded but self-healing.
 // SDK-level timeout on the goto_sleep move + a slightly larger JS hard cap so a
 // wedged daemon can't stall the leave forever.
 const LEAVE_SLEEP_TIMEOUT_MS = 6000;
@@ -108,39 +106,15 @@ const LEAVE_DISABLE_CONFIRM_TIMEOUT_MS = 1000;
 /**
  * Land the user in a *settled* robot.
  *
- * Unlike `sdk.ensureAwake()` - which kicks `wakeUp()` fire-and-forget and
- * resolves the instant the command is *sent* - this awaits the wake-up
- * trajectory to actual completion (the daemon's `completed: true` ack), so
- * the host only reveals the app once the robot has finished its wake
- * animation instead of mid-move.
- *
- * Ordering:
- *   1. If the motor mode is still unknown (fresh session), ask for a state
- *      snapshot and wait briefly for it so `isAwake()` is meaningful.
- *   2. Already awake -> return immediately (no trajectory to play).
- *   3. Asleep -> await the full `wakeUp()` trajectory. A timeout or error is
- *      swallowed and we reveal the app anyway (degraded but reachable),
- *      never trapping the user on the connecting splash.
+ * The whole bring-up contract now lives in `sdk.ensureAwake()`: it awaits
+ * the wake trajectory to the daemon's `completed` ack (internal budget,
+ * never rejects - a daemon that won't confirm still lets the app land,
+ * degraded but reachable), and flips an inherited `gravity_compensation`
+ * back to position control without replaying the emote. Kept as a named
+ * boot-phase step for the wake logging around its call site.
  */
 async function awaitFullyAwake(sdk: ReachyMiniInstance): Promise<void> {
-  if (sdk.robotState.motor_mode === undefined) {
-    await new Promise<void>((resolve) => {
-      const done = (): void => {
-        sdk.removeEventListener('state', done);
-        clearTimeout(timer);
-        resolve();
-      };
-      const timer = setTimeout(done, 1000);
-      sdk.addEventListener('state', done);
-      sdk.requestState();
-    });
-  }
-  if (sdk.isAwake()) return;
-  try {
-    await sdk.wakeUp({ timeoutMs: WAKE_TRAJECTORY_TIMEOUT_MS });
-  } catch {
-    /* degraded: reveal the app anyway rather than trap the user on splash */
-  }
+  await sdk.ensureAwake();
 }
 
 /**
