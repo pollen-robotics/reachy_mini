@@ -13,6 +13,7 @@
  *    `window.location.origin` (same-origin deployment).
  */
 import { useCallback, useEffect, useRef } from 'react';
+import { createLogger } from '@pollen-robotics/reachy-mini-sdk';
 
 import {
   PROTOCOL_SOURCE,
@@ -29,6 +30,8 @@ import type {
   LeavingReason,
   ThemeMode,
 } from '../lib/protocol';
+
+const log = createLogger('host');
 
 export interface EmbedAppState {
   phase: AppPhase;
@@ -174,7 +177,13 @@ export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
             } catch {
               asJson = '<unserializable>';
             }
-            console.info(`[host-debug] embed:${msg.tag ?? '?'} ${asJson}`);
+            // Mirror of the embed's diagnostic channel, one level up so it
+            // shows in the parent page's console. Same leveling as the
+            // embed side: lifecycle tags at info, traffic at debug.
+            const tag = msg.tag ?? '?';
+            const line = `embed ${tag} ${asJson}`;
+            if (tag.startsWith('boot:') || tag.startsWith('leave:')) log.info(line);
+            else log.debug(line);
           }
           return;
         }
@@ -271,6 +280,6 @@ function postToFrame(iframe: HTMLIFrameElement, msg: unknown): void {
   try {
     iframe.contentWindow.postMessage(msg, window.location.origin);
   } catch (err) {
-    console.warn('[reachy-mini-sdk/host] postMessage to embed failed', err);
+    log.warn('postMessage to embed failed', err);
   }
 }

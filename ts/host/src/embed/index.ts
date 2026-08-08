@@ -45,6 +45,7 @@ import {
   isProtocolMessage,
 } from '../lib/protocol';
 import { fetchRobotsFromCentral } from '../lib/centralRest';
+import { createLogger } from '@pollen-robotics/reachy-mini-sdk';
 import type {
   AppConnectingStep,
   AppPhase,
@@ -613,7 +614,7 @@ function createBridge(expectedOrigin: string, sdk: ReachyMiniInstance) {
       try {
         void cb();
       } catch (err) {
-        console.warn('[reachy-mini-sdk/host/embed] onLeave threw', err);
+        embedLog.warn('onLeave threw', err);
       }
     });
   }
@@ -644,27 +645,41 @@ function createBridge(expectedOrigin: string, sdk: ReachyMiniInstance) {
     if (graceLeaveStarted) return;
     graceLeaveStarted = true;
 
+    postDebug('leave:start');
     runLeaveOnce();
 
+    const sleepStartedAt = Date.now();
+    let sleepOutcome: 'ok' | 'hard-timeout' | 'error' = 'ok';
     try {
-      await Promise.race([
-        sdk.gotoSleep({ timeoutMs: LEAVE_SLEEP_TIMEOUT_MS }),
-        new Promise<void>((resolve) =>
-          window.setTimeout(resolve, LEAVE_SLEEP_HARD_TIMEOUT_MS),
+      sleepOutcome = await Promise.race([
+        sdk.gotoSleep({ timeoutMs: LEAVE_SLEEP_TIMEOUT_MS }).then(() => 'ok' as const),
+        new Promise<'hard-timeout'>((resolve) =>
+          window.setTimeout(() => resolve('hard-timeout'), LEAVE_SLEEP_HARD_TIMEOUT_MS),
         ),
       ]);
     } catch {
       /* wedged/older daemon: fall through to the explicit disable */
+      sleepOutcome = 'error';
     }
+    postDebug('leave:sleep', { outcome: sleepOutcome, ms: Date.now() - sleepStartedAt });
+
+    const disableStartedAt = Date.now();
+    let disableConfirmed = false;
     try {
       sdk.setMotorMode('disabled');
       // Only ack once the daemon has echoed the mode back: the host unmounts
       // this iframe on the ack, which would kill the command in flight.
       await awaitMotorsDisabled(sdk);
+      disableConfirmed = true;
     } catch {
       /* channel may already be closing - best effort */
     }
+    postDebug('leave:motors-disabled', {
+      confirmed: disableConfirmed,
+      ms: Date.now() - disableStartedAt,
+    });
 
+    postDebug('leave:ack');
     postToHost({
       source: PROTOCOL_SOURCE,
       type: 'embed:left',
@@ -879,7 +894,7 @@ function postToHost(msg: EmbedToHostMsg): void {
   try {
     window.parent.postMessage(msg, parentTargetOrigin);
   } catch (err) {
-    console.warn('[reachy-mini-sdk/host/embed] postMessage to host failed', err);
+      embedLog.warn('postMessage to host failed', err);
   }
 }
 
@@ -1151,12 +1166,26 @@ function livePeerConnection(sdk: ReachyMiniInstance): RTCPeerConnection | null {
   return s.peerConnection ?? s._pc ?? null;
 }
 
+const embedLog = createLogger('embed');
+
+/**
+ * Is this diagnostic tag a lifecycle transition (a handful of lines per
+ * session) rather than per-message traffic (one line per command / SSE
+ * event)? Lifecycle logs at `info` - visible by default; traffic logs at
+ * `debug` - opt-in via `localStorage.setItem('reachy-log', 'debug')`.
+ */
+function isLifecycleTag(tag: string): boolean {
+  return tag.startsWith('boot:') || tag.startsWith('leave:');
+}
+
 /**
  * Dev-only diagnostic channel. Forwards a tag + payload to the host
  * so the parent's console (visible to devtools and the Cursor MCP
- * browser) shows the embed's boot progression. The host's
- * `ReachyHostShell` listens for `embed:debug` and `console.info`s
- * the payload.
+ * browser) shows the embed's boot progression - the host's
+ * `useHostBridge` listens for `embed:debug` and mirrors it. Locally the
+ * tag is logged through the shared `[reachy:embed]` logger: lifecycle
+ * tags (`boot:*`, `leave:*`) at `info`, everything else at `debug` so
+ * per-message traffic doesn't flood the console by default.
  */
 function postDebug(tag: string, payload: Record<string, unknown> = {}): void {
   if (typeof window === 'undefined') return;
@@ -1181,7 +1210,9 @@ function postDebug(tag: string, payload: Record<string, unknown> = {}): void {
     } catch {
       asJson = '<unserializable>';
     }
-    console.info(`[embed-debug] ${tag} ${asJson}`);
+    const line = `${tag} ${asJson}`;
+    if (isLifecycleTag(tag)) embedLog.info(line);
+    else embedLog.debug(line);
   } catch {
     /* ignore */
   }

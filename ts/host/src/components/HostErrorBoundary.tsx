@@ -18,7 +18,10 @@ import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 
+import { createLogger } from '@pollen-robotics/reachy-mini-sdk';
 import { RADIUS } from '../lib/tokens';
+
+const log = createLogger('host');
 
 export interface HostErrorBoundaryProps {
   children: ReactNode;
@@ -39,8 +42,8 @@ export class HostErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error(
-      '[reachy-mini-sdk/host] uncaught render error:',
+    log.error(
+      'uncaught render error:',
       error,
       info.componentStack,
     );

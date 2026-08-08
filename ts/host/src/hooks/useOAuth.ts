@@ -16,6 +16,7 @@
  */
 import { useEffect, useState, useCallback } from 'react';
 
+import { createLogger } from '@pollen-robotics/reachy-mini-sdk';
 import type { ReachyMiniInstance } from '../lib/sdk-types';
 import {
   clearSignedOutFlag,
@@ -29,6 +30,8 @@ import {
   markUserSignedOut,
   rehydrateDevToken,
 } from '../lib/settings';
+
+const log = createLogger('host');
 
 export interface OAuthState {
   /** SDK reports an active auth (token + user name resolved). */
@@ -183,13 +186,13 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
           } catch (err) {
             // No client ID (dev setups) or blocked redirect: fall
             // through to the normal signed-out view.
-            console.warn('[reachy-mini-sdk/host] silent sign-in failed to start', err);
+            log.warn('silent sign-in failed to start', err);
           }
         }
         setAuth(ok);
         setUserName(sdk.username);
       } catch (err) {
-        console.warn('[reachy-mini-sdk/host] authenticate() threw', err);
+        log.warn('authenticate() threw', err);
       } finally {
         // Settled either way - the shell can now pick a definite view.
         if (alive && !redirecting) setAuthResolved(true);
@@ -251,7 +254,7 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
         setUserName(sdk.username);
         if (ok) setPostOauth(true);
       } catch (err) {
-        console.error('[reachy-mini-sdk/host] dev-token authenticate() threw', err);
+        log.error('dev-token authenticate() threw', err);
         throw err;
       }
       return;
@@ -266,7 +269,7 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
       // login() typically redirects, so a throw here means the
       // redirect was blocked. Clear the pending flag so the
       // next boot doesn't show a confused "welcome back".
-      console.error('[reachy-mini-sdk/host] sdk.login() threw', err);
+      log.error('sdk.login() threw', err);
       consumeOAuthPending();
       throw err;
     }
@@ -277,7 +280,7 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
     try {
       sdk.logout();
     } catch (err) {
-      console.warn('[reachy-mini-sdk/host] sdk.logout() threw', err);
+      log.warn('sdk.logout() threw', err);
     }
     markUserSignedOut();
     setAuth(false);

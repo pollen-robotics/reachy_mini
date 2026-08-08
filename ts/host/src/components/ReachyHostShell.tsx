@@ -28,6 +28,7 @@ import GlobalStyles from '@mui/material/GlobalStyles';
 import Stack from '@mui/material/Stack';
 import { alpha } from '@mui/material/styles';
 
+import { createLogger } from '@pollen-robotics/reachy-mini-sdk';
 import type { ReachyMiniInstance, RobotInfo } from '../lib/sdk-types';
 import {
   encodeCredsToHash,
@@ -64,6 +65,8 @@ import { PostOAuthSplash } from './PostOAuthSplash';
 import { SignInView } from './SignInView';
 import { TopBar, type HostPhase } from './TopBar';
 import { WelcomeBackOverlay } from './WelcomeBackOverlay';
+
+const log = createLogger('host');
 
 // Hard cap on how long the host stays on the leaving overlay waiting for the
 // embed's `embed:left` ack (app cleanup + host-owned sleep/disable). The
@@ -461,8 +464,8 @@ function ReachyHostShellNormal({
         setErrorPayload({ message, detail });
         setHostPhase('error');
       } else {
-        console.warn(
-          '[reachy-mini-sdk/host] embed reported non-fatal error:',
+        log.warn(
+          'embed reported non-fatal error:',
           message,
           detail,
         );
@@ -672,8 +675,10 @@ function ReachyHostShellNormal({
       appName,
     };
     const hash = encodeCredsToHash(bundle);
-    console.info(
-      `[host-debug] iframeUrl = ${window.location.origin}/?embedded=1#${hash}`,
+    // Debug-only: the hash carries the user's HF token, so don't print
+    // it in default console output.
+    log.debug(
+      `iframeUrl = ${window.location.origin}/?embedded=1#${hash}`,
     );
     // Hash creds carry the same data as host:init; the iframe
     // wipes the hash on its first tick (APP_CREATION_GUIDE §13.5.2). The

@@ -42,12 +42,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchRobotsFromCentral } from '../lib/centralRest';
 import {
+  createLogger,
   openCentralListener,
   type CentralListenerHandle,
   type CentralStreamProducer,
 } from '@pollen-robotics/reachy-mini-sdk';
 import { resolveSignalingUrl } from '../lib/signalingUrl';
 import type { RobotInfo } from '../lib/sdk-types';
+
+const log = createLogger('host');
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -194,8 +197,8 @@ export function useRobots(opts: {
         );
       },
       onError: (err) => {
-        console.warn(
-          '[reachy-mini-sdk/host] central listener error:',
+        log.warn(
+          'central listener error:',
           err.message,
         );
       },
