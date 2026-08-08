@@ -115,6 +115,16 @@ interface OAuthRedirectResult {
  */
 const POSE_STREAM_FRESH_MS = 750;
 
+/**
+ * Upper bound on how long `ensureAwake()` waits for the wake trajectory to
+ * complete. The emote itself takes ~2-3 s on hardware; the extra headroom
+ * covers a cold trajectory player. Deliberately shorter than `wakeUp()`'s
+ * own 8 s default: `ensureAwake()` gates app boot, and a daemon that hasn't
+ * confirmed within 5 s isn't going to - better to let the app in degraded
+ * than trap it on the splash.
+ */
+const WAKE_TRAJECTORY_BUDGET_MS = 5000;
+
 export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Config ──────────────────────────────────────────────────────────
@@ -1122,8 +1132,32 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 this.requestState();
             });
         }
+        // Gravity compensation counts as awake - the robot is standing - but
+        // it runs under current control, where the daemon ignores position
+        // targets outright. An app inheriting that state from its predecessor
+        // (a fast handoff cancels the daemon's idle reset, so the mode
+        // survives) would see every goto silently do nothing. Flip back to
+        // position control without replaying the emote: the robot is already
+        // up, and the daemon pins targets to the measured pose on the way in,
+        // so nothing snaps.
+        if (this._robotState?.motor_mode === 'gravity_compensation') {
+            this.setMotorMode('enabled');
+            // Refresh the cache so a caller reading isAwake() right after us
+            // doesn't see the mode we just left.
+            this.requestState();
+            return true;
+        }
         if (this.isAwake()) return true;
-        this.wakeUp().catch(() => { /* swallow: caller may have torn down */ });
+        // Await the trajectory: callers treat resolution as "robot ready for
+        // position targets", and the emote keeps moving the head for ~2 s
+        // after the command is acked - an app that starts commanding poses
+        // under it fights it. Failures are swallowed: a torn-down session or
+        // a daemon that never acks must not take the whole boot down with it.
+        try {
+            await this.wakeUp({ timeoutMs: WAKE_TRAJECTORY_BUDGET_MS });
+        } catch {
+            /* timed out, or the session went away under us */
+        }
         return true;
     }
 

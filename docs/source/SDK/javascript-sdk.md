@@ -130,8 +130,8 @@ new ReachyMini({
 | `setMotorMode(mode)` | `boolean` | `"enabled"` (position control), `"disabled"` (limp), or `"gravity_compensation"` (float by hand) |
 | `setMotorTorque(on, ids?)` | `boolean` | Toggle torque; per-motor when `ids` is given, else global |
 | `wakeUp(opts?)` / `gotoSleep(opts?)` | `Promise<void>` | Play the wake-up / sleep trajectory; resolves on daemon completion (rejects after `opts.timeoutMs`, default 8000). `wakeUp` enables motors first |
-| `isAwake()` | `boolean` | Awake state derived from the cached `motor_mode` |
-| `ensureAwake(timeoutMs?)` | `Promise<boolean>` | Idempotent wake-up: no-op if already awake; does not await the trajectory |
+| `isAwake()` | `boolean` | Awake state derived from the cached `motor_mode` (`gravity_compensation` counts as awake) |
+| `ensureAwake(timeoutMs?)` | `Promise<boolean>` | Idempotent bring-up to position control: awaits the wake trajectory when asleep, flips `gravity_compensation` back to `enabled` (no emote), no-op when already there. Never rejects |
 | `playSound(filename)` | `boolean` | Play a sound file on the robot |
 | `clearIncomingAudio()` | `boolean` | Drop audio queued for the robot speaker (barge-in) |
 | `sendRaw(data)` | `boolean` | Send arbitrary JSON via data channel |

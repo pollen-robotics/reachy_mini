@@ -616,11 +616,22 @@ export interface ReachyMiniInstance extends EventTarget {
      * completion. Does NOT touch motor mode; caller manages it.
      */
     gotoSleep(options?: MotionAwaitOptions): Promise<void>;
-    /** Read the awake state from the cached `motor_mode`. */
+    /**
+     * Read the awake state from the cached `motor_mode`. Gravity
+     * compensation counts as awake: the robot is standing, even though
+     * it won't follow position targets in that mode.
+     */
     isAwake(): boolean;
     /**
-     * Idempotent wakeUp: noop when already awake. Resolves with
-     * the post-call awake state. Does NOT await the trajectory.
+     * Idempotent bring-up to a state where the robot follows position
+     * targets. Plays the wake trajectory when asleep and awaits it, so
+     * callers can start commanding poses on resolution without fighting
+     * the emote; switches back to position control (no emote) when the
+     * robot is up but in gravity compensation; noop when already there.
+     *
+     * `timeoutMs` bounds only the initial `motor_mode` read; the wake
+     * trajectory gets its own internal budget. Never rejects - a robot
+     * that won't confirm the wake still lets the app boot.
      */
     ensureAwake(timeoutMs?: number): Promise<boolean>;
 
