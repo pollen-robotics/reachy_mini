@@ -53,6 +53,8 @@
       title: JavaScript SDK & Web Apps
     - local: SDK/apps
       title: Building & Publishing Apps
+    - local: SDK/lifecycle-contract
+      title: Wake & Sleep Lifecycle
     - local: SDK/integration
       title: AI Integrations
     - local: SDK/python-sdk
