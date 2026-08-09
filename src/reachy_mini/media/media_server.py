@@ -1258,16 +1258,16 @@ class GstMediaServer:
         self._logger.debug("Stopping WebRTC")
         self._pipeline_sender.set_state(Gst.State.NULL)
 
-    def play_sound(self, sound_file: str) -> None:
-        """Play a sound file on the robot's speaker.
+    # Max time we let the playbin sit in PAUSED waiting for preroll before
+    # giving up and falling back to a plain (warm-up-latency) play.
+    _PREROLL_TIMEOUT_NS = 2 * Gst.SECOND
 
-        Uses GStreamer's playbin element with a platform-aware audio sink.
-        This is used for daemon-side sounds (wake-up, sleep, etc.).
+    def _make_playbin_for(self, sound_file: str) -> Optional[Gst.Element]:
+        """Resolve ``sound_file`` and build a fresh playbin + audio sink.
 
-        Args:
-            sound_file: Path to the sound file to play. If the file is not
-                found at the given path, it is looked up in the assets directory.
-
+        Returns the playbin in NULL state (uri + audio-sink set) or None on
+        failure. Any previously held playbin is torn down first. Shared by
+        :meth:`prepare_sound` and :meth:`play_sound`.
         """
         if not os.path.exists(sound_file):
             file_path = f"{ASSETS_ROOT_PATH}/{sound_file}"
@@ -1276,17 +1276,18 @@ class GstMediaServer:
                     f"Sound file {sound_file} not found in assets directory "
                     "or given path."
                 )
-                return
+                return None
         else:
             file_path = sound_file
 
         if self._playbin is not None:
             self._playbin.set_state(Gst.State.NULL)
+            self._playbin = None
 
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
             self._logger.error("Failed to create playbin element")
-            return
+            return None
 
         # Build file URI
         if os.name == "nt":
@@ -1300,13 +1301,73 @@ class GstMediaServer:
 
         playbin.set_property("uri", uri)
         playbin.set_property("audio-sink", self._build_audiosink_tee_bin())
+        return playbin
+
+    def prepare_sound(self, sound_file: str) -> bool:
+        """Preroll a sound for a warmup-free :meth:`start_prepared_sound`.
+
+        Builds the playbin and drives it to PAUSED, blocking until the async
+        state change (sink open + decode + ring-buffer fill) completes. This
+        is the slow part of ``set_state(PLAYING)``; doing it ahead of time
+        means the subsequent flip to PLAYING makes the first sample hit the
+        speaker essentially immediately.
+
+        Args:
+            sound_file: Path to the sound file, or a name resolved against
+                the assets directory.
+
+        Returns:
+            True when the pipeline is prerolled and ready, False on any
+            failure (caller should fall back to :meth:`play_sound`).
+
+        """
+        playbin = self._make_playbin_for(sound_file)
+        if playbin is None:
+            return False
+
+        self._playbin = playbin
+        playbin.set_state(Gst.State.PAUSED)
+        ret, _state, _pending = playbin.get_state(self._PREROLL_TIMEOUT_NS)
+        if ret in (Gst.StateChangeReturn.SUCCESS, Gst.StateChangeReturn.NO_PREROLL):
+            return True
+
+        self._logger.warning(
+            "playbin preroll for %s did not complete (state change: %s)",
+            sound_file,
+            ret,
+        )
+        playbin.set_state(Gst.State.NULL)
+        self._playbin = None
+        return False
+
+    def start_prepared_sound(self) -> None:
+        """Start a sound previously prerolled via :meth:`prepare_sound`.
+
+        No-op if nothing has been prepared. The first sample hits the
+        speaker essentially immediately since preroll already happened.
+        """
+        if self._playbin is None:
+            return
 
         if self._head_wobbler is not None:
             self._head_wobbler.reset()
             self._head_wobbler.start()
 
-        self._playbin = playbin
-        playbin.set_state(Gst.State.PLAYING)
+        self._playbin.set_state(Gst.State.PLAYING)
+
+    def play_sound(self, sound_file: str) -> None:
+        """Play a sound file on the robot's speaker.
+
+        Uses GStreamer's playbin element with a platform-aware audio sink.
+        This is used for daemon-side sounds (wake-up, sleep, etc.).
+
+        Args:
+            sound_file: Path to the sound file to play. If the file is not
+                found at the given path, it is looked up in the assets directory.
+
+        """
+        if self.prepare_sound(sound_file):
+            self.start_prepared_sound()
 
     def stop_sound(self) -> None:
         """Stop the currently playing sound file.
