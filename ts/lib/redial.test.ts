@@ -15,9 +15,9 @@
  * The loop is exercised through the supervisor's surface
  * (`maybeBeginRedial`) with the public `startSession`/`connect` stubbed
  * out on the instance (the supervisor's deps are closures over the
- * instance, so stubs are picked up transparently): the dial itself is
- * covered by integration flows, what matters here is the state machine
- * around it.
+ * instance, so stubs are picked up transparently): the dial itself
+ * (real WebRTC/central handshake) is only exercised manually on
+ * hardware - what matters here is the state machine around it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

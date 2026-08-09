@@ -241,9 +241,11 @@ export interface ConnectedHandle<TConfig = unknown> {
   readonly media: RobotMedia;
 
   /** Register a teardown callback. Fires on `host:leaving`
-   *  (one-shot) or `pagehide`. Return a promise to keep the host
-   *  waiting (bounded by the host's `timeoutMs`). Returns an
-   *  unsubscribe function. */
+   *  (one-shot) or `pagehide`. Callbacks are fire-and-forget: a
+   *  returned promise is NOT awaited, but on the graceful-leave
+   *  path async cleanup still gets several seconds of wall time
+   *  because the `embed:left` ack only goes out after the sleep +
+   *  motors-off sequence. Returns an unsubscribe function. */
   onLeave(cb: () => void | Promise<void>): () => void;
   /** Register a theme-change handler. */
   onThemeChange(cb: (theme: ThemeMode) => void): () => void;
