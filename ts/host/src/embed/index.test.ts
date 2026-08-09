@@ -40,6 +40,15 @@ import {
 } from '../lib/protocol';
 import type { ConnectedHandle } from './index';
 
+/** Central REST is the only network dependency of the boot pipeline
+ *  (peer-id re-resolution). Mocked so tests control the robot list. */
+const { fetchRobotsFromCentralMock } = vi.hoisted(() => ({
+  fetchRobotsFromCentralMock: vi.fn(),
+}));
+vi.mock('../lib/centralRest', () => ({
+  fetchRobotsFromCentral: fetchRobotsFromCentralMock,
+}));
+
 /* ─────────────────── Timeline + deferred helpers ─────────────────── */
 
 let timeline: string[] = [];
@@ -226,6 +235,7 @@ type EmbedModule = typeof import('./index');
 async function startBoot(opts: {
   configureSdk?: (sdk: FakeReachyMini) => void;
   hostInit?: boolean;
+  hostInitOverrides?: Record<string, unknown>;
 } = {}): Promise<{
   embed: EmbedModule;
   bootP: Promise<ConnectedHandle<unknown>>;
@@ -243,7 +253,7 @@ async function startBoot(opts: {
     // Let the 2 s host:init soft deadline expire → creds fallback.
     await vi.advanceTimersByTimeAsync(2_000);
   } else {
-    deliverToEmbed(hostInitMsg());
+    deliverToEmbed(hostInitMsg(opts.hostInitOverrides));
   }
   await flush();
   return { embed, bootP, sdk };
@@ -298,6 +308,11 @@ beforeEach(() => {
     },
   );
   (window as unknown as { ReachyMini: unknown }).ReachyMini = FakeReachyMini;
+  // Default central answer: reachable but empty. Only the peer-id
+  // re-resolution tests care; everything else never calls it (their
+  // creds carry no `robotHardwareId`).
+  fetchRobotsFromCentralMock.mockReset();
+  fetchRobotsFromCentralMock.mockResolvedValue({ ok: true, robots: [] });
   // The boot fires a fire-and-forget npm-registry staleness check;
   // it must never hit the network from a unit test.
   vi.stubGlobal('fetch', vi.fn(async () => {
@@ -403,6 +418,81 @@ describe('connectToHost boot pipeline', () => {
       (m) => m.type === 'embed:app-state' && m.phase === 'live',
     );
     expect(liveFrame?.daemonVersion).toBeNull();
+  });
+});
+
+/* ─────────────────── Peer-id re-resolution ─────────────────── */
+
+/**
+ * The handed-in `robotPeerId` is a snapshot the host captured at picker
+ * time; central rotates it on every relay reconnect, so after a Space
+ * cold-start it is frequently dead. When the host also hands a stable
+ * `robotHardwareId`, the embed re-resolves the CURRENT peer id from
+ * central right before dialing. The contract under test is twofold:
+ * the happy path actually swaps the id, and every failure mode is
+ * FAIL-OPEN (dial the handed-in id rather than not dialing at all - a
+ * refactor that lets a central hiccup throw would break every boot).
+ */
+describe('peer-id re-resolution before startSession', () => {
+  const withHardwareId = { robotHardwareId: 'hw-1' };
+
+  it('dials the fresh peer id when central knows the hardware id', async () => {
+    fetchRobotsFromCentralMock.mockResolvedValue({
+      ok: true,
+      robots: [
+        { id: 'peer-other', hardwareId: 'hw-2' },
+        { id: 'peer-fresh', hardwareId: 'hw-1' },
+      ],
+    });
+    const { bootP } = await startBoot({ hostInitOverrides: withHardwareId });
+    await bootP;
+
+    expect(timeline).toContain('sdk:startSession:peer-fresh');
+    expect(timeline).not.toContain('sdk:startSession:peer-live');
+    expect(fetchRobotsFromCentralMock).toHaveBeenCalledWith({
+      signalingUrl: CREDS.signalingUrl,
+      hfToken: CREDS.hfToken,
+    });
+  });
+
+  it('falls back to the handed-in id when the hardware id is unknown to central', async () => {
+    fetchRobotsFromCentralMock.mockResolvedValue({
+      ok: true,
+      robots: [{ id: 'peer-other', hardwareId: 'hw-2' }],
+    });
+    const { bootP } = await startBoot({ hostInitOverrides: withHardwareId });
+    await bootP;
+
+    expect(timeline).toContain('sdk:startSession:peer-live');
+  });
+
+  it('falls back to the handed-in id when central answers not-ok', async () => {
+    fetchRobotsFromCentralMock.mockResolvedValue({
+      ok: false,
+      robots: [],
+      reason: 'HTTP 503',
+    });
+    const { bootP } = await startBoot({ hostInitOverrides: withHardwareId });
+    await bootP;
+
+    expect(timeline).toContain('sdk:startSession:peer-live');
+  });
+
+  it('a central that throws must not break the boot (fail-open)', async () => {
+    fetchRobotsFromCentralMock.mockRejectedValue(new Error('network down'));
+    const { bootP } = await startBoot({ hostInitOverrides: withHardwareId });
+    await bootP;
+
+    expect(timeline).toContain('sdk:startSession:peer-live');
+    expect(timeline).toContain('post:app-state:live');
+  });
+
+  it('skips the central roundtrip entirely when no hardware id was handed in', async () => {
+    const { bootP } = await startBoot(); // default: robotHardwareId null
+    await bootP;
+
+    expect(fetchRobotsFromCentralMock).not.toHaveBeenCalled();
+    expect(timeline).toContain('sdk:startSession:peer-live');
   });
 });
 
