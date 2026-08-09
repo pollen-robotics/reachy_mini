@@ -1194,11 +1194,6 @@ class Backend:
     # a (velocity-eased) tick short of the commanded endpoint.
     INIT_TARGET_ATOL: float = 1e-2
 
-    # Radius (magic units) around SLEEP_HEAD_POSE within which the robot counts
-    # as already down. Shared by goto_sleep's "no travel needed" branch and
-    # is_at_sleep_pose() so the trajectory and the skip can't drift apart.
-    SLEEP_POSE_MAGIC_ATOL: float = 10.0
-
     def is_awake_at_init_pose(self) -> bool:
         """Motors on and init is the pose the controller is actively holding.
 
@@ -1225,20 +1220,6 @@ class Backend:
                 )
             )
         )
-
-    def is_at_sleep_pose(self) -> bool:
-        """Head physically resting within the sleep-pose radius.
-
-        Reads the measured pose, not the commanded target: a limp robot has no
-        meaningful target, and the whole point is to tell a robot parked down by
-        a clean leave sequence from one left limp mid-pose by a crashed app.
-        """
-        if self.current_head_pose is None:
-            return False
-        _, _, dist_to_sleep_pose = distance_between_poses(
-            self.get_current_head_pose(), self.SLEEP_HEAD_POSE
-        )
-        return bool(dist_to_sleep_pose <= self.SLEEP_POSE_MAGIC_ATOL)
 
     async def wake_up(self, *, force: bool = False) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound.
@@ -1289,7 +1270,13 @@ class Backend:
             - If we are far from the initial position, we move there first.
             - If we are close to the initial position, we move directly to the sleep position.
         """
-        self._quiesce_aim_sources()
+        # Stop head wobbling so leftover speech offsets don't fight the
+        # sleep pose during the goto. Head tracking is also a primary
+        # aim source, so it must be disabled before moving to sleep.
+        if self._media_server is not None:
+            self._media_server.disable_wobbling()
+        self.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+        self.disable_head_tracking()
 
         # Magic units
         _, _, dist_to_sleep_pose = distance_between_poses(
@@ -1301,7 +1288,7 @@ class Backend:
         sleep_time = 2.0
 
         # Thresholds found empirically.
-        if dist_to_sleep_pose > self.SLEEP_POSE_MAGIC_ATOL:
+        if dist_to_sleep_pose > 10:
             if dist_to_init_pose > 30:
                 # Move to the initial position
                 await self.goto_target(
@@ -1329,57 +1316,6 @@ class Backend:
 
         # Rest limp at the sleep pose, like a fresh boot.
         self.set_motor_control_mode(MotorControlMode.Disabled)
-
-    def _quiesce_aim_sources(self) -> None:
-        """Silence every secondary head-aim source before a scripted move.
-
-        Wobbling and leftover speech offsets are added on top of the commanded
-        target, and head tracking is a primary aim source in its own right, so
-        any of them left running would fight the trajectory.
-        """
-        if self._media_server is not None:
-            self._media_server.disable_wobbling()
-        self.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
-        self.disable_head_tracking()
-
-    async def reset_to_sleep(self) -> None:
-        """Put the robot to sleep from ANY motor state the last app left behind.
-
-        ``goto_sleep()`` assumes it inherits a robot under position control.
-        When that assumption is broken it degrades silently instead of failing:
-        under gravity compensation the control loop ignores position targets
-        outright, so the whole trajectory is written into the void and the final
-        torque cut drops the head from wherever it happened to be. Motors left
-        limp - globally or per-motor via ``set_torque(ids=...)`` - are just as
-        bad, and none of these paths are hypothetical: a crashed app, a killed
-        tab or a dropped Wi-Fi link all skip the client's own cleanup.
-
-        So re-establish the assumption first, then reuse the normal sequence:
-        torque on (``enable_motors`` pins every target to the measured pose, so
-        nothing snaps), lift to the init pose, then ``goto_sleep()``, which ends
-        limp at the sleep pose. The lift is what makes the result predictable -
-        it collapses every possible inherited pose into the one starting point
-        the sleep trajectory was tuned for.
-        """
-        # Ordered: quiesce first so tracking can't re-aim the head between the
-        # torque coming back and the lift starting.
-        self._quiesce_aim_sources()
-        self.set_motor_control_mode(MotorControlMode.Enabled)
-
-        _, _, magic_distance = distance_between_poses(
-            self.get_current_head_pose(), self.INIT_HEAD_POSE
-        )
-        await self.goto_target(
-            self.INIT_HEAD_POSE,
-            antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
-            # Same magic-unit scaling as wake_up, floored so a head already at
-            # init still gets a real (if brief) move rather than a zero-length
-            # one, and capped so a fully drooped head doesn't crawl back up.
-            duration=float(np.clip(magic_distance * 20 / 1000, 0.3, 1.5)),
-        )
-        await asyncio.sleep(0.2)
-
-        await self.goto_sleep()
 
     # Motor control modes
     @abstractmethod
@@ -2928,26 +2864,15 @@ class Backend:
             task.cancel()
         self._idle_reset_task = None
 
-    def _already_idle(self) -> bool:
-        """Nothing left to do: the robot is limp AND physically at the sleep pose.
-
-        Both halves matter. A well-behaved client (e.g. the mobile app, which
-        sleeps then disables on leave) satisfies them and must not get a
-        redundant trajectory + sound. Limp *anywhere else* is the crashed-app
-        signature - torque cut mid-pose, head drooped - and does need the reset,
-        which is why the motor mode alone is not a sufficient test.
-        """
-        return (
-            self.get_motor_control_mode() == MotorControlMode.Disabled
-            and self.is_at_sleep_pose()
-        )
-
     def _maybe_start_idle_reset(self, grace_s: float) -> None:
-        """Kick off a sleep reset if the robot isn't already idle. Runs on the loop."""
+        """Kick off a goto_sleep if the robot is still awake. Runs on the loop."""
         try:
             if not self.ready.is_set() or self.is_shutting_down:
                 return
-            if self._already_idle():
+            # Already limp / asleep: a well-behaved client (e.g. the mobile app,
+            # which sleeps + disables on leave) leaves nothing to do, so we skip
+            # the redundant trajectory + sound.
+            if self.get_motor_control_mode() == MotorControlMode.Disabled:
                 return
             self._cancel_idle_reset()
             self._idle_reset_task = asyncio.create_task(self._async_idle_reset(grace_s))
@@ -2960,12 +2885,10 @@ class Backend:
         Starts with a debounce (``grace_s``): a fast reconnect or a local app
         grabbing the robot cancels the task during that window, so no motion
         happens at all on transient drops. Only if the slot stays free past the
-        grace period do we actually reset.
+        grace period do we actually goto_sleep.
 
-        Goes through ``reset_to_sleep()`` rather than ``goto_sleep()`` directly:
-        the client that just vanished may have left the motors limp or in
-        gravity compensation, and a bare ``goto_sleep()`` degrades silently in
-        both cases. ``reset_to_sleep()`` finishes with
+        Mirrors the reference leave behaviour clients already run by hand
+        (gotoSleep -> motors off). ``goto_sleep()`` finishes with
         ``set_motor_control_mode(Disabled)``, which also clears
         ``gravity_compensation_mode`` - so the next session's ``ensureAwake()``
         correctly triggers a fresh wake.
@@ -2977,15 +2900,15 @@ class Backend:
             # held the slot). Re-check before committing to the trajectory.
             if self.is_shutting_down:
                 return
-            if self._already_idle():
+            if self.get_motor_control_mode() == MotorControlMode.Disabled:
                 return
-            await self.reset_to_sleep()
+            await self.goto_sleep()
         except asyncio.CancelledError:
             # A new session (or local app) grabbed the robot before/mid-reset:
             # let it take over without noise.
             raise
         except Exception:
-            self.logger.warning("Idle reset to sleep failed", exc_info=True)
+            self.logger.warning("Idle reset goto_sleep failed", exc_info=True)
         finally:
             # Only clear the handle if it still points at *this* task: a
             # concurrent _cancel_idle_reset()+reschedule may have already

@@ -557,11 +557,9 @@ class Daemon:
             if goto_sleep_on_stop:
                 try:
                     self.logger.info("Putting Reachy Mini to sleep...")
-                    # Whatever the last app left behind (gravity compensation,
-                    # limp motors, a per-motor torque cut), reset_to_sleep
-                    # re-establishes position control before moving and ends
-                    # limp at the sleep pose - so no explicit disable here.
-                    await self.backend.reset_to_sleep()
+                    self.backend.set_motor_control_mode(MotorControlMode.Enabled)
+                    await self.backend.goto_sleep()
+                    self.backend.set_motor_control_mode(MotorControlMode.Disabled)
                 except Exception as e:
                     self.logger.error(f"Error while putting Reachy Mini to sleep: {e}")
                     self._status.state = DaemonState.ERROR
