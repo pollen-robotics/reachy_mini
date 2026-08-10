@@ -1,6 +1,5 @@
 import time
-from typing import cast
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 import numpy as np
 import numpy.typing as npt
@@ -27,35 +26,25 @@ VIDEO_BACKENDS = [
 
 
 def test_open_defers_initial_frame_wait_until_first_read(
+    ipc_video_source: CameraSpecs,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Camera readiness waits on first use instead of startup."""
-    camera = cast(GStreamerCamera, object.__new__(GStreamerCamera))
-    camera.logger = MagicMock()
-    camera.pipeline = MagicMock()
-    camera._appsink_video = MagicMock()
-    camera._loop = MagicMock()
-    camera._jpeg_pipeline = None
+    get_sample = MagicMock(return_value=None)
+    monkeypatch.setattr(camera_gstreamer, "get_sample", get_sample)
+    camera = GStreamerCamera(camera_specs=ipc_video_source)
 
-    monkeypatch.setattr(camera_gstreamer, "Thread", MagicMock())
-    monkeypatch.setattr(
-        camera_gstreamer.GLib,
-        "timeout_add_seconds",
-        MagicMock(),
-    )
+    try:
+        camera.open()
+        get_sample.assert_not_called()
+        assert camera.read() is None
+        assert camera.read() is None
+    finally:
+        camera.close()
 
-    camera.open()
-
-    camera._appsink_video.emit.assert_not_called()
-    assert camera.read() is None
-    assert camera.read() is None
-    assert camera._appsink_video.try_pull_sample.call_args_list == [
-        call(camera.INITIAL_FRAME_TIMEOUT_NS),
-        call(20_000_000),
-    ]
-
-    camera.close()
-    assert not camera._initial_frame_pending
+    first_call, second_call = get_sample.call_args_list
+    assert first_call.kwargs == {"timeout_ns": camera.INITIAL_FRAME_TIMEOUT_NS}
+    assert second_call.kwargs == {}
 
 
 @pytest.mark.video
@@ -160,7 +149,7 @@ def test_change_resolution_errors(backend: MediaBackend) -> None:
     with pytest.raises(RuntimeError):
         media.camera.set_resolution(CameraResolution.R1280x720at30fps)
 
-    # TODO: uncomment this when we actually support resolution change for Mujoco cameras. 
+    # TODO: uncomment this when we actually support resolution change for Mujoco cameras.
     # We currently only log a warning to avoid raising an error when the camera is initialized in `init_camera()`
     # media.camera.camera_specs = MujocoCameraSpecs()
     # with pytest.raises(RuntimeError):
