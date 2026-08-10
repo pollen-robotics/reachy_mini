@@ -82,11 +82,12 @@ export function PostOAuthSplash(): JSX.Element {
         }}
       />
       <Stack
-        alignItems="center"
-        justifyContent="center"
         spacing={1}
-        sx={{ minHeight: CONTENT_MIN_HEIGHT }}
-      >
+        sx={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: CONTENT_MIN_HEIGHT
+        }}>
         <Typography
           component="h1"
           sx={{

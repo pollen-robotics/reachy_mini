@@ -78,11 +78,15 @@ export function ConnectingView({
       aria-live="polite"
     >
       <Stack
-        alignItems="center"
-        justifyContent="center"
         spacing={3.5}
-        sx={{ flex: 1, minHeight: 0, width: '100%', px: 3 }}
-      >
+        sx={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          flex: 1,
+          minHeight: 0,
+          width: '100%',
+          px: 3
+        }}>
         {/* Hero illustration: the "Reachy connecting" hand-drawn SVG
             from the design system. Sits above the stepper to anchor
             the screen visually before the eye drops to the
@@ -124,7 +128,9 @@ export function ConnectingView({
           />
         </Stack>
 
-        <Stack alignItems="center" spacing={0.75}>
+        <Stack spacing={0.75} sx={{
+          alignItems: 'center'
+        }}>
           <Typography
             sx={{
               fontSize: TYPO.lg,

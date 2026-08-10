@@ -144,17 +144,16 @@ export function TopBar({
     >
       <Stack
         direction="row"
-        alignItems="center"
         spacing={1.25}
         sx={{
+          alignItems: 'center',
           py: 1,
           px: 2,
           // Same fixed height as the rest of the host shell expects
           // (the iframe layout reserves `--reachy-host-topbar-h`
           // px above it).
-          minHeight: 'var(--reachy-host-topbar-h)',
-        }}
-      >
+          minHeight: 'var(--reachy-host-topbar-h)'
+        }}>
         <AppLogo iconUrl={appIconUrl} emoji={appEmoji} />
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography
@@ -355,7 +354,6 @@ function AccountMenu({
           }}
         />
       </ButtonBase>
-
       <Menu
         anchorEl={anchorEl}
         open={open}
@@ -418,7 +416,9 @@ function AccountMenu({
           </ListItemIcon>
           <ListItemText
             primary="Sign out"
-            primaryTypographyProps={{ fontSize: 14, fontWeight: 500 }}
+            slotProps={{
+              primary: { sx: { fontSize: 14, fontWeight: 500 } }
+            }}
           />
         </MenuItem>
       </Menu>

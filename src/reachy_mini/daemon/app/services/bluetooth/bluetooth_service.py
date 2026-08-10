@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
@@ -959,13 +960,26 @@ class BluetoothCommandService:
             ssid = command_str[len("WIFI_FORGET ") :]
             self._run_async(lambda: _wifi_forget(ssid))
             return "OK: working"
+        # Set the robot display name over BLE (end of the setup flow). Mutating,
+        # so it requires a live TTL session like the WiFi commands. The name can
+        # contain spaces, so everything after "SET_NAME " is the raw value.
+        elif upper.startswith("SET_NAME "):
+            if not self._is_authed():
+                return "ERROR: Not connected. Please authenticate first."
+            name = command_str[len("SET_NAME ") :].strip()
+            self._run_async(lambda: _set_robot_name(name))
+            return "OK: working"
 
         # else if command starts with "CMD_xxxxx" check if  commands directory contains the said named script command xxxx.sh and run its, show output or/and send to read
         elif command_str.startswith("CMD_"):
             if not self.connected:
                 return "ERROR: Not connected. Please authenticate first."
             try:
-                script_name = command_str[4:].strip() + ".sh"
+                # Constrain to a bare filename so it cannot escape commands/.
+                raw_name = command_str[4:].strip().split("/")[-1]
+                if not re.fullmatch(r"[A-Za-z0-9_-]+", raw_name):
+                    return f"ERROR: Invalid command '{raw_name}'"
+                script_name = raw_name + ".sh"
                 script_path = os.path.join("commands", script_name)
                 if os.path.isfile(script_path):
                     try:
@@ -1475,6 +1489,30 @@ def _wifi_connect_sealed(blob: str) -> str:
         if e.code == 409:
             return "ERROR: Busy"
         return "ERROR: Connect request failed"
+    except urllib.error.URLError:
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _set_robot_name(name: str) -> str:
+    """Persist + live-apply the robot display name (proxy to the daemon).
+
+    Relays to the daemon's ``/api/daemon/robot-name`` route, which persists
+    the name and applies it live (status + central relay + mDNS) so it takes
+    effect without a restart. Best-effort by design: naming is the last,
+    non-critical step of setup.
+    """
+    name = name.strip()
+    if not name:
+        return "ERROR: Missing name"
+    try:
+        _daemon_request("POST", "/api/daemon/robot-name", data={"name": name})
+        return f"OK: Named {name}"
+    except urllib.error.HTTPError as e:
+        if e.code == 422:
+            return "ERROR: Invalid name"
+        return "ERROR: Set name failed"
     except urllib.error.URLError:
         return "ERROR: Daemon unreachable"
     except Exception as e:

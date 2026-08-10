@@ -111,7 +111,9 @@ export function PickerView({
             py: 4,
           }}
         >
-          <Stack alignItems="center" spacing={2}>
+          <Stack spacing={2} sx={{
+            alignItems: 'center'
+          }}>
             <HeroBuste />
             <RobotsHeader
               isRefreshing={isRefreshing}
@@ -149,7 +151,6 @@ export function PickerView({
           )}
         </Stack>
       </Stack>
-
       <StickyRefreshBar
         onRefresh={onRefresh}
         isRefreshing={isRefreshing}
@@ -210,7 +211,12 @@ function RobotsHeader({
   }, [hasRobots, hasError, isRefreshing, count]);
 
   return (
-    <Stack alignItems="center" spacing={0.5} sx={{ width: '100%' }}>
+    <Stack
+      spacing={0.5}
+      sx={{
+        alignItems: 'center',
+        width: '100%'
+      }}>
       <Typography
         component="h1"
         sx={{
@@ -297,10 +303,11 @@ function RemoteRobotCard({
     >
       <Stack
         direction="row"
-        alignItems="center"
         spacing={2}
-        sx={{ width: '100%' }}
-      >
+        sx={{
+          alignItems: 'center',
+          width: '100%'
+        }}>
         <CardAvatar />
         {/* Two-row identity grid: name + transport chip, then id.
             Mirrors the mobile `RemoteRobotCard` so users moving
@@ -309,10 +316,11 @@ function RemoteRobotCard({
         <Stack sx={{ flex: 1, minWidth: 0 }} spacing={0.25}>
           <Stack
             direction="row"
-            alignItems="center"
             spacing={1}
-            sx={{ minWidth: 0 }}
-          >
+            sx={{
+              alignItems: 'center',
+              minWidth: 0
+            }}>
             <Typography
               sx={{
                 minWidth: 0,
@@ -483,17 +491,16 @@ function StickyRefreshBar({
 
   return (
     <Stack
-      alignItems="center"
       sx={{
+        alignItems: 'center',
         width: '100%',
         flexShrink: 0,
         pt: 1.5,
         pb: 2,
         px: 2,
         bgcolor: 'background.default',
-        borderTop: (theme) => `1px solid ${theme.palette.divider}`,
-      }}
-    >
+        borderTop: (theme) => `1px solid ${theme.palette.divider}`
+      }}>
       <Button
         variant="text"
         color="primary"
@@ -590,10 +597,11 @@ function LoadingState(): JSX.Element {
   return (
     <StateCard>
       <Stack
-        alignItems="center"
         spacing={1.5}
-        sx={{ color: 'text.secondary' }}
-      >
+        sx={{
+          alignItems: 'center',
+          color: 'text.secondary'
+        }}>
         <CircularProgress size={24} sx={{ color: 'text.secondary' }} />
         <Typography sx={{ fontSize: TYPO.sm, fontWeight: FONT_WEIGHT.medium }}>
           Asking Hugging Face for your robots…
@@ -613,10 +621,12 @@ function CenteredMessageState({
   return (
     <StateCard>
       <Stack
-        alignItems="center"
         spacing={0.75}
-        sx={{ textAlign: 'center', maxWidth: 280 }}
-      >
+        sx={{
+          alignItems: 'center',
+          textAlign: 'center',
+          maxWidth: 280
+        }}>
         <Typography
           sx={{
             fontSize: TYPO.lg,

@@ -239,6 +239,46 @@
         }
       }
     },
+    "/api/apps/start-app/{app_name}/no-evict": {
+      "post": {
+        "summary": "Start App No Evict",
+        "description": "Start an app only when the managed robot slot can be acquired atomically.",
+        "operationId": "start_app_no_evict_api_apps_start_app__app_name__no_evict_post",
+        "parameters": [
+          {
+            "name": "app_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/apps/restart-current-app": {
       "post": {
         "summary": "Restart App",
@@ -714,6 +754,62 @@
         }
       }
     },
+    "/api/daemon/robot-name": {
+      "get": {
+        "summary": "Get Robot Display Name",
+        "description": "Return the robot's current display name.\n\nReports the effective/advertised name: the persisted override when a\nclient has renamed the robot, otherwise the ``--robot-name`` default the\ndaemon is running with. A client can pre-fill a rename field from this\nwithout having to fall back to the daemon status for the default.",
+        "operationId": "get_robot_display_name_api_daemon_robot_name_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RobotNameResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Set Robot Display Name",
+        "description": "Persist a new robot display name and apply it live (no restart).\n\nPersists the name to disk, then refreshes the advertised copies so the\nrename takes effect immediately: the daemon status + central relay (via\n``Daemon.apply_robot_name``) and the LAN mDNS record. This is the REST\nentry point used by the BLE setup service; the WebRTC ``set_robot_name``\ncommand goes through the same live-apply path on the backend.",
+        "operationId": "set_robot_display_name_api_daemon_robot_name_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RobotNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RobotNameResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/daemon/hardware-id": {
       "get": {
         "summary": "Get Robot Hardware Id",
@@ -1059,6 +1155,113 @@
                     "type": "string"
                   },
                   "title": "Response Cancel Oauth Session Api Hf Auth Oauth Session  Session Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/device/start": {
+      "post": {
+        "summary": "Start Device Oauth",
+        "description": "Start a device-code OAuth login.\n\nReturns a `user_code` and `verification_uri(_complete)` to show the user, plus\na `session_id` to poll via `/oauth/device/status/{session_id}`.",
+        "operationId": "start_device_oauth_api_hf_auth_oauth_device_start_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Start Device Oauth Api Hf Auth Oauth Device Start Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/device/status/{session_id}": {
+      "get": {
+        "summary": "Get Device Oauth Status",
+        "description": "Poll for device-code login completion.\n\nOn the first poll that reports success, bring the central relay up (a\ntoken-less boot has no relay instance yet), mirroring the OAuth callback.",
+        "operationId": "get_device_oauth_status_api_hf_auth_oauth_device_status__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Device Oauth Status Api Hf Auth Oauth Device Status  Session Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/device/session/{session_id}": {
+      "delete": {
+        "summary": "Cancel Device Oauth Session",
+        "description": "Cancel a pending device-code login session.",
+        "operationId": "cancel_device_oauth_session_api_hf_auth_oauth_device_session__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Cancel Device Oauth Session Api Hf Auth Oauth Device Session  Session Id  Delete"
                 }
               }
             }
@@ -2120,7 +2323,7 @@
     "/api/state/doa": {
       "get": {
         "summary": "Get Doa",
-        "description": "Get the Direction of Arrival from the microphone array.\n\nReturns the angle in radians (0=left, \u03c0/2=front, \u03c0=right) and speech detection status.\nReturns None if the audio device is not available.",
+        "description": "Get the Direction of Arrival from the microphone array.\n\nReturns the angle in radians (0=left, \u03c0/2=front, \u03c0=right) and speech detection status.\nReturns None if the audio device is not available or no reading has\nlanded yet (the first one lands within ~100 ms of the first request).",
         "operationId": "get_doa_api_state_doa_get",
         "responses": {
           "200": {
@@ -2130,7 +2333,7 @@
                 "schema": {
                   "anyOf": [
                     {
-                      "$ref": "#/components/schemas/DoAInfo"
+                      "$ref": "#/components/schemas/DoaSnapshot"
                     },
                     {
                       "type": "null"
@@ -2868,7 +3071,7 @@
         "title": "DaemonStatus",
         "description": "Status of the Reachy Mini daemon."
       },
-      "DoAInfo": {
+      "DoaSnapshot": {
         "properties": {
           "angle": {
             "type": "number",
@@ -2884,8 +3087,8 @@
           "angle",
           "speech_detected"
         ],
-        "title": "DoAInfo",
-        "description": "Direction of Arrival info from the microphone array."
+        "title": "DoaSnapshot",
+        "description": "Sound Direction of Arrival reading (ReSpeaker mic array).\n\n``angle`` is in radians: 0 = left, \u03c0/2 = front, \u03c0 = right."
       },
       "EnableTrackingRequest": {
         "properties": {
@@ -3133,7 +3336,7 @@
           "doa": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DoAInfo"
+                "$ref": "#/components/schemas/DoaSnapshot"
               },
               {
                 "type": "null"
@@ -3620,6 +3823,40 @@
         ],
         "title": "RobotBackendStatus",
         "description": "Status of the Robot Backend."
+      },
+      "RobotNameRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "RobotNameRequest",
+        "description": "Body for setting the robot display name."
+      },
+      "RobotNameResponse": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "title": "RobotNameResponse",
+        "description": "The robot's current display name (``null`` only if none is resolvable)."
       },
       "SourceKind": {
         "type": "string",

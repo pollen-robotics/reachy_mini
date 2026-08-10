@@ -361,6 +361,18 @@ export interface ReachyMiniInstance extends EventTarget {
     setMicrophoneVolume(volume: number): Promise<number | null>;
 
     /**
+     * Query the persisted robot display name. `null` when none is set, the
+     * channel isn't open, or the daemon predates the `get_robot_name` command.
+     */
+    getRobotName(): Promise<string | null>;
+    /**
+     * Set and persist the robot display name. Applied live by the daemon
+     * (status + central relay + mDNS), so it takes effect right away without a
+     * restart. Resolves with the stored name, or `null` on error.
+     */
+    setRobotName(name: string): Promise<string | null>;
+
+    /**
      * Apply a batch of XVF3800 audio-board parameters on the robot.
      * Mirrors the on-robot `AudioBase.apply_audio_config()` SDK call.
      * Resolves `true` when every parameter was written (and, when

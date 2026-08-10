@@ -289,23 +289,23 @@ Open the Reachy Mini dashboard and click **Install** on any community app. This 
 
 ### Via the REST API
 
+The daemon host is `localhost:8000` on Lite (daemon on your machine) and `reachy-mini.local:8000` (or the robot's IP) on Wireless — substitute it for `<HOST>` below.
+
 ```bash
 # Install from Hugging Face
-curl -X POST http://localhost:8000/api/apps/install \
+curl -X POST http://<HOST>/api/apps/install \
   -H "Content-Type: application/json" \
   -d '{"url": "https://huggingface.co/spaces/<user>/<app_name>"}'
 
 # Start an app
-curl -X POST http://localhost:8000/api/apps/start-app/<app_name>
+curl -X POST http://<HOST>/api/apps/start-app/<app_name>
 
 # Stop the current app
-curl -X POST http://localhost:8000/api/apps/stop-current-app
+curl -X POST http://<HOST>/api/apps/stop-current-app
 
 # List installed apps
-curl http://localhost:8000/api/apps/list
+curl http://<HOST>/api/apps/list
 ```
-
-Replace `localhost` with `reachy-mini.local` or the robot's IP address for the Wireless version.
 
 ### Offline / manual deployment for a Wireless unit
 
@@ -359,7 +359,7 @@ sudo journalctl -u reachy-mini-daemon --since '5 min ago' | grep -v "uvicorn\|GE
 
 | Problem | Solution |
 |---------|----------|
-| "An app is already running" | Stop the current app first: `curl -X POST http://localhost:8000/api/apps/stop-current-app` |
+| "An app is already running" | Stop the current app first: `curl -X POST http://<HOST>/api/apps/stop-current-app` (`<HOST>` is `localhost:8000` on Lite, `reachy-mini.local:8000` on Wireless) |
 | Daemon in a bad state | Restart it: `sudo systemctl restart reachy-mini-daemon` (wait ~30s before starting an app) |
 | App not picking up code changes | Restart the app. If you deployed manually, also clear bytecode: `rm -rf __pycache__` |
 

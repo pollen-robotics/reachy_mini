@@ -135,6 +135,16 @@ class RobotBackend(Backend):
         else:
             self.bmi088 = None
 
+        # Latest IMU reading as (msg, monotonic ts), refreshed by the control
+        # loop and served by `get_imu_data`. Only `_read_imu` (see its
+        # docstring) may touch the BMI088.
+        self._last_imu: tuple[ImuDataMsg, float] | None = None
+
+    # A cached reading older than this is treated as absent: 0.5 s is 25
+    # control-loop periods at 50 Hz, so the loop is stalled (e.g. died on a
+    # motor error) and the data no longer describes the present.
+    IMU_CACHE_FRESH_S = 0.5
+
     def run(self) -> None:
         """Run the control loop for the robot backend.
 
@@ -257,10 +267,16 @@ class RobotBackend(Backend):
                         )
                     )
 
-                    if self.imu_publisher is not None and self.bmi088 is not None:
-                        imu_msg = self.get_imu_data()
+                    # Note: this block inherits the joint/pose publisher
+                    # guards above, so the IMU cache is only refreshed once
+                    # `WSServer.start()` has wired the publishers (it sets
+                    # all four together).
+                    if self.bmi088 is not None:
+                        imu_msg = self._read_imu()
                         if imu_msg is not None:
-                            self.imu_publisher.put(imu_msg)
+                            self._last_imu = (imu_msg, time.monotonic())
+                            if self.imu_publisher is not None:
+                                self.imu_publisher.put(imu_msg)
 
                 self.last_alive = time.time()
 
@@ -321,6 +337,8 @@ class RobotBackend(Backend):
 
     def get_status(self) -> "RobotBackendStatus":
         """Get the current status of the robot backend."""
+        self._status.ready = self.ready.is_set() and not self.should_stop.is_set()
+        self._status.last_alive = self.last_alive
         self._status.error = self.error
         self._status.motor_control_mode = self.motor_control_mode
         return self._status
@@ -493,7 +511,29 @@ class RobotBackend(Backend):
         return np.array(self.get_all_joint_positions()[1])
 
     def get_imu_data(self) -> ImuDataMsg | None:
-        """Get current IMU data (accelerometer, gyroscope, quaternion, temperature).
+        """Return the latest IMU reading cached by the control loop.
+
+        Returns:
+            An ImuDataMsg, or None if the IMU is missing or the cache is
+            older than ``IMU_CACHE_FRESH_S``.
+
+        """
+        cached = self._last_imu
+        if cached is None:
+            return None
+        msg, ts = cached
+        if time.monotonic() - ts > self.IMU_CACHE_FRESH_S:
+            return None
+        return msg
+
+    def _read_imu(self) -> ImuDataMsg | None:
+        """Read the BMI088 directly. Control-loop only.
+
+        The loop must stay the sensor's only reader: `get_quat(dt)`
+        integrates the orientation filter with a fixed loop period, so an
+        on-demand read would both race the i2c conversation and inject a
+        spurious integration step. Everyone else reads the `_last_imu`
+        cache through `get_imu_data`.
 
         Returns:
             An ImuDataMsg, or None if IMU is not available.
@@ -694,5 +734,3 @@ class RobotBackend(Backend):
 
         result: bytes = bytes(self.c.write_raw_packet(packet))
         return result
-
-

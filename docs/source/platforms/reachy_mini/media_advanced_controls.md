@@ -130,3 +130,28 @@ python src/reachy_mini/media/audio_control_utils.py DOA_VALUE_RADIANS
 # DOA_VALUE_RADIANS: (0.5410520434379578, 1.0)
 ```
 This feature is also directly available from [the SDK](../../SDK/python-sdk.md#sensors--media).
+
+
+### Speaker equalization
+
+The plastic head shell acts as a small enclosure that colors the speaker output, making it sound a bit "boxy" — a low-mid resonance plus a muffled presence range. To compensate, the daemon inserts a GStreamer [`equalizer-10bands`](https://gstreamer.freedesktop.org/documentation/equalizer/equalizer-10bands.html) on the speaker output and applies a fixed per-band correction.
+
+The correction was derived from a differential acoustic measurement (the speaker response *with* vs. *without* the shell): it cuts the head-cavity bass boom and lifts the muffled 1–8 kHz range. The default gains (dB), one per band, are:
+
+| Band (Hz) | 29 | 59 | 119 | 237 | 474 | 947 | 1889 | 3770 | 7523 | 15011 |
+|-----------|-----|-------|------|------|------|------|------|------|------|-------|
+| Gain (dB) | 0.0 | -13.2 | -5.6 | -4.3 | -4.3 | +5.8 | +4.7 | +4.9 | +3.4 | 0.0 |
+
+![Speaker EQ calibration](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/speaker_eq_calibration.png)
+
+*Top: measured speaker response with the shell on vs. off. Bottom: the shell coloration and the applied 10-band correction — its mirror image.*
+
+You can override these gains — or disable the EQ — through the daemon config file `~/.config/reachy_mini/daemon_config.json` (on the Wireless robot: `/home/pollen/.config/reachy_mini/daemon_config.json`):
+
+```json
+{ "speaker_eq_gains": [0.0, -13.21, -5.55, -4.28, -4.32, 5.80, 4.65, 4.90, 3.41, 0.0] }
+```
+
+Provide exactly 10 values (dB), in the band order above. Set them all to `0.0` to bypass the equalizer entirely, then restart the daemon to apply the change.
+
+To re-derive gains for a different shell or speaker, see the calibration tool at [`src/reachy_mini/tools/speaker_eq_calibration/`](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/tools/speaker_eq_calibration).

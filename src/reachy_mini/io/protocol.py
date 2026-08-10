@@ -7,8 +7,10 @@ Client->Server command types:
     goto_target, wake_up, goto_sleep, play_sound,
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
-    get_state, get_version, start_recording, stop_recording, append_record,
-    subscribe_logs, unsubscribe_logs, restart_daemon, start_update,
+    get_state, get_version, get_imu, start_recording, stop_recording, append_record,
+    get_robot_name, set_robot_name, delete_hf_token,
+    subscribe_logs, unsubscribe_logs, subscribe_pose, unsubscribe_pose,
+    restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
     play_uploaded_move, cancel_move,
@@ -17,6 +19,7 @@ Client->Server command types:
     set_speech_offsets, set_wobbling, set_head_tracking, get_tracked_face
 
 Server->Client message types:
+    welcome (pushed once when the data channel opens),
     joint_positions, head_pose, imu_data, recorded_data,
     daemon_status, task_progress, log_line, log_stream_error,
     update_progress
@@ -30,6 +33,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, TypeAdapter
 
 from reachy_mini.utils.interpolation import InterpolationTechnique
+from reachy_mini.utils.robot_name import MAX_ROBOT_NAME_LENGTH
 
 # ------------------------------------------------------------------
 # Shared enums
@@ -92,6 +96,52 @@ class FaceTarget(BaseModel):
     y: float | None = None
     roll: float | None = None
     ts: float | None = None
+
+
+class DoaSnapshot(BaseModel):
+    """Sound Direction of Arrival reading (ReSpeaker mic array).
+
+    ``angle`` is in radians: 0 = left, π/2 = front, π = right.
+    """
+
+    angle: float
+    speech_detected: bool
+
+
+class StateSnapshot(BaseModel):
+    """Present-state snapshot sent to WebRTC clients.
+
+    Payload of both the polled ``get_state`` reply (``{"state": ...}``)
+    and the pushed pose-stream frames (see :class:`PoseFrame`). The field
+    names are the wire contract already parsed by released JS SDKs —
+    keep them stable.
+
+    ``head_joint_positions`` carries the 7 per-motor head values (body
+    yaw at index 0), which is genuinely distinct from the ``head_pose``
+    matrix; the antennas need no such twin since ``antennas`` already IS
+    the two motor values.
+    """
+
+    head_pose: Optional[list[list[float]]] = None
+    antennas: Optional[list[float]] = None
+    head_joint_positions: Optional[list[float]] = None
+    body_yaw: float
+    motor_mode: MotorControlMode
+    is_recording: bool
+    is_move_running: bool
+    face_target: FaceTarget
+    doa: Optional[DoaSnapshot] = None
+
+
+class PoseFrame(BaseModel):
+    """One pushed pose-stream frame.
+
+    The state snapshot plus a monotonic ``seq`` so clients can drop
+    stale/out-of-order frames on the unordered ``pose`` channel.
+    """
+
+    state: StateSnapshot
+    seq: int
 
 
 class DaemonStatus(BaseModel):
@@ -246,6 +296,12 @@ class GetHardwareIdCmd(BaseModel):
     type: Literal["get_hardware_id"] = "get_hardware_id"
 
 
+class GetImuCmd(BaseModel):
+    """Query the current IMU reading (`ImuDataMsg`; null on IMU-less robots)."""
+
+    type: Literal["get_imu"] = "get_imu"
+
+
 class StartRecordingCmd(BaseModel):
     """Start recording joint data."""
 
@@ -292,6 +348,38 @@ class GetMicrophoneVolumeCmd(BaseModel):
     """Query the current input (microphone) volume."""
 
     type: Literal["get_microphone_volume"] = "get_microphone_volume"
+
+
+# Robot display name. A persistent, robot-wide string (not per-session):
+# advertised to the central relay / mDNS and shown in the apps' robot list.
+# Defaults to the daemon's --robot-name; a client rename is stored on the
+# robot and wins over the default at the next daemon start.
+class GetRobotNameCmd(BaseModel):
+    """Query the persisted robot display name (null if unset)."""
+
+    type: Literal["get_robot_name"] = "get_robot_name"
+
+
+class SetRobotNameCmd(BaseModel):
+    """Set and persist the robot display name."""
+
+    type: Literal["set_robot_name"] = "set_robot_name"
+    name: str = Field(..., min_length=1, max_length=MAX_ROBOT_NAME_LENGTH)
+
+
+# Hugging Face account sign-out over the DataChannel.
+#
+# Remote counterpart of `DELETE /api/hf-auth/token` (`routers/hf_auth.py`):
+# clears the robot's own stored HF token so it de-registers from the
+# central signaling relay (a null-token notification drops the relay to
+# WAITING_FOR_TOKEN). Exposed over the typed transport so a Central-routed
+# owner can unlink the robot without an LAN HTTP path. The robot stays
+# offline until it is re-provisioned (BLE setup or the robot-side OAuth
+# begin URL).
+class DeleteHfTokenCmd(BaseModel):
+    """Delete the robot's stored Hugging Face token (sign the robot out)."""
+
+    type: Literal["delete_hf_token"] = "delete_hf_token"
 
 
 class SetSpeechOffsetsCmd(BaseModel):
@@ -349,6 +437,26 @@ class UnsubscribeLogsCmd(BaseModel):
     """Stop the calling peer's log subscription. No-op if no stream."""
 
     type: Literal["unsubscribe_logs"] = "unsubscribe_logs"
+
+
+class SubscribePoseCmd(BaseModel):
+    """Subscribe the calling peer to the pushed pose stream.
+
+    While subscribed, the daemon pushes the robot's present state (same
+    envelope as ``get_state``, plus a monotonic ``seq``) to this peer over
+    the dedicated unreliable/unordered ``pose`` data channel at ~30 Hz. This
+    replaces polling ``get_state`` for a live mirror: pushing is immune to
+    the Wi-Fi round-trip latency and head-of-line blocking that make polling
+    lag. Idempotent - safe to send again on reconnect.
+    """
+
+    type: Literal["subscribe_pose"] = "subscribe_pose"
+
+
+class UnsubscribePoseCmd(BaseModel):
+    """Stop the calling peer's pose stream. No-op if not subscribed."""
+
+    type: Literal["unsubscribe_pose"] = "unsubscribe_pose"
 
 
 # XVF3800 audio-board configuration over the DataChannel.
@@ -742,6 +850,7 @@ AnyCommand = Annotated[
     | GetStateCmd
     | GetVersionCmd
     | GetHardwareIdCmd
+    | GetImuCmd
     | StartRecordingCmd
     | StopRecordingCmd
     | AppendRecordCmd
@@ -753,8 +862,13 @@ AnyCommand = Annotated[
     | GetVolumeCmd
     | SetMicrophoneVolumeCmd
     | GetMicrophoneVolumeCmd
+    | GetRobotNameCmd
+    | SetRobotNameCmd
+    | DeleteHfTokenCmd
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
+    | SubscribePoseCmd
+    | UnsubscribePoseCmd
     | RestartDaemonCmd
     | StartUpdateCmd
     | UploadMoveStartCmd

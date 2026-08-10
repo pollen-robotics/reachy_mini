@@ -105,11 +105,27 @@ class AppManager:
             AppState.STOPPING,
         )
 
+    def get_running_app_url(self) -> str | None:
+        """Return the running app's ``custom_app_url``, or ``None``.
+
+        The JSON-RPC relay uses this to reach the app's ``/rpc`` endpoint. The
+        URL is read from the app's ``main.py`` (same cheap scrape the launcher
+        uses); the relay normalizes the host (``0.0.0.0`` -> ``127.0.0.1``).
+        """
+        if self.current_app is None or not self.is_app_running():
+            return None
+        return local_common_venv._get_custom_app_url_from_file(
+            self.current_app.status.info.name,
+            self.wireless_version,
+            self.desktop_app_daemon,
+        )
+
     async def start_app(
         self,
         app_name: str,
         *args: Any,
         evict_remote: bool = True,
+        keep_remote: bool = False,
         **kwargs: Any,
     ) -> AppStatus:
         """Start the app as a subprocess.
@@ -117,6 +133,12 @@ class AppManager:
         Raises RuntimeError if an app is already running. When
         ``evict_remote`` is false, a remote WebRTC session holding the app slot
         makes the start fail instead of being evicted.
+
+        ``keep_remote`` (used when the start is *requested by* the connected
+        remote client, e.g. the mobile app driving a conversation) takes the
+        local-app slot **without** evicting the remote session: the client is a
+        controller of this app, not a competitor for the robot, so its
+        DataChannel must survive. Takes precedence over ``evict_remote``.
         """
         if self.is_app_running():
             raise RuntimeError("An app is already running")
@@ -128,12 +150,20 @@ class AppManager:
         # the normal case, but the lock is the single source of truth
         # shared with the relay thread).
         if self.daemon is not None:
-            if evict_remote:
-                await self.daemon.robot_app_lock.acquire_local_evicting_remote(
-                    app_name
-                )
+            if keep_remote:
+                self.daemon.robot_app_lock.acquire_local_keeping_remote(app_name)
+            elif evict_remote:
+                await self.daemon.robot_app_lock.acquire_local_evicting_remote(app_name)
             elif not self.daemon.robot_app_lock.try_acquire_local(app_name):
                 raise RuntimeError("The robot app slot is already in use")
+
+            # We now own the app slot. Cancel any idle reset the daemon
+            # scheduled when the slot last became free: this local app runs its
+            # own wake/motion sequence and must not fight a stale goto_sleep.
+            # Threadsafe; no-op if the backend loop isn't up.
+            backend = getattr(self.daemon, "backend", None)
+            if backend is not None:
+                backend.cancel_idle_reset()
 
         try:
             # Get module name and Python path for subprocess execution.
@@ -239,9 +269,7 @@ class AppManager:
                 if self.current_app is not None:
                     if returncode == 0:
                         self.current_app.status.state = AppState.DONE
-                        self.logger.getChild("runner").info(
-                            f"App {app_name} finished"
-                        )
+                        self.logger.getChild("runner").info(f"App {app_name} finished")
                     else:
                         self.current_app.status.state = AppState.ERROR
                         error_msg = "\n".join(stderr_lines[-10:])  # Last 10 lines

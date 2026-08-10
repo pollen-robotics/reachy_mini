@@ -49,6 +49,20 @@ class AudioDoA:
         self._closed = False
         self._lock = Lock()
 
+    @property
+    def available(self) -> bool:
+        """True while a ReSpeaker device is held (probe succeeded, not closed)."""
+        return self._respeaker is not None
+
+    @property
+    def respeaker(self) -> Optional[ReSpeaker]:
+        """The underlying ReSpeaker handle, for raw parameter access.
+
+        Callers sharing this handle are responsible for serializing their
+        USB conversations with any concurrent ``get_DoA()`` reader.
+        """
+        return self._respeaker
+
     def get_DoA(self) -> tuple[float, bool] | None:
         """Read the current Direction of Arrival from the ReSpeaker.
 

@@ -46,11 +46,15 @@ export function LeavingView(): JSX.Element {
       aria-live="polite"
     >
       <Stack
-        alignItems="center"
-        justifyContent="center"
         spacing={2}
-        sx={{ flex: 1, minHeight: 0, width: '100%', px: 3 }}
-      >
+        sx={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          flex: 1,
+          minHeight: 0,
+          width: '100%',
+          px: 3
+        }}>
         {/* Discreet, thin-stroked spinner. Size + thickness tuned
             to read as "a small ambient activity indicator" rather
             than "the focal point of the screen". `text.secondary`

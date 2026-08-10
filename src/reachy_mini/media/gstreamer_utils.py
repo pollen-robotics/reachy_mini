@@ -63,7 +63,10 @@ def get_sample(
     Args:
         appsink: The GStreamer AppSink element to pull from.
         logger: Logger for warnings.
-        timeout_ns: Maximum time to wait for a sample, in nanoseconds.
+        timeout_ns: How long to wait for a sample, in nanoseconds. Defaults to
+            20 ms, which suits video-rate pulling where a missed frame is fine.
+            One-shot encoders (e.g. ``read_jpeg``) need a larger value so the
+            pipeline has time to preroll on a loaded machine.
 
     Returns:
         Raw bytes of the buffer, or ``None`` if no sample was available.
