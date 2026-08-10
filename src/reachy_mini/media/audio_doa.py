@@ -17,7 +17,6 @@ Note:
 
 import logging
 from threading import Lock
-from typing import Optional
 
 from reachy_mini.media.audio_control_utils import ReSpeaker, init_respeaker_usb
 
@@ -44,29 +43,44 @@ class AudioDoA:
 
     def __init__(self) -> None:
         """Initialize the DoA helper without probing USB until first use."""
-        self._respeaker: Optional[ReSpeaker] = None
-        self._initialization_attempted = False
+        self._respeaker: ReSpeaker | None = None
+        self._discovery_complete = False
         self._closed = False
         self._lock = Lock()
 
     @property
-    def available(self) -> bool:
-        """True while a ReSpeaker device is held (probe succeeded, not closed)."""
-        return self._respeaker is not None
+    def discovery_complete(self) -> bool:
+        """Return whether ReSpeaker discovery has completed."""
+        return self._discovery_complete
 
     @property
-    def respeaker(self) -> Optional[ReSpeaker]:
-        """The underlying ReSpeaker handle, for raw parameter access.
+    def available(self) -> bool:
+        """Return whether a ReSpeaker is available, discovering it on demand."""
+        with self._lock:
+            return self._discover_respeaker() is not None
+
+    @property
+    def respeaker(self) -> ReSpeaker | None:
+        """Return the ReSpeaker handle, discovering it on demand.
 
         Callers sharing this handle are responsible for serializing their
         USB conversations with any concurrent ``get_DoA()`` reader.
         """
+        with self._lock:
+            return self._discover_respeaker()
+
+    def _discover_respeaker(self) -> ReSpeaker | None:
+        if self._closed:
+            return None
+        if not self._discovery_complete:
+            self._respeaker = init_respeaker_usb()
+            self._discovery_complete = True
         return self._respeaker
 
     def get_DoA(self) -> tuple[float, bool] | None:
         """Read the current Direction of Arrival from the ReSpeaker.
 
-        The USB device is discovered on the first call and reused thereafter.
+        The USB device is discovered on first demand and reused thereafter.
 
         Returns:
             A tuple ``(angle_radians, speech_detected)`` or ``None`` when
@@ -74,15 +88,11 @@ class AudioDoA:
 
         """
         with self._lock:
-            if self._closed:
-                return None
-            if not self._initialization_attempted:
-                self._respeaker = init_respeaker_usb()
-                self._initialization_attempted = True
-            if self._respeaker is None:
+            respeaker = self._discover_respeaker()
+            if respeaker is None:
                 return None
 
-            result = self._respeaker.read("DOA_VALUE_RADIANS")
+            result = respeaker.read("DOA_VALUE_RADIANS")
             if result is None:
                 return None
             return float(result[0]), bool(result[1])
@@ -105,7 +115,7 @@ def main() -> None:
 
     doa = AudioDoA()
     result = doa.get_DoA()
-    if doa._respeaker is None:
+    if not doa.available:
         print("No ReSpeaker device found. Exiting.")
         return
 

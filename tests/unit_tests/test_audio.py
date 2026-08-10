@@ -2,6 +2,7 @@ import os
 import tempfile
 import time
 import wave
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -27,6 +28,7 @@ def _spectral_cosine(a: np.ndarray, b: np.ndarray, n: int = 8192) -> float:
         return mag / (np.linalg.norm(mag) + 1e-9)
 
     return float(np.dot(spectrum(a), spectrum(b)))
+
 
 # Audio-capable backends to test
 AUDIO_BACKENDS = [
@@ -291,28 +293,24 @@ def test_play_sound_reaches_sink(audio_loopback: None) -> None:
 
 
 def test_doa_simulated(fake_respeaker, monkeypatch) -> None:
-    """DoA probes lazily and reuses the board for subsequent reads."""
-    initialization_calls = 0
-
-    def initialize_respeaker():
-        nonlocal initialization_calls
-        initialization_calls += 1
-        return fake_respeaker
-
+    """DoA discovers lazily through every public hardware access path."""
+    initialize_respeaker = MagicMock(return_value=fake_respeaker)
     monkeypatch.setattr(
         "reachy_mini.media.audio_doa.init_respeaker_usb", initialize_respeaker
     )
     from reachy_mini.media.audio_doa import AudioDoA
 
     doa = AudioDoA()
-    assert initialization_calls == 0
+    initialize_respeaker.assert_not_called()
     try:
+        assert doa.available
+        assert doa.respeaker is fake_respeaker
         result = doa.get_DoA()
         second_result = doa.get_DoA()
     finally:
         doa.close()
 
-    assert initialization_calls == 1
+    initialize_respeaker.assert_called_once_with()
     assert result is not None
     angle, speech = result
     assert isinstance(angle, float) and angle == pytest.approx(1.57)

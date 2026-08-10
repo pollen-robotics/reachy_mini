@@ -1440,6 +1440,12 @@ class Backend:
                 reading = None
             with self._doa_lock:
                 self._last_doa = reading
+            if (
+                self.doa is not None
+                and self.doa.discovery_complete
+                and not self.doa.available
+            ):
+                return
             # `wait()` returns True once stopped, False on timeout - so this
             # both paces the poll and exits promptly on shutdown.
             if self._doa_stop.wait(self.DOA_POLL_INTERVAL_S):
@@ -1455,7 +1461,7 @@ class Backend:
         the first poll hasn't landed yet (~one ``DOA_POLL_INTERVAL_S``
         after the first demand).
         """
-        if self.doa is None or not self.doa.available:
+        if self.doa is None or (self.doa.discovery_complete and not self.doa.available):
             return None
         self._note_doa_demand()
         with self._doa_lock:

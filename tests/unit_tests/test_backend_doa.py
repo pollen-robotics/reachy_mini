@@ -11,12 +11,14 @@ The ReSpeaker itself is faked; the real USB layer is exercised in
 ``test_audio_control_utils.py``.
 """
 
-from __future__ import annotations
-
 import time
+from unittest.mock import MagicMock
+
+import pytest
 
 from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackend
 from reachy_mini.io.protocol import DoaSnapshot
+from reachy_mini.media.audio_control_utils import ReSpeaker
 
 
 class FakeDoA:
@@ -32,6 +34,7 @@ class FakeDoA:
         """Configure the fixed reading, failure and blocking behaviour."""
         self.reading = reading
         self.available = available
+        self.discovery_complete = True
         self.raise_on_read = raise_on_read
         self.read_delay = read_delay
         self.calls = 0
@@ -94,6 +97,30 @@ def test_unavailable_device_never_polls() -> None:
     assert backend.read_doa() is None
     assert backend._doa_thread is None
     assert fake.calls == 0
+
+
+def test_read_doa_initializes_device_on_first_demand(
+    fake_respeaker: ReSpeaker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The first DoA demand probes in the poller, not during backend startup."""
+    initialize_respeaker = MagicMock(return_value=fake_respeaker)
+    monkeypatch.setattr(
+        "reachy_mini.media.audio_doa.init_respeaker_usb", initialize_respeaker
+    )
+    backend = MockupSimBackend(use_audio=True)
+    backend.DOA_POLL_INTERVAL_S = 0.01  # type: ignore[misc]
+
+    try:
+        assert initialize_respeaker.call_count == 0
+        assert backend.read_doa() is None
+        assert _wait_for(lambda: backend.read_doa() is not None)
+        reading = backend.read_doa()
+        assert reading is not None
+        assert reading.angle == pytest.approx(1.57)
+        assert reading.speech_detected is True
+        assert initialize_respeaker.call_count == 1
+    finally:
+        backend.close()
 
 
 def test_read_doa_starts_poller_and_serves_cache() -> None:
