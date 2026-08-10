@@ -1,1 +1,1 @@
-{"id":"2dc483831e2149cdc457217e8ecf3c79","fullName":"tests.unit_tests.test_wireless_version#test_restart_argv_matches_sudoers_whitelist","name":"test_restart_argv_matches_sudoers_whitelist","status":"passed","testResultsByEnv":{"default":"fd487081820bb005fcde9ade0ebd2f26"}}
+{"id":"2dc483831e2149cdc457217e8ecf3c79","fullName":"tests.unit_tests.test_wireless_version#test_restart_argv_matches_sudoers_whitelist","name":"test_restart_argv_matches_sudoers_whitelist","status":"passed","testResultsByEnv":{"default":"1eaf4c9221920ad2e426af9b31926775"}}

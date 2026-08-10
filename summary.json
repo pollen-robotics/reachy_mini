@@ -1,76 +1,40 @@
 {
   "stats": {
-    "total": 824,
-    "passed": 809,
+    "total": 826,
+    "passed": 811,
     "skipped": 15,
-    "new": 8
+    "new": 2
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "ecb0bbcea515eab3e1ba9e63c205583d",
-      "name": "test_update_daemon_install_failure_aborts_before_restart",
+      "id": "e0b1505f011150a9fa0b5648a03a6239",
+      "name": "test_handler_rejects_relative_path_traversal",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "fd487081820bb005fcde9ade0ebd2f26",
-      "name": "test_restart_argv_matches_sudoers_whitelist",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "ae8049dc5657b8068504129ae5facea1",
-      "name": "test_git_ref_grouping_shell_precedence",
-      "status": "passed",
-      "duration": 3
-    },
-    {
-      "id": "db32d17f37cbec2927fa07a88a0881b7",
-      "name": "test_update_apps_venv_failure_still_restarts",
+      "id": "05b48d98142a995aa10a9cbe4fdb902c",
+      "name": "test_handler_rejects_absolute_path_payload",
       "status": "passed",
       "duration": 1
-    },
-    {
-      "id": "87acc7a5f068b96151648f5726578813",
-      "name": "test_call_logger_wrapper_nonzero_raises",
-      "status": "passed",
-      "duration": 4
-    },
-    {
-      "id": "4d4b091f885ed9f1ae110ad2b297b819",
-      "name": "test_call_logger_wrapper_success",
-      "status": "passed",
-      "duration": 2
-    },
-    {
-      "id": "314e9dd7813d7e83194f4cbcdd0d6493",
-      "name": "test_update_restart_failure_propagates",
-      "status": "passed",
-      "duration": 2
-    },
-    {
-      "id": "0c11f0f5403fb2e1164dc24f19a8512b",
-      "name": "test_call_logger_wrapper_tolerated_returncode",
-      "status": "passed",
-      "duration": 5
     }
   ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 100967,
-  "createdAt": 1786110482464,
+  "duration": 100563,
+  "createdAt": 1786347557879,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "d4e02ea9-bafd-4203-9220-c2786a947b2f",
+    "reportId": "a028d786-0ea0-42ad-9c1f-83812e445f33",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31184066876",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31366469644",
   "href": "awesome/",
   "coverage": 53
 }

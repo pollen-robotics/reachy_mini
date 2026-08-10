@@ -1,1 +1,1 @@
-{"id":"141ce5c8560d4fef90a4758c4d9192a3","fullName":"tests.unit_tests.test_face_detector#test_matches_opencv_reference","name":"test_matches_opencv_reference","status":"passed","testResultsByEnv":{"default":"af30a0fa53efc64045a6b77f2c53aa09"}}
+{"id":"141ce5c8560d4fef90a4758c4d9192a3","fullName":"tests.unit_tests.test_face_detector#test_matches_opencv_reference","name":"test_matches_opencv_reference","status":"passed","testResultsByEnv":{"default":"6d4e351ebf0bb061484ab3342c274945"}}
