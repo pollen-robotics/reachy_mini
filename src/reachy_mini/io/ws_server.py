@@ -133,13 +133,9 @@ class WSServer(AbstractServer):
         await websocket.accept()
 
         queue: asyncio.Queue[str] = asyncio.Queue(maxsize=100)
-        self._clients.add(queue)
-
         if self._status_provider is not None:
-            try:
-                queue.put_nowait(self._status_provider().model_dump_json())
-            except Exception as e:
-                logger.warning("Could not get initial daemon status: %s", e)
+            queue.put_nowait(self._status_provider().model_dump_json())
+        self._clients.add(queue)
 
         send_task = asyncio.create_task(self._send_loop(websocket, queue))
         try:
