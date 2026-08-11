@@ -20,10 +20,7 @@ jobs:
           lfs: true
       - name: Install system dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
-        with:
-          packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0
-          version: 1.0
+        uses: ./.github/actions/install-system-deps
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
         with:
@@ -33,6 +30,39 @@ jobs:
         run: uv sync --frozen --all-extras --group dev
       - name: Run tests
         run: |
-          uv run pytest -vv -m 'not audio and not video and not wireless' --tb=short
+          uv run pytest -vv -m 'not audio and not video and not wireless and not webrtc' --tb=short
+        env:
+          MUJOCO_GL: disable
+      # Virtual audio card (PulseAudio null sink + ALSA `type pulse` .asoundrc)
+      # so the tests exercise the real alsasrc/alsasink fast-path
+      # (has_reachymini_asoundrc); the null sink's monitor loops playback back to
+      # capture for the play-through test. Video needs no device: the
+      # ipc_video_source fixture feeds videotestsrc -> unixfdsink into the IPC
+      # socket GStreamerCamera reads. Board/wireless tests stay excluded.
+      # Ubuntu only.
+      - name: Set up virtual sound card (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        uses: ./.github/actions/virtual-sound-card
+      - name: Run audio + video tests (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          uv run pytest -vv tests/unit_tests/test_audio.py tests/unit_tests/test_video.py \
+            -m '(audio or video) and not respeaker and not wireless' --tb=short
+        env:
+          MUJOCO_GL: disable
+      # Real WebRTC: the prebuilt gst-plugins-rs webrtc plugin gives us
+      # webrtcsrc/webrtcsink, so GstWebRTCClient and GstMediaServer construct
+      # and a gst-launch webrtcsink producer loops back to the client. Pure
+      # userspace (no robot). Ubuntu only. See tests/unit_tests/test_webrtc_*.
+      - name: Set up gst-plugins-rs webrtc plugin (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        uses: ./.github/actions/webrtc-plugin
+      - name: Run WebRTC tests (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # `-m webrtc` explicitly selects these, so a missing plugin fails
+          # loudly (see conftest.pytest_collection_modifyitems) rather than
+          # silently skipping — this job set the plugin up.
+          uv run pytest -vv -m 'webrtc and not wireless' --tb=short
         env:
           MUJOCO_GL: disable

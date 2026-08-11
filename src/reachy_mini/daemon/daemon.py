@@ -6,11 +6,13 @@ It also provides a command-line interface for easy interaction.
 """
 
 import asyncio
+import json
 import logging
 import time
+from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
 from reachy_mini.daemon.utils import (
@@ -25,6 +27,11 @@ from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 from .backend.mockup_sim import MockupSimBackend
 from .backend.mujoco import MujocoBackend
 from .backend.robot import RobotBackend
+from .jsonrpc_relay import JsonRpcRelay
+
+if TYPE_CHECKING:
+    from reachy_mini.apps.manager import AppManager
+    from reachy_mini.daemon.backend.abstract import Backend
 
 # Central signaling relay for WebRTC (optional)
 _central_relay_task: Optional[asyncio.Task[Any]] = None
@@ -84,6 +91,11 @@ class Daemon:
         self.ws_server: "WSServer | None" = None
         self.backend_run_thread: "Thread | None" = None
         self._thread_event_publish_status = Event()
+
+        # Set by the daemon FastAPI factory so `Daemon.start` can wire the
+        # JSON-RPC app relay (apps.* + conversation.* over the DataChannel).
+        self.app_manager: "AppManager | None" = None
+        self._jsonrpc_relay: "JsonRpcRelay | None" = None
 
         # Single source of truth for which managed app (local Python app or
         # remote WebRTC client) currently holds the robot's app slot. Shared
@@ -156,6 +168,26 @@ class Daemon:
         self._status.media_released = False
         self.logger.info("Media hardware re-acquired.")
 
+    def _setup_jsonrpc_relay(
+        self, backend: "Backend", app_manager: "AppManager"
+    ) -> None:
+        """Create the JSON-RPC app relay and wire it into the backend.
+
+        The relay routes ``apps.*`` locally and relays every other namespace
+        (``conversation.*`` ...) to the running app's ``/rpc``. It runs on this
+        loop; the DataChannel handler (which fires on the media thread) hops
+        frames onto it with ``run_coroutine_threadsafe``.
+        """
+        loop = asyncio.get_running_loop()
+        relay = JsonRpcRelay(app_manager, backend.broadcast_to_all_clients)
+        self._jsonrpc_relay = relay
+
+        def handler(raw: str, reply: Callable[[dict[str, Any]], None]) -> None:
+            asyncio.run_coroutine_threadsafe(relay.handle(raw, reply), loop)
+
+        backend.set_jsonrpc_handler(handler)
+        self.logger.info("JSON-RPC app relay wired to the DataChannel")
+
     async def _start_central_signaling_relay(self) -> None:
         """Start the central signaling relay for remote WebRTC access."""
         global _central_relay_task
@@ -218,19 +250,88 @@ class Daemon:
         except Exception as e:
             self.logger.debug(f"Error stopping central signaling relay: {e}")
 
+    def _on_robot_slot_free(self, expect_handoff: bool) -> None:
+        """Return the robot to a clean idle state when the app slot frees.
+
+        Wired into ``robot_app_lock`` so that when a remote session ends/drops
+        or a local app exits, the daemon - not the client - guarantees the robot
+        doesn't stay parked awake (enabled / gravity_compensation) across
+        sessions. Best-effort, non-blocking; the actual work is scheduled
+        threadsafely on the backend's loop. Fires on both graceful and abnormal
+        teardown (crash, killed tab, lost Wi-Fi), which is the whole point:
+        those paths run no client-side cleanup.
+
+        Args:
+            expect_handoff: True when the session ended on purpose to let a
+                successor take the slot, which buys the incoming session a much
+                longer grace period before the robot is put back to sleep.
+
+        """
+        backend = self.backend
+        if backend is None:
+            return
+        try:
+            backend.request_idle_reset(expect_handoff=expect_handoff)
+        except Exception as e:
+            self.logger.warning(f"Idle reset request failed: {e}")
+
+    def _on_robot_slot_acquired(self) -> None:
+        """Cancel any pending idle reset when a remote session takes the slot.
+
+        Counterpart of ``_on_robot_slot_free``: the successor now owns the
+        robot, so the previous session's grace timer must not fire under it.
+        Without this, only the successor's first data-channel command cancels
+        the timer - a WebRTC handshake slower than the handoff grace would
+        let the daemon goto_sleep mid-session.
+        """
+        backend = self.backend
+        if backend is None:
+            return
+        try:
+            backend.cancel_idle_reset()
+        except Exception as e:
+            self.logger.warning(f"Idle reset cancel failed: {e}")
+
+    def apply_robot_name(self, name: str) -> None:
+        """Apply a new robot name to the live daemon without a restart.
+
+        Refreshes the in-memory name and the daemon status, then nudges the
+        central relay so its next heartbeat advertises the new label. The
+        persistent store (``utils/robot_name``) is written by the caller
+        (the ``set_robot_name`` command handler); this only updates the
+        live/advertised copies. mDNS re-registration is wired separately in
+        the app lifespan, which owns the ``MdnsServiceRegistration``.
+
+        Safe to call from the backend's command thread: it only mutates
+        attributes and calls the relay's thread-safe name setter.
+        """
+        new_name = (name or "").strip()
+        if not new_name:
+            return
+        self.robot_name = new_name
+        self._status.robot_name = new_name
+        try:
+            from reachy_mini.media.central_signaling_relay import (
+                notify_robot_name_change,
+            )
+
+            notify_robot_name_change(new_name)
+        except Exception as e:
+            self.logger.warning(f"Failed to update relay robot name: {e}")
+
     async def start(
         self,
         sim: bool = False,
         mockup_sim: bool = False,
         serialport: str = "auto",
         scene: str = "empty",
-        localhost_only: bool = True,
         wake_up_on_start: bool = True,
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
         use_audio: bool = True,  # kept for backward compat, overridden by no_media
         hardware_config_filepath: str | None = None,
+        on_wake_up_callback: Callable[[], None] | None = None,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
 
@@ -239,13 +340,13 @@ class Daemon:
             mockup_sim (bool): If True, run in lightweight simulation mode (no MuJoCo). Defaults to False.
             serialport (str): Serial port for real motors. Defaults to "auto", which will try to find the port automatically.
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
-            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             check_collision (bool): If True, enable collision checking. Defaults to False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
             use_audio (bool): If True, enable audio. Defaults to True.
             hardware_config_filepath (str | None): Path to the hardware configuration YAML file. Defaults to None.
+            on_wake_up_callback (Callable[[], None] | None): Fired once each time the robot finishes waking up. Defaults to None.
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -256,7 +357,7 @@ class Daemon:
             return self._status.state
 
         self.logger.info(
-            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
+            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
         )
 
         # mockup-sim behaves exactly like a real robot for apps (they open webcam directly)
@@ -264,7 +365,9 @@ class Daemon:
         self._status.simulation_enabled = sim
         self._status.mockup_sim_enabled = mockup_sim
 
-        if not localhost_only:
+        # The wireless version binds all interfaces and advertises its LAN
+        # address; loopback-only configurations have no meaningful wlan_ip.
+        if self.wireless_version:
             self._status.wlan_ip = get_ip_address()
 
         # When no_media is set, override use_audio to False
@@ -277,7 +380,6 @@ class Daemon:
             "headless": headless,
             "use_audio": effective_use_audio,
             "scene": scene,
-            "localhost_only": localhost_only,
         }
 
         self.logger.info("Starting Reachy Mini daemon...")
@@ -334,10 +436,37 @@ class Daemon:
                 if self.backend is not None:
                     self.backend.setup_media_server(self._media_server)
                     self.backend.set_restart_daemon_callback(self._spawn_webrtc_restart)
+                    self.backend.set_start_update_callback(self._spawn_webrtc_update)
                 self._media_server.start()
+
+            # Reset the robot to a clean idle state whenever the managed app
+            # slot becomes free (remote session end/drop or local app exit), so
+            # no client can leave it parked awake across sessions. Registered
+            # after the backend loop is up (setup_media_server) so
+            # `request_idle_reset()` has a loop to hop onto, and *before* the
+            # relay starts so no remote session can slip through unwired.
+            self.robot_app_lock.set_on_became_free_handler(self._on_robot_slot_free)
+            # Counterpart: a remote successor taking the slot cancels any
+            # pending idle reset right away, instead of relying on its first
+            # data-channel command to do it - a handshake slower than the
+            # handoff grace would otherwise take a goto_sleep mid-session.
+            self.robot_app_lock.set_on_remote_acquired_handler(
+                self._on_robot_slot_acquired
+            )
+
+            # Wire the JSON-RPC app relay now that the backend + broadcast
+            # paths exist. Runs on this (the main) loop; the DataChannel
+            # transport schedules frames onto it.
+            if self.backend is not None and self.app_manager is not None:
+                self._setup_jsonrpc_relay(self.backend, self.app_manager)
 
                 # Start central signaling relay for remote WebRTC access
                 await self._start_central_signaling_relay()
+
+            # Wire the wake-up hook before any wake can fire (on-start below, or
+            # later via button/REST on the wireless unit, which boots asleep).
+            if on_wake_up_callback is not None:
+                self.backend.set_on_wake_up_callback(on_wake_up_callback)
 
             if wake_up_on_start:
                 try:
@@ -404,6 +533,19 @@ class Daemon:
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
 
+            # Unwire the idle-reset hooks before tearing down the relay: stopping
+            # the relay releases the remote hold on `robot_app_lock`, which would
+            # otherwise fire `_on_robot_slot_free` and race the explicit
+            # goto_sleep below with a second one.
+            self.robot_app_lock.set_on_became_free_handler(None)
+            self.robot_app_lock.set_on_remote_acquired_handler(None)
+
+            # Close the JSON-RPC app relay (drops the app /rpc connection and
+            # fails any in-flight calls) before tearing the backend down.
+            if self._jsonrpc_relay is not None:
+                await self._jsonrpc_relay.aclose()
+                self._jsonrpc_relay = None
+
             if self._media_server and not self._media_released:
                 # Stop pipeline (NULL) to release camera/audio hardware so
                 # external tools (rpicam-still, etc.) can access them.
@@ -469,7 +611,6 @@ class Daemon:
         scene: Optional[str] = None,
         headless: Optional[bool] = None,
         use_audio: Optional[bool] = None,
-        localhost_only: Optional[bool] = None,
         wake_up_on_start: Optional[bool] = None,
         goto_sleep_on_stop: Optional[bool] = None,
     ) -> "DaemonState":
@@ -482,7 +623,6 @@ class Daemon:
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to None (uses the previous value).
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to None (uses the previous value).
             use_audio (bool): If True, enable audio. Defaults to None (uses the previous value).
-            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to None (uses the previous value).
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to None (don't wake up).
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to None (don't go to sleep).
 
@@ -517,9 +657,6 @@ class Daemon:
                 "use_audio": use_audio
                 if use_audio is not None
                 else self._start_params["use_audio"],
-                "localhost_only": localhost_only
-                if localhost_only is not None
-                else self._start_params["localhost_only"],
                 "wake_up_on_start": wake_up_on_start
                 if wake_up_on_start is not None
                 else False,
@@ -559,10 +696,121 @@ class Daemon:
 
         Thread(target=_run, daemon=True, name="webrtc-restart-daemon").start()
 
+    def _spawn_webrtc_update(self, pre_release: bool = False) -> Optional[str]:
+        """Run a PyPI update of the daemon on a fresh thread.
+
+        Called from the backend's WebRTC ``start_update`` handler. Mirrors
+        ``_spawn_webrtc_restart`` and the REST ``/update/start`` endpoint:
+        ``update_reachy_mini`` upgrades the package and ends with a
+        ``systemctl restart``. We run it on a daemon thread with its own
+        asyncio loop so the caller can flush its DataChannel ack before the
+        WebRTC stack is torn down by the restart.
+
+        Returns a refusal reason string when the update is declined so the
+        caller can ack an error instead of ``ok`` (and never spawns the
+        thread in that case); returns ``None`` once the job is accepted.
+        The same guards as the REST endpoint are enforced:
+
+        * wireless-only -- the self-update path lives in
+          ``utils.wireless_version`` and has no meaning on a Lite, which is
+          updated through its host machine;
+        * an update must actually be available, otherwise we would force a
+          needless reinstall + restart of the running version;
+        * the shared ``busy_lock`` from ``routers/update.py`` is acquired so
+          a WebRTC update and a concurrent REST update can never run at the
+          same time and corrupt the venv.
+
+        Progress is fanned out to every connected client as
+        ``update_progress`` broadcasts (one per log line), mirroring the
+        REST ``WS /update/ws/logs`` stream. A successful update restarts
+        the daemon before a ``done`` event can be sent, so consumers infer
+        success from the transport teardown + reconnect.
+        """
+        if self._status.state == DaemonState.STOPPED:
+            self.logger.warning("Ignoring WebRTC start_update: daemon already stopped.")
+            return "Daemon is stopped"
+
+        # The PyPI self-update only exists on the wireless robot; a Lite is
+        # updated via its host machine, so reject it here rather than failing
+        # deep inside `update_reachy_mini`.
+        if not self.wireless_version:
+            return "start_update is only supported on Reachy Mini Wireless"
+
+        # Local import: keeps the wireless-update dependency chain out of
+        # the daemon module's import-time graph (matches routers/update.py).
+        from reachy_mini.daemon.app.routers.update import busy_lock
+        from reachy_mini.utils.wireless_version.update import update_reachy_mini
+        from reachy_mini.utils.wireless_version.update_available import (
+            is_update_available,
+        )
+
+        # Share the REST router's lock so a WebRTC-triggered update and an
+        # HTTP-triggered one are mutually exclusive (a concurrent pip install
+        # into the same venv would corrupt it). Acquire non-blocking up front
+        # so we can reject immediately; on the accepted path the worker thread
+        # owns the lock and releases it, on every rejection we release here.
+        if not busy_lock.acquire(blocking=False):
+            return "Update already in progress"
+
+        try:
+            if not is_update_available("reachy_mini", pre_release):
+                busy_lock.release()
+                return "No update available"
+        except Exception as e:
+            busy_lock.release()
+            self.logger.error(f"WebRTC start_update availability check failed: {e}")
+            return f"Update availability check failed: {e}"
+
+        backend = self.backend
+
+        def _broadcast(
+            status: str, *, line: str | None = None, error: str | None = None
+        ) -> None:
+            if backend is None:
+                return
+            payload: dict[str, Any] = {"type": "update_progress", "status": status}
+            if line is not None:
+                payload["line"] = line
+            if error is not None:
+                payload["error"] = error
+            try:
+                backend.broadcast_to_all_clients(json.dumps(payload))
+            except Exception as e:
+                self.logger.warning(f"update_progress broadcast failed: {e}")
+
+        class _ProgressHandler(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                _broadcast("in_progress", line=self.format(record))
+
+        # Dedicated logger: streams update output to clients while still
+        # propagating to the daemon's journalctl logs (propagate=True).
+        update_logger = logging.getLogger("reachy_mini.webrtc_update")
+        update_logger.setLevel(logging.INFO)
+        update_logger.handlers.clear()
+        update_logger.addHandler(_ProgressHandler())
+
+        def _run() -> None:
+            try:
+                asyncio.run(update_reachy_mini(update_logger, pre_release=pre_release))
+                _broadcast("done")
+            except Exception as e:
+                self.logger.error(f"WebRTC start_update failed: {e}")
+                _broadcast("failed", error=str(e))
+            finally:
+                # On success `update_reachy_mini` triggers a `systemctl
+                # restart` that kills this process before we get here; the
+                # release only matters when the update failed without
+                # restarting, freeing the lock for a retry.
+                busy_lock.release()
+
+        Thread(target=_run, daemon=True, name="webrtc-start-update").start()
+        return None
+
     def status(self) -> "DaemonStatus":
         """Get the current status of the Reachy Mini daemon."""
         if self.backend is not None:
             self._status.backend_status = self.backend.get_status()
+            self._status.face_target = self.backend.get_tracked_face()
 
             assert self._status.backend_status is not None, (
                 "Backend status should not be None after backend initialization."

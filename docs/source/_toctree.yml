@@ -49,16 +49,16 @@
       title: Core Concepts
     - local: SDK/quickstart
       title: Quickstart Guide
-    - local: SDK/python-sdk
-      title: Python SDK
-    - local: SDK/integration
-      title: AI Integrations
-    - local: SDK/apps
-      title: Building & Publishing Apps
-    - local: API/rest-api
-      title: REST API
     - local: SDK/javascript-sdk
       title: JavaScript SDK & Web Apps
+    - local: SDK/apps
+      title: Building & Publishing Apps
+    - local: SDK/integration
+      title: AI Integrations
+    - local: SDK/python-sdk
+      title: Python SDK
+    - local: API/rest-api
+      title: REST API
     - local: SDK/media-architecture
       title: Media Architecture
     - local: SDK/cloud-backend-consumer
@@ -84,6 +84,8 @@
       title: Minimal demo
     - local: examples/look_at
       title: Look at
+    - local: examples/head_tracking
+      title: Head Tracking
     - local: examples/sequence
       title: Sequence
     - local: examples/goto_interpolation_playground

@@ -8,7 +8,8 @@
  *
  * Strict Mode safety: the underlying `useSdk` hook stores its
  * SDK instance at module scope, so a double-mount in dev does
- * NOT create two SDK instances. See SPEC §8.1 / §8.4.
+ * NOT create two SDK instances. See APP_CREATION_GUIDE
+ * §13.5.1 (single live SDK per tab) and §13.5.4 (StrictMode safety).
  */
 import type { JSX } from 'react';
 import CssBaseline from '@mui/material/CssBaseline';

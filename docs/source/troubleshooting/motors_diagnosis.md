@@ -21,6 +21,11 @@ If you have any of the following symptoms, please follow the diagnosis steps bel
 - Open the Reachy Mini Testbench app.
 - Do a motor scan by clicking on the "Scan Motors" button.
 
+> Note: the testbench app has two different interfaces depending on the daemon is running or not.  
+> To scan and debug the motors, you need to stop the daemon first.
+> To turn off the daemon, go in the settings of the desktop app and turn off "motor backend" before running the testbench app.
+> ![daemon_off](/docs/assets/daemon_off.png)  
+
 ### Possible outcomes
 
 **1. All motors are detected:**  
@@ -60,9 +65,6 @@ Please let some slack to the usb cable to allow the head to move freely, even to
 
 
 **A motor feels broken:**
-We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty batch of Dynamixel motors. 
-
-In most reported cases, the issue affects motor number 4 or one with QC label n°2544.
 
 If one of your motors, **blinks red and feels unusually hard to move when turned off** [(example video here)](https://drive.google.com/file/d/1UHTqUcb21aFThqlr2Qcx23VWqvj_y-ly/view?usp=sharing), and you are 100% sure the motor was in the correct slot.
 

@@ -24,6 +24,7 @@ import {
     bytesToBase64,
     gzipBase64,
     clampVolume,
+    audioUploadEncoding,
 } from './upload-helpers.js';
 import type {
     ApplyAudioConfigOptions,
@@ -31,6 +32,7 @@ import type {
     AutoConnectOptions,
     AutoConnectResult,
     AutoConnectRobotChoice,
+    FaceTarget,
     MotionAwaitOptions,
     MoveData,
     PlayMoveOptions,
@@ -63,6 +65,17 @@ interface LogSubscriber {
     onError?: (error: string) => void;
 }
 
+/** One progress event from an in-flight `startDaemonUpdate()`. */
+export interface UpdateProgressEvent {
+    status: 'in_progress' | 'done' | 'failed';
+    /** A log line of the underlying update job (when `in_progress`). */
+    line?: string;
+    /** Set when `status === 'failed'`. */
+    error?: string;
+}
+
+type UpdateProgressCallback = (event: UpdateProgressEvent) => void;
+
 interface SignalingMessage {
     type?: string;
     sessionId?: string;
@@ -86,6 +99,74 @@ interface OAuthRedirectResult {
     userInfo: { preferred_username?: string; name?: string };
 }
 
+// ─── Internal constants ──────────────────────────────────────────────────────
+
+/**
+ * How long we tolerate `iceConnectionState === 'disconnected'` before
+ * surfacing it as an error. The spec defines this state as transient
+ * (browsers keep STUN keep-alives running and usually heal in 1-2 s
+ * on WiFi blips, AP roams, brief 4G dropouts). Consumers watching
+ * `iceStateChange` directly should outlive this window before
+ * showing any fatal UI.
+ */
+const ICE_DISCONNECT_GRACE_MS = 3000;
+
+/**
+ * Grace before treating `iceConnectionState === 'failed'` as terminal.
+ * The spec says `failed` IS terminal, but we've observed real
+ * `failed → connected` flips on rapid AP roams and iOS BT route
+ * changes — 1 s of debounce absorbs those without noticeably
+ * delaying a real failure.
+ */
+const ICE_FAILED_GRACE_MS = 1000;
+
+/**
+ * Ceiling on how long we'll keep `_armIceGraceOnVisibility` waiting
+ * for the tab to come back. The daemon's `webrtcsink` runs a STUN
+ * consent-freshness check (RFC 7675, ~30 s default) and unilaterally
+ * tears its side of the session down past that window, releasing the
+ * producer slot on central. If the user backgrounded the tab for
+ * longer than this, running another 3 s foreground grace is a lie —
+ * the underlying transport is gone, nothing can recover. Give up
+ * straight away so the host shows the real "session expired" UX
+ * instead of a fake "Reconnecting…" badge that's never going to
+ * heal. 60 s gives a 2× margin over the daemon-side timeout — long
+ * enough to absorb a "phone in pocket for 45 s" case, short enough
+ * to be honest with the user.
+ */
+const MAX_VISIBILITY_DEFER_MS = 60_000;
+
+/**
+ * How long a pushed pose frame keeps the periodic `get_state` poll on hold -
+ * both on the way out (no request is sent) and on the way back (a reply that
+ * arrives anyway doesn't touch the state mirror).
+ *
+ * Poll replies carry no `seq`, so they slip past the stale-frame guard: a
+ * reply that crosses a fresher pushed frame would rewind the very mirror the
+ * stream exists to smooth. While frames flow at ~30 Hz there is nothing left
+ * for the poll to add, so it stands down. Keying that on frame arrival rather
+ * than on `_poseSubRefs` keeps the poll running against a daemon that doesn't
+ * know `subscribe_pose`, and brings it back on its own if the stream stalls.
+ * A little over one 500 ms poll period, so a couple of dropped frames don't
+ * flip it back and forth.
+ */
+const POSE_STREAM_FRESH_MS = 750;
+
+/**
+ * Fail-open ceiling for a single `_slotRoundtrip` request/response.
+ * Every slot command has a strict "one reply per request" contract, so
+ * a missing reply means the daemon either never got it or - crucially -
+ * predates that command entirely: an older daemon silently drops an
+ * unknown `type` and sends nothing back, which would otherwise leave the
+ * caller's promise pending forever (e.g. a newer SDK calling a command a
+ * 1.8.x daemon doesn't implement). Resolving `null` on timeout maps
+ * cleanly onto the "unsupported / failed" value every slot caller already
+ * handles. 4 s is comfortably above a WebRTC data-channel round trip on a
+ * congested phone link while still failing fast enough that a gated UI
+ * doesn't feel hung.
+ */
+const SLOT_ROUNDTRIP_TIMEOUT_MS = 4000;
+
 export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Config ──────────────────────────────────────────────────────────
@@ -100,6 +181,19 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _state: 'disconnected' | 'connected' | 'streaming' = 'disconnected';
     private _robots: RobotInfo[] = [];
     private _robotState: RobotState = {};
+    // Highest `seq` seen on the unordered `pose` channel. Frames that arrive
+    // out of order (older seq) are dropped so a late packet can't rewind the
+    // live mirror. `null` until the first pose frame.
+    private _lastPoseSeq: number | null = null;
+    // When the last pushed pose frame was applied, used to park the periodic
+    // `get_state` poll while the stream is live (see POSE_STREAM_FRESH_MS).
+    private _lastPoseFrameAt = 0;
+    // Local refcount of pose-stream consumers (the 3D mirror, the wizard's
+    // move-end watcher, ...). The daemon's subscription is a per-peer boolean
+    // (not refcounted), so we only send `unsubscribe_pose` once the LAST local
+    // consumer releases - otherwise one consumer's cleanup would kill the
+    // stream for the others.
+    private _poseSubRefs = 0;
     private readonly _preselectedRobotId: string | null;
 
     // ─── Auth ────────────────────────────────────────────────────────────
@@ -132,6 +226,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _hardwareIdResolve: ((v: string | null) => void) | null = null;
     private _volumeResolve: ((v: number | null) => void) | null = null;
     private _micVolumeResolve: ((v: number | null) => void) | null = null;
+    private _trackedFaceResolve: ((v: FaceTarget | null) => void) | null = null;
+    private _robotNameResolve: ((v: string | null) => void) | null = null;
+    private _deleteHfTokenResolve: ((v: boolean | null) => void) | null = null;
     // applyAudioConfig() / readAudioParameter() share the same single-slot
     // pattern as the volume helpers. Separate slots so the two can be
     // in-flight concurrently without collision.
@@ -140,6 +237,18 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Log subscribers ─────────────────────────────────────────────────
     private readonly _logSubscribers: Set<LogSubscriber> = new Set();
+    private readonly _updateProgressSubscribers: Set<UpdateProgressCallback> = new Set();
+
+    // ─── JSON-RPC app control (over the same DataChannel) ────────────────
+    // rpcCall() sends {jsonrpc,id,method,params} and awaits the matching
+    // response; onNotification() subscribes to one-way events (no id) the
+    // robot/app pushes (conversation.phase/turn/transcript, ...).
+    private _rpcCounter = 0;
+    private readonly _pendingRpc = new Map<
+        string,
+        { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }
+    >();
+    private readonly _rpcListeners = new Map<string, Set<(params: Record<string, unknown>) => void>>();
 
     // ─── Broadcast waiters (playMove / playUploadedAudio) ────────────────
     private _broadcastWaiters: BroadcastWaiter[] = [];
@@ -153,6 +262,20 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _sessionReject: ((err: Error) => void) | null = null;
     private _iceConnected = false;
     private _dcOpen = false;
+
+    // ─── Resilience: ICE-blip debounce + network awareness ──────────────
+    // Backs `_scheduleIceGrace` / `_armIceGraceOnVisibility` and the
+    // `networkOnline` / `networkOffline` / `networkChange` forwarders.
+    // All three handler slots are scoped to the lifetime of a live
+    // session (installed in `startSession`, cleared in
+    // `stopSession` / `disconnect` / `_handleEndSession` /
+    // `_failSessionRejected`).
+    private _iceGraceTimer: ReturnType<typeof setTimeout> | null = null;
+    private _iceGraceReason: 'disconnected' | 'failed' | null = null;
+    private _pendingVisibilityHandler: (() => void) | null = null;
+    private _onlineHandler: (() => void) | null = null;
+    private _offlineHandler: (() => void) | null = null;
+    private _connectionChangeHandler: (() => void) | null = null;
 
     // ─── Motion completion plumbing (wake_up / goto_sleep) ───────────────
     private readonly _pendingMotionCompletions: Record<'wake_up' | 'goto_sleep', PendingMotion[]> = {
@@ -534,6 +657,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] satisfies RTCIceServer[],
         });
 
+        // Scope `networkOnline` / `networkOffline` / `networkChange`
+        // event forwarding to the lifetime of this session.
+        this._installNetworkListeners();
+
         return new Promise<void>((resolve, reject) => {
             this._sessionResolve = resolve;
             this._sessionReject = reject;
@@ -570,24 +697,70 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._pc!.oniceconnectionstatechange = () => {
                 const s = this._pc?.iceConnectionState;
                 if (!s) return;
+                // Public, granular event: every transition is visible to
+                // consumers so they can render finer UX (e.g. a transient
+                // "Reconnecting…" badge during `disconnected`) without
+                // having to attach their own handler to `_pc`.
+                this._emit('iceStateChange', { state: s });
+
                 if (s === 'connected' || s === 'completed') {
+                    // Healed — cancel any pending grace from a previous blip.
+                    this._clearIceGrace();
                     this._iceConnected = true;
                     this._checkSessionReady();
-                } else if (s === 'failed') {
-                    const err = new Error('ICE connection failed');
-                    if (this._sessionReject) {
-                        this._sessionReject(err);
-                        this._sessionResolve = null;
-                        this._sessionReject = null;
+                    return;
+                }
+                if (s === 'disconnected') {
+                    // TRANSIENT per spec — debounce before escalating.
+                    // If the tab is hidden, JS timers are throttled and
+                    // would fire unpredictably late, so defer the grace
+                    // window to the next foreground frame.
+                    if (typeof document !== 'undefined' && document.hidden) {
+                        this._armIceGraceOnVisibility();
+                    } else {
+                        this._scheduleIceGrace(ICE_DISCONNECT_GRACE_MS, 'disconnected');
                     }
-                    this._emit('error', { source: 'webrtc', error: err });
-                } else if (s === 'disconnected') {
-                    this._emit('error', { source: 'webrtc', error: new Error('ICE disconnected') });
+                    return;
+                }
+                if (s === 'failed') {
+                    // Terminal per spec, but in practice we've seen
+                    // `failed → connected` on rapid AP roams / BT route
+                    // changes on iOS. Give the ICE agent a short window
+                    // to surprise us before rejecting the session.
+                    this._scheduleIceGrace(ICE_FAILED_GRACE_MS, 'failed');
+                    return;
                 }
             };
 
             this._pc!.ondatachannel = (e) => {
-                this._dc = e.channel;
+                const ch = e.channel;
+                // On `subscribe_pose` the daemon opens a second,
+                // unreliable/unordered channel labelled "pose" that *pushes*
+                // the robot state at ~30 Hz (see media_server
+                // `_setup_pose_channel`), so this can fire mid-session. It
+                // carries the same `{state:{...}}` envelope as a get_state
+                // reply, so we route it through the same handler - but it
+                // must NOT gate session readiness (that's the reliable
+                // control channel's job) nor become `_dc` (commands must
+                // never ride the lossy channel).
+                if (ch.label === 'pose') {
+                    // Fresh channel (new session or daemon restart): the
+                    // daemon's seq counter may have reset, so forget the old
+                    // high-water mark or we'd drop every new frame.
+                    this._lastPoseSeq = null;
+                    ch.onmessage = (ev) => {
+                        const msg = JSON.parse(ev.data);
+                        // Drop stale/reordered frames (unordered channel).
+                        if (typeof msg.seq === 'number') {
+                            if (this._lastPoseSeq !== null && msg.seq <= this._lastPoseSeq) return;
+                            this._lastPoseSeq = msg.seq;
+                        }
+                        this._lastPoseFrameAt = Date.now();
+                        this._handleRobotMessage(msg, true);
+                    };
+                    return;
+                }
+                this._dc = ch;
                 this._dc.onopen = () => {
                     this._dcOpen = true;
                     this._checkSessionReady();
@@ -614,6 +787,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         err.reason = msg.reason ?? null;
         err.activeApp = msg.activeApp ?? null;
 
+        // Resilience teardown BEFORE closing `_pc` so a queued grace
+        // callback can't dereference a dead handle.
+        this._clearIceGrace();
+        this._uninstallNetworkListeners();
         if (this._pc) { this._pc.close(); this._pc = null; }
         if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
         this._iceConnected = false;
@@ -636,10 +813,19 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
+        if (this._robotNameResolve) { this._robotNameResolve(null); this._robotNameResolve = null; }
+        if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
         this._logSubscribers.clear();
+        this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Session stopped'));
+        this._rejectPendingRpc(new Error('Session stopped'));
+        // Tear down resilience plumbing BEFORE closing `_pc` so a
+        // queued grace callback can't dereference a dead handle.
+        this._clearIceGrace();
+        this._uninstallNetworkListeners();
         if (this._sessionReject) {
             this._sessionReject(new Error('Session stopped'));
             this._sessionResolve = null;
@@ -678,10 +864,17 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
+        if (this._robotNameResolve) { this._robotNameResolve(null); this._robotNameResolve = null; }
+        if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
         this._logSubscribers.clear();
+        this._updateProgressSubscribers.clear();
         this._rejectPendingMotionCompletions(new Error('Disconnected'));
+        // Mirrors the resilience teardown in `stopSession()`.
+        this._clearIceGrace();
+        this._uninstallNetworkListeners();
         if (this._sessionReject) {
             this._sessionReject(new Error('Disconnected'));
             this._sessionResolve = null;
@@ -709,8 +902,247 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._emit('disconnected', { reason: 'user' });
     }
 
+    // ─── Resilience: ICE-blip debounce + network awareness ───────────────
+    //
+    // Both halves below are intentionally generic (they don't know about
+    // motion, audio, or the FSM): they just smooth out browser-level
+    // events so the consumer's own state machine doesn't get torn down
+    // by routine WiFi/4G/screen-off noise.
+
+    /**
+     * Cancel any pending ICE grace timer and visibility handler. Called
+     * on a healed `connected`/`completed` transition AND from the
+     * lifecycle teardown paths so a callback can't fire after `_pc`
+     * is closed.
+     */
+    private _clearIceGrace(): void {
+        if (this._iceGraceTimer !== null) {
+            clearTimeout(this._iceGraceTimer);
+            this._iceGraceTimer = null;
+        }
+        this._iceGraceReason = null;
+        if (this._pendingVisibilityHandler && typeof document !== 'undefined') {
+            document.removeEventListener('visibilitychange', this._pendingVisibilityHandler);
+        }
+        this._pendingVisibilityHandler = null;
+    }
+
+    /**
+     * Start a grace window. After `ms`, re-check the live ICE state:
+     *   - If we healed back to `connected`/`completed`, the timer was
+     *     already cancelled in `oniceconnectionstatechange`, so we
+     *     never get here.
+     *   - If we're still in the originally-observed bad state (or
+     *     worse), surface the error and reject any pending session
+     *     promise. The original code path is preserved verbatim so
+     *     downstream consumers see the same `error` payload shape.
+     */
+    private _scheduleIceGrace(ms: number, reason: 'disconnected' | 'failed'): void {
+        // Coalesce: if a grace is already pending and the reason hasn't
+        // changed, keep the original timer so a flurry of identical
+        // transitions doesn't reset the clock. If the reason changed
+        // (typically `disconnected` → `failed`, but also the reverse on
+        // some Android WebViews), replace the timer with the new
+        // (reason, ms) pair — the latest signal wins.
+        if (this._iceGraceTimer !== null) {
+            if (this._iceGraceReason === reason) return;
+            clearTimeout(this._iceGraceTimer);
+        }
+        this._iceGraceReason = reason;
+        this._iceGraceTimer = setTimeout(() => {
+            this._iceGraceTimer = null;
+            const r = this._iceGraceReason;
+            this._iceGraceReason = null;
+            const s = this._pc?.iceConnectionState;
+            if (s === 'connected' || s === 'completed') return; // healed
+            if (r === 'disconnected' && s === 'disconnected') {
+                this._emit('error', {
+                    source: 'webrtc',
+                    error: new Error(`ICE stuck in 'disconnected' for > ${ms}ms`),
+                });
+                return;
+            }
+            if (r === 'failed' || s === 'failed') {
+                const err = new Error('ICE connection failed');
+                if (this._sessionReject) {
+                    this._sessionReject(err);
+                    this._sessionResolve = null;
+                    this._sessionReject = null;
+                }
+                this._emit('error', { source: 'webrtc', error: err });
+            }
+        }, ms);
+    }
+
+    /**
+     * `disconnected` while the tab is hidden. JS timers are throttled
+     * in background tabs (Chrome clamps to ~1 Hz, Safari can pause
+     * altogether), so a foreground grace timer would either miss the
+     * window or fire long after the connection healed. Wait for the
+     * tab to come back, then re-evaluate.
+     */
+    private _armIceGraceOnVisibility(): void {
+        if (this._pendingVisibilityHandler) return;
+        const deferredAt = Date.now();
+        const handler = (): void => {
+            if (typeof document !== 'undefined' && document.hidden) return;
+            document.removeEventListener('visibilitychange', handler);
+            this._pendingVisibilityHandler = null;
+            if (!this._pc) return;
+            const s = this._pc.iceConnectionState;
+            if (s === 'connected' || s === 'completed') return; // healed in bg
+
+            // Ceiling: if the user backgrounded past the daemon's
+            // ICE-consent freshness window the session is gone from
+            // the daemon's side regardless of what `_pc` reports
+            // locally. Running another foreground grace would tell
+            // the user "Reconnecting…" for a recovery that can never
+            // happen. Escalate immediately so the host renders the
+            // real "session expired" UX. See MAX_VISIBILITY_DEFER_MS.
+            if (Date.now() - deferredAt > MAX_VISIBILITY_DEFER_MS) {
+                const err = new Error(
+                    'Session expired while tab was backgrounded',
+                );
+                if (this._sessionReject) {
+                    this._sessionReject(err);
+                    this._sessionResolve = null;
+                    this._sessionReject = null;
+                }
+                this._emit('error', { source: 'webrtc', error: err });
+                return;
+            }
+
+            if (s === 'failed') {
+                this._scheduleIceGrace(ICE_FAILED_GRACE_MS, 'failed');
+                return;
+            }
+            // Still disconnected when we came back — give it a normal
+            // foreground grace window now that timers fire reliably.
+            this._scheduleIceGrace(ICE_DISCONNECT_GRACE_MS, 'disconnected');
+        };
+        document.addEventListener('visibilitychange', handler);
+        this._pendingVisibilityHandler = handler;
+    }
+
+    /**
+     * Install browser-level network listeners and forward them as
+     * public `networkOnline` / `networkOffline` / `networkChange`
+     * events on this instance. Idempotent: called from
+     * `startSession()`, removed by `_uninstallNetworkListeners` on
+     * teardown. Reachable only when there's a live `window`
+     * (defensive guard for SSR / test environments).
+     *
+     * `online` / `offline` are semantically about CONNECTIVITY:
+     * "does the OS think we can reach the internet". They flip
+     * symmetrically.
+     *
+     * `connection.change` (NetworkInformation API, Chrome / Android
+     * WebView only) is semantically about the TRANSPORT: it fires
+     * on Wi-Fi → 4G swaps, AP roams, etc. without necessarily going
+     * through `offline`. We forward it as its own `networkChange`
+     * event rather than aliasing it onto `networkOnline`, so
+     * consumers don't have to guess whether they're seeing a real
+     * connectivity recovery or a silent transport swap.
+     */
+    private _installNetworkListeners(): void {
+        if (this._onlineHandler || typeof window === 'undefined') return;
+        const onOnline = (): void => this._emit('networkOnline', {});
+        const onOffline = (): void => this._emit('networkOffline', {});
+        window.addEventListener('online', onOnline);
+        window.addEventListener('offline', onOffline);
+        this._onlineHandler = onOnline;
+        this._offlineHandler = onOffline;
+
+        const conn = (navigator as Navigator & {
+            connection?: {
+                effectiveType?: string;
+                downlink?: number;
+                rtt?: number;
+                saveData?: boolean;
+                addEventListener?: (type: string, listener: () => void) => void;
+                removeEventListener?: (type: string, listener: () => void) => void;
+            };
+        }).connection;
+        if (conn && typeof conn.addEventListener === 'function') {
+            const onChange = (): void => this._emit('networkChange', {
+                effectiveType: conn.effectiveType,
+                downlink: conn.downlink,
+                rtt: conn.rtt,
+                saveData: conn.saveData,
+            });
+            conn.addEventListener('change', onChange);
+            this._connectionChangeHandler = onChange;
+        }
+    }
+
+    /** Counterpart to `_installNetworkListeners`. */
+    private _uninstallNetworkListeners(): void {
+        if (typeof window !== 'undefined') {
+            if (this._onlineHandler) {
+                window.removeEventListener('online', this._onlineHandler);
+            }
+            if (this._offlineHandler) {
+                window.removeEventListener('offline', this._offlineHandler);
+            }
+        }
+        const conn = (navigator as Navigator & {
+            connection?: {
+                removeEventListener?: (type: string, listener: () => void) => void;
+            };
+        }).connection;
+        if (conn && this._connectionChangeHandler && typeof conn.removeEventListener === 'function') {
+            conn.removeEventListener('change', this._connectionChangeHandler);
+        }
+        this._onlineHandler = null;
+        this._offlineHandler = null;
+        this._connectionChangeHandler = null;
+    }
+
     // ─── Commands ────────────────────────────────────────────────────────
 
+    /**
+     * Atomic raw-units pose update over the data channel. Channels you
+     * omit are held at their last commanded value (per-axis, independent).
+     *
+     * **Head pose is in the WORLD frame.** The daemon's IK splits the
+     * requested head world-yaw between body rotation and the stewart
+     * platform, subject to the mechanical limit
+     * `|head_yaw_world − body_yaw| ≤ 65°`.
+     *
+     * **If you want the head to FOLLOW the body** (tank-style rotation):
+     * a `setTarget({ body_yaw })` on its own does NOT rotate the head —
+     * the head's commanded world yaw is unchanged, so its gaze stays
+     * pinned in world frame while the body turns under it. To make the
+     * head turn with the body, include a `head` matrix in the SAME call
+     * with the body-yaw delta added to the head RPY's yaw:
+     *
+     * ```ts
+     * // Body-yaw drag handler: tank-couple the head so it follows.
+     * const delta = newBodyDeg - lastCommandedBodyDeg;
+     * const nextHeadYaw = lastCommandedHeadYawDeg + delta;
+     * robot.setTarget({
+     *   head: rpyToMatrix(headRoll, headPitch, nextHeadYaw).flat(),
+     *   body_yaw: degToRad(newBodyDeg),
+     * });
+     * lastCommandedHeadYawDeg = nextHeadYaw;
+     * lastCommandedBodyDeg    = newBodyDeg;
+     * ```
+     *
+     * **Baseline must be the last COMMANDED value, not telemetry.** For
+     * continuous-input controllers (slider drag, joystick), do not use
+     * `state.head` from the `state` event as the baseline for incremental
+     * commands — telemetry lags one WebRTC round-trip, so cumulative
+     * deltas computed against it stall (every iteration in a rapid drag
+     * adds the same `delta` to the same stale baseline → the head fails
+     * to keep up). Track the last-commanded RPY in your own buffer.
+     *
+     * @param head      Flat row-major 4×4 matrix (16 finite numbers) in
+     *                  the world frame. Omit to hold the previous head target.
+     * @param antennas  `[rightRad, leftRad]` (radians). Omit to hold.
+     * @param body_yaw  Signed radians. Omit to hold.
+     * @returns `true` if the command was queued on the data channel,
+     *          `false` if the channel is not open.
+     */
     setTarget(
         { head, antennas, body_yaw }: { head?: number[]; antennas?: number[]; body_yaw?: number } = {},
     ): boolean {
@@ -802,6 +1234,55 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     playSound(file: string): boolean {
         return this._sendCommand({ type: 'play_sound', file });
+    }
+
+    clearIncomingAudio(): boolean {
+        return this._sendCommand({ type: 'clear_incoming_audio' });
+    }
+
+    startHeadTracking(weight = 1.0): boolean {
+        if (!Number.isFinite(weight)) {
+            throw new TypeError(`startHeadTracking: weight must be a finite number; got ${weight}`);
+        }
+        const clampedWeight = Math.min(Math.max(weight, 0), 1);
+        return this._sendCommand({
+            type: 'set_head_tracking',
+            enabled: true,
+            weight: clampedWeight,
+        });
+    }
+
+    stopHeadTracking(): boolean {
+        return this._sendCommand({ type: 'set_head_tracking', enabled: false });
+    }
+
+    getTrackedFace(): Promise<FaceTarget | null> {
+        return this._slotRoundtrip(
+            () => this._trackedFaceResolve,
+            (next) => { this._trackedFaceResolve = next; },
+            { type: 'get_tracked_face' },
+        );
+    }
+
+    /**
+     * Trigger a PyPI update of the daemon over the data channel. Remote
+     * counterpart of `POST /update/start`. The daemon acks then restarts
+     * itself once the install finishes, which tears this session down -
+     * the caller is expected to reconnect afterwards.
+     *
+     * Pass `onProgress` to receive `update_progress` events (one per log
+     * line of the update job). A *successful* update restarts the daemon
+     * before a `done` event can arrive, so treat the session teardown +
+     * a successful reconnect as the success signal; `onProgress` will fire
+     * with `status: 'failed'` if the install errors before the restart.
+     *
+     * Returns `false` if the data channel isn't open.
+     */
+    startDaemonUpdate(
+        { preRelease = false, onProgress }: { preRelease?: boolean; onProgress?: UpdateProgressCallback } = {},
+    ): boolean {
+        if (onProgress) this._updateProgressSubscribers.add(onProgress);
+        return this._sendCommand({ type: 'start_update', pre_release: preRelease });
     }
 
     setMotorMode(mode: 'enabled' | 'disabled' | 'gravity_compensation'): boolean {
@@ -937,6 +1418,58 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         );
     }
 
+    /**
+     * Query the persisted robot display name. Resolves the stored name,
+     * `null` when none is set / the channel isn't open / the daemon predates
+     * the `get_robot_name` command.
+     */
+    getRobotName(): Promise<string | null> {
+        return this._slotRoundtrip(
+            () => this._robotNameResolve,
+            (next) => { this._robotNameResolve = next; },
+            { type: 'get_robot_name' },
+        );
+    }
+
+    /**
+     * Set and persist the robot display name on the robot. Resolves with the
+     * stored (trimmed) name, or `null` on error / channel-closed. Applied live
+     * by the daemon (status + central relay + mDNS), so it takes effect right
+     * away without a restart; the persisted name also overrides --robot-name
+     * on the next start.
+     */
+    setRobotName(name: string): Promise<string | null> {
+        return this._slotRoundtrip(
+            () => this._robotNameResolve,
+            (next) => { this._robotNameResolve = next; },
+            { type: 'set_robot_name', name },
+        );
+    }
+
+    /**
+     * Sign this robot out of Hugging Face: asks the daemon to delete its
+     * stored HF token, which de-registers the robot from the central
+     * signaling relay (it disappears from its owner's robot list until it
+     * is set up again). Works over the WebRTC data channel, so it reaches
+     * the robot remotely (no LAN HTTP path required).
+     *
+     * Resolves `true` when the daemon acked success, `false` on a daemon
+     * error, or `null` when no ack arrives before the timeout (e.g. a
+     * daemon that predates the `delete_hf_token` command silently drops
+     * it). Rejects if the data channel isn't open. Note the sign-out
+     * drops the central relay, so the session may tear down right after
+     * the ack - callers should treat a post-call session drop as expected,
+     * and a successful sign-out may surface as `null` if teardown races
+     * ahead of the ack.
+     */
+    signOut(): Promise<boolean | null> {
+        return this._slotRoundtrip(
+            () => this._deleteHfTokenResolve,
+            (next) => { this._deleteHfTokenResolve = next; },
+            { type: 'delete_hf_token' },
+        );
+    }
+
     applyAudioConfig(
         config: AudioConfigEntry[],
         { verify = true }: ApplyAudioConfigOptions = {},
@@ -982,7 +1515,28 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             }
             const prev = getSlot();
             if (prev) prev(null);
-            setSlot(resolve);
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            // Single settle path shared by the daemon response, supersession
+            // by a newer call, and the fail-open timeout below. It clears the
+            // timer once and detaches itself from the slot only if it's still
+            // the current occupant, so a stale settle (timed-out or superseded)
+            // can't clear a newer call's slot registration. The message handler
+            // stores `settle` (not `resolve`), so every response route funnels
+            // through here.
+            // Note: slots are keyed by command type, not request id, so this
+            // does not prevent a genuinely late daemon reply from being routed
+            // to a newer same-command caller — that cross-talk is inherent to
+            // the single-flight slot design and unchanged here.
+            const settle = (v: T | null): void => {
+                if (timer !== undefined) {
+                    clearTimeout(timer);
+                    timer = undefined;
+                }
+                if (getSlot() === settle) setSlot(null);
+                resolve(v);
+            };
+            setSlot(settle);
+            timer = setTimeout(() => settle(null), SLOT_ROUNDTRIP_TIMEOUT_MS);
             this._sendCommand(command);
         });
     }
@@ -1013,6 +1567,30 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     requestState(): boolean {
         return this._sendCommand({ type: 'get_state' });
+    }
+
+    /**
+     * Ask the daemon to *push* the robot state (~30 Hz) over the dedicated
+     * unreliable/unordered `pose` data channel instead of polling get_state.
+     * Fires `state` events as frames arrive. No-op against an older daemon (no
+     * pose channel) - fall back to `requestState()` polling there.
+     *
+     * Refcounted: pair every `subscribePose()` with exactly one
+     * `unsubscribePose()`. Multiple consumers share a single daemon-side
+     * subscription; the daemon only stops pushing once the last one releases.
+     * If the channel isn't open yet (or the session later reconnects), the
+     * subscription is (re-)asserted from `_checkSessionReady`.
+     */
+    subscribePose(): boolean {
+        this._poseSubRefs++;
+        return this._sendCommand({ type: 'subscribe_pose' });
+    }
+
+    /** Release one pose-stream consumer; sends `unsubscribe_pose` on the last. */
+    unsubscribePose(): boolean {
+        if (this._poseSubRefs > 0) this._poseSubRefs--;
+        if (this._poseSubRefs > 0) return true; // still wanted by another consumer
+        return this._sendCommand({ type: 'unsubscribe_pose' });
     }
 
     // ─── Audio ───────────────────────────────────────────────────────────
@@ -1145,7 +1723,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 type: 'upload_audio_start',
                 upload_id: uploadId,
                 total_chunks: audioTotal,
-                encoding: 'wav-base64',
+                encoding: audioUploadEncoding(audioBlob),
                 description,
             });
             for (let i = 0; i < audioTotal; i++) {
@@ -1244,7 +1822,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             type: 'upload_audio_start',
             upload_id: uploadId,
             total_chunks: total,
-            encoding: 'wav-base64',
+            encoding: audioUploadEncoding(audioBlob),
             description,
         });
         for (let i = 0; i < total; i++) {
@@ -1365,11 +1943,111 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         return true;
     }
 
+    /**
+     * Call a JSON-RPC method on the robot/app over the DataChannel and await
+     * its result. This is the one way to drive an on-robot app (start/stop it
+     * via `apps.*`, or drive a running app via its own namespace, e.g.
+     * `conversation.say`). Rejects on the JSON-RPC error, a closed channel, or
+     * timeout.
+     */
+    rpcCall<T = unknown>(
+        method: string,
+        params: Record<string, unknown> = {},
+        opts: { timeoutMs?: number } = {},
+    ): Promise<T> {
+        const timeoutMs = opts.timeoutMs ?? 20000;
+        const id = `rpc-${++this._rpcCounter}`;
+        if (!this._sendCommand({ jsonrpc: '2.0', id, method, params })) {
+            return Promise.reject(new Error(`rpcCall(${method}): data channel not open`));
+        }
+        return new Promise<T>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                this._pendingRpc.delete(id);
+                reject(new Error(`rpcCall(${method}) timed out after ${timeoutMs}ms`));
+            }, timeoutMs);
+            this._pendingRpc.set(id, {
+                resolve: (v) => resolve(v as T),
+                reject,
+                timer,
+            });
+        });
+    }
+
+    /**
+     * Subscribe to a JSON-RPC notification (one-way event) pushed by the
+     * robot/app, e.g. `conversation.turn`. Returns an unsubscribe function.
+     */
+    onNotification(
+        method: string,
+        cb: (params: Record<string, unknown>) => void,
+    ): () => void {
+        let set = this._rpcListeners.get(method);
+        if (!set) {
+            set = new Set();
+            this._rpcListeners.set(method, set);
+        }
+        set.add(cb);
+        return () => {
+            this._rpcListeners.get(method)?.delete(cb);
+        };
+    }
+
+    private _rejectPendingRpc(err: Error): void {
+        for (const pending of this._pendingRpc.values()) {
+            clearTimeout(pending.timer);
+            pending.reject(err);
+        }
+        this._pendingRpc.clear();
+    }
+
+    private _handleRpcMessage(data: Record<string, unknown>): void {
+        // Response to an rpcCall (correlated by id)...
+        if ('id' in data && data.id != null && ('result' in data || 'error' in data)) {
+            const pending = this._pendingRpc.get(data.id as string);
+            if (!pending) return;
+            this._pendingRpc.delete(data.id as string);
+            clearTimeout(pending.timer);
+            if ('error' in data && data.error) {
+                const err = data.error as { message?: string; data?: { reason?: string } };
+                const e = new Error(err.message ?? 'rpc error');
+                (e as Error & { reason?: string }).reason = err.data?.reason;
+                pending.reject(e);
+            } else {
+                pending.resolve((data as { result?: unknown }).result);
+            }
+            return;
+        }
+        // ...or a one-way notification (event): dispatch to listeners.
+        if (typeof data.method === 'string') {
+            const params = (data.params as Record<string, unknown> | undefined) ?? {};
+            for (const cb of this._rpcListeners.get(data.method) ?? []) {
+                try {
+                    cb(params);
+                } catch (e) {
+                    console.error(`onNotification(${data.method}) threw:`, e);
+                }
+            }
+        }
+    }
+
     private _checkSessionReady(): void {
         if (this._iceConnected && this._dcOpen && this._sessionResolve) {
             this._state = 'streaming';
             this.requestState();
-            this._stateRefreshInterval = setInterval(() => this.requestState(), 500);
+            // Re-assert a pose subscription that was requested before the data
+            // channel was open, or lost on reconnect (a fresh peer starts
+            // unsubscribed on the daemon). Sent raw so it doesn't touch the
+            // local refcount, which already reflects the live consumer count.
+            if (this._poseSubRefs > 0) this._sendCommand({ type: 'subscribe_pose' });
+            // A fresh session has received no pose frame yet, so a timestamp
+            // left over from the previous one must not hold off the poll.
+            this._lastPoseFrameAt = 0;
+            this._stateRefreshInterval = setInterval(() => {
+                // Skip while the pose stream is already feeding state; see
+                // POSE_STREAM_FRESH_MS.
+                if (Date.now() - this._lastPoseFrameAt < POSE_STREAM_FRESH_MS) return;
+                this.requestState();
+            }, 500);
             this._emit('streaming', { sessionId: this._sessionId!, robotId: this._selectedRobotId! });
             this._sessionResolve();
             this._sessionResolve = null;
@@ -1426,6 +2104,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             ) as SessionRejectError;
             err.reason = reason ?? null;
             this._emit('sessionRejected', { reason, activeApp: null });
+            // Resilience teardown alongside the PC close path.
+            this._clearIceGrace();
+            this._uninstallNetworkListeners();
             if (this._pc) { this._pc.close(); this._pc = null; }
             if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
             this._iceConnected = false;
@@ -1507,7 +2188,18 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         }
     }
 
-    private _handleRobotMessage(data: Record<string, unknown>): void {
+    /**
+     * @param fromPoseStream Frame came from the pushed `pose` channel rather
+     *   than the reliable control channel. Only those may refresh the state
+     *   mirror while the stream is live (see the `data.state` branch).
+     */
+    private _handleRobotMessage(data: Record<string, unknown>, fromPoseStream = false): void {
+        // JSON-RPC frames (app control surface) are handled separately from
+        // the legacy {command|type} robot messages that share this channel.
+        if (data.jsonrpc === '2.0') {
+            this._handleRpcMessage(data);
+            return;
+        }
         if ('version' in data && this._versionResolve) {
             this._versionResolve(data.version as string | null);
             this._versionResolve = null;
@@ -1532,6 +2224,22 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             }
             return;
         }
+        if (data.command === 'get_robot_name' || data.command === 'set_robot_name') {
+            if (this._robotNameResolve) {
+                this._robotNameResolve(
+                    data.status === 'error' ? null : ((data.name as string | null) ?? null),
+                );
+                this._robotNameResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'delete_hf_token') {
+            if (this._deleteHfTokenResolve) {
+                this._deleteHfTokenResolve(data.status === 'error' ? false : true);
+                this._deleteHfTokenResolve = null;
+            }
+            return;
+        }
         if (data.command === 'apply_audio_config') {
             if (this._applyAudioConfigResolve) {
                 this._applyAudioConfigResolve(data.error ? false : !!data.applied);
@@ -1545,6 +2253,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     data.error ? null : ((data.values as number[] | undefined) ?? null),
                 );
                 this._readAudioParameterResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'get_tracked_face') {
+            if (this._trackedFaceResolve) {
+                this._trackedFaceResolve(
+                    (data.face_target as FaceTarget | undefined) ?? null,
+                );
+                this._trackedFaceResolve = null;
             }
             return;
         }
@@ -1586,19 +2303,58 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             }
             return;
         }
-        if (data.state) {
+        if (data.command === 'start_update') {
+            // Refusal ack (non-wireless robot, no update available, or one
+            // already running): the daemon never spawned the job, so surface
+            // it to `onProgress` as a terminal `failed` event - there will be
+            // no transport teardown to infer success from.
+            if (typeof data.error === 'string') {
+                const event: UpdateProgressEvent = { status: 'failed', error: data.error };
+                for (const cb of this._updateProgressSubscribers) {
+                    try { cb(event); }
+                    catch (e) { console.error('startDaemonUpdate onProgress threw:', e); }
+                }
+            }
+            return;
+        }
+        if (data.type === 'update_progress') {
+            const event: UpdateProgressEvent = {
+                status: data.status as UpdateProgressEvent['status'],
+                line: typeof data.line === 'string' ? data.line : undefined,
+                error: typeof data.error === 'string' ? data.error : undefined,
+            };
+            for (const cb of this._updateProgressSubscribers) {
+                try { cb(event); }
+                catch (e) { console.error('startDaemonUpdate onProgress threw:', e); }
+            }
+            return;
+        }
+        // Only the stream may write the mirror while the stream is live. The
+        // poll stands down in that case (see POSE_STREAM_FRESH_MS), but it
+        // can't unsend a request already in flight: `get_state` rides the
+        // reliable channel, so its reply queues behind whatever else is on it
+        // - a `upload_move_*` burst, typically - and can land hundreds of ms
+        // after the snapshot it carries. Having no `seq`, it slips past the
+        // stale-frame guard and rewinds every consumer to a pose from before
+        // the upload, until the next pushed frame puts them back. That reads
+        // as a one-frame flick to the pre-move pose right as an animation
+        // starts. Nothing is lost by dropping it: pushed frames carry the same
+        // fields (daemon-side `build_state_dict` feeds both).
+        if (data.state && (fromPoseStream || Date.now() - this._lastPoseFrameAt >= POSE_STREAM_FRESH_MS)) {
             const s = data.state as {
                 head_pose?: number[][];
                 antennas?: [number, number];
                 body_yaw?: number;
                 motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';
                 is_move_running?: boolean;
+                face_target?: FaceTarget;
             };
             if (s.head_pose) this._robotState.head = s.head_pose.flat();
             if (s.antennas) this._robotState.antennas = [s.antennas[0], s.antennas[1]];
             if (typeof s.body_yaw === 'number') this._robotState.body_yaw = s.body_yaw;
             if (s.motor_mode) this._robotState.motor_mode = s.motor_mode;
             if (typeof s.is_move_running === 'boolean') this._robotState.is_move_running = s.is_move_running;
+            if (s.face_target) this._robotState.face_target = s.face_target;
             this._emit('state', { ...this._robotState });
         }
         if (data.error) {

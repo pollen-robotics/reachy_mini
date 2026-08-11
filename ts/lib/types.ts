@@ -37,6 +37,14 @@ export interface RobotInfo {
 }
 
 /** Latest robot telemetry mirrored on `robot.robotState` (wire shape). */
+export interface FaceTarget {
+    detected: boolean;
+    x?: number | null;
+    y?: number | null;
+    roll?: number | null;
+    ts?: number | null;
+}
+
 export interface RobotState {
     /** Flat row-major 4×4 head pose (16 numbers). */
     head?: number[];
@@ -46,6 +54,7 @@ export interface RobotState {
     body_yaw?: number;
     motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';
     is_move_running?: boolean;
+    face_target?: FaceTarget;
 }
 
 /** SDK constructor options. */
@@ -221,6 +230,25 @@ export interface ErrorEventDetail {
     source: 'signaling' | 'webrtc' | 'robot';
     error: Error | string;
 }
+/**
+ * Granular ICE-state transition. Fires on every change of
+ * `_pc.iceConnectionState`. Transient `disconnected` is debounced
+ * internally before escalating to `error`; subscribe here for finer
+ * UX (e.g. a transient "Reconnecting…" badge).
+ */
+export interface IceStateChangeEventDetail { state: RTCIceConnectionState; }
+/**
+ * Forwarded from `navigator.connection.change` on browsers that ship
+ * the NetworkInformation API (Chrome, Android WebView). Fires on
+ * transport swaps (Wi-Fi → 4G, AP roam) without going through
+ * `offline`. All fields are best-effort and may be undefined.
+ */
+export interface NetworkChangeEventDetail {
+    effectiveType?: string;
+    downlink?: number;
+    rtt?: number;
+    saveData?: boolean;
+}
 
 /** Map of event names to their detail shapes. */
 export interface ReachyMiniEventMap {
@@ -234,6 +262,10 @@ export interface ReachyMiniEventMap {
     videoTrack: CustomEvent<VideoTrackEventDetail>;
     micSupported: CustomEvent<MicSupportedEventDetail>;
     error: CustomEvent<ErrorEventDetail>;
+    iceStateChange: CustomEvent<IceStateChangeEventDetail>;
+    networkOnline: CustomEvent<Record<string, never>>;
+    networkOffline: CustomEvent<Record<string, never>>;
+    networkChange: CustomEvent<NetworkChangeEventDetail>;
 }
 
 /** Public surface of a ReachyMini SDK instance. */
@@ -311,6 +343,14 @@ export interface ReachyMiniInstance extends EventTarget {
     sendRaw(data: unknown): boolean;
     /** Play a sound file on the robot's speakers (basename). */
     playSound(file: string): boolean;
+    /** Drop incoming audio queued for the robot speaker (barge-in). */
+    clearIncomingAudio(): boolean;
+    /** Enable daemon-side visual head tracking. */
+    startHeadTracking(weight?: number): boolean;
+    /** Disable daemon-side visual head tracking. */
+    stopHeadTracking(): boolean;
+    /** Read the latest face observed by daemon-side head tracking. */
+    getTrackedFace(): Promise<FaceTarget | null>;
 
     setAudioMuted(muted: boolean): void;
     setMicMuted(muted: boolean): void;
@@ -319,6 +359,18 @@ export interface ReachyMiniInstance extends EventTarget {
     setVolume(volume: number): Promise<number | null>;
     getMicrophoneVolume(): Promise<number | null>;
     setMicrophoneVolume(volume: number): Promise<number | null>;
+
+    /**
+     * Query the persisted robot display name. `null` when none is set, the
+     * channel isn't open, or the daemon predates the `get_robot_name` command.
+     */
+    getRobotName(): Promise<string | null>;
+    /**
+     * Set and persist the robot display name. Applied live by the daemon
+     * (status + central relay + mDNS), so it takes effect right away without a
+     * restart. Resolves with the stored name, or `null` on error.
+     */
+    setRobotName(name: string): Promise<string | null>;
 
     /**
      * Apply a batch of XVF3800 audio-board parameters on the robot.

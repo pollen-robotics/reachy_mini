@@ -1,7 +1,8 @@
 """Tests for the REST audio-config router.
 
 Hits the real ReSpeaker USB board, so each test is gated behind
-`@pytest.mark.audio` like the helpers in `test_audio_control_utils.py`.
+`@pytest.mark.audio` + `@pytest.mark.respeaker` like the helpers in
+`test_audio_control_utils.py` — a simulated sound card can't stand in for it.
 """
 
 import pytest
@@ -21,6 +22,7 @@ def client() -> TestClient:
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 def test_read_audio_parameter_round_trip(client: TestClient) -> None:
     """The REST route should return a JSON-decoded view of a board parameter."""
     response = client.get("/audio/config/parameter/AUDIO_MGR_MIC_GAIN")
@@ -32,6 +34,7 @@ def test_read_audio_parameter_round_trip(client: TestClient) -> None:
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 def test_apply_audio_config_identity_write(client: TestClient) -> None:
     """Identity write (read → apply → verify) must succeed on the real board."""
     respeaker = init_respeaker_usb()
@@ -63,3 +66,35 @@ def test_read_unknown_parameter_returns_404(client: TestClient) -> None:
     """
     response = client.get("/audio/config/parameter/DEFINITELY_NOT_A_PARAM")
     assert response.status_code in (404, 503)
+
+
+# ---- Simulated board (no hardware): point the router's init_respeaker_usb at
+# the fake device so the REST layer gets CI coverage. See conftest.py.
+
+
+def test_simulated_read_parameter_round_trip(client, fake_respeaker, monkeypatch) -> None:
+    """GET returns a JSON-decoded parameter, served from the fake board."""
+    monkeypatch.setattr(
+        "reachy_mini.daemon.app.routers.audio_config.init_respeaker_usb",
+        lambda: fake_respeaker,
+    )
+    response = client.get("/audio/config/parameter/AUDIO_MGR_MIC_GAIN")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["name"] == "AUDIO_MGR_MIC_GAIN"
+    assert isinstance(body["values"], list) and len(body["values"]) >= 1
+
+
+def test_simulated_apply_identity_write(client, fake_respeaker, monkeypatch) -> None:
+    """POST identity write (read -> apply -> verify) succeeds on the fake board."""
+    monkeypatch.setattr(
+        "reachy_mini.daemon.app.routers.audio_config.init_respeaker_usb",
+        lambda: fake_respeaker,
+    )
+    original = list(fake_respeaker.read_values("PP_MIN_NS"))
+    response = client.post(
+        "/audio/config/apply",
+        json={"config": [{"name": "PP_MIN_NS", "values": original}], "verify": True},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"applied": True}

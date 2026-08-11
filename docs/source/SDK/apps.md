@@ -214,6 +214,31 @@ reachy-mini-daemon --sim    # Simulation
 
 Then open <a href="http://127.0.0.1:8000/">http://127.0.0.1:8000/</a> — your app appears in the installed list.
 
+### 4. Make an app start on wake-up or antenna touch
+
+Use the daemon's existing `--startup-app` option when you want one installed
+app to be the default experience:
+
+```bash
+reachy-mini-daemon --startup-app reachy_mini_conversation_app
+```
+
+If the app is not installed yet but exists in the app catalog, the daemon
+installs it before the robot wakes up. The app starts after wake-up. On an idle
+robot that is already running the daemon while asleep, touching an antenna also
+wakes the robot and starts the same startup app.
+
+For example, the Wireless flow keeps the daemon running without waking the
+robot immediately:
+
+```bash
+reachy-mini-daemon --wireless-version --no-wake-up-on-start --startup-app reachy_mini_conversation_app
+```
+
+No extra antenna-specific flag is needed: setting `--startup-app <app_name>` is
+the opt-in. The app only starts when the managed app slot is free, so it does
+not replace a running local app or an active remote session.
+
 ---
 
 ## Publishing to Hugging Face
@@ -264,23 +289,23 @@ Open the Reachy Mini dashboard and click **Install** on any community app. This 
 
 ### Via the REST API
 
+The daemon host is `localhost:8000` on Lite (daemon on your machine) and `reachy-mini.local:8000` (or the robot's IP) on Wireless — substitute it for `<HOST>` below.
+
 ```bash
 # Install from Hugging Face
-curl -X POST http://localhost:8000/api/apps/install \
+curl -X POST http://<HOST>/api/apps/install \
   -H "Content-Type: application/json" \
   -d '{"url": "https://huggingface.co/spaces/<user>/<app_name>"}'
 
 # Start an app
-curl -X POST http://localhost:8000/api/apps/start-app/<app_name>
+curl -X POST http://<HOST>/api/apps/start-app/<app_name>
 
 # Stop the current app
-curl -X POST http://localhost:8000/api/apps/stop-current-app
+curl -X POST http://<HOST>/api/apps/stop-current-app
 
 # List installed apps
-curl http://localhost:8000/api/apps/list
+curl http://<HOST>/api/apps/list
 ```
-
-Replace `localhost` with `reachy-mini.local` or the robot's IP address for the Wireless version.
 
 ### Offline / manual deployment for a Wireless unit
 
@@ -334,7 +359,7 @@ sudo journalctl -u reachy-mini-daemon --since '5 min ago' | grep -v "uvicorn\|GE
 
 | Problem | Solution |
 |---------|----------|
-| "An app is already running" | Stop the current app first: `curl -X POST http://localhost:8000/api/apps/stop-current-app` |
+| "An app is already running" | Stop the current app first: `curl -X POST http://<HOST>/api/apps/stop-current-app` (`<HOST>` is `localhost:8000` on Lite, `reachy-mini.local:8000` on Wireless) |
 | Daemon in a bad state | Restart it: `sudo systemctl restart reachy-mini-daemon` (wait ~30s before starting an app) |
 | App not picking up code changes | Restart the app. If you deployed manually, also clear bytecode: `rm -rf __pycache__` |
 
@@ -378,7 +403,7 @@ Audio recording, playback, and direction-of-arrival detection work the same way 
 Refer to the official examples for working code:
 
 - **[Sound Recording](../examples/sound_record)**: Record from the mic array and save to WAV.
-- **[Sound Playback](../examples/sound_play)**: Play a WAV file or push real-time audio (e.g., from a TTS engine).
+- **[Sound Playback](../examples/sound_play)**: Play a sound file or push real-time audio (e.g., from a TTS engine).
 - **[Sound Direction of Arrival](../examples/sound_doa)**: Detect who is speaking and make the robot look at them.
 
 For details on how audio streams differ between Wireless and Lite, see [Media Architecture](media-architecture.md).

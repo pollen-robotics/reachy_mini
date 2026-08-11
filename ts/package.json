@@ -12,6 +12,11 @@
       "import": "./dist/reachy-mini-sdk.js",
       "default": "./dist/reachy-mini-sdk.js"
     },
+    "./animation": {
+      "types": "./dist/animation/index.d.ts",
+      "import": "./dist/animation/index.js",
+      "default": "./dist/animation/index.js"
+    },
     "./host": {
       "types": "./host/dist/index.d.ts",
       "import": "./host/dist/index.js"
@@ -34,10 +39,8 @@
     "dist",
     "host/dist",
     "host/README.md",
-    "host/SPEC.md",
-    "host/APP_AUTHOR_GUIDE.md",
+    "APP_CREATION_GUIDE.md",
     "README.md",
-    "CHANGELOG.md",
     "LICENSE"
   ],
   "sideEffects": false,
@@ -56,8 +59,8 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@huggingface/hub": "^0.15.2",
-    "@mui/icons-material": "^7.3.5",
-    "@mui/material": "^7.3.5"
+    "@mui/icons-material": "^9.0.0",
+    "@mui/material": "^9.0.0"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",

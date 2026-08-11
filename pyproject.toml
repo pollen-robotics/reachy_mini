@@ -4,43 +4,54 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "1.8.0rc1"
+version = "1.10.0.dev0"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "numpy>=2.2.5",
-    "scipy>=1.15.3, <2.0.0",
-    "reachy_mini_motor_controller>=1.5.5",
-    "psutil",
-    "jinja2",
-    "uvicorn[standard]",
-    "fastapi",
-    "python-multipart",
-    "starlette<1.0.0",                           #Fix: for starlette >= 1.0.0, we need to implement TemplateResponse(request, name, context)
-    "pyserial",
-    "huggingface-hub==1.3.0",
-    "reachy-mini-rust-kinematics>=1.0.3",
+    "aiohttp>=3.14.0",
     "asgiref",
-    "aiohttp",
-    "log-throttling==0.0.3",
-    "pyusb>=1.2.1",
+    "fastapi",
+    # Floor is 1.20.1, NOT 1.20.0: the device-code OAuth flow (apps/sources/hf_auth.py)
+    # imports PRIVATE huggingface_hub internals, and the `_oauth_device` module lived at
+    # the top level in 1.20.0 before moving to `utils/` in 1.20.1 (where it has stayed,
+    # import- and signature-identical, through at least 1.24.0). `_login._save_oauth_token`
+    # (refresh-capable token persistence backing get_token()) and `errors.DeviceCodeError`
+    # are likewise private. This private-API contract is guarded in CI by
+    # tests/unit_tests/test_hf_hub_private_api_contract.py, which runs against both the
+    # locked version and (in a dedicated job) the latest version allowed by this range —
+    # so an upstream break surfaces in CI rather than at runtime on a robot.
+    "huggingface-hub>=1.20.1,<2.0.0",
+    "jinja2",
     "libusb_package>=1.0.26.3",
-    "pip>=25",
-    "rich",
-    "questionary",
-    "websockets>=12,<16",
-    "toml",
-    "rustypot>=1.4.2",
-    "pyyaml>=6.0",
-    "requests>=2.28.0",
-    "zeroconf>=0.131,<1",
-    "pycaw>=20240210; sys_platform == 'win32'",
+    "log-throttling==0.0.3",
+    "numpy>=2.2.5",
+    "onnxruntime==1.27.0",
+    "pip>=26.1",
+    "platformdirs",
+    "psutil",
     "pulsectl>=24.1.0; sys_platform == 'linux'",
+    "pycaw>=20240210; sys_platform == 'win32'",
+    "pydantic>=2.12.5,<3.0.0",
+    "pyserial",
+    "python-multipart>=0.0.27",
+    "pyusb>=1.2.1",
+    "pyyaml>=6.0",
+    "questionary",
+    "requests>=2.33.0",
+    "rich",
+    "rustypot>=1.4.2",
+    "scipy>=1.15.3, <2.0.0",
+    "starlette<1.0.0", # TODO: update TemplateResponse(request, name, context) before allowing Starlette 1.x
+    "toml",
+    "uvicorn[standard]",
+    "websockets>=12,<16",
+    "zeroconf>=0.149.7,<1",
 
-    "tornado>=6.5.5",   # fix security issue of this subdependency
-    "requests>=2.33.0", # fix security issue of this subdependency
+    # Reachy Mini specifics
+    "reachy-mini-rust-kinematics>=1.0.3",
+    "reachy_mini_motor_controller>=1.5.5",
 
     "gstreamer-bundle==1.28.3; sys_platform != 'linux'",
     # OS-specific: use PyGObject for Linux
@@ -56,12 +67,18 @@ examples = [
     "gradio-client",
 ]
 mujoco = ["mujoco==3.3.0"]
-nn_kinematics = ["onnxruntime==1.22.1"]
-placo_kinematics = ["placo==0.9.14; sys_platform != 'win32'"]
+placo_kinematics = [
+    "placo==0.9.14; sys_platform != 'win32'",
+    "tornado>=6.5.5; sys_platform != 'win32'", # security floor for meshcat transitive dependency
+]
 rerun = ["rerun-sdk>=0.29.0,<=0.31.3"]
 wireless-version = [
     "semver>=3,<4",
     "nmcli>=1.5; sys_platform == 'linux'",
+    # Sealed BLE WiFi provisioning (wifi_config.py) does X25519 + HKDF +
+    # AES-GCM to keep the WiFi password off the air in cleartext. Was only
+    # present transitively before; declared here now that it's a direct import.
+    "cryptography>=42.0",
     "pollen_BMI088_imu_library; sys_platform == 'linux'",
     "gpiozero>=2.0.0; sys_platform == 'linux'",
     "lgpio>=0.2.2.0; sys_platform == 'linux'",
@@ -70,7 +87,6 @@ opencv = ["opencv-python<=5.0", "cv2_enumerate_cameras>=1.2.1"]
 all = [
     "reachy_mini[examples]",
     "reachy_mini[mujoco]",
-    "reachy_mini[nn_kinematics]",
     "reachy_mini[placo_kinematics]",
     "reachy_mini[rerun]",
     "reachy_mini[wireless-version]",
@@ -79,7 +95,7 @@ all = [
 
 [dependency-groups]
 dev = [
-    "pytest",
+    "pytest>=9.0.3",
     "pytest-asyncio",
     "ruff==0.12.0",
     "onshape-to-robot==1.7.6",
@@ -94,6 +110,14 @@ dev = [
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
 reachy-mini-app-assistant = "reachy_mini.apps.app:main"
 reachy-mini-reflash-motors = "reachy_mini.tools.reflash_motors:main"
+
+[tool.uv]
+exclude-newer = "7 days"
+
+[tool.uv.exclude-newer-package]
+"pollen_BMI088_imu_library"  = false
+# huggingface-hub is pinned to an exact version (==1.20.1) in [project.dependencies],
+# released well before the 7-day cutoff, so no opt-out is needed here.
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -125,8 +149,11 @@ lint.ignore = [
 testpaths = ["tests/unit_tests"]
 markers = [
     "audio: mark test as requiring audio hardware",
+    "respeaker: mark test as requiring the physical ReSpeaker/XMOS audio board",
+    "loopback: mark test as requiring a virtual audio loopback (verifies real audio flow)",
     "video: mark test as requiring video hardware",
     "wireless: mark test as requiring wireless Reachy Mini",
+    "webrtc: mark test as requiring the gst-plugins-rs webrtc plugin (libgstrswebrtc.so)",
     "ipc_resolution: override the resolution used by the ipc_video_source fixture",
 ]
 

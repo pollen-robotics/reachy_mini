@@ -33,7 +33,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
-  Chip,
   CircularProgress,
   ListItemButton,
   Stack,
@@ -45,12 +44,11 @@ import {
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import LockIcon from '@mui/icons-material/Lock';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import UsbIcon from '@mui/icons-material/Usb';
-import WifiIcon from '@mui/icons-material/Wifi';
 
 import { reachyBusteSvg, reachyStandardSvg } from '../assets';
 import type { RobotInfo } from '../lib/sdk-types';
 import { FONT_WEIGHT, LAYOUT, TYPO } from '../lib/tokens';
+import { VariantTag } from '../ui/design/MetaPill';
 
 export interface PickerViewProps {
   robots: RobotInfo[];
@@ -113,7 +111,9 @@ export function PickerView({
             py: 4,
           }}
         >
-          <Stack alignItems="center" spacing={2}>
+          <Stack spacing={2} sx={{
+            alignItems: 'center'
+          }}>
             <HeroBuste />
             <RobotsHeader
               isRefreshing={isRefreshing}
@@ -151,7 +151,6 @@ export function PickerView({
           )}
         </Stack>
       </Stack>
-
       <StickyRefreshBar
         onRefresh={onRefresh}
         isRefreshing={isRefreshing}
@@ -212,7 +211,12 @@ function RobotsHeader({
   }, [hasRobots, hasError, isRefreshing, count]);
 
   return (
-    <Stack alignItems="center" spacing={0.5} sx={{ width: '100%' }}>
+    <Stack
+      spacing={0.5}
+      sx={{
+        alignItems: 'center',
+        width: '100%'
+      }}>
       <Typography
         component="h1"
         sx={{
@@ -299,10 +303,11 @@ function RemoteRobotCard({
     >
       <Stack
         direction="row"
-        alignItems="center"
         spacing={2}
-        sx={{ width: '100%' }}
-      >
+        sx={{
+          alignItems: 'center',
+          width: '100%'
+        }}>
         <CardAvatar />
         {/* Two-row identity grid: name + transport chip, then id.
             Mirrors the mobile `RemoteRobotCard` so users moving
@@ -311,10 +316,11 @@ function RemoteRobotCard({
         <Stack sx={{ flex: 1, minWidth: 0 }} spacing={0.25}>
           <Stack
             direction="row"
-            alignItems="center"
             spacing={1}
-            sx={{ minWidth: 0 }}
-          >
+            sx={{
+              alignItems: 'center',
+              minWidth: 0
+            }}>
             <Typography
               sx={{
                 minWidth: 0,
@@ -334,7 +340,7 @@ function RemoteRobotCard({
             </Typography>
             {transport ? (
               <Box sx={{ flexShrink: 0 }}>
-                <TransportChip transport={transport} />
+                <VariantTag transport={transport} />
               </Box>
             ) : null}
           </Stack>
@@ -449,61 +455,6 @@ function CardAvatar(): JSX.Element {
   );
 }
 
-/* ─────────────────── Transport chip ─────────────────── */
-
-/**
- * Compact transport tag for a robot listing. Ported 1-to-1 from
- * the mobile shell's `TransportChip`. Two well-known values get
- * an icon + typed label (`usb`, `wifi`); anything else falls
- * through to a plain capitalised label so a future daemon
- * advertising `ethernet` / `sim` / `mockup` still renders without
- * a component update.
- */
-function TransportChip({ transport }: { transport: string }): JSX.Element {
-  if (transport === 'usb') {
-    return (
-      <Chip
-        size="small"
-        icon={<UsbIcon sx={{ fontSize: 14 }} />}
-        label="USB"
-        variant="outlined"
-        sx={{
-          height: 20,
-          fontSize: TYPO.tiny,
-          '.MuiChip-icon': { ml: 0.5 },
-        }}
-      />
-    );
-  }
-  if (transport === 'wifi') {
-    return (
-      <Chip
-        size="small"
-        icon={<WifiIcon sx={{ fontSize: 14 }} />}
-        label="Wi-Fi"
-        variant="outlined"
-        sx={{
-          height: 20,
-          fontSize: TYPO.tiny,
-          '.MuiChip-icon': { ml: 0.5 },
-        }}
-      />
-    );
-  }
-  return (
-    <Chip
-      size="small"
-      label={transport}
-      variant="outlined"
-      sx={{
-        height: 20,
-        fontSize: TYPO.tiny,
-        textTransform: 'capitalize',
-      }}
-    />
-  );
-}
-
 /* ─────────────────── Sticky refresh ─────────────────── */
 
 const refreshSpinKeyframes = keyframes`
@@ -540,17 +491,16 @@ function StickyRefreshBar({
 
   return (
     <Stack
-      alignItems="center"
       sx={{
+        alignItems: 'center',
         width: '100%',
         flexShrink: 0,
         pt: 1.5,
         pb: 2,
         px: 2,
         bgcolor: 'background.default',
-        borderTop: (theme) => `1px solid ${theme.palette.divider}`,
-      }}
-    >
+        borderTop: (theme) => `1px solid ${theme.palette.divider}`
+      }}>
       <Button
         variant="text"
         color="primary"
@@ -647,10 +597,11 @@ function LoadingState(): JSX.Element {
   return (
     <StateCard>
       <Stack
-        alignItems="center"
         spacing={1.5}
-        sx={{ color: 'text.secondary' }}
-      >
+        sx={{
+          alignItems: 'center',
+          color: 'text.secondary'
+        }}>
         <CircularProgress size={24} sx={{ color: 'text.secondary' }} />
         <Typography sx={{ fontSize: TYPO.sm, fontWeight: FONT_WEIGHT.medium }}>
           Asking Hugging Face for your robots…
@@ -670,10 +621,12 @@ function CenteredMessageState({
   return (
     <StateCard>
       <Stack
-        alignItems="center"
         spacing={0.75}
-        sx={{ textAlign: 'center', maxWidth: 280 }}
-      >
+        sx={{
+          alignItems: 'center',
+          textAlign: 'center',
+          maxWidth: 280
+        }}>
         <Typography
           sx={{
             fontSize: TYPO.lg,

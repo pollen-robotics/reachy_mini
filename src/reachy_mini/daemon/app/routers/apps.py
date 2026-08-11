@@ -7,14 +7,17 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
     WebSocket,
 )
 from pydantic import BaseModel
 
 from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.manager import AppManager, AppStatus
+from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.dependencies import get_app_manager
+from reachy_mini.daemon.app.startup_app import rearm_startup_app_watcher
 
 router = APIRouter(prefix="/apps")
 
@@ -66,6 +69,16 @@ async def install_app(
     app_manager: "AppManager" = Depends(get_app_manager),
 ) -> dict[str, str]:
     """Install a new app by its info (background, returns job_id)."""
+    # HuggingFace Spaces are the only source kind installable via the API.
+    if app_info.source_kind != SourceKind.HF_SPACE:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"source_kind '{app_info.source_kind.value}' is not installable "
+                "via the API"
+            ),
+        )
+
     global _update_cache
     _update_cache = None  # Invalidate cache
 
@@ -78,11 +91,21 @@ async def install_app(
 @router.post("/remove/{app_name}")
 async def remove_app(
     app_name: str,
+    request: Request,
     app_manager: "AppManager" = Depends(get_app_manager),
 ) -> dict[str, str]:
     """Remove an installed app by its name (background, returns job_id)."""
     global _update_cache
     _update_cache = None  # Invalidate cache
+
+    # Clear the startup app if it's the one being removed, so the watcher stops
+    # trying to launch (and reinstall) it.
+    if startup_app_config.get_startup_app() == app_name:
+        startup_app_config.set_startup_app(None)
+        state = request.app.state
+        state.startup_app_antenna_watcher_task = await rearm_startup_app_watcher(
+            app_manager, state.daemon, None, state.startup_app_antenna_watcher_task
+        )
 
     job_id = bg_job_register.run_command("remove", app_manager.remove_app, app_name)
     return {"job_id": job_id}
@@ -118,6 +141,18 @@ async def start_app(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/start-app/{app_name}/no-evict")
+async def start_app_no_evict(
+    app_name: str,
+    app_manager: "AppManager" = Depends(get_app_manager),
+) -> AppStatus:
+    """Start an app only when the managed robot slot can be acquired atomically."""
+    try:
+        return await app_manager.start_app(app_name, evict_remote=False)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/restart-current-app")
 async def restart_app(
     app_manager: "AppManager" = Depends(get_app_manager),
@@ -146,6 +181,46 @@ async def current_app_status(
 ) -> AppStatus | None:
     """Get the status of the currently running app, if any."""
     return await app_manager.current_app_status()
+
+
+class StartupApp(BaseModel):
+    """The app configured to auto-start on the robot's first wake-up."""
+
+    startup_app: Optional[str] = None
+
+
+@router.get("/startup-app")
+async def get_startup_app() -> StartupApp:
+    """Get the app configured to auto-start on wake-up (null if unset)."""
+    return StartupApp(startup_app=startup_app_config.get_startup_app())
+
+
+@router.put("/startup-app")
+async def set_startup_app(
+    body: StartupApp,
+    request: Request,
+    app_manager: "AppManager" = Depends(get_app_manager),
+) -> StartupApp:
+    """Set (or clear, with null) the app that auto-starts on wake-up.
+
+    Must already be installed (install via /apps/install first). Applied live, so
+    no daemon restart is needed.
+    """
+    name = body.startup_app
+    if name:
+        installed = await app_manager.list_available_apps(SourceKind.INSTALLED)
+        if not any(a.name == name for a in installed):
+            raise HTTPException(
+                status_code=400, detail=f"App '{name}' is not installed"
+            )
+
+    startup_app_config.set_startup_app(name)
+
+    state = request.app.state
+    state.startup_app_antenna_watcher_task = await rearm_startup_app_watcher(
+        app_manager, state.daemon, name, state.startup_app_antenna_watcher_task
+    )
+    return StartupApp(startup_app=name)
 
 
 class PrivateSpaceInstallRequest(BaseModel):

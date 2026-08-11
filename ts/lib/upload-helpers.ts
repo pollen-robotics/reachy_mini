@@ -53,3 +53,42 @@ export function clampVolume(v: number): number {
     const n = Math.round(Number(v) || 0);
     return Math.max(0, Math.min(100, n));
 }
+
+/**
+ * Map an audio Blob to the daemon's `"<container>-base64"` upload encoding.
+ *
+ * Transport is always base64; the prefix only tells the daemon which file
+ * extension to write so GStreamer playbin picks the right demuxer (playbin
+ * also sniffs content, so this is a hint, not a hard requirement). We forward
+ * the Blob's own MIME type rather than forcing WAV — the daemon already decodes
+ * any container it supports. Unknown or empty types fall back to `wav-base64`,
+ * so legacy WAV recordings and untyped Blobs are unchanged.
+ *
+ * Container set mirrors the daemon's `UploadAudioStartCmd.encoding` enum and
+ * `media.py` `ALLOWED_SOUND_EXTENSIONS`.
+ */
+export function audioUploadEncoding(blob: Blob): string {
+    const mime = (blob.type || '').toLowerCase().split(';')[0]?.trim() ?? '';
+    switch (mime) {
+        case 'audio/ogg':
+        case 'application/ogg':
+            return 'ogg-base64';
+        case 'audio/opus':
+            return 'opus-base64';
+        case 'audio/mpeg':
+        case 'audio/mp3':
+            return 'mp3-base64';
+        case 'audio/flac':
+        case 'audio/x-flac':
+            return 'flac-base64';
+        case 'audio/mp4':
+        case 'audio/m4a':
+        case 'audio/x-m4a':
+            return 'm4a-base64';
+        case 'audio/aac':
+            return 'aac-base64';
+        default:
+            // audio/wav, audio/x-wav, audio/wave, unknown, or empty.
+            return 'wav-base64';
+    }
+}

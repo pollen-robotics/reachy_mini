@@ -1,20 +1,28 @@
-# JavaScript SDK & Web Apps
+# JavaScript SDK runtime reference
 
-Reachy Mini supports **full JavaScript web apps** that run entirely in the browser. No install, no server, no Python — just open a URL and control your robot from any device, including your phone.
+> **Building a Reachy Mini JS app?** The single source of truth is
+> [`ts/APP_CREATION_GUIDE.md`](../../../ts/APP_CREATION_GUIDE.md) at
+> the repo root. It covers scaffolding, `public/icon.svg`, the host
+> shell, `sdk: static` deploy,
+> `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host
+> ↔ embed contract. **Pin the SDK to
+> `@pollen-robotics/reachy-mini-sdk@1.8.0`** (the stable release
+> validated against the host shell + daemon).
+>
+> **This file** is the runtime API surface of the `ReachyMini` class
+> you receive from `handle.reachy` once `connectToHost()` resolves:
+> methods, events, properties, state machine, and the daemon-side
+> recorded-move playback API. Bookmark it after you've shipped a
+> first app from the guide.
 
-## Why Web Apps?
+Reachy Mini ships a browser SDK that drives a robot over WebRTC.
+The npm package `@pollen-robotics/reachy-mini-sdk` exposes:
 
-The Python SDK is powerful but requires installation, GStreamer dependencies, and a capable machine. Web apps take a different approach:
-
-- **Zero install** — open a link, you're in. Save disk space and setup time.
-- **Cross-platform** — works on any device with a browser: laptop, tablet, phone.
-- **Run from anywhere** — control your robot from the other side of the world.
-- **Leverage device hardware** — use your phone's microphone, speakers, and touchscreen.
-- **Instant sharing** — send someone a link, they can use the app immediately.
-
-Web apps are deployed as **static Hugging Face Spaces** (`sdk: static`). There is no server-side code — the browser connects directly to the robot over WebRTC via a central signaling server.
-
-> Python apps are not going away. Web apps are a complementary option, especially suited for lightweight control, remote access, and quick demos.
+- The `ReachyMini` class (the SDK runtime documented below).
+- The host shell + embed adapter under the `./host*` subpath
+  exports (`./host`, `./host/auto`, `./host/embed`, `./host/protocol`).
+  See [`ts/APP_CREATION_GUIDE.md`](../../../ts/APP_CREATION_GUIDE.md)
+  for the integration recipe.
 
 ## Architecture
 
@@ -38,156 +46,19 @@ Web apps are deployed as **static Hugging Face Spaces** (`sdk: static`). There i
 └─────────────────────────────────┘
 ```
 
-1. **Your app** is a static HTML/JS page hosted on Hugging Face Spaces.
-2. **reachy-mini-sdk.js** handles authentication, signaling, and WebRTC negotiation.
-3. The **signaling server** relays SDP offers/answers and ICE candidates. It also validates Hugging Face OAuth tokens.
-4. Once the WebRTC connection is established, **video, audio, and commands flow peer-to-peer** — the signaling server is no longer in the path.
+1. Your app is a static HTML/JS page hosted on Hugging Face Spaces.
+2. The SDK handles authentication, signaling, and WebRTC negotiation.
+3. The signaling server relays SDP offers/answers and ICE candidates
+   and validates Hugging Face OAuth tokens.
+4. Once the WebRTC connection is established, video, audio, and
+   commands flow peer-to-peer; the signaling server is no longer in
+   the path.
 
-## Quick Start
-
-### 1. Create a Hugging Face Space
-
-Create a new Space on [huggingface.co](https://huggingface.co/new-space) with `sdk: static`.
-
-Your `README.md` front matter should look like:
-
-```yaml
----
-title: My Reachy Mini App
-emoji: 🤖
-sdk: static
-pinned: false
-hf_oauth: true
-hf_oauth_expiration_minutes: 480
----
-```
-
-`hf_oauth: true` is required — it enables the Hugging Face login button that the signaling server uses for authentication.
-
-### 2. Add the SDK
-
-In your `index.html`, import the SDK as an ES module:
-
-```html
-<script type="module">
-import { ReachyMini } from "./reachy-mini-sdk.js";
-
-const robot = new ReachyMini();
-</script>
-```
-
-You can grab `reachy-mini-sdk.js` from the [reference example](https://huggingface.co/spaces/cduss/webrtc_example) or from the npm CDN:
-
-```js
-import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk/+esm";
-```
-
-> The same npm package also ships the optional **host shell** (OAuth + robot picker + iframe lifecycle) for apps deployed as Hugging Face Spaces, under the `./host*` subpath exports:
-> ```js
-> import { mountHost } from "@pollen-robotics/reachy-mini-sdk/host/auto";
-> import { connectToHost } from "@pollen-robotics/reachy-mini-sdk/host/embed";
-> ```
-> See the [host README](https://github.com/pollen-robotics/reachy_mini/tree/main/ts/host) for the full integration recipe.
-
-### 3. Connect to your robot
-
-```js
-// Authenticate with Hugging Face
-if (!await robot.authenticate()) {
-    robot.login();  // redirects to HF login page
-    return;
-}
-
-// Connect to the signaling server
-await robot.connect();
-
-// Wait for robots to appear
-robot.addEventListener("robotsChanged", (e) => {
-    const robots = e.detail.robots;
-    console.log("Available robots:", robots);
-});
-
-// Start a session with a specific robot
-const detach = robot.attachVideo(document.querySelector("video"));
-await robot.startSession(robotId);
-
-// You're live — video is streaming, data channel is open
-```
-
-### 4. Control the robot
-
-```js
-// Move the head (roll, pitch, yaw in degrees)
-robot.setHeadRpyDeg(0, 10, -5);
-
-// Move the antennas (right, left in degrees)
-robot.setAntennasDeg(30, -30);
-
-// Rotate the body (yaw in degrees)
-robot.setBodyYawDeg(15);
-
-// Atomic raw-units update (single datachannel message; no XYZ loss)
-robot.setTarget({
-    head: rpyToMatrix(0, 10, -5).flat(),    // number[16] flat 4×4
-    antennas: [degToRad(30), degToRad(-30)],
-    body_yaw: degToRad(15),
-});
-
-// Play a sound file on the robot
-robot.playSound("wake_up.wav");
-
-// Send any JSON command via the data channel
-robot.sendRaw({ my_custom_command: "hello" });
-```
-
-### 5. Receive robot state
-
-```js
-// Emitted every ~500ms while streaming. Wire-shape, raw units —
-// use the exported math utilities for human conversions.
-robot.addEventListener("state", (e) => {
-    const { head, antennas, body_yaw, motor_mode, is_move_running } = e.detail;
-    // head:            number[16]            — flat row-major 4×4
-    // antennas:        [rightRad, leftRad]
-    // body_yaw:        number                — radians
-    // motor_mode:      "enabled" | "disabled" | "gravity_compensation"
-    // is_move_running: boolean
-    const rpy = matrixToRpy(head);   // { roll, pitch, yaw } in degrees
-});
-```
-
-### 6. Audio
-
-```js
-// Unmute robot speaker (muted by default in browser)
-robot.setAudioMuted(false);
-
-// Unmute your microphone (bidirectional audio, if robot supports it)
-robot.setMicMuted(false);
-
-// Check if bidirectional audio is available
-robot.addEventListener("micSupported", (e) => {
-    console.log("Mic supported:", e.detail.supported);
-});
-
-// XVF3800 audio-board tuning. Available on both Lite and Wireless — the
-// daemon owns the USB handle (on Lite that's your laptop, on Wireless
-// it's the CM4), and these calls cross the same DataChannel as the
-// volume helpers above.
-const values = await robot.readAudioParameter("AUDIO_MGR_MIC_GAIN"); // number[] | null
-const ok = await robot.applyAudioConfig([
-    { name: "AUDIO_MGR_MIC_GAIN", values: [1.0] },
-]); // boolean
-```
-
-### 7. Cleanup
-
-```js
-detach();                    // remove video binding
-await robot.stopSession();   // back to 'connected' state
-robot.disconnect();          // close signaling (keeps auth)
-robot.logout();              // clear HF credentials
-```
+When you use the host shell (`mountHost()` + `connectToHost()`,
+documented in [`ts/APP_CREATION_GUIDE.md`](../../../ts/APP_CREATION_GUIDE.md)),
+the steps below are handled for you. The class-level API documented
+here is what you use **after** `connectToHost()` resolves, or what
+you call directly if you opted out of the host shell.
 
 ## API Reference
 
@@ -196,7 +67,13 @@ robot.logout();              // clear HF credentials
 ```js
 new ReachyMini({
     signalingUrl: "https://pollen-robotics-reachy-mini-central.hf.space",  // default
-    enableMicrophone: true,  // default — request mic on startSession()
+    clientId: "my-app",              // optional — OAuth client / app id
+    appName: "My App",               // optional — label advertised to the robot
+    videoJitterBufferTargetMs: 0,    // optional — 0 = render ASAP (teleop); omit for default browser buffering
+    autoStartFromUrl: false,         // optional — auto startSession() when the URL carries a robot_peer_id hint
+    // NOTE: `enableMicrophone` is deprecated and ignored. The SDK never grabs
+    // the user's mic; it always wires a silent placeholder audio sender you
+    // can replaceTrack() with your own audio (TTS, files, or the user's mic).
 })
 ```
 
@@ -208,18 +85,27 @@ new ReachyMini({
      └─────────────────────────────┘
 ```
 
+> **One-shot bring-up.** `autoConnect(options?)` runs the whole
+> auth → `connect()` → robot pick → `startSession()` → `ensureAwake()`
+> chain and resolves to `{ robotId, robotName, isEmbedded }`. It
+> auto-picks when exactly one robot is free, otherwise calls your
+> `options.pickRobot(robots)` callback. This is the recommended entry
+> point when you're **not** using the host shell.
+
 ### Properties (read-only)
 
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `state` | `string` | `"disconnected"`, `"connected"`, or `"streaming"` |
 | `robots` | `Array` | Available robots: `[{ id, meta: { name } }]` |
-| `robotState` | `Object` | Latest `state` event detail — `{ head: number[16], antennas: [rRad, lRad], body_yaw, motor_mode, is_move_running }` (wire shape) |
+| `robotState` | `Object` | Latest `state` event detail — `{ head: number[16], antennas: [rRad, lRad], head_joint_positions: number[7], antennas_joint_positions: [rRad, lRad], body_yaw, motor_mode, is_move_running }` (wire shape). `head_joint_positions` is per-motor radians: body yaw at `[0]`, the 6 Stewart-platform neck motors at `[1..6]`; `antennas_joint_positions` is `[right, left]` in radians. Both fields appear only once the daemon emits them. |
 | `username` | `string\|null` | HF username after `authenticate()` |
 | `isAuthenticated` | `boolean` | True if a valid HF token is available |
 | `micSupported` | `boolean` | True if robot offers bidirectional audio |
 | `micMuted` | `boolean` | Your microphone mute state |
 | `audioMuted` | `boolean` | Robot speaker mute state (local only) |
+| `preselectedRobotId` | `string\|null` | Robot id read from `?robot_peer_id=` / `#robot_peer_id=` (set by the host iframe) |
+| `isEmbedded` | `boolean` | `true` iff `preselectedRobotId !== null` — UX branching helper (embed vs standalone) |
 
 ### Methods
 
@@ -228,25 +114,58 @@ new ReachyMini({
 | `authenticate()` | `Promise<boolean>` | Check for existing HF OAuth token |
 | `login()` | — | Redirect to HF login page |
 | `connect()` | `Promise` | Open SSE connection, receive robot list |
+| `autoConnect(opts?)` | `Promise<{robotId, robotName, isEmbedded}>` | One-shot bring-up: auth → connect → pick robot → session → wake. Auto-picks a single free robot, else calls `opts.pickRobot(robots)` |
 | `startSession(robotId)` | `Promise` | Negotiate WebRTC, resolves when video + data ready |
 | `stopSession()` | `Promise` | End session, back to `connected` |
 | `disconnect()` | — | Close signaling (keeps auth) |
 | `logout()` | — | Clear HF credentials |
 | `attachVideo(videoEl)` | `() => void` | Bind video stream to element; returns cleanup function |
 | `setTarget({ head?, antennas?, body_yaw? })` | `boolean` | Atomic raw-units update — `head` is `number[16]` (flat 4×4), `antennas` is `[rRad, lRad]`, `body_yaw` is radians |
+| `gotoTarget({ head?, antennas?, body_yaw?, duration })` | `boolean` | Smooth daemon-side interpolation to a target pose over `duration` seconds (same wire units as `setTarget`). Throws `TypeError` on invalid input |
 | `setHeadRpyDeg(roll, pitch, yaw)` | `boolean` | Set head orientation in degrees (wraps `setTarget`) |
 | `setAntennasDeg(right, left)` | `boolean` | Set antenna positions in degrees (wraps `setTarget`) |
 | `setBodyYawDeg(yaw)` | `boolean` | Set body yaw in degrees (wraps `setTarget`) |
+| `startHeadTracking(weight?)` / `stopHeadTracking()` | `boolean` | Enable / disable daemon-side visual head tracking. `weight` in `[0,1]` blends tracking with app motion (default `1.0`) |
+| `getTrackedFace()` | `Promise<FaceTarget\|null>` | Latest face seen by head tracking — `{ detected, x, y, roll }` |
+| `setMotorMode(mode)` | `boolean` | `"enabled"` (position control), `"disabled"` (limp), or `"gravity_compensation"` (float by hand) |
+| `setMotorTorque(on, ids?)` | `boolean` | Toggle torque; per-motor when `ids` is given, else global |
+| `wakeUp(opts?)` / `gotoSleep(opts?)` | `Promise<void>` | Play the wake-up / sleep trajectory; resolves on daemon completion (rejects after `opts.timeoutMs`, default 8000). `wakeUp` enables motors first |
+| `isAwake()` | `boolean` | Awake state derived from the cached `motor_mode` |
+| `ensureAwake(timeoutMs?)` | `Promise<boolean>` | Idempotent wake-up: no-op if already awake; does not await the trajectory |
 | `playSound(filename)` | `boolean` | Play a sound file on the robot |
+| `clearIncomingAudio()` | `boolean` | Drop audio queued for the robot speaker (barge-in) |
 | `sendRaw(data)` | `boolean` | Send arbitrary JSON via data channel |
 | `requestState()` | `boolean` | Request a state snapshot |
 | `setAudioMuted(muted)` | — | Mute/unmute robot speaker (local) |
 | `setMicMuted(muted)` | — | Mute/unmute your microphone |
+| `getVolume()` / `setVolume(v)` | `Promise<number\|null>` | Read / set speaker volume (integer `0..100`, clamped); resolves the applied value or `null` if unavailable |
+| `getMicrophoneVolume()` / `setMicrophoneVolume(v)` | `Promise<number\|null>` | Read / set microphone gain (integer `0..100`, clamped) |
+| `getVersion()` | `Promise<string\|null>` | Daemon version string |
+| `getHardwareId()` | `Promise<string\|null>` | Hardware ID (USB serial); `null` on developer machines |
+| `applyAudioConfig(config, opts?)` | `Promise<boolean>` | Write a batch of XVF3800 audio-board parameters (`[{ name, values }]`); `opts.verify` reads them back (default `true`). Wireless only |
+| `readAudioParameter(name)` | `Promise<number[]\|null>` | Read one XVF3800 parameter by name |
+| `subscribeLogs({ onLine, onError? })` | `() => void` | Stream the daemon's `journalctl` logs over the data channel; returns an unsubscribe fn |
+| `playRecordedMove(name, opts?)` | `boolean` | Play a named move (motion + bundled sound) from a HF dataset, daemon-side. Fire-and-forget (resolves on send, not on playback end). `opts.dataset` defaults to the pre-downloaded emotions library; `opts.initialGotoDuration` sets the lead-in goto |
 | `playMove(motion, opts?)` | `Promise<{finished?, cancelled?, error?, has_audio?}>` | Upload + play a recorded move (optionally with audio) on the daemon's local clock; resolves when playback ends — see [Daemon-side recorded-move playback](#daemon-side-recorded-move-playback) |
 | `cancelMove()` | `boolean` | Cancel an in-flight `playMove` |
 | `uploadAudio(blob, opts?)` | `Promise<string>` | Upload a standalone audio slot, returns `uploadId` — pair with `playUploadedAudio` for record-time sync |
 | `playUploadedAudio(uploadId, opts?)` | `Promise<{started: true, ...}>` | Trigger daemon-side standalone audio playback; resolves on the daemon's `started` broadcast (use as a sync anchor) |
 | `cancelAudio()` | `boolean` | Cancel an in-flight `playUploadedAudio` |
+| `subscribePose()` / `unsubscribePose()` | `boolean` | Opt into a ~30 Hz daemon-pushed pose stream (unreliable/unordered data channel) that fires `state` events, instead of the 500 ms `requestState` poll. Refcounted — pair each subscribe with one unsubscribe. No-op on daemons without the pose channel |
+| `getFirstWakeUp()` / `setFirstWakeUp(done)` | `Promise<boolean\|null>` | Read / persist the robot-wide "first wake-up wizard completed" flag. `null` = channel closed or daemon predates the command (fail-open: skip the wizard) |
+| `getRobotName()` / `setRobotName(name)` | `Promise<string\|null>` | Read / persist the robot display name. Applied live by the daemon (status + central relay + mDNS), no restart needed. Resolves the stored name, or `null` on error / unsupported |
+| `signOut()` | `Promise<boolean\|null>` | Sign the robot out of Hugging Face (daemon deletes its stored HF token, de-registering it from central). Reaches the robot remotely over the data channel. The session may drop right after the ack — expected |
+
+> **`setTarget` head-vs-body coupling.** The `head` matrix is in the
+> world frame. Sending `setTarget({ body_yaw })` alone rotates the
+> body *but not the head's commanded world yaw* — the head's gaze
+> stays fixed in world frame, so visually it appears to counter-rotate
+> as the body turns. For tank-style "head follows body", add the body
+> yaw delta to the head RPY's yaw and ship `head` + `body_yaw` in the
+> same `setTarget` call. The baseline for the head yaw must be the
+> last *commanded* value you tracked yourself, not `state.head` from
+> the telemetry event — telemetry lags one WebRTC RTT and cumulative
+> deltas computed against it stall under rapid input.
 
 ### Events
 
@@ -259,19 +178,31 @@ Use `robot.addEventListener(name, handler)` — the SDK extends `EventTarget`.
 | `robotsChanged` | `{ robots }` | Robot list updated |
 | `streaming` | `{ sessionId, robotId }` | WebRTC session active |
 | `sessionStopped` | `{ reason }` | Session ended |
-| `state` | `{ head, antennas, body_yaw, motor_mode, is_move_running }` | Robot state update (~500ms; wire shape — see "Receive robot state" above) |
+| `state` | Same shape as the `robotState` property (see above) | Robot state update (~500 ms polled, or ~30 Hz when subscribed via `subscribePose()`; wire shape) |
 | `videoTrack` | `{ track, stream }` | Video track available |
 | `micSupported` | `{ supported }` | Bidirectional audio availability |
 | `error` | `{ source, error }` | Error from `signaling`, `webrtc`, or `robot` |
+| `sessionRejected` | `{ reason, activeApp }` | The robot refused the session (e.g. busy with another app) |
+| `iceStateChange` | `{ state }` | Granular ICE transition (`RTCIceConnectionState`); a transient `disconnected` is debounced before it escalates to `error` |
+| `networkOnline` / `networkOffline` | `{}` | Browser connectivity regained / lost |
+| `networkChange` | `{ effectiveType?, downlink?, rtt?, saveData? }` | Transport swap (Wi-Fi ↔ cellular) via the NetworkInformation API; best-effort, Chromium-only |
 
 ### Math Utilities
 
 ```js
-import { rpyToMatrix, matrixToRpy, degToRad, radToDeg } from "./reachy-mini-sdk.js";
+import { rpyToMatrix, matrixToRpy, degToRad, radToDeg } from "@pollen-robotics/reachy-mini-sdk";
 
 rpyToMatrix(roll, pitch, yaw)  // degrees → 4×4 rotation matrix (ZYX)
 matrixToRpy(matrix)            // 4×4 matrix → { roll, pitch, yaw } in degrees
 ```
+
+### Advanced: JSON-RPC & daemon admin
+
+Beyond the typed surface above, the runtime object exposes lower-level hooks (not part of the host-shell typed handle — reach for these only when you need them):
+
+- `rpcCall(method, params?, { timeoutMs? })` — send a JSON-RPC request over the data channel and await the correlated result (e.g. app-defined methods).
+- `onNotification(method, cb)` — subscribe to one-way JSON-RPC notifications pushed by the robot/app (e.g. `conversation.turn`); returns an unsubscribe fn.
+- `startDaemonUpdate({ preRelease?, onProgress? })` — trigger a PyPI update of the daemon. It restarts on success (which tears the session down), so treat a successful reconnect as the "done" signal; `onProgress` fires with `status: "failed"` if the install errors first.
 
 ## Daemon-side recorded-move playback
 
@@ -333,6 +264,56 @@ Audio must be canonical **16 kHz mono 16-bit PCM WAV**. Apps are responsible for
 
 `playMove` and `uploadAudio` pace chunk sends on the data channel's `bufferedAmount` so multi-megabyte uploads (a 3-min song's WAV is ~6 MB base64) don't degrade other channels on the same peer connection. There's no separate `pause` — to stop a long upload mid-way, close the session.
 
+## Live pose stream (30 Hz)
+
+By default the SDK refreshes `robotState` by polling `requestState()` every
+500 ms. For anything that mirrors the robot in real time (a 3D view, a
+"wait for the move to finish" watcher), opt into the daemon's **pose
+stream** instead: it *pushes* the state at ~30 Hz over a dedicated
+unreliable/unordered data channel, firing the same `state` events.
+
+```js
+robot.subscribePose();               // start the push stream
+robot.addEventListener("state", (e) => {
+    // e.detail.head_joint_positions → per-motor radians (body yaw + 6 neck)
+    render(e.detail);
+});
+
+// Later, when this consumer no longer needs the stream:
+robot.unsubscribePose();
+```
+
+The subscription is **refcounted**: multiple consumers share one daemon-side
+stream, so pair every `subscribePose()` with exactly one `unsubscribePose()`
+— the daemon only stops pushing once the last consumer releases. Frames that
+arrive out of order are dropped (the channel is unordered). Against an older
+daemon that has no pose channel this is a no-op; fall back to `requestState()`
+polling there.
+
+## Robot onboarding & management
+
+These daemon-side commands power first-run setup and remote administration.
+Each resolves `null` when the data channel isn't open or the daemon predates
+the command, so **fail-open**: treat `null` as "unsupported" and skip the
+gated UI.
+
+```js
+// First wake-up wizard (robot-wide, persisted on the robot).
+if ((await robot.getFirstWakeUp()) === false) {
+    await runWakeUpWizard();
+    await robot.setFirstWakeUp(true);
+}
+
+// Robot display name — applied live (status + central relay + mDNS), no restart.
+const name = await robot.getRobotName();
+await robot.setRobotName("Marvin");
+
+// Sign the robot out of Hugging Face (deletes its stored token; the robot
+// disappears from its owner's list until set up again). The session may
+// tear down right after the ack — that's expected.
+await robot.signOut();
+```
+
 ## Security
 
 - Authentication goes through Hugging Face OAuth — only users logged in to HF can access the signaling server.
@@ -345,9 +326,12 @@ Audio must be canonical **16 kHz mono 16-bit PCM WAV**. Apps are responsible for
 - The robot must have a valid Hugging Face token configured (see [Usage](../platforms/reachy_mini/usage)).
 - Currently supported on **wireless versions** only.
 
-## Example
+## Working examples
 
-A full working example is available as a Hugging Face Space:
-[cduss/webrtc_example](https://huggingface.co/spaces/cduss/webrtc_example)
+The three reference apps maintained alongside the SDK are the canonical worked examples. They all use the host shell pattern and the current SDK pin:
 
-It demonstrates video streaming, head/antenna control, bidirectional audio, and sound playback — all from a single static HTML page.
+- [`pollen-robotics/reachy_mini_minimal_conversation`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation) — vanilla TS + Vite.
+- [`pollen-robotics/reachy_mini_emotions`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions) — React 19 + MUI 7 + Vite.
+- [`pollen-robotics/reachy_mini_telepresence`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence) — React 19 + MUI 7 + Vite with camera + media streams.
+
+Clone the closest one and trim. See [`ts/APP_CREATION_GUIDE.md`](../../../ts/APP_CREATION_GUIDE.md) for the step-by-step.

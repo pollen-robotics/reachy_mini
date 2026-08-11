@@ -103,6 +103,21 @@ class MdnsServiceRegistration:
         thread.start()
         thread.join(timeout=5.0)
 
+    def update_name(self, robot_name: str) -> None:
+        """Re-advertise the service under a new name.
+
+        Unregisters the current service (if any) then registers a fresh
+        one so a live rename shows up on the LAN without a daemon restart.
+        No-op when the name is unchanged; never raises (register /
+        unregister already swallow their own errors).
+        """
+        new_name = (robot_name or "").strip()
+        if not new_name or new_name == self._robot_name:
+            return
+        self.unregister()
+        self._robot_name = new_name
+        self.register()
+
     def _do_register(self) -> None:
         try:
             pkg_version = version("reachy_mini")

@@ -5,7 +5,6 @@ without any reachy_mini import chain (media_manager, GStreamer, etc.).
 """
 
 import os
-import platform
 
 import pytest
 

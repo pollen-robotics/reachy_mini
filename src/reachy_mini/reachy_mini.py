@@ -22,6 +22,7 @@ from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import (
     AppendRecordCmd,
     DaemonStatus,
+    FaceTarget,
     GotoTaskRequest,
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
@@ -29,6 +30,7 @@ from reachy_mini.io.protocol import (
     SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
+    SetHeadTrackingCmd,
     SetSpeechOffsetsCmd,
     SetTargetCmd,
     SetTorqueCmd,
@@ -38,10 +40,15 @@ from reachy_mini.io.protocol import (
 )
 from reachy_mini.io.ws_client import WSClient
 from reachy_mini.media.camera_constants import get_camera_specs_by_name
-from reachy_mini.media.camera_utils import undistort_points
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
+from reachy_mini.utils.discovery import find_robots
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
+from reachy_mini.vision.look_at import (
+    default_head_to_camera_transform,
+    look_at_image_pose,
+    look_at_world_pose,
+)
 
 # Behavior definitions
 INIT_HEAD_POSE = np.eye(4)
@@ -70,16 +77,19 @@ SLEEP_HEAD_POSE = np.array(
 
 ConnectionMode = Literal["auto", "localhost_only", "network"]
 
+DEFAULT_ROBOT_NAME = "reachy_mini"
+
 
 class ReachyMini:
     """Reachy Mini class for controlling a simulated or real Reachy Mini robot.
 
     Args:
-        robot_name: Name of the robot, defaults to "reachy_mini".
+        robot_name: Name of the robot, defaults to "reachy_mini". A non-default
+            name is validated locally or resolved via mDNS.
         host: Hostname or IP of the daemon. Defaults to "reachy-mini.local".
             In ``"auto"`` mode this is only used as a fallback when localhost
-            is unreachable, so the default works out of the box for local
-            development.
+            is unreachable. For a non-default *robot_name* it is also tried as a
+            last resort when mDNS discovery does not locate the robot.
         port: Port of the daemon's FastAPI server. Defaults to 8000.
         connection_mode: Select how to connect to the daemon. Use
             `"localhost_only"` to restrict connections to daemons running on
@@ -93,7 +103,7 @@ class ReachyMini:
 
     def __init__(
         self,
-        robot_name: str = "reachy_mini",
+        robot_name: str = DEFAULT_ROBOT_NAME,
         host: str = "reachy-mini.local",
         port: int = 8000,
         connection_mode: ConnectionMode = "auto",
@@ -108,11 +118,14 @@ class ReachyMini:
         """Initialize the Reachy Mini robot.
 
         Args:
-            robot_name (str): Name of the robot, defaults to "reachy_mini".
+            robot_name: Name of the robot, defaults to "reachy_mini". A
+                non-default name is validated locally or resolved via mDNS.
             host (str): Hostname or IP of the daemon. Defaults to
                 "reachy-mini.local".  In ``"auto"`` mode (the default) the
                 client first tries ``localhost``; *host* is only used as a
-                fallback or when *connection_mode* is ``"network"``.
+                fallback or when *connection_mode* is ``"network"``. For a
+                non-default *robot_name* it is also tried as a last resort when
+                mDNS discovery does not locate the robot.
             port (int): Port of the daemon's FastAPI server. Defaults to 8000.
             connection_mode: `"auto"` (default), `"localhost_only"` or `"network"`.
                 `"auto"` will first try daemons on localhost and fall back to
@@ -153,15 +166,7 @@ class ReachyMini:
         self._log_level = log_level
         self._media_backend = media_backend
 
-        self.T_head_cam = np.eye(4)
-        self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
-        self.T_head_cam[:3, :3] = np.array(
-            [
-                [0, 0, 1],
-                [-1, 0, 0],
-                [0, -1, 0],
-            ]
-        )
+        self.T_head_cam = default_head_to_camera_transform()
 
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
 
@@ -249,7 +254,11 @@ class ReachyMini:
 
         """
         def _send_offsets(offsets: tuple[float, float, float, float, float, float]) -> None:
-            self.client.send_command(SetSpeechOffsetsCmd(offsets=list(offsets)))
+            try:
+                self.client.send_command(SetSpeechOffsetsCmd(offsets=list(offsets)))
+            except ConnectionError:
+                # best-effort cosmetic motion; ws may already be closing at teardown
+                pass
 
         # Enable SDK-side wobbling (LOCAL backend only, no-op for WEBRTC)
         self.media_manager.enable_wobbling(_send_offsets)
@@ -262,6 +271,28 @@ class ReachyMini:
         self.media_manager.disable_wobbling()
         self.client.send_command(SetWobblingCmd(enabled=False))
         self.logger.info("Head wobbling disabled")
+
+    def start_head_tracking(self, weight: float = 1.0) -> None:
+        """Enable daemon-side visual head tracking.
+
+        Args:
+            weight: Blend factor in ``[0, 1]``. ``1`` lets tracking fully own the
+                head orientation; intermediate values let app motion show through
+                while biasing toward the face; ``0`` pauses detection (freeing the
+                head and CPU) without tearing the tracker down, for cheap on/off.
+
+        """
+        self.client.send_command(SetHeadTrackingCmd(enabled=True, weight=weight))
+        self.logger.debug("Head tracking enabled (weight=%.1f)", weight)
+
+    def stop_head_tracking(self) -> None:
+        """Disable daemon-side visual head tracking."""
+        self.client.send_command(SetHeadTrackingCmd(enabled=False))
+        self.logger.info("Head tracking disabled")
+
+    def get_tracked_face(self, wait: bool = True, timeout: float = 5.0) -> FaceTarget:
+        """Return the latest face observed by daemon-side head tracking."""
+        return self.client.get_status(wait=wait, timeout=timeout).face_target
 
     @property
     def imu(self) -> Dict[str, List[float] | float] | None:
@@ -436,6 +467,66 @@ class ReachyMini:
     ) -> tuple[WSClient, ConnectionMode]:
         """Create a client according to the requested mode, adding auto fallback."""
         requested_mode = cast(ConnectionMode, requested_mode.lower())
+
+        if self.robot_name != DEFAULT_ROBOT_NAME:
+            if requested_mode != "network":
+                try:
+                    client = self._connect_and_verify_name(
+                        "localhost", self.port, timeout
+                    )
+                except (ConnectionError, TimeoutError) as error:
+                    if requested_mode == "localhost_only":
+                        raise ConnectionError(
+                            f"Could not connect to a local Reachy Mini daemon named "
+                            f"{self.robot_name!r}: {error}"
+                        ) from error
+                    self.logger.info(
+                        "No matching local daemon found (%s). Discovering %r via mDNS.",
+                        error,
+                        self.robot_name,
+                    )
+                else:
+                    self.logger.info("Connection mode selected: localhost_only")
+                    return client, "localhost_only"
+
+            matches = [
+                robot
+                for robot in find_robots(timeout=timeout)
+                if robot.name == self.robot_name
+            ]
+            if len(matches) > 1:
+                self.logger.warning(
+                    "Found %d daemons named %r on the network; using the first.",
+                    len(matches),
+                    self.robot_name,
+                )
+
+            candidates = [
+                (host, robot.port or self.port)
+                for robot in matches
+                for host in [*robot.addresses, robot.host]
+                if host
+            ]
+            # mDNS can be blocked, cross-subnet, or over a VPN. Always try the
+            # user-supplied host as a last resort; the name check makes it safe.
+            candidates.append((self.host, self.port))
+
+            last_error: Exception | None = None
+            for host, port in candidates:
+                try:
+                    client = self._connect_and_verify_name(host, port, timeout)
+                except (ConnectionError, TimeoutError) as error:
+                    last_error = error
+                    continue
+
+                self.logger.info("Connection mode selected: network")
+                return client, "network"
+
+            raise ConnectionError(
+                f"Could not connect to a Reachy Mini daemon named "
+                f"{self.robot_name!r} via mDNS or host {self.host!r}: {last_error}"
+            )
+
         if requested_mode == "auto":
             try:
                 client = self._connect_single(
@@ -492,6 +583,28 @@ class ReachyMini:
         """Connect once with the requested host/port and guard cleanup."""
         client = WSClient(host, port)
         client.wait_for_connection(timeout=timeout)
+        return client
+
+    def _connect_and_verify_name(
+        self, host: str, port: int, timeout: float
+    ) -> WSClient:
+        """Connect to host:port and verify the daemon advertises the expected name.
+
+        Raises ``ConnectionError``/``TimeoutError`` on connection failure, and
+        ``ConnectionError`` on a name mismatch. Never leaks a client.
+        """
+        client = self._connect_single(host=host, port=port, timeout=timeout)
+        try:
+            status = client.get_status(timeout=timeout)
+        except (ConnectionError, TimeoutError):
+            client.disconnect()
+            raise
+        if status.robot_name != self.robot_name:
+            client.disconnect()
+            raise ConnectionError(
+                f"Daemon at {host!r} is named {status.robot_name!r}, "
+                f"expected {self.robot_name!r}."
+            )
         return client
 
     def set_target(
@@ -661,7 +774,7 @@ class ReachyMini:
     ) -> npt.NDArray[np.float64]:
         """Make the robot head look at a point defined by a pixel position (u,v).
 
-        # TODO image of reachy mini coordinate system
+        Pixels are counted from the image top-left corner: u to the right, v down.
 
         Args:
             u (int): Horizontal coordinate in image frame.
@@ -693,33 +806,26 @@ class ReachyMini:
         if self.media.camera is None or self.media.camera.camera_specs is None:
             raise RuntimeError("Camera specs not set.")
 
-        x_n, y_n = undistort_points(
-            u,
-            v,
-            self.media.camera.K,  # type: ignore
-            self.media.camera.D,  # type: ignore
+        camera_matrix = self.media.camera.K
+        distortion = self.media.camera.D
+        if camera_matrix is None or distortion is None:
+            raise RuntimeError("Camera calibration is not set.")
+
+        target_head_pose = look_at_image_pose(
+            u=u,
+            v=v,
+            K=camera_matrix,
+            D=distortion,
+            T_world_head=self.get_current_head_pose(),
+            T_head_cam=self.T_head_cam,
         )
+        if perform_movement:
+            if duration > 0:
+                self.goto_target(target_head_pose, duration=duration)
+            else:
+                self.set_target(target_head_pose)
 
-        ray_cam = np.array([x_n, y_n, 1.0])
-        ray_cam /= np.linalg.norm(ray_cam)
-
-        T_world_head = self.get_current_head_pose()
-        T_world_cam = T_world_head @ self.T_head_cam
-
-        R_wc = T_world_cam[:3, :3]
-        t_wc = T_world_cam[:3, 3]
-
-        ray_world = R_wc @ ray_cam
-
-        P_world = t_wc + ray_world
-
-        return self.look_at_world(
-            x=P_world[0],
-            y=P_world[1],
-            z=P_world[2],
-            duration=duration,
-            perform_movement=perform_movement,
-        )
+        return target_head_pose
 
     def look_at_world(
         self,
@@ -731,7 +837,7 @@ class ReachyMini:
     ) -> npt.NDArray[np.float64]:
         """Look at a specific point in 3D space in Reachy Mini's reference frame.
 
-        TODO include image of reachy mini coordinate system
+        The frame sits at the neutral head origin: x forward, y left, z up.
 
         Args:
             x (float): X coordinate in meters.
@@ -750,39 +856,7 @@ class ReachyMini:
         if duration < 0:
             raise ValueError("Duration can't be negative.")
 
-        # Head is at the origin, so vector from head to target position is directly the target position
-        # TODO FIX : Actually, the head frame is not the origin frame wrt the kinematics. Close enough for now.
-        target_position = np.array([x, y, z])
-        target_vector = target_position / np.linalg.norm(
-            target_position
-        )  # normalize the vector
-
-        # head_pointing straight vector
-        straight_head_vector = np.array([1, 0, 0])
-
-        # Calculate the rotation needed to align the head with the target vector
-        v1 = straight_head_vector
-        v2 = target_vector
-        axis = np.cross(v1, v2)
-        axis_norm = np.linalg.norm(axis)
-        if axis_norm < 1e-8:
-            # Vectors are (almost) parallel
-            if np.dot(v1, v2) > 0:
-                rot_mat = np.eye(3)
-            else:
-                # Opposite direction: rotate 180° around any perpendicular axis
-                perp = np.array([0, 1, 0]) if abs(v1[0]) < 0.9 else np.array([0, 0, 1])
-                axis = np.cross(v1, perp)
-                axis /= np.linalg.norm(axis)
-                rot_mat = R.from_rotvec(np.pi * axis).as_matrix()
-        else:
-            axis = axis / axis_norm
-            angle = np.arccos(np.clip(np.dot(v1, v2), -1.0, 1.0))
-            rotation_vector = angle * axis
-            rot_mat = R.from_rotvec(rotation_vector).as_matrix()
-
-        target_head_pose = np.eye(4)
-        target_head_pose[:3, :3] = rot_mat
+        target_head_pose = look_at_world_pose(x, y, z)
 
         # If perform_movement is True, execute the movement
         if perform_movement:
@@ -979,6 +1053,9 @@ class ReachyMini:
         """
         if not isinstance(record, dict):
             raise ValueError("Record must be a dictionary.")
+
+        if not self.is_recording:
+            return
 
         # Send the record data to the backend
         self.client.send_command(AppendRecordCmd(record=record))

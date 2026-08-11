@@ -49,6 +49,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 
 import { reachyHeadSvg } from '../assets';
+import { IdentityChipBar } from '../ui/design/IdentityChipBar';
 
 export type HostPhase =
   | 'signing-in'
@@ -71,6 +72,13 @@ export interface TopBarProps {
    *  flight / failed. The chip falls back to a first-letter glyph. */
   avatarUrl?: string | null;
   selectedRobotName?: string | null;
+  /** Physical transport of the selected robot (`wifi` / `usb` / …),
+   *  surfaced as the Lite/Wireless tag on the in-session identity
+   *  sub-line. `null` when no robot is selected. */
+  selectedRobotTransport?: string | null;
+  /** Rolling-min RTT (ms) the embed reports once live, or `null` while
+   *  not yet measured. Drives the latency pill on the sub-line. */
+  linkRttMs?: number | null;
   onSignOut(): void;
   onEndSession(): void;
 }
@@ -82,7 +90,9 @@ export function TopBar({
   hostPhase,
   userName,
   avatarUrl = null,
-  selectedRobotName: _selectedRobotName,
+  selectedRobotName = null,
+  selectedRobotTransport = null,
+  linkRttMs = null,
   onSignOut,
   onEndSession,
 }: TopBarProps): JSX.Element {
@@ -134,17 +144,16 @@ export function TopBar({
     >
       <Stack
         direction="row"
-        alignItems="center"
         spacing={1.25}
         sx={{
+          alignItems: 'center',
           py: 1,
           px: 2,
           // Same fixed height as the rest of the host shell expects
           // (the iframe layout reserves `--reachy-host-topbar-h`
           // px above it).
-          minHeight: 'var(--reachy-host-topbar-h)',
-        }}
-      >
+          minHeight: 'var(--reachy-host-topbar-h)'
+        }}>
         <AppLogo iconUrl={appIconUrl} emoji={appEmoji} />
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography
@@ -154,6 +163,24 @@ export function TopBar({
           >
             {appName}
           </Typography>
+          {/* In-session identity sub-line: the running app is the
+              headline (above); the robot it's driving + its link
+              facts (Lite/Wireless, live latency) read as the smaller
+              context line, mirroring the mobile app overlay. Only the
+              embed measures the live RTT (the host handed off its
+              WebRTC slot), so the latency pill is gated on a reported
+              value to avoid a misleading `0 ms`. */}
+          {sessionOpen && selectedRobotName && (
+            <Box sx={{ mt: 0.25 }}>
+              <IdentityChipBar
+                robotName={selectedRobotName}
+                transport={selectedRobotTransport}
+                linkRttMs={linkRttMs}
+                showLatency={linkRttMs !== null}
+                variant="secondary"
+              />
+            </Box>
+          )}
         </Box>
 
         {showEndSession && (
@@ -164,22 +191,36 @@ export function TopBar({
             onClick={handleEndSession}
             disabled={isStopping}
             startIcon={
-              isStopping ? (
-                <CircularProgress
-                  size={14}
-                  thickness={5}
-                  sx={{ color: 'inherit' }}
-                />
-              ) : (
-                <PowerSettingsNewIcon sx={{ fontSize: 16 }} />
-              )
+              // Wrap both the icon and the spinner in a fixed 16x16
+              // slot so the button width does NOT shift by ~2px when
+              // we swap glyphs during teardown. `CircularProgress`
+              // and `PowerSettingsNewIcon` otherwise render at
+              // slightly different intrinsic sizes.
+              <Box
+                sx={{
+                  width: 16,
+                  height: 16,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {isStopping ? (
+                  <CircularProgress
+                    size={14}
+                    thickness={5}
+                    sx={{ color: 'inherit' }}
+                  />
+                ) : (
+                  <PowerSettingsNewIcon sx={{ fontSize: 16 }} />
+                )}
+              </Box>
             }
             sx={{
               fontSize: 12.5,
               fontWeight: 600,
               py: 0.5,
               px: 1.25,
-              minWidth: 0,
               borderRadius: 999,
               textTransform: 'none',
               lineHeight: 1.1,
@@ -189,7 +230,12 @@ export function TopBar({
           </Button>
         )}
 
-        {isSignedIn && (
+        {/* Account menu (avatar + sign-out) is a PICKER-only affordance:
+            sign-out lives in the robot list, not mid-session. Once a
+            session is open we swap it for the "End session" button
+            above, so the right cluster shows exactly one primary action
+            for the current phase. */}
+        {isSignedIn && !showEndSession && (
           <AccountMenu
             username={userName}
             avatarUrl={avatarUrl}
@@ -308,7 +354,6 @@ function AccountMenu({
           }}
         />
       </ButtonBase>
-
       <Menu
         anchorEl={anchorEl}
         open={open}
@@ -371,7 +416,9 @@ function AccountMenu({
           </ListItemIcon>
           <ListItemText
             primary="Sign out"
-            primaryTypographyProps={{ fontSize: 14, fontWeight: 500 }}
+            slotProps={{
+              primary: { sx: { fontSize: 14, fontWeight: 500 } }
+            }}
           />
         </MenuItem>
       </Menu>

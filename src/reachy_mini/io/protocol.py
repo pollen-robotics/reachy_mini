@@ -7,17 +7,22 @@ Client->Server command types:
     goto_target, wake_up, goto_sleep, play_sound,
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
-    get_state, get_version, start_recording, stop_recording, append_record,
-    subscribe_logs, unsubscribe_logs, restart_daemon,
+    get_state, get_version, get_imu, start_recording, stop_recording, append_record,
+    get_robot_name, set_robot_name, delete_hf_token,
+    subscribe_logs, unsubscribe_logs, subscribe_pose, unsubscribe_pose,
+    restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
     play_uploaded_move, cancel_move,
-    play_uploaded_audio, cancel_audio,
-    apply_audio_config, read_audio_parameter
+    play_uploaded_audio, cancel_audio, clear_incoming_audio,
+    apply_audio_config, read_audio_parameter,
+    set_speech_offsets, set_wobbling, set_head_tracking, get_tracked_face
 
 Server->Client message types:
+    welcome (pushed once when the data channel opens),
     joint_positions, head_pose, imu_data, recorded_data,
-    daemon_status, task_progress
+    daemon_status, task_progress, log_line, log_stream_error,
+    update_progress
 """
 
 from datetime import datetime
@@ -28,6 +33,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, TypeAdapter
 
 from reachy_mini.utils.interpolation import InterpolationTechnique
+from reachy_mini.utils.robot_name import MAX_ROBOT_NAME_LENGTH
 
 # ------------------------------------------------------------------
 # Shared enums
@@ -82,6 +88,62 @@ class MockupSimBackendStatus(BaseModel):
     error: str | None = None
 
 
+class FaceTarget(BaseModel):
+    """Latest daemon-side face target used for head tracking."""
+
+    detected: bool = False
+    x: float | None = None
+    y: float | None = None
+    roll: float | None = None
+    ts: float | None = None
+
+
+class DoaSnapshot(BaseModel):
+    """Sound Direction of Arrival reading (ReSpeaker mic array).
+
+    ``angle`` is in radians: 0 = left, π/2 = front, π = right.
+    """
+
+    angle: float
+    speech_detected: bool
+
+
+class StateSnapshot(BaseModel):
+    """Present-state snapshot sent to WebRTC clients.
+
+    Payload of both the polled ``get_state`` reply (``{"state": ...}``)
+    and the pushed pose-stream frames (see :class:`PoseFrame`). The field
+    names are the wire contract already parsed by released JS SDKs —
+    keep them stable.
+
+    ``head_joint_positions`` carries the 7 per-motor head values (body
+    yaw at index 0), which is genuinely distinct from the ``head_pose``
+    matrix; the antennas need no such twin since ``antennas`` already IS
+    the two motor values.
+    """
+
+    head_pose: Optional[list[list[float]]] = None
+    antennas: Optional[list[float]] = None
+    head_joint_positions: Optional[list[float]] = None
+    body_yaw: float
+    motor_mode: MotorControlMode
+    is_recording: bool
+    is_move_running: bool
+    face_target: FaceTarget
+    doa: Optional[DoaSnapshot] = None
+
+
+class PoseFrame(BaseModel):
+    """One pushed pose-stream frame.
+
+    The state snapshot plus a monotonic ``seq`` so clients can drop
+    stale/out-of-order frames on the unordered ``pose`` channel.
+    """
+
+    state: StateSnapshot
+    seq: int
+
+
 class DaemonStatus(BaseModel):
     """Status of the Reachy Mini daemon."""
 
@@ -102,6 +164,7 @@ class DaemonStatus(BaseModel):
     wlan_ip: Optional[str] = None
     version: Optional[str] = None
     hardware_id: Optional[str] = None
+    face_target: FaceTarget = Field(default_factory=FaceTarget)
 
 
 # ------------------------------------------------------------------
@@ -233,6 +296,12 @@ class GetHardwareIdCmd(BaseModel):
     type: Literal["get_hardware_id"] = "get_hardware_id"
 
 
+class GetImuCmd(BaseModel):
+    """Query the current IMU reading (`ImuDataMsg`; null on IMU-less robots)."""
+
+    type: Literal["get_imu"] = "get_imu"
+
+
 class StartRecordingCmd(BaseModel):
     """Start recording joint data."""
 
@@ -280,6 +349,39 @@ class GetMicrophoneVolumeCmd(BaseModel):
 
     type: Literal["get_microphone_volume"] = "get_microphone_volume"
 
+
+# Robot display name. A persistent, robot-wide string (not per-session):
+# advertised to the central relay / mDNS and shown in the apps' robot list.
+# Defaults to the daemon's --robot-name; a client rename is stored on the
+# robot and wins over the default at the next daemon start.
+class GetRobotNameCmd(BaseModel):
+    """Query the persisted robot display name (null if unset)."""
+
+    type: Literal["get_robot_name"] = "get_robot_name"
+
+
+class SetRobotNameCmd(BaseModel):
+    """Set and persist the robot display name."""
+
+    type: Literal["set_robot_name"] = "set_robot_name"
+    name: str = Field(..., min_length=1, max_length=MAX_ROBOT_NAME_LENGTH)
+
+
+# Hugging Face account sign-out over the DataChannel.
+#
+# Remote counterpart of `DELETE /api/hf-auth/token` (`routers/hf_auth.py`):
+# clears the robot's own stored HF token so it de-registers from the
+# central signaling relay (a null-token notification drops the relay to
+# WAITING_FOR_TOKEN). Exposed over the typed transport so a Central-routed
+# owner can unlink the robot without an LAN HTTP path. The robot stays
+# offline until it is re-provisioned (BLE setup or the robot-side OAuth
+# begin URL).
+class DeleteHfTokenCmd(BaseModel):
+    """Delete the robot's stored Hugging Face token (sign the robot out)."""
+
+    type: Literal["delete_hf_token"] = "delete_hf_token"
+
+
 class SetSpeechOffsetsCmd(BaseModel):
     """Set head-wobbler speech offsets (composed with target pose before IK)."""
 
@@ -292,6 +394,21 @@ class SetWobblingCmd(BaseModel):
 
     type: Literal["set_wobbling"] = "set_wobbling"
     enabled: bool
+
+
+class SetHeadTrackingCmd(BaseModel):
+    """Enable or disable daemon-side visual head tracking."""
+
+    type: Literal["set_head_tracking"] = "set_head_tracking"
+    enabled: bool
+    weight: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class GetTrackedFaceCmd(BaseModel):
+    """Query the latest face seen by daemon-side head tracking."""
+
+    type: Literal["get_tracked_face"] = "get_tracked_face"
+
 
 # ------------------------------------------------------------------
 # Daemon log streaming over the DataChannel.
@@ -320,6 +437,26 @@ class UnsubscribeLogsCmd(BaseModel):
     """Stop the calling peer's log subscription. No-op if no stream."""
 
     type: Literal["unsubscribe_logs"] = "unsubscribe_logs"
+
+
+class SubscribePoseCmd(BaseModel):
+    """Subscribe the calling peer to the pushed pose stream.
+
+    While subscribed, the daemon pushes the robot's present state (same
+    envelope as ``get_state``, plus a monotonic ``seq``) to this peer over
+    the dedicated unreliable/unordered ``pose`` data channel at ~30 Hz. This
+    replaces polling ``get_state`` for a live mirror: pushing is immune to
+    the Wi-Fi round-trip latency and head-of-line blocking that make polling
+    lag. Idempotent - safe to send again on reconnect.
+    """
+
+    type: Literal["subscribe_pose"] = "subscribe_pose"
+
+
+class UnsubscribePoseCmd(BaseModel):
+    """Stop the calling peer's pose stream. No-op if not subscribed."""
+
+    type: Literal["unsubscribe_pose"] = "unsubscribe_pose"
 
 
 # XVF3800 audio-board configuration over the DataChannel.
@@ -376,6 +513,38 @@ class RestartDaemonCmd(BaseModel):
     """
 
     type: Literal["restart_daemon"] = "restart_daemon"
+
+
+# ------------------------------------------------------------------
+# Remote daemon update over the DataChannel.
+#
+# Remote counterpart of ``POST /update/start`` (``routers/update.py``):
+# upgrades the ``reachy_mini`` package in the daemon venv from PyPI.
+# Exposed over the typed transport so Central-routed peers can trigger
+# an update without an LAN HTTP path.
+#
+# Like ``restart_daemon``, this is fire-and-ack: the daemon validates the
+# request (wireless robot, an update is actually available, no update
+# already running) and either rejects it with an ``error`` ack or accepts
+# it with ``{"status": "ok", "command": "start_update"}``. Once accepted,
+# the job's log lines are fanned out to every client as ``update_progress``
+# broadcasts (see :class:`UpdateProgressMsg`). A successful update ends
+# with a ``systemctl restart`` that tears the transport down before a
+# ``done`` event is delivered, so consumers infer success from the
+# teardown + reconnect.
+# ------------------------------------------------------------------
+
+
+class StartUpdateCmd(BaseModel):
+    """Start a PyPI update of the daemon, then restart it.
+
+    ``pre_release`` mirrors the REST endpoint: when true the daemon
+    installs the latest pre-release. See :class:`RestartDaemonCmd` for
+    the fire-and-ack semantics (the transport dies with the restart).
+    """
+
+    type: Literal["start_update"] = "start_update"
+    pre_release: bool = False
 
 
 # ------------------------------------------------------------------
@@ -493,11 +662,10 @@ class UploadAudioStartCmd(BaseModel):
     matching move is held until either a matching move arrives or
     the TTL expires.
 
-    ``encoding`` is currently always ``"wav-base64"``: raw PCM WAV
-    bytes (any container the GStreamer playbin can decode) sliced
-    into chunks and base64-encoded.  Defined as an enum so a future
-    encoding (raw binary frames, opus, ...) can be added without
-    breaking older clients.
+    ``encoding`` is ``"<container>-base64"``: transport is always
+    base64, the prefix just sets the written file's extension (playbin
+    sniffs content, so playback works regardless).  Defaults to
+    ``"wav-base64"`` for older clients.
     """
 
     type: Literal["upload_audio_start"] = "upload_audio_start"
@@ -508,7 +676,16 @@ class UploadAudioStartCmd(BaseModel):
     # exposing the CM4 to multi-GB allocations on a misbehaving
     # client.
     total_chunks: int = Field(..., ge=1, le=16384)
-    encoding: Literal["wav-base64"] = "wav-base64"
+    encoding: Literal[
+        "wav-base64",
+        "mp3-base64",
+        "ogg-base64",
+        "oga-base64",
+        "opus-base64",
+        "flac-base64",
+        "m4a-base64",
+        "aac-base64",
+    ] = "wav-base64"
     description: str = ""
 
 
@@ -644,6 +821,17 @@ class CancelAudioCmd(BaseModel):
     upload_id: str
 
 
+class ClearIncomingAudioCmd(BaseModel):
+    """Drop incoming WebRTC audio queued for the speaker (barge-in). Fire-and-forget.
+
+    Flushes the daemon's incoming-audio playback pipeline so audio already
+    received from a WebRTC client stops playing promptly. No-op if no audio
+    is currently being received.
+    """
+
+    type: Literal["clear_incoming_audio"] = "clear_incoming_audio"
+
+
 AnyCommand = Annotated[
     SetTargetCmd
     | SetHeadJointsCmd
@@ -662,18 +850,27 @@ AnyCommand = Annotated[
     | GetStateCmd
     | GetVersionCmd
     | GetHardwareIdCmd
+    | GetImuCmd
     | StartRecordingCmd
     | StopRecordingCmd
     | AppendRecordCmd
     | SetSpeechOffsetsCmd
     | SetWobblingCmd
+    | SetHeadTrackingCmd
+    | GetTrackedFaceCmd
     | SetVolumeCmd
     | GetVolumeCmd
     | SetMicrophoneVolumeCmd
     | GetMicrophoneVolumeCmd
+    | GetRobotNameCmd
+    | SetRobotNameCmd
+    | DeleteHfTokenCmd
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
+    | SubscribePoseCmd
+    | UnsubscribePoseCmd
     | RestartDaemonCmd
+    | StartUpdateCmd
     | UploadMoveStartCmd
     | UploadMoveChunkCmd
     | UploadMoveFinishCmd
@@ -684,6 +881,7 @@ AnyCommand = Annotated[
     | CancelMoveCmd
     | PlayUploadedAudioCmd
     | CancelAudioCmd
+    | ClearIncomingAudioCmd
     | ApplyAudioConfigCmd
     | ReadAudioParameterCmd,
     Field(discriminator="type"),
@@ -759,6 +957,30 @@ class LogStreamErrorMsg(BaseModel):
 
 
 # ------------------------------------------------------------------
+# Update progress broadcast over the DataChannel.
+#
+# Unsolicited fan-out emitted while a `start_update` job runs, mirroring
+# the REST `WS /update/ws/logs` stream. One message per log line of the
+# underlying `update_reachy_mini` job (`status="in_progress"`), plus a
+# terminal `status="failed"` if the install raises before the restart.
+#
+# Note: a *successful* update ends with a `systemctl restart` that tears
+# the transport down, so `status="done"` is best-effort and usually
+# never arrives - consumers infer success from the channel teardown +
+# reconnect, exactly like the desktop app does with the REST WS close.
+# ------------------------------------------------------------------
+
+
+class UpdateProgressMsg(BaseModel):
+    """A progress event for an in-flight ``start_update`` job."""
+
+    type: Literal["update_progress"] = "update_progress"
+    status: Literal["in_progress", "done", "failed"]
+    line: str | None = None
+    error: str | None = None
+
+
+# ------------------------------------------------------------------
 # Task protocol
 # ------------------------------------------------------------------
 
@@ -813,7 +1035,8 @@ AnyServerMsg = Annotated[
     | DaemonStatus
     | TaskProgress
     | LogLineMsg
-    | LogStreamErrorMsg,
+    | LogStreamErrorMsg
+    | UpdateProgressMsg,
     Field(discriminator="type"),
 ]
 server_msg_adapter: TypeAdapter[AnyServerMsg] = TypeAdapter(AnyServerMsg)

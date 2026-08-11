@@ -254,6 +254,13 @@ class MediaManager:
             return None
         return self.camera.read()
 
+    def get_frame_jpeg(self) -> Optional[bytes]:
+        """Get the current camera frame as JPEG bytes, or ``None`` if unavailable."""
+        if self.camera is None:
+            self.logger.warning("Camera is not initialized.")
+            return None
+        return self.camera.read_jpeg()
+
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
 

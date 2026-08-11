@@ -6,6 +6,7 @@ This exposes:
 """
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -14,6 +15,8 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend, ws_get_backend
 from ..models import AnyPose, DoAInfo, FullState, as_any_pose
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/state")
 
@@ -61,14 +64,10 @@ async def get_doa(
     """Get the Direction of Arrival from the microphone array.
 
     Returns the angle in radians (0=left, π/2=front, π=right) and speech detection status.
-    Returns None if the audio device is not available.
+    Returns None if the audio device is not available or no reading has
+    landed yet (the first one lands within ~100 ms of the first request).
     """
-    if not backend.doa:
-        return None
-    result = backend.doa.get_DoA()
-    if result is None:
-        return None
-    return DoAInfo(angle=result[0], speech_detected=result[1])
+    return backend.read_doa()
 
 
 @router.get("/full")
@@ -118,10 +117,8 @@ async def get_full_state(
             result["passive_joints"] = list(joints.values())
         else:
             result["passive_joints"] = None
-    if with_doa and backend.doa:
-        doa_result = backend.doa.get_DoA()
-        if doa_result:
-            result["doa"] = DoAInfo(angle=doa_result[0], speech_detected=doa_result[1])
+    if with_doa:
+        result["doa"] = backend.read_doa()
 
     result["timestamp"] = datetime.now(timezone.utc)
     return FullState.model_validate(result)
@@ -148,8 +145,9 @@ async def ws_full_state(
     await websocket.accept()
     period = 1.0 / frequency
 
-    try:
-        while True:
+    last_err: str | None = None
+    while backend.ready.is_set():
+        try:
             full_state = await get_full_state(
                 with_head_pose=with_head_pose,
                 with_target_head_pose=with_target_head_pose,
@@ -165,6 +163,14 @@ async def ws_full_state(
                 backend=backend,
             )
             await websocket.send_text(full_state.model_dump_json())
-            await asyncio.sleep(period)
-    except WebSocketDisconnect:
-        pass
+            last_err = None
+        except WebSocketDisconnect:
+            break
+        except Exception as e:
+            # transient backend read (e.g. motor comms): skip frame, keep stream
+            # alive; dedup so a persistent fault doesn't spam at stream frequency
+            msg = str(e)
+            if msg != last_err:
+                logger.warning(f"Skipping full-state frame: {msg}")
+                last_err = msg
+        await asyncio.sleep(period)

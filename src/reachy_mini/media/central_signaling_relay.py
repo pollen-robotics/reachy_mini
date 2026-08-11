@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import threading
 from enum import Enum
 from typing import Any, Callable, Optional
@@ -21,7 +22,7 @@ import aiohttp
 import websockets
 from websockets.asyncio.client import ClientConnection
 
-from reachy_mini.daemon.robot_app_lock import RobotAppLock
+from reachy_mini.daemon.robot_app_lock import RobotAppLock, RobotAppLockState
 from reachy_mini.utils.hardware_id import get_hardware_id
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,8 @@ LOCAL_GSTREAMER_SIGNALING = "ws://127.0.0.1:8443"
 
 # Reconnection settings
 RECONNECT_INTERVAL = 5.0  # seconds
+MAX_RECONNECT_INTERVAL = 60.0  # seconds - cap for the reconnect backoff
+RECONNECT_BACKOFF_JITTER = 0.1  # fractional jitter (+0-10%) per backoff
 TOKEN_CHECK_INTERVAL = 30.0  # seconds - how often to check for token when not connected
 LOCAL_WS_CONNECT_TIMEOUT = 5.0  # seconds - timeout for local websocket connection
 LOCAL_WS_WELCOME_TIMEOUT = (
@@ -623,6 +626,22 @@ class CentralSignalingRelay:
         finally:
             self._closing = False
 
+    def _reconnect_delay(self) -> float:
+        """Return the next reconnect wait using capped exponential backoff.
+
+        The delay grows as ``RECONNECT_INTERVAL * 2 ** (attempts - 1)`` per
+        consecutive failed attempt, capped at ``MAX_RECONNECT_INTERVAL``, with
+        a small additive jitter to de-synchronize reconnects across a fleet.
+        ``_connection_attempts`` resets to 0 on a successful connection, so the
+        backoff restarts from ``RECONNECT_INTERVAL`` after recovery. The
+        ``_token_updated`` event still short-circuits the wait, so a login or
+        token refresh reconnects immediately regardless of the backoff.
+        """
+        exponent = min(max(self._connection_attempts - 1, 0), 20)
+        base: float = min(RECONNECT_INTERVAL * (2**exponent), MAX_RECONNECT_INTERVAL)
+        jitter: float = random.uniform(0.0, base * RECONNECT_BACKOFF_JITTER)
+        return base + jitter
+
     async def _run_loop(self) -> None:
         """Maintain connections and relay messages."""
         logger.info("[Central Relay] _run_loop started")
@@ -686,13 +705,23 @@ class CentralSignalingRelay:
                             f"Connection failed after {self._connection_attempts} attempts: {e}",
                         )
 
+                if (
+                    self._running
+                    and not had_exception
+                    and self._state == RelayState.ERROR
+                ):
+                    # Clean return but ERROR (e.g. 401) - back off like a failure.
+                    had_exception = True
+                    self._connection_attempts += 1
+
                 if self._running and had_exception:
                     # Only wait after connection failures, not after normal returns
                     # (e.g., when token update triggered reconnection)
                     self._token_updated.clear()
                     try:
                         await asyncio.wait_for(
-                            self._token_updated.wait(), timeout=RECONNECT_INTERVAL
+                            self._token_updated.wait(),
+                            timeout=self._reconnect_delay(),
                         )
                     except asyncio.TimeoutError:
                         pass
@@ -1341,25 +1370,36 @@ class CentralSignalingRelay:
                     )
                 return
 
-            # Gate on the robot lock: if a local Python app is running, the
-            # lock will refuse our acquire. We also acquire proactively here
-            # so a concurrent local-app start can't sneak in between the
-            # check and the session handoff to local GStreamer.
+            # Gate on the robot lock:
+            #  - free            -> acquire remote_session (this peer owns the robot)
+            #  - local_app       -> accept as a CONTROL session: a local app owns
+            #                       the robot, and this peer (e.g. the mobile app)
+            #                       just drives/observes it over the DataChannel.
+            #                       It does NOT take the lock; the app keeps it.
+            #  - remote_session  -> another remote peer owns it -> refuse.
+            # We acquire proactively (from free) so a concurrent local-app start
+            # can't sneak in between the check and the session handoff.
             if self._robot_app_lock is not None:
-                # holder_name is generic because central already tracks the
-                # real consumer app name (via setPeerStatus meta) for its
-                # own rejection messages; the daemon-side lock just needs
-                # to know that *something* remote holds it.
-                if not self._robot_app_lock.try_acquire_remote("remote"):
+                lock = self._robot_app_lock
+                # holder_name is generic because central already tracks the real
+                # consumer app name (via setPeerStatus meta); the daemon-side
+                # lock just needs to know *something* remote holds it.
+                if lock.status().state == RobotAppLockState.LOCAL_APP:
+                    logger.info(
+                        f"[Central Relay] Session {session_id}: local app "
+                        f"{lock.status().holder_name!r} holds the robot; accepting "
+                        f"as a control-only session (no lock acquired)."
+                    )
+                elif not lock.try_acquire_remote("remote"):
                     logger.warning(
-                        f"[Central Relay] Rejecting session {session_id}: robot lock is held locally"
+                        f"[Central Relay] Rejecting session {session_id}: robot lock is held by another remote session"
                     )
                     if session_id:
                         await self._send_to_central(
                             {
                                 "type": "endSession",
                                 "sessionId": session_id,
-                                "reason": "robot_busy_local_app",
+                                "reason": "robot_busy",
                             }
                         )
                     return
@@ -1435,13 +1475,16 @@ class CentralSignalingRelay:
                 logger.info(
                     f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}"
                 )
-                # If no sessions remain, release the robot lock.
+                # If no sessions remain, release the robot lock. This is the
+                # client hanging up on purpose, so flag it as a hand-off: it may
+                # well be making room for a successor session (mobile app ->
+                # app iframe) rather than walking away from the robot.
                 if (
                     self._robot_app_lock is not None
                     and not self._central_to_local_session
                     and not self._pending_central_sessions
                 ):
-                    self._robot_app_lock.release_remote()
+                    self._robot_app_lock.release_remote(expect_handoff=True)
 
         elif msg_type == "peerStatusChanged":
             # Another peer changed status - ignore for producers
@@ -1568,13 +1611,14 @@ class CentralSignalingRelay:
                 logger.info(
                     f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}"
                 )
-                # If no sessions remain, release the robot lock.
+                # If no sessions remain, release the robot lock. Deliberate
+                # hang-up, so same hand-off treatment as the central-side path.
                 if (
                     self._robot_app_lock is not None
                     and not self._central_to_local_session
                     and not self._pending_central_sessions
                 ):
-                    self._robot_app_lock.release_remote()
+                    self._robot_app_lock.release_remote(expect_handoff=True)
 
 
 # Singleton instance for integration
@@ -1694,6 +1738,25 @@ async def notify_token_change(new_token: Optional[str] = None) -> None:
             pass
 
     await _relay_instance.update_token(new_token)
+
+
+def notify_robot_name_change(new_name: str) -> None:
+    """Update the producer name advertised to the central relay.
+
+    The name is read fresh from ``self.robot_name`` on every heartbeat
+    re-emit (see ``_heartbeat_loop`` / ``_producer_status_payload``), so
+    mutating it here is enough for central to pick up the new label at the
+    next heartbeat (a few seconds) with no reconnect. A plain attribute
+    write is atomic under the GIL, so this is safe to call from the
+    backend's command thread. No-op if no relay is running.
+    """
+    if _relay_instance is not None and new_name:
+        _relay_instance.robot_name = new_name
+        logger.info(
+            "[Central Relay] robot name updated to %r "
+            "(propagates to central on next heartbeat)",
+            new_name,
+        )
 
 
 async def notify_force_reconnect() -> bool:

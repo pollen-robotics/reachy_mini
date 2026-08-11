@@ -30,6 +30,28 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 
+# Head-shell "boxy" resonance correction; see tools/speaker_eq_calibration/.
+DEFAULT_SPEAKER_EQ_GAINS = [
+    0.0,
+    -13.21,
+    -5.55,
+    -4.28,
+    -4.32,
+    5.80,
+    4.65,
+    4.90,
+    3.41,
+    0.0,
+]
+
+
+def resolve_speaker_eq_gains() -> list[float]:
+    """Return the 10 speaker-EQ band gains (dB), from daemon config or the default."""
+    from reachy_mini.daemon.startup_app_config import get_speaker_eq_gains
+
+    gains = get_speaker_eq_gains()
+    return gains if gains is not None else list(DEFAULT_SPEAKER_EQ_GAINS)
+
 
 def _process_card_number_output(output: str) -> int:
     """Process the output of 'arecord -l' to find the ReSpeaker or Reachy Mini Audio card number.

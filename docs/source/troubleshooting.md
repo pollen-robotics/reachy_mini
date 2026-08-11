@@ -97,6 +97,8 @@ If your cable is plugged properly and you still have issues, it is likely that t
 For more details, see the documentation:  
 [Getting Started](./platforms/reachy_mini/get_started.md)
 
+- Update the firmware to version 2.1.4 or later. Run the [update script](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/firmware/update.sh).
+
 </details>
 
 <details>
@@ -289,8 +291,8 @@ If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connec
 <details>
 <summary><strong>Does the robot have a Web API?</strong></summary>
 
-Yes. The daemon provides a REST API (FastAPI) and WebSocket support.
-* **Docs:** `http://localhost:8000/docs` (available when daemon is running).
+Yes. The daemon provides a REST API (FastAPI) and WebSocket support. The daemon host is `localhost:8000` on Lite (daemon on your machine) and `reachy-mini.local:8000` (or the robot's IP) on Wireless.
+* **Docs:** `http://<host>:8000/docs` (available when daemon is running).
 * **Features:** Get state, Move joints, Control daemon.
 
 You can use the API to control the robot and get its state and even control the daemon itself. The API is implemented using [FastAPI](https://fastapi.tiangolo.com/) and [pydantic](https://docs.pydantic.dev/latest/) models.
@@ -300,7 +302,7 @@ It should provide you all the necessary endpoints to interact with the robot, in
 - Getting the state of the robot (joints positions, motor status, etc.)
 - Moving the robot's joints or setting specific poses
 
-The API is documented using OpenAPI, and you can access all available routes and test them at http://localhost:8000/docs when the daemon is running. You can also access the raw OpenAPI schema at http://localhost:8000/openapi.json.
+The API is documented using OpenAPI, and you can access all available routes and test them at `http://<host>:8000/docs` (`localhost` on Lite, `reachy-mini.local` or the robot's IP on Wireless) when the daemon is running. You can also access the raw OpenAPI schema at `http://<host>:8000/openapi.json`.
 
 This can be useful if you want to generate client code for your preferred programming language or framework, connect it to your AI application, or even to create your MCP server.
 
@@ -309,7 +311,9 @@ This can be useful if you want to generate client code for your preferred progra
 The API also supports WebSocket connections for real-time updates. For instance, you can subscribe to joint state updates:
 
 ```
-let ws = new WebSocket(`ws://127.0.0.1:8000/api/state/ws/full`);
+// Daemon host: "localhost:8000" on Lite, "reachy-mini.local:8000" on Wireless.
+const HOST = "localhost:8000";
+let ws = new WebSocket(`ws://${HOST}/api/state/ws/full`);
 
 ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
@@ -645,6 +649,12 @@ Your GUI will open at the usual address (for example, `http://reachy-mini.local:
 
 </details>
 
+<details>
+<summary><strong>The Web App can't connect to my Reachy</strong></summary>
+
+Make sure that your Reachy is logged in to your HF account using the desktop app. Make sure there is no other web app connected to it. You may want to restart your browser or clear your cache.
+
+</details>
 
 
 ## 🕹️ Moving the Robot
@@ -718,6 +728,36 @@ If the period is much higher than 20ms, it means the control loop is not running
 
 </details>
 
+<details>
+<summary><strong>My robot doesn't move and no error is reported</strong></summary>
+
+If motion commands are accepted but nothing happens, the motors are most likely disabled. With torque off the daemon still accepts every command, reports success, and keeps its control loop running at 50Hz with no errors, so nothing indicates that the robot is not moving.
+
+Two common situations leave the motors disabled:
+- The robot is asleep and limp after an app has stopped, or after the daemon has just started.
+- `wake_up()` was called on its own. It plays the wake up pose, emote and sound, but it does not enable torque.
+
+Check the current mode:
+- via the SDK
+```python
+mini = ReachyMini()
+print(mini.client.get_status().backend_status.motor_control_mode)
+```
+- via the REST API, in the `backend_status` field of the `/api/daemon/status` endpoint
+
+If it reads `MotorControlMode.Disabled`, enable the motors before moving the robot:
+
+```python
+mini.enable_motors()
+mini.wake_up()
+```
+
+Note that a limp robot keeps its head down in the sleep position, close to the body. The camera then faces the inside of the shell and returns a dark, almost uniform image with exposure and gain at their maximum, which is easy to mistake for a broken camera. Check that the head is really up before investigating the camera.
+
+The **Why are the motors "limp" or "stiff"? (Compliancy)** entry above describes the different motor modes.
+
+</details>
+
 
 
 ## 👁️ Vision & Audio
@@ -731,12 +771,19 @@ If the period is much higher than 20ms, it means the control loop is not running
 
 To make it permanent:
 ```bash
-CARD=$(aplay -l | grep -i "reSpeaker" | head -n1 | sed -n 's/^card \([0-9]*\):.*/\1/p')
+CARD=$(aplay -l | grep -i "Reachy Mini Audio" | head -n1 | sed -n 's/^card \([0-9]*\):.*/\1/p')
 amixer -c "$CARD" set PCM,1 100%
 sudo alsactl store "$CARD"
 ```
 
 This is a [known issue](https://www.xmos.com/documentation/XM-014888-PC/html/modules/fwk_xvf/doc/user_guide/02_setting_up_the_hardware.html#low-volume-of-playback-audio-on-linux-for-project-ua) of the XVF3800 based sound card.
+
+</details>
+
+<details>
+<summary><strong>The sound quality is not great / the speaker sounds "boxy".</strong></summary>
+
+The daemon already applies a default equalizer to compensate for the head shell's acoustic coloration. If the sound still isn't to your liking, the per-band gains can be tuned — or the EQ disabled — via the `speaker_eq_gains` entry in the daemon config file. See [Advanced Media Controls → Speaker equalization](platforms/reachy_mini/media_advanced_controls.md#speaker-equalization).
 
 </details>
 
@@ -767,6 +814,13 @@ mini.media.push_audio_sample(numpy_chunk)
 </details>
 
 <details>
+<summary><strong>Can I get the raw microphone output?</strong></summary>
+
+Yes — install the [6-channel firmware](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/firmware).
+
+</details>
+
+<details>
 <summary><strong>How do I make Reachy look at something?</strong></summary>
 
 * **2D (Image):** `mini.look_at_image(x, y)` - (0,0 is top-left).
@@ -778,6 +832,15 @@ mini.media.push_audio_sample(numpy_chunk)
 <summary><strong>Face tracking feels slow.</strong></summary>
 
 Performance relies heavily on lighting conditions. Ensure the face is well-lit. The LOCAL backend (GStreamer IPC) provides the lowest latency for on-device applications.
+
+</details>
+
+<details>
+<summary><strong>The camera can't focus.</strong></summary>
+
+When running the [look_at example](https://huggingface.co/docs/reachy_mini/examples/look_at), it's easy to see whether the camera is focusing by putting your hand in front of it. If it isn't, the camera may be physically blocked. It is held to the black part by 4 screws — loosen them very slightly, about 1/8 of a turn.
+
+![camera_focus](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/troubleshooting_screw_focus_camera.png)
 
 </details>
 
@@ -822,19 +885,6 @@ You can play back a sound while recording simultaneously to test the echo cancel
 <details>
 <summary><strong>Motor '<name>' hardware errors: ['Input Voltage Error']</strong></summary>
 We are using a higher voltage on Reachy Mini, it's on purpose :)
-
-</details>
-
-
-
-<details>
-<summary><strong>Error: "OSError: PortAudio library not found"</strong></summary>
-
-This error occurs when using `sounddevice` directly (e.g. after calling `release_media()`). Install the system dependency:
-
-```bash
-sudo apt-get install libportaudio2
-```
 
 </details>
 

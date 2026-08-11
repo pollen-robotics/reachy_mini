@@ -8,12 +8,15 @@ so that WebRTC clients can upload, play, list and delete sound files on
 the daemon.
 """
 
+import asyncio
 import os
+import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from ....media.gstreamer_utils import is_valid_audio_file
 from ...daemon import Daemon
 from ..dependencies import get_daemon
 
@@ -22,6 +25,17 @@ router = APIRouter(
 )
 
 SOUNDS_TMP_DIR = "/tmp/reachy_mini_sounds"
+
+# Sound uploads are restricted to known audio container extensions (allow-list)
+# and validated by content (see ``is_valid_audio_file``) to prevent arbitrary
+# file upload (CWE-434, GHSA-m2pc-3q4q-w6jr).
+ALLOWED_SOUND_EXTENSIONS = frozenset(
+    {".wav", ".mp3", ".ogg", ".oga", ".opus", ".flac", ".m4a", ".aac"}
+)
+
+# Cap upload size before the file is probed so a large body can neither exhaust
+# memory nor tie up the GStreamer discoverer.
+MAX_SOUND_UPLOAD_BYTES = 25 * 1024 * 1024
 
 
 @router.post("/release")
@@ -52,6 +66,12 @@ class PlaySoundRequest(BaseModel):
     """Request body for the play_sound endpoint."""
 
     file: str
+
+
+class EnableTrackingRequest(BaseModel):
+    """Request body for enabling daemon-side head tracking."""
+
+    weight: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
 @router.post("/play_sound")
@@ -95,6 +115,22 @@ async def stop_sound(
     return {"status": "ok"}
 
 
+@router.post("/clear_incoming_audio")
+async def clear_incoming_audio(
+    daemon: Daemon = Depends(get_daemon),
+) -> dict[str, str]:
+    """Drop audio received from WebRTC clients that is queued for the speaker.
+
+    Used for barge-in so the robot stops speaking already-buffered audio.
+    """
+    backend = daemon.backend
+    if backend is None or not backend.ready.is_set():
+        raise HTTPException(status_code=503, detail="Backend not running")
+
+    backend.clear_incoming_audio()
+    return {"status": "ok"}
+
+
 @router.post("/wobbling/enable")
 async def enable_wobbling(
     daemon: Daemon = Depends(get_daemon),
@@ -128,6 +164,46 @@ async def disable_wobbling(
     return {"status": "ok"}
 
 
+@router.post("/tracking/enable")
+async def enable_tracking(
+    body: EnableTrackingRequest | None = None,
+    daemon: Daemon = Depends(get_daemon),
+) -> dict[str, str | bool]:
+    """Enable daemon-side visual head tracking."""
+    backend = daemon.backend
+    if backend is None or not backend.ready.is_set():
+        raise HTTPException(status_code=503, detail="Backend not running")
+
+    weight = body.weight if body is not None else 1.0
+    enabled = backend.enable_head_tracking(weight=weight)
+    return {"status": "ok" if enabled else "unavailable", "enabled": enabled}
+
+
+@router.post("/tracking/disable")
+async def disable_tracking(
+    daemon: Daemon = Depends(get_daemon),
+) -> dict[str, str | bool]:
+    """Disable daemon-side visual head tracking."""
+    backend = daemon.backend
+    if backend is None or not backend.ready.is_set():
+        raise HTTPException(status_code=503, detail="Backend not running")
+
+    backend.disable_head_tracking()
+    return {"status": "ok", "enabled": False}
+
+
+@router.get("/tracking/face")
+async def get_tracked_face(
+    daemon: Daemon = Depends(get_daemon),
+) -> dict[str, object]:
+    """Return the latest face observed by daemon-side head tracking."""
+    backend = daemon.backend
+    if backend is None or not backend.ready.is_set():
+        raise HTTPException(status_code=503, detail="Backend not running")
+
+    return {"status": "ok", "face_target": backend.get_tracked_face().model_dump()}
+
+
 @router.post("/sounds/upload")
 async def upload_sound(
     file: UploadFile = File(...),
@@ -136,6 +212,10 @@ async def upload_sound(
 
     The file is saved to ``/tmp/reachy_mini_sounds/<original_filename>``.
     If a file with the same name already exists it is overwritten.
+
+    The upload is restricted to known audio extensions, capped at
+    ``MAX_SOUND_UPLOAD_BYTES``, and validated by content before being stored,
+    so non-audio payloads cannot be written to disk.
 
     Returns:
         JSON with the absolute *path* of the saved file on the daemon.
@@ -149,12 +229,38 @@ async def upload_sound(
     if not filename or filename in (".", ".."):
         raise HTTPException(status_code=400, detail="Invalid filename")
 
+    # Allow-list the extension before touching the disk.
+    if Path(filename).suffix.lower() not in ALLOWED_SOUND_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Unsupported file extension; allowed: "
+                f"{', '.join(sorted(ALLOWED_SOUND_EXTENSIONS))}"
+            ),
+        )
+
     os.makedirs(SOUNDS_TMP_DIR, exist_ok=True)
     dest = os.path.join(SOUNDS_TMP_DIR, filename)
 
-    content = await file.read()
-    with open(dest, "wb") as f:
-        f.write(content)
+    # Probe a temp copy, then atomically move it into place so no partial or
+    # invalid file ever lands at the public destination name.
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=SOUNDS_TMP_DIR, suffix=".upload")
+    try:
+        with os.fdopen(tmp_fd, "wb") as f:
+            while chunk := await file.read(1 << 20):
+                f.write(chunk)
+
+        # Offload the blocking GStreamer probe (up to 5 s) off the event loop.
+        if not await asyncio.to_thread(is_valid_audio_file, tmp_path):
+            raise HTTPException(
+                status_code=400, detail="Unsupported or invalid audio file"
+            )
+
+        os.replace(tmp_path, dest)
+    except BaseException:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
 
     return {"status": "ok", "path": dest}
 

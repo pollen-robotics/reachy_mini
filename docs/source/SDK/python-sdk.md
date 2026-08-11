@@ -1,5 +1,7 @@
 # Python SDK Reference
 
+> **Heads up:** The Python and **[JavaScript](javascript-sdk.md)** SDKs both give you full control of the robot — they simply target different audiences. If you want to build apps that are easy to share (zero-install, open a link in a browser), the JavaScript/Web path is usually the better fit. The Python SDK shines for scripting, control loops, and code running directly on the robot.
+
 > **💡 Reminder:** The SDK now auto-detects whether it should connect over USB/localhost or over the network, so `ReachyMini()` works out of the box. You can still force a mode with `ReachyMini(connection_mode="localhost_only" | "network")` if needed.
 
 ## Movement
@@ -43,6 +45,21 @@ with ReachyMini(media_backend="default") as mini:
     frame = mini.media.get_frame()
 ```
 The returned frame is a numpy array with shape `(height, width, 3)` and data type `uint8`.
+
+### Head Tracking 👀
+
+The daemon can track the closest face and turn the head to follow it (aiming at the nose). Detection runs inside the daemon.
+
+```python
+from reachy_mini import ReachyMini
+
+with ReachyMini() as mini:
+    mini.start_head_tracking()
+    face = mini.get_tracked_face()  # detected, x, y in [-1, 1], roll
+    mini.stop_head_tracking()
+```
+
+`start_head_tracking(weight=...)` blends tracking with application motion: `1.0` lets tracking own the head, `0.0` pauses detection (freeing the head and CPU) without stopping the tracker, so applications can toggle it cheaply per turn. See the [Head Tracking example](../examples/head_tracking.md).
 
 ### IMU 🧭
 

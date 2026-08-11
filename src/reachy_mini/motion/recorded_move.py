@@ -16,6 +16,9 @@ from reachy_mini.utils.interpolation import linear_pose_interpolation
 
 logger = logging.getLogger(__name__)
 
+# Sidecar audio containers; mirrors media.py ALLOWED_SOUND_EXTENSIONS. .wav wins ties.
+SOUND_EXTENSIONS = (".wav", ".mp3", ".ogg", ".oga", ".opus", ".flac", ".m4a", ".aac")
+
 # Default datasets to preload at daemon startup
 DEFAULT_DATASETS = [
     "pollen-robotics/reachy-mini-emotions-library",
@@ -200,11 +203,14 @@ class RecordedMoves:
             move = json.load(open(move_path, "r"))
             self.moves[move_name] = move
 
-            sound_path = move_path.with_suffix(".wav")
-            self.sounds[move_name] = None
-
-            if os.path.exists(sound_path):
-                self.sounds[move_name] = sound_path
+            self.sounds[move_name] = next(
+                (
+                    p
+                    for ext in SOUND_EXTENSIONS
+                    if (p := move_path.with_suffix(ext)).exists()
+                ),
+                None,
+            )
 
     def get(self, move_name: str) -> RecordedMove:
         """Get a recorded move by name."""

@@ -6,6 +6,7 @@ import os
 import platform
 import re
 import shutil
+import subprocess
 import sys
 from importlib.metadata import entry_points
 from pathlib import Path
@@ -153,6 +154,54 @@ def get_app_python(
         return Path(sys.executable)
 
 
+def _find_app_main_file(
+    app_name: str,
+    wireless_version: bool = False,
+    desktop_app_daemon: bool = False,
+) -> Path | None:
+    """Locate an app's ``main.py`` without importing it.
+
+    Tries the app venv's ``site-packages/<app>/main.py`` first (a regular
+    copy install, no subprocess). For an **editable** (``-e``) install there is
+    no physical ``main.py`` under site-packages (the ``.pth`` redirects imports
+    to the source tree), so we resolve the package origin with the app's **own**
+    python (``get_app_python`` — the ``apps_venv`` interpreter on wireless /
+    desktop, ``sys.executable`` in SDK mode). Doing it out-of-process is what
+    makes editable installs work in a *separate* venv: the daemon interpreter
+    can't ``find_spec`` an app it can't import. Same subprocess idiom as
+    ``check_and_sync_apps_venv_sdk``; bounded and fail-open to ``None``.
+    """
+    site_packages = _get_app_site_packages(
+        app_name, wireless_version, desktop_app_daemon
+    )
+    if site_packages and site_packages.exists():
+        main_file = site_packages / app_name / "main.py"
+        if main_file.exists():
+            return main_file
+
+    app_python = get_app_python(app_name, wireless_version, desktop_app_daemon)
+    try:
+        result = subprocess.run(
+            [
+                str(app_python),
+                "-c",
+                f"import importlib.util as u; s = u.find_spec({app_name!r}); "
+                f"print((s.origin or '') if s else '')",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    origin = result.stdout.strip()
+    if origin:
+        main_file = Path(origin).parent / "main.py"
+        if main_file.exists():
+            return main_file
+    return None
+
+
 def _get_custom_app_url_from_file(
     app_name: str,
     wireless_version: bool = False,
@@ -163,17 +212,8 @@ def _get_custom_app_url_from_file(
     This is much faster than subprocess and avoids sys.path pollution.
     Looks for patterns like: custom_app_url: str | None = "http://..."
     """
-    site_packages = _get_app_site_packages(
-        app_name, wireless_version, desktop_app_daemon
-    )
-    if not site_packages or not site_packages.exists():
-        return None
-
-    # Try to find main.py in the app's package directory
-    app_dir = site_packages / app_name
-    main_file = app_dir / "main.py"
-
-    if not main_file.exists():
+    main_file = _find_app_main_file(app_name, wireless_version, desktop_app_daemon)
+    if main_file is None:
         return None
 
     try:
@@ -234,9 +274,7 @@ async def _list_apps_from_separate_venvs(
             return []
 
         app_names = [
-            name.strip()
-            for name in result.stdout.strip().split("\n")
-            if name.strip()
+            name.strip() for name in result.stdout.strip().split("\n") if name.strip()
         ]
         apps = []
         for app_name in app_names:
@@ -497,22 +535,10 @@ async def install_package(
             # Download the space
             logger.info("Attempting to download all files from space...")
 
-            # On Windows, there is a chance snapshot_download triggers an uncaught symlink
-            # exception (are_symlinks_supported falsely returns True). This is a workaround to
-            # make sure are_symlinks_supported consistently returns False before snapshot_download.
+            # On Windows, snapshot_download may attempt symlinks and fail
+            # HF_HUB_DISABLE_SYMLINKS prevents this
             if _is_windows():
-                from huggingface_hub import constants as hf_hub_constants
-                from huggingface_hub.file_download import (
-                    are_symlinks_supported,
-                    repo_folder_name,
-                )
-
-                storage_folder = os.path.join(
-                    hf_hub_constants.HF_HUB_CACHE,
-                    repo_folder_name(repo_id=repo_id, repo_type="space"),
-                )
-                os.makedirs(storage_folder, exist_ok=True)
-                are_symlinks_supported(storage_folder)
+                os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
 
             # For private spaces, we need to be careful about missing files like .gitattributes
             # snapshot_download can fail on 404 for optional git metadata files
@@ -525,7 +551,6 @@ async def install_package(
                     ".gitattributes",
                     ".gitignore",
                 ],  # Skip git metadata that may 404
-                allow_patterns=None,  # Download all other files
             )
             logger.info(f"Downloaded to: {target}")
 
@@ -611,16 +636,12 @@ async def install_package(
 
             ret = await running_command(install_cmd, logger=logger)
             if ret != 0:
-                logger.warning(
-                    "Failed to pre-install reachy-mini, continuing anyway"
-                )
+                logger.warning("Failed to pre-install reachy-mini, continuing anyway")
         else:
             logger.info(f"Using existing shared venv at {venv_path}")
 
         # Install package in the venv
-        python_path = _get_app_python(
-            app_name, wireless_version, desktop_app_daemon
-        )
+        python_path = _get_app_python(app_name, wireless_version, desktop_app_daemon)
 
         if use_uv:
             install_cmd = [
@@ -724,9 +745,7 @@ async def uninstall_package(
 
         # Shared venv: just uninstall the package, preserve the venv
         logger.info(f"Uninstalling '{app_name}' from shared venv at {venv_path}")
-        python_path = _get_app_python(
-            app_name, wireless_version, desktop_app_daemon
-        )
+        python_path = _get_app_python(app_name, wireless_version, desktop_app_daemon)
 
         # Check if uv is available
         use_uv = _check_uv_available()

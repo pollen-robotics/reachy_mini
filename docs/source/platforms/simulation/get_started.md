@@ -62,6 +62,9 @@ reachy-mini-daemon --sim --scene minimal
 
 Once the simulation is running, it behaves exactly like a real **Reachy Mini Lite** connected via USB. The daemon listens on `localhost`, and you can run any Python SDK script without modification:
 
+> **Note:** in simulation mode the Reachy Mini Audio USB card is not present, so hardware acoustic echo cancellation (XMOS) is unavailable. Echo cancellation is instead performed in software by GStreamer (`webrtcdsp` + `webrtcechoprobe`) on the default system microphone and speakers.
+
+
 ```python
 from reachy_mini import ReachyMini
 from reachy_mini.utils import create_head_pose

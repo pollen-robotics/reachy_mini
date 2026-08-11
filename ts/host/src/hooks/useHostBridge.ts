@@ -33,6 +33,12 @@ export interface EmbedAppState {
   phase: AppPhase;
   connectingStep: AppConnectingStep | null;
   message: string | null;
+  /** Rolling-min round-trip time (ms) the embed measures on its own
+   *  WebRTC pair and reports over `embed:app-state` once `live`. The
+   *  host released its session slot to the iframe, so this is the only
+   *  TRUE link-latency signal available; `null` when not yet measured
+   *  or unavailable (e.g. iOS WKWebView). */
+  rttMs: number | null;
 }
 
 export interface UseHostBridgeOptions {
@@ -94,6 +100,7 @@ export function useHostBridge(opts: UseHostBridgeOptions): HostBridge {
             phase: data.phase,
             connectingStep: data.connectingStep ?? null,
             message: data.message ?? null,
+            rttMs: data.rttMs ?? null,
           });
           return;
         case 'embed:request-leave':

@@ -2,13 +2,44 @@
 
 import pytest
 
-from reachy_mini.media.audio_control_utils import PARAMETERS, init_respeaker_usb
+from reachy_mini.media.audio_control_utils import (
+    PARAMETERS,
+    ReSpeaker,
+    init_respeaker_usb,
+)
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 
 AUDIO_CONFIG_PARAMETER_NAMES = ("PP_MIN_NS", "PP_NLATTENONOFF", "PP_MGSCALE")
 
 
+# ---- Simulated board (no hardware) — the fake_respeaker fixture stands in for
+# the USB device, so the read/write protocol codec and apply_audio_config verify
+# logic get CI coverage. See tests/unit_tests/conftest.py.
+
+
+def test_simulated_read_values_decode(fake_respeaker: ReSpeaker) -> None:
+    """read_values decodes each parameter to the right count/type on the fake."""
+    for name in AUDIO_CONFIG_PARAMETER_NAMES:
+        values = fake_respeaker.read_values(name)
+        assert values is not None
+        assert len(values) == PARAMETERS[name][2]
+        assert all(isinstance(value, (float, int)) for value in values)
+
+
+def test_simulated_apply_audio_config_round_trip(fake_respeaker: ReSpeaker) -> None:
+    """apply_audio_config writes then verifies via read-back — round-trips on the fake."""
+    config = (
+        ("PP_MIN_NS", (0.25,)),
+        ("PP_NLATTENONOFF", (1,)),
+        ("PP_MGSCALE", (0.1, 0.2, 0.3)),
+    )
+    assert fake_respeaker.apply_audio_config(config, write_settle_seconds=0.0)
+    for name, expected in config:
+        assert fake_respeaker.read_values(name) == pytest.approx(expected)
+
+
 @pytest.mark.audio
+@pytest.mark.respeaker
 def test_respeaker_read_values_reads_board_parameters() -> None:
     """Numeric readback should be normalized from the real audio board."""
     respeaker = init_respeaker_usb()
@@ -24,6 +55,7 @@ def test_respeaker_read_values_reads_board_parameters() -> None:
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 def test_respeaker_apply_audio_config_writes_current_board_values() -> None:
     """Custom config writes should be verified against real board readback."""
     respeaker = init_respeaker_usb()
@@ -43,6 +75,7 @@ def test_respeaker_apply_audio_config_writes_current_board_values() -> None:
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 def test_respeaker_apply_audio_config_changes_value_and_restores_it() -> None:
     """Custom config writes should change a real value and restore it."""
     parameter_name = "PP_NLATTENONOFF"
@@ -65,6 +98,7 @@ def test_respeaker_apply_audio_config_changes_value_and_restores_it() -> None:
 
 
 @pytest.mark.audio
+@pytest.mark.respeaker
 def test_media_audio_apply_audio_config_uses_real_board() -> None:
     """Media audio should apply caller-provided config through the real board."""
     respeaker = init_respeaker_usb()
