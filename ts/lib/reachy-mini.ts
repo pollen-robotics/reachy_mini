@@ -1429,6 +1429,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * and skip the wizard on `null`).
      */
     getFirstWakeUp(): Promise<boolean | null> {
+        // Fail-open, so this never rejects: the wizard gate runs right after
+        // connect, which is exactly when the channel may not be open yet.
+        if (!this._dc || this._dc.readyState !== 'open') return Promise.resolve(null);
         return this._slotRoundtrip(
             () => this._firstWakeUpResolve,
             (next) => { this._firstWakeUpResolve = next; },
@@ -1441,6 +1444,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * Resolves with the stored value (or `null` on channel-closed).
      */
     setFirstWakeUp(isCompleted: boolean): Promise<boolean | null> {
+        if (!this._dc || this._dc.readyState !== 'open') return Promise.resolve(null);
         return this._slotRoundtrip(
             () => this._firstWakeUpResolve,
             (next) => { this._firstWakeUpResolve = next; },
