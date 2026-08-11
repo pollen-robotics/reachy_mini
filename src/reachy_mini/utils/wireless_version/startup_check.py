@@ -519,9 +519,21 @@ def check_and_fix_restore_venv() -> bool:
 
 
 def clear_startup_stamp() -> None:
-    """Remove the startup-check stamp so the next boot runs the full checks."""
+    """Remove the startup-check stamp so the next boot runs the full checks.
+
+    Raises:
+        OSError: If the stamp exists and cannot be removed. Callers decide how
+            loud to be about it; a stamp we cannot delete points at a
+            filesystem or ownership problem rather than at the stamp itself.
+
+    """
+    STAMP_PATH.unlink(missing_ok=True)
+
+
+def _clear_startup_stamp_best_effort() -> None:
+    """Clear the stamp on the boot path, where raising would abort daemon startup."""
     try:
-        STAMP_PATH.unlink(missing_ok=True)
+        clear_startup_stamp()
     except OSError as e:
         print(f"Could not remove startup stamp: {e}")
 
@@ -644,7 +656,7 @@ def run_wireless_startup_checks(
 
     if not all_ok:
         print("Some startup checks did not succeed; not writing startup stamp")
-        clear_startup_stamp()
+        _clear_startup_stamp_best_effort()
         return
 
     try:
@@ -653,7 +665,7 @@ def run_wireless_startup_checks(
         # Never fatal: worst case the full checks simply run again next boot.
         # Drop any stale stamp so what's on disk is always fresh or absent.
         print(f"Could not write startup stamp: {e}")
-        clear_startup_stamp()
+        _clear_startup_stamp_best_effort()
 
 
 if __name__ == "__main__":

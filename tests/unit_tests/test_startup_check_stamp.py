@@ -248,7 +248,7 @@ async def test_update_clears_stamp_before_first_install(fake_venvs, monkeypatch)
     fake_venvs["stamp"].write_text("{}")
     stamp_present_at_install = []
 
-    async def fake_call(cmd, logger, env=None):
+    async def fake_call(cmd, logger, env=None, ok_returncodes=(0,)):
         stamp_present_at_install.append(fake_venvs["stamp"].exists())
 
     monkeypatch.setattr(up, "build_install_command", lambda **kw: ("true", None))
@@ -258,3 +258,56 @@ async def test_update_clears_stamp_before_first_install(fake_venvs, monkeypatch)
 
     assert stamp_present_at_install, "install command was never invoked"
     assert stamp_present_at_install[0] is False
+
+
+@pytest.mark.asyncio
+async def test_update_logs_error_but_continues_when_stamp_is_stuck(
+    fake_venvs, monkeypatch, caplog
+):
+    """An unremovable stamp is an ERROR with a traceback, never a failed update.
+
+    A stamp we cannot delete means the filesystem or the ownership is broken,
+    which deserves a loud signal. It must not abort the update though: the
+    install signature invalidates the stamp on the next boot anyway, and
+    updating is how a robot in a bad state gets repaired.
+    """
+    from reachy_mini.utils.wireless_version import update as up
+
+    def stuck() -> None:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(sc, "clear_startup_stamp", stuck)
+    monkeypatch.setattr(up, "build_install_command", lambda **kw: ("true", None))
+
+    installed = []
+
+    async def fake_call(cmd, logger, env=None, ok_returncodes=(0,)):
+        installed.append(cmd)
+
+    monkeypatch.setattr(up, "call_logger_wrapper", fake_call)
+
+    with caplog.at_level("ERROR"):
+        await up.update_reachy_mini(sc.logger)
+
+    assert installed, "the update must go ahead despite the stuck stamp"
+    errors = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert errors, "a stuck stamp must be logged at ERROR, not swallowed"
+    assert errors[0].exc_info is not None, "the exception must reach the log"
+
+
+def test_boot_path_survives_an_unremovable_stamp(fake_venvs, spy_checks, monkeypatch):
+    """On the boot path a stuck stamp degrades to full checks, never a crash.
+
+    run_wireless_startup_checks is called during daemon startup, so letting an
+    OSError escape here would stop the robot from booting.
+    """
+
+    def stuck() -> None:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(sc, "clear_startup_stamp", stuck)
+    monkeypatch.setattr(sc, "check_and_fix_restore_venv", lambda: False)
+
+    sc.run_wireless_startup_checks()  # must not raise
+
+    assert not fake_venvs["stamp"].exists()
