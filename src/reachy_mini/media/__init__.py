@@ -41,6 +41,14 @@ Example usage::
     # Clean up
     media.close()
 
+Cloud-backend consumer:
+    For cloud backends that need to consume a Reachy Mini's camera + drive
+    the robot via the HF central signaling relay (without running the
+    daemon or any hardware), :mod:`reachy_mini.media.central_consumer`
+    provides a hardware-free aiortc client.  Counterpart to
+    ``central_signaling_relay.py`` (the producer the daemon runs).
+    See the ``central_consumer.py`` module docstring for the full example.
+
 For more information on specific components, see:
     - media_manager.py: Media management and backend selection
     - camera_gstreamer.py: GStreamer IPC camera reader (LOCAL backend)
@@ -48,4 +56,6 @@ For more information on specific components, see:
     - audio_doa.py: Direction of Arrival estimation
     - webrtc_client_gstreamer.py: WebRTC client (WEBRTC backend)
     - media_server.py: GstMediaServer (daemon-side media hub: camera, IPC, WebRTC, audio)
+    - central_signaling_relay.py: Daemon-side producer for the HF central relay
+    - central_consumer.py: Cloud-backend consumer for the HF central relay
 """
