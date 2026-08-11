@@ -55,6 +55,7 @@ from reachy_mini.media.camera_constants import (
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
 from reachy_mini.media.gstreamer_utils import handle_default_bus_message
+from reachy_mini.media.webrtc_utils import TurnCredentials
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
@@ -89,96 +90,6 @@ SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 
 # Cap the local IPC feed below the capture rate; it also paces every client, face tracker included.
 IPC_FPS = 10
-
-
-# --- TURN relay support ----------------------------------------------
-#
-# By default webrtcsink only gathers host + srflx candidates, so a remote
-# consumer behind a restrictive NAT (e.g. a cloud backend that can't
-# UDP-hole-punch) has no way to reach us. We fetch short-lived Cloudflare
-# TURN credentials from HF's hosted proxy (using the daemon's own HF
-# token — the same one the relay uses for central auth) and apply them to
-# each consumer's webrtcbin in ``_consumer_added``, so our offer includes
-# a ``relay`` candidate the consumer can connect through.
-#
-# No central-server change is needed: only the robot has to *offer* a
-# relay; a consumer (e.g. an aiortc backend) reaches it with plain STUN —
-# aiortc's STUN works, only its TURN client is broken, so the consumer
-# never needs TURN creds of its own.
-TURN_CREDENTIALS_URL = os.getenv(
-    "REACHY_TURN_URL", "https://turn.fastrtc.org/credentials"
-)
-TURN_TTL_SECONDS = int(os.getenv("REACHY_TURN_TTL", "600"))
-_ICE_REFRESH_AFTER_S = TURN_TTL_SECONDS / 2.0  # refresh at half-life
-_ice_cache: dict[str, Any] = {"servers": [], "ts": 0.0}
-_ice_lock = Lock()
-
-
-def _fetch_central_ice_servers() -> list[dict[str, Any]]:
-    """Fetch ICE servers (STUN + Cloudflare TURN) for our offer, cached.
-
-    Uses the daemon's HF token to authenticate to the TURN proxy. Returns
-    a list of ``{"urls", "username"?, "credential"?}`` dicts, or the
-    stale cache / empty list on failure (caller then keeps host/srflx).
-    """
-    now = time.time()
-    cached = _ice_cache.get("servers") or []
-    if cached and (now - float(_ice_cache.get("ts", 0.0))) < _ICE_REFRESH_AFTER_S:
-        return cached
-    with _ice_lock:
-        now = time.time()
-        cached = _ice_cache.get("servers") or []
-        if cached and (now - float(_ice_cache.get("ts", 0.0))) < _ICE_REFRESH_AFTER_S:
-            return cached
-        try:
-            from huggingface_hub import get_token
-
-            token = get_token()
-            if not token:
-                logging.getLogger(__name__).warning(
-                    "No HF token available; cannot fetch TURN credentials"
-                )
-                return cached
-            import requests
-
-            resp = requests.get(
-                TURN_CREDENTIALS_URL,
-                headers={"Authorization": f"Bearer {token}"},
-                params={"ttl": TURN_TTL_SECONDS},
-                timeout=10,
-            )
-            resp.raise_for_status()
-            servers = resp.json().get("iceServers") or []
-            if servers:
-                _ice_cache["servers"] = servers
-                _ice_cache["ts"] = time.time()
-            return servers or cached
-        except Exception as e:  # noqa: BLE001 - never break negotiation
-            logging.getLogger(__name__).warning(
-                "Failed to fetch TURN credentials: %r", e
-            )
-            return cached
-
-
-def _ice_servers_to_turn_uris(servers: list[dict[str, Any]]) -> list[str]:
-    """Convert ICE-server dicts to webrtcbin ``turn(s)://user:pass@host:port`` URIs."""
-    from urllib.parse import quote
-
-    uris: list[str] = []
-    for s in servers:
-        urls = s.get("urls")
-        if not urls:
-            continue
-        if isinstance(urls, str):
-            urls = [urls]
-        user = s.get("username")
-        cred = s.get("credential")
-        for url in urls:
-            scheme, _, rest = url.partition(":")
-            scheme = scheme.lower()
-            if scheme in ("turn", "turns") and user is not None and cred is not None:
-                uris.append(f"{scheme}://{quote(str(user), safe='')}:{quote(str(cred), safe='')}@{rest}")
-    return uris
 
 
 @dataclass
@@ -267,6 +178,7 @@ class GstMediaServer:
         self,
         log_level: str = "INFO",
         sim_mode: SimulationMode = SimulationMode.NONE,
+        enable_turn: Optional[bool] = None,
     ) -> None:
         """Initialize the GStreamer WebRTC pipeline.
 
@@ -274,6 +186,11 @@ class GstMediaServer:
             log_level: Logging level for WebRTC daemon operations.
             sim_mode: Simulation mode. MUJOCO receives video via UDP,
                 MOCKUP uses autovideosrc, NONE detects a physical camera.
+            enable_turn: offer TURN relay candidates to consumers, so a
+                remote one behind a restrictive NAT can still reach us.
+                Costs one background thread refreshing credentials. None
+                (the default) reads ``turn_enabled`` from the daemon
+                config file, falling back to True when it is unset.
 
         Raises:
             RuntimeError: If no camera is detected (unless in simulation mode)
@@ -369,6 +286,22 @@ class GstMediaServer:
         self._aec_enabled = False
         self._webrtcechoprobe: Optional[Gst.Element] = None
 
+        if enable_turn is None:
+            # Deferred like the speaker-EQ lookup in audio_utils, so this
+            # module doesn't pull in the daemon package at import time.
+            from reachy_mini.daemon.startup_app_config import get_turn_enabled
+
+            configured = get_turn_enabled()
+            enable_turn = True if configured is None else configured
+        # Refreshed off-thread so `_consumer_added` can read credentials
+        # without doing I/O on the thread that builds the SDP offer.
+        # None when relay candidates are disabled.
+        self._turn: Optional[TurnCredentials] = (
+            TurnCredentials() if enable_turn else None
+        )
+        if self._turn is not None:
+            self._turn.start()
+
         self._build_pipeline()
 
     def _build_pipeline(self) -> None:
@@ -395,6 +328,9 @@ class GstMediaServer:
         bury that real error under an unraisable `AttributeError`.
         """
         self._logger.debug("Cleaning up GstMediaServer")
+        turn = getattr(self, "_turn", None)
+        if turn is not None:
+            turn.stop()
         # A non-None source id implies a completed `__init__`, hence a lock.
         if getattr(self, "_pose_push_source_id", None) is not None:
             with self._pose_lock:
@@ -515,31 +451,27 @@ class GstMediaServer:
         self._install_negotiation_watchdog(peer_id, webrtcbin)
 
     def _apply_turn_servers(self, webrtcbin: Gst.Element) -> None:
-        """Add central-provided TURN relay servers to this webrtcbin.
+        """Add the currently held TURN relay servers to this webrtcbin.
 
         Must run before the SDP offer is generated so the offer carries a
-        ``relay`` candidate. Best-effort: any failure leaves the default
-        host/srflx-only gathering untouched. Credentials are never logged.
+        ``relay`` candidate. Reads cached credentials only and never does
+        I/O: this runs on the thread that builds the offer, so blocking
+        here would delay the connection for every consumer, including LAN
+        ones that will never use a relay. Credentials are never logged.
         """
-        try:
-            uris = _ice_servers_to_turn_uris(_fetch_central_ice_servers())
-            if not uris:
-                self._logger.info(
-                    "No TURN servers available; offering host/srflx only"
-                )
-                return
-            for uri in uris:
-                try:
-                    webrtcbin.emit("add-turn-server", uri)
-                except Exception as e:  # noqa: BLE001
-                    self._logger.warning("add-turn-server failed: %r", e)
-            self._logger.info(
-                "Configured %d TURN server(s) on webrtcbin: %s",
-                len(uris),
-                [u.split("@", 1)[-1] for u in uris],  # host only, no creds
-            )
-        except Exception as e:  # noqa: BLE001 - never break negotiation
-            self._logger.warning("Failed to apply TURN servers: %r", e)
+        if self._turn is None:
+            return
+        uris = self._turn.turn_uris()
+        if not uris:
+            # Normal right after boot, or when the proxy is unreachable.
+            self._logger.info("No TURN servers held; offering host/srflx only")
+            return
+        for uri in uris:
+            try:
+                webrtcbin.emit("add-turn-server", uri)
+            except Exception as e:  # noqa: BLE001 - never break negotiation
+                self._logger.warning("add-turn-server failed: %r", e)
+        self._logger.debug("Configured %d TURN server(s) on webrtcbin", len(uris))
 
     # GstWebRTCRTPTransceiverDirection enum values
     _WEBRTC_DIRECTION_SENDRECV = 4

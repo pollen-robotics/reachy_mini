@@ -26,3 +26,14 @@ def test_media_server_constructs_in_mujoco_sim() -> None:
         assert server._resolution is not None
     finally:
         server.close()
+
+
+def test_enable_turn_false_starts_no_refresher() -> None:
+    """Opting out means no credentials object, hence no thread and no fetch."""
+    server = GstMediaServer(sim_mode=SimulationMode.MUJOCO, enable_turn=False)
+    try:
+        assert server._turn is None
+        # The consumer hook stays callable; it just adds nothing.
+        server._apply_turn_servers(None)  # type: ignore[arg-type]
+    finally:
+        server.close()
