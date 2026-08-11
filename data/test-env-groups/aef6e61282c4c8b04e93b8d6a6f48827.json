@@ -1,1 +1,1 @@
-{"id":"aef6e61282c4c8b04e93b8d6a6f48827","fullName":"tests.unit_tests.test_device_detection.TestParser#test_pulseaudio_has_monitor_device","name":"test_pulseaudio_has_monitor_device","status":"passed","testResultsByEnv":{"default":"776bd73f93e447d4902bd01693ab20da"}}
+{"id":"aef6e61282c4c8b04e93b8d6a6f48827","fullName":"tests.unit_tests.test_device_detection.TestParser#test_pulseaudio_has_monitor_device","name":"test_pulseaudio_has_monitor_device","status":"passed","testResultsByEnv":{"default":"aed0a537835ca45d6b7afdd640a96146"}}

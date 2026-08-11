@@ -1,118 +1,58 @@
 {
   "stats": {
-    "total": 841,
-    "passed": 826,
-    "skipped": 15,
-    "new": 15
+    "total": 846,
+    "passed": 831,
+    "new": 5,
+    "skipped": 15
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "642c64727d26c9fe9e7f1b0fa1a1775e",
-      "name": "test_enable_turn_false_starts_no_refresher",
-      "status": "passed",
-      "duration": 35
-    },
-    {
-      "id": "bb9097121b1704c4d1f3ae9bf6ab9728",
-      "name": "test_ice_servers_to_turn_uris_percent_encodes_credentials",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "ee5d6f4449d77c9e7987bfa89864f87e",
-      "name": "test_turn_credentials_without_token_logs_once",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "8a9d5dc6af808404178b4793d253f69d",
-      "name": "test_send_command_serializes_a_protocol_model",
+      "id": "5d28b0eb7de776bf55a8e484ac058424",
+      "name": "test_unconfigured_root_drops_info",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "8794852b2899ad0cc816b6a03c183107",
-      "name": "test_turn_credentials_network_failure_retries_soon",
+      "id": "ff6ff003ec4e3312c80c77a9ef15c3bd",
+      "name": "test_log_file_is_added_alongside_stderr_not_instead",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "d56e66dd0f707ab81b0cf78426df23bc",
-      "name": "test_ice_servers_to_turn_uris_skips_stun_and_credentialless",
+      "id": "e10c8314f85384a6f68d18ada822b45d",
+      "name": "test_configure_is_idempotent",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "5562115aa7999f62fa0a620b39f2945d",
-      "name": "test_ice_servers_to_turn_uris_builds_userinfo_uris",
+      "id": "169e772b3e88c8dcdef37088da8eeb06",
+      "name": "test_level_is_honoured",
       "status": "passed",
       "duration": 0
     },
     {
-      "id": "936bbaa69afe769a9e0444bb9e0f5833",
-      "name": "test_turn_credentials_without_token_does_not_fetch",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "2a6f90d846ed32da96a7fdd0646b0a9b",
-      "name": "test_turn_credentials_refresh_once_populates_cache",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "39cecb0bc9544e2377c791632171faac",
-      "name": "test_turn_credentials_uris_empty_before_any_fetch",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "1e621f24b45c5e46d9c4c48faacf6944",
-      "name": "test_ice_servers_to_turn_uris_expands_url_lists",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "6daf0764b9efacadc26878ce9109b651",
-      "name": "test_send_command_passes_dicts_through_unchanged",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "087946ce4069e18a6a8df95dbf54cfe7",
-      "name": "test_send_command_refuses_when_channel_closed",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "47bc705eb101d76e30432beecd8a071f",
-      "name": "test_get_turn_enabled_reads_daemon_config",
+      "id": "a160f1b90b7f272663e1f1891af90c1a",
+      "name": "test_configure_sends_info_to_stderr",
       "status": "passed",
       "duration": 1
-    },
-    {
-      "id": "aa0f820b2bfc4bde400f07565fb4b89b",
-      "name": "test_send_command_omits_unset_optional_fields",
-      "status": "passed",
-      "duration": 0
     }
   ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 94946,
-  "createdAt": 1786452438407,
+  "duration": 101420,
+  "createdAt": 1786460786488,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "4ce83170-b8a8-4a84-a529-a3af3cad09d6",
+    "reportId": "9be846d8-376a-47c4-8646-d7d01a824d1a",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31492627222",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31504847175",
   "href": "awesome/",
   "coverage": 52
 }
