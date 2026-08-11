@@ -32,6 +32,16 @@ If your code runs on the same machine as the daemon, prefer
 `ReachyMini(media_backend="local")` or the WebRTC client — they're
 faster (no central round-trip) and richer (audio + DoA, etc.).
 
+## Install
+
+The consumer needs `aiortc` and `av`, which the base install leaves out —
+a robot never runs the consumer, and aiortc pulls a native SRTP/crypto
+stack with it. Ask for the extra:
+
+```bash
+pip install "reachy_mini[central-consumer]"
+```
+
 ## Quick start
 
 ```python

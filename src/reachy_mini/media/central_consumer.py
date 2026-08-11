@@ -160,8 +160,10 @@ def _patch_aiortc_dtls_ciphers() -> None:
             logger.warning("dtls-patch: set_cipher_list failed: %r", e)
         return ctx
 
-    RTCCertificate._create_ssl_context = _patched
-    RTCCertificate._reachy_cipher_patched = True
+    # Replacing a method and tagging the class are the point of the shim,
+    # so both ignores are permanent until aiortc ships the upstream fix.
+    RTCCertificate._create_ssl_context = _patched  # type: ignore[method-assign]
+    RTCCertificate._reachy_cipher_patched = True  # type: ignore[attr-defined]
     logger.info("DTLS cipher list extended (+ECDHE-RSA-AES128-GCM-SHA256)")
 
 
@@ -824,7 +826,7 @@ class ReachyCentralConsumer:
         config = RTCConfiguration(iceServers=ice_servers)
         pc = RTCPeerConnection(configuration=config)
 
-        @pc.on("track")  # type: ignore[misc]  # pyee .on() is untyped
+        @pc.on("track")
         def _on_track(track: MediaStreamTrack) -> None:
             logger.info("received remote track kind=%s", track.kind)
             if track.kind == "video":
@@ -832,7 +834,7 @@ class ReachyCentralConsumer:
             elif track.kind == "audio" and self._on_pcm is not None:
                 asyncio.create_task(self._consume_audio(track))
 
-        @pc.on("datachannel")  # type: ignore[misc]  # pyee .on() is untyped
+        @pc.on("datachannel")
         def _on_datachannel(channel: RTCDataChannel) -> None:
             # The robot daemon offers a "data" channel for JSON command
             # envelopes (set_full_target / goto_target / ...). We capture
@@ -856,22 +858,22 @@ class ReachyCentralConsumer:
                 self._cmd_channel_open = True
                 self._on_cmd_ready()
 
-            @channel.on("open")  # type: ignore[misc]  # pyee .on() is untyped
+            @channel.on("open")
             def _open() -> None:
                 self._cmd_channel_open = True
                 logger.info("robot data channel open")
                 self._on_cmd_ready()
 
-            @channel.on("close")  # type: ignore[misc]  # pyee .on() is untyped
+            @channel.on("close")
             def _close() -> None:
                 self._cmd_channel_open = False
 
-            @channel.on("message")  # type: ignore[misc]  # pyee .on() is untyped
+            @channel.on("message")
             def _msg(_m: Any) -> None:
                 # Telemetry from the robot (state snapshots). Ignored for now.
                 pass
 
-        @pc.on("connectionstatechange")  # type: ignore[misc]  # pyee .on() is untyped
+        @pc.on("connectionstatechange")
         async def _on_state() -> None:
             st = pc.connectionState
             logger.info("pc state: %s", st)
@@ -884,11 +886,11 @@ class ReachyCentralConsumer:
                 # dead pc and reconnects, and a fresh welcome re-negotiates.
                 self._force_sse_reconnect("pc connection failed")
 
-        @pc.on("iceconnectionstatechange")  # type: ignore[misc]  # pyee .on() is untyped
+        @pc.on("iceconnectionstatechange")
         async def _on_ice_state() -> None:
             logger.info("ice state: %s", pc.iceConnectionState)
 
-        @pc.on("icegatheringstatechange")  # type: ignore[misc]  # pyee .on() is untyped
+        @pc.on("icegatheringstatechange")
         async def _on_ice_gather_state() -> None:
             logger.info("ice gathering: %s", pc.iceGatheringState)
 
@@ -1001,13 +1003,21 @@ class ReachyCentralConsumer:
         try:
             while True:
                 try:
-                    frame = await track.recv()
+                    # recv() is typed as the Frame|Packet union; _on_track
+                    # only starts this for kind == "video", so aiortc yields
+                    # VideoFrames here.
+                    frame = cast("av.VideoFrame", await track.recv())
                 except MediaStreamError:
                     # Normal end-of-track: aiortc raises this on teardown.
                     logger.debug("video track ended")
                     return
                 try:
-                    arr = frame.to_ndarray(format="rgb24")
+                    # to_ndarray's dtype depends on the format; rgb24 is
+                    # 8 bits per channel by definition, which is what
+                    # latest_frame() promises its callers.
+                    arr = cast(
+                        "npt.NDArray[np.uint8]", frame.to_ndarray(format="rgb24")
+                    )
                 except Exception as e:
                     logger.warning("frame decode failed: %r", e)
                     continue
@@ -1049,7 +1059,9 @@ class ReachyCentralConsumer:
         try:
             while True:
                 try:
-                    frame = await track.recv()
+                    # Same union as in _consume_video; _on_track only starts
+                    # this for kind == "audio".
+                    frame = cast("av.AudioFrame", await track.recv())
                 except MediaStreamError:
                     # Normal end-of-track: aiortc raises this on teardown.
                     logger.debug("audio track ended")
