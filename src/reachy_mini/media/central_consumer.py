@@ -259,8 +259,6 @@ class ReachyCentralConsumer:
         self._task: Optional[asyncio.Task[None]] = None
         self._discovery_task: Optional[asyncio.Task[None]] = None
         self._heartbeat_task: Optional[asyncio.Task[None]] = None
-        # Track consumers, held so the loop's weak reference isn't the only
-        # one. See _spawn_track_task; cleared on teardown.
         self._track_tasks: set[asyncio.Task[None]] = set()
         self._stopping = False
         # The live SSE response, so other tasks can force a reconnect by
