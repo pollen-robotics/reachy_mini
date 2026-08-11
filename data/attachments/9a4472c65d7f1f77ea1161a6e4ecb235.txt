@@ -1,0 +1,1 @@
+WARNING  reachy_mini.daemon.startup_app_config:startup_app_config.py:104 Ignoring invalid 'some_flag' in daemon config (need true or false); using the built-in default.

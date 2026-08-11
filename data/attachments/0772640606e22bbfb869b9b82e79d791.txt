@@ -1,0 +1,1 @@
+WARNING  reachy_mini.daemon.startup_app_config:startup_app_config.py:54 Ignoring unreadable daemon config /tmp/pytest-of-runner/pytest-0/test_get_is_failsafe_on_corrup0/reachy_mini/daemon_config.json: Expecting property name enclosed in double quotes: line 1 column 3 (char 2)

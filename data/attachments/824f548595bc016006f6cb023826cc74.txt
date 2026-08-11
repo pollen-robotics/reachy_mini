@@ -1,0 +1,1 @@
+WARNING  reachy_mini.daemon.startup_app_config:startup_app_config.py:104 Ignoring invalid 'first_wake_up_completed' in daemon config (need true or false); using the built-in default.

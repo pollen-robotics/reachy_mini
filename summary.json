@@ -1,63 +1,177 @@
 {
   "stats": {
-    "total": 855,
-    "passed": 840,
+    "total": 883,
+    "passed": 868,
     "skipped": 15,
-    "new": 9
+    "new": 28
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "63a94ee020f108a6ad559718e7b50958",
-      "name": "test_failed_daemon_reload_is_retried_on_the_next_boot",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "e7772f0c8e27abf51815cdec774fcaf2",
-      "name": "test_target_missing_gets_installed_and_enabled",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "6673043691d5b00b1122bfd2aa920821",
-      "name": "test_packaged_unit_exists_and_points_at_venv_launcher",
+      "id": "9c3b5177982187d235b3f8f5498a952e",
+      "name": "test_update_creates_file_and_parent_dirs",
       "status": "passed",
       "duration": 0
     },
     {
-      "id": "e70078253af281750a871f25ed988576",
-      "name": "test_target_differs_gets_copied_and_restarted",
+      "id": "7b91e7844db8b3c8ddf51caa9bc88b59",
+      "name": "test_update_overwrites_existing_key",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "0e6d41af39188c9330c4a01305e14cb9",
-      "name": "test_source_missing_is_a_noop",
+      "id": "7876bf00b6f6518e4b490041ef595795",
+      "name": "test_get_bool_none_when_file_missing",
       "status": "passed",
       "duration": 0
     },
     {
-      "id": "08516c9477ce58538a4de8a0167a7aba",
-      "name": "test_failed_systemctl_is_tolerated",
+      "id": "5b64a1baec107b41c5e0591b7fabc9d5",
+      "name": "test_update_raises_on_write_error",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "e10c643e8aa4a0ce1d2561f3cf2d59cf",
-      "name": "test_target_same_is_untouched",
+      "id": "ca0d89056fd4b48c6dbbb8db9daab0e2",
+      "name": "test_get_bool_none_when_key_missing",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "1bcf3159e4ded60d3973f13ec058c54a",
+      "name": "test_set_preserves_other_config_keys",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "397d3b278604e243a0219ff1f242d6d5",
+      "name": "test_get_bool_none_and_warns_on_malformed[yes]",
       "status": "passed",
       "duration": 0
     },
     {
-      "id": "171588e81c4e00c7fbf8395120c0b67b",
-      "name": "test_failed_copy_leaves_the_installed_unit_alone",
+      "id": "8c74e8e23723d0d868eeaf1c80a1459a",
+      "name": "test_get_bool_none_and_warns_on_malformed[0]",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "418bf05224837a20376d2635581c4b67",
-      "name": "test_failed_enable_on_fresh_install_is_retried_on_the_next_boot",
+      "id": "37399ca17cd153c3296db6f2f0e82d02",
+      "name": "test_set_is_failsafe_on_write_error",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "e30e80631d09135211ff7825bce4b8a6",
+      "name": "test_get_defaults_false_on_malformed_flag",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "965b1e4df2bdd5801e3b45d5f525693c",
+      "name": "test_set_true_then_get_round_trips",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "ab292766fbc26b4e94553f24275dcca9",
+      "name": "test_update_preserves_other_keys",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "4fcb59376563e017021bfbf450401e53",
+      "name": "test_set_false_then_get_round_trips",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "167cfdac03be197dd41001ba4dcf5f45",
+      "name": "test_first_wake_up_write_failure_acks_stored_value",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "e3f9583083ab20f54db710ae6f42a6d9",
+      "name": "test_get_bool_round_trips[False]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "282f49552df76b61f0dc7cb3cc1d7693",
+      "name": "test_update_none_clears_key",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "b0a1d5174e55edf4764bc514c53bca9c",
+      "name": "test_get_bool_none_and_warns_on_malformed[1]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "9847a18c40cf1dfe27eff89168442551",
+      "name": "test_get_bool_none_and_warns_on_malformed[malformed4]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "2504d0b607a409c04cac054cf6300ddb",
+      "name": "test_set_creates_parent_dirs",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "f8e13a3b89a2f4fde463f839e5e69006",
+      "name": "test_get_defaults_false_when_flag_missing_from_file",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "95c49e911098996e3df6386ca9fa2b41",
+      "name": "test_get_is_failsafe_on_corrupt_json",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "0ff1c07e637cc9715cf88b09f655d2c3",
+      "name": "test_get_bool_round_trips[True]",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "b79161b7231e79c81ce8650bae3741fa",
+      "name": "test_update_none_on_absent_key_writes_empty_config",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "7bd020a0f16cb4d325c2dd250e169861",
+      "name": "test_defaults_to_false_when_unset",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "231b85188e7036e48b3391b7c82924b9",
+      "name": "test_get_bool_none_and_warns_on_malformed[malformed3]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "aa6d180a017fedf471f8f19c5b75a481",
+      "name": "test_get_bool_none_and_warns_on_malformed[None]",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "28926482839b4ef2209e39cd91de1a41",
+      "name": "test_first_wake_up_round_trips",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "d65cfe887e757c27b0986685399b9d01",
+      "name": "test_update_recovers_from_corrupt_file",
       "status": "passed",
       "duration": 1
     }
@@ -66,17 +180,17 @@
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 97197,
-  "createdAt": 1786466327119,
+  "duration": 101856,
+  "createdAt": 1786487887591,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "7006f86e-8d01-4176-817e-71e1743f0034",
+    "reportId": "e32f2681-39c4-49e3-a534-f7f6e9132d5b",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31513157103",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31542975262",
   "href": "awesome/",
-  "coverage": 52
+  "coverage": 53
 }

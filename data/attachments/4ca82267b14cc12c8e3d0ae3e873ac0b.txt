@@ -1,0 +1,2 @@
+WARNING  reachy_mini.daemon.startup_app_config:startup_app_config.py:54 Ignoring unreadable daemon config /tmp/pytest-of-runner/pytest-0/test_set_is_failsafe_on_write_0/blocked/daemon_config.json: [Errno 20] Not a directory: '/tmp/pytest-of-runner/pytest-0/test_set_is_failsafe_on_write_0/blocked/daemon_config.json'
+WARNING  reachy_mini.daemon.startup_app_config:startup_app_config.py:173 Could not persist first-wake-up flag: [Errno 17] File exists: '/tmp/pytest-of-runner/pytest-0/test_set_is_failsafe_on_write_0/blocked'

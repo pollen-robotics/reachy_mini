@@ -1,0 +1,1 @@
+WARNING  reachy_mini.daemon.startup_app_config:startup_app_config.py:54 Ignoring unreadable daemon config /tmp/pytest-of-runner/pytest-0/test_update_raises_on_write_er0/blocked/daemon_config.json: [Errno 20] Not a directory: '/tmp/pytest-of-runner/pytest-0/test_update_raises_on_write_er0/blocked/daemon_config.json'
