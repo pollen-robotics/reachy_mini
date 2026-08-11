@@ -284,7 +284,10 @@ def _revert_gpio_unit(target: Path, previous: bytes | None) -> None:
     installed units match, so a new file left behind after a failed
     daemon-reload / restart / enable would mark the work done forever. systemd
     would keep the old unit, or on a fresh install keep no enabled unit at all,
-    which silently costs the power button and no later boot would fix it.
+    so the power switch stops triggering a graceful `shutdown -h now` (no
+    kernel gpio-shutdown overlay backs it up, this daemon is the only thing
+    listening) and every power-off becomes an abrupt cut. No later boot would
+    fix it either, since the files still match.
     """
     try:
         if previous is None:
