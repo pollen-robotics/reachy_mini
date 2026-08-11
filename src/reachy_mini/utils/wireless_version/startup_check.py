@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -34,14 +35,11 @@ STAMP_FORMAT = 1
 GPIO_SHUTDOWN_UNIT_TARGET = Path("/etc/systemd/system/gpio-shutdown-daemon.service")
 
 
-def check_and_fix_venvs_ownership(
-    venvs_path: str = "/venvs", custom_logger: logging.Logger | None = None
-) -> bool:
+def check_and_fix_venvs_ownership(venvs_path: str = "/venvs") -> bool:
     """For wireless units, check if files under venvs_path are owned by user pollen and fix if needed.
 
     Args:
         venvs_path: Path to the virtual environments directory (default: /venvs)
-        custom_logger: Optional logger to use instead of the module logger
 
     Returns:
         True when everything under venvs_path is (now) owned by USER.
@@ -53,17 +51,17 @@ def check_and_fix_venvs_ownership(
         # Get pollen user's UID
         pollen_uid = pwd.getpwnam(USER).pw_uid
     except KeyError:
-        print(f"User '{USER}' does not exist on this system")
+        logger.error(f"User '{USER}' does not exist on this system")
         return False
 
     venvs_dir = Path(venvs_path)
 
     if not venvs_dir.exists():
-        print(f"Directory {venvs_path} does not exist")
+        logger.error(f"Directory {venvs_path} does not exist")
         return False
 
     if not venvs_dir.is_dir():
-        print(f"{venvs_path} exists but is not a directory")
+        logger.error(f"{venvs_path} exists but is not a directory")
         return False
 
     # Check if any files are not owned by pollen
@@ -73,16 +71,16 @@ def check_and_fix_venvs_ownership(
             try:
                 if item.stat().st_uid != pollen_uid:
                     needs_fix = True
-                    print(f"Found file not owned by {USER}: {item}")
+                    logger.warning(f"Found file not owned by {USER}: {item}")
                     break
             except (PermissionError, OSError) as e:
-                print(f"Cannot check ownership of {item}: {e}")
+                logger.warning(f"Cannot check ownership of {item}: {e}")
     except (PermissionError, OSError) as e:
-        print(f"Cannot access {venvs_path}: {e}")
+        logger.error(f"Cannot access {venvs_path}: {e}")
         return False
 
     if needs_fix:
-        print(f"Fixing ownership of {venvs_path} to {USER}:{USER}")
+        logger.info(f"Fixing ownership of {venvs_path} to {USER}:{USER}")
         try:
             # Run chown with sudo to fix ownership
             subprocess.run(
@@ -91,16 +89,16 @@ def check_and_fix_venvs_ownership(
                 capture_output=True,
                 text=True,
             )
-            print(f"Successfully fixed ownership of {venvs_path}")
+            logger.info(f"Successfully fixed ownership of {venvs_path}")
             return True
         except subprocess.CalledProcessError as e:
-            print(f"Failed to fix ownership: {e.stderr}")
+            logger.error(f"Failed to fix ownership: {e.stderr}")
             return False
         except Exception as e:
-            print(f"Unexpected error while fixing ownership: {e}")
+            logger.error(f"Unexpected error while fixing ownership: {e}")
             return False
     else:
-        print(f"All files under {venvs_path} are owned by {USER}")
+        logger.info(f"All files under {venvs_path} are owned by {USER}")
         return True
 
 
@@ -130,7 +128,7 @@ def check_and_update_bluetooth_service() -> None:
     target_commands = Path("/bluetooth/commands")
 
     if not source.exists():
-        print(f"Source bluetooth service not found at {source}")
+        logger.warning(f"Source bluetooth service not found at {source}")
         return
 
     needs_update = False
@@ -138,20 +136,20 @@ def check_and_update_bluetooth_service() -> None:
 
     # Check if bluetooth_service.py needs update
     if not target.exists():
-        print(f"Bluetooth service not installed at {target}, copying...")
+        logger.info(f"Bluetooth service not installed at {target}, copying...")
         needs_update = True
     else:
         try:
             if not filecmp.cmp(str(source), str(target), shallow=False):
-                print("Bluetooth service has changed, updating...")
+                logger.info("Bluetooth service has changed, updating...")
                 needs_update = True
         except Exception as e:
-            print(f"Error comparing bluetooth service files: {e}")
+            logger.error(f"Error comparing bluetooth service files: {e}")
 
     # Check if commands folder needs update
     if source_commands.exists():
         if not target_commands.exists():
-            print("Commands folder not installed, copying...")
+            logger.info("Commands folder not installed, copying...")
             needs_commands_update = True
         else:
             # Compare each command file
@@ -169,22 +167,22 @@ def check_and_update_bluetooth_service() -> None:
                     break
 
     if not needs_update and not needs_commands_update:
-        print("Bluetooth service and commands are up to date")
+        logger.info("Bluetooth service and commands are up to date")
         return
 
     try:
         if needs_update:
-            print(f"Copying {source} to {target}")
+            logger.info(f"Copying {source} to {target}")
             subprocess.run(
                 ["sudo", "cp", str(source), str(target)],
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            print("Successfully copied bluetooth service")
+            logger.info("Successfully copied bluetooth service")
 
         if needs_commands_update:
-            print(f"Syncing commands folder to {target_commands}")
+            logger.info(f"Syncing commands folder to {target_commands}")
             subprocess.run(
                 ["sudo", "mkdir", "-p", str(target_commands)],
                 check=True,
@@ -197,21 +195,21 @@ def check_and_update_bluetooth_service() -> None:
                 capture_output=True,
                 text=True,
             )
-            print("Successfully synced commands folder")
+            logger.info("Successfully synced commands folder")
 
         # Restart the bluetooth service
-        print("Restarting bluetooth service...")
+        logger.info("Restarting bluetooth service...")
         subprocess.run(
             ["sudo", "systemctl", "restart", "reachy-mini-bluetooth"],
             check=True,
             capture_output=True,
             text=True,
         )
-        print("Successfully restarted bluetooth service")
+        logger.info("Successfully restarted bluetooth service")
     except subprocess.CalledProcessError as e:
-        print(f"Failed to update bluetooth service: {e.stderr}")
+        logger.error(f"Failed to update bluetooth service: {e.stderr}")
     except Exception as e:
-        print(f"Unexpected error while updating bluetooth service: {e}")
+        logger.error(f"Unexpected error while updating bluetooth service: {e}")
 
 
 def check_and_update_wireless_launcher() -> None:
@@ -234,49 +232,92 @@ def check_and_update_wireless_launcher() -> None:
     target = Path("/etc/systemd/system/reachy-mini-daemon.service")
 
     if not source.exists():
-        print(f"Source service file not found at {source}")
+        logger.warning(f"Source service file not found at {source}")
         return
 
     # Check if target exists
     if not target.exists():
-        print(f"Wireless daemon service not installed at {target}")
+        logger.warning(f"Wireless daemon service not installed at {target}")
         return
 
     # Compare files
     try:
         if filecmp.cmp(str(source), str(target), shallow=False):
-            print("Wireless daemon service is up to date")
+            logger.info("Wireless daemon service is up to date")
             return
         else:
-            print("Wireless daemon service has changed, updating...")
+            logger.info("Wireless daemon service has changed, updating...")
     except Exception as e:
-        print(f"Error comparing service files: {e}")
+        logger.error(f"Error comparing service files: {e}")
         return
 
     # Update service file
     try:
-        print(f"Copying {source} to {target}")
+        logger.info(f"Copying {source} to {target}")
         subprocess.run(
             ["sudo", "cp", str(source), str(target)],
             check=True,
             capture_output=True,
             text=True,
         )
-        print("Successfully copied service file")
+        logger.info("Successfully copied service file")
 
         # Reload systemd daemon
-        print("Reloading systemd daemon...")
+        logger.info("Reloading systemd daemon...")
         subprocess.run(
             ["sudo", "systemctl", "daemon-reload"],
             check=True,
             capture_output=True,
             text=True,
         )
-        print("Successfully reloaded systemd")
+        logger.info("Successfully reloaded systemd")
     except subprocess.CalledProcessError as e:
-        print(f"Failed to update service: {e.stderr}")
+        logger.error(f"Failed to update service: {e.stderr}")
     except Exception as e:
-        print(f"Unexpected error while updating service: {e}")
+        logger.error(f"Unexpected error while updating service: {e}")
+
+
+def _revert_gpio_unit(target: Path, previous: bytes | None) -> None:
+    """Undo a half-applied unit update so the next boot retries it.
+
+    check_and_update_gpio_shutdown_service returns early once the packaged and
+    installed units match, so a new file left behind after a failed
+    daemon-reload / restart / enable would mark the work done forever. systemd
+    would keep the old unit, or on a fresh install keep no enabled unit at all,
+    which silently costs the power button and no later boot would fix it.
+    """
+    try:
+        if previous is None:
+            subprocess.run(
+                ["sudo", "rm", "-f", str(target)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            logger.warning(
+                f"Removed the half-installed {target}; the next boot will retry"
+            )
+            return
+
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp.write(previous)
+        try:
+            subprocess.run(
+                ["sudo", "cp", tmp.name, str(target)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            os.unlink(tmp.name)
+        logger.warning(f"Restored the previous {target}; the next boot will retry")
+    except Exception as e:
+        logger.error(
+            f"Could not revert {target} after a failed update: {e}. The next boot "
+            "will find a matching unit and skip the sync; recover with "
+            "`sudo systemctl daemon-reload && sudo systemctl enable --now "
+            "gpio-shutdown-daemon`."
+        )
 
 
 def check_and_update_gpio_shutdown_service() -> None:
@@ -318,6 +359,11 @@ def check_and_update_gpio_shutdown_service() -> None:
     else:
         logger.info(f"gpio-shutdown service not installed at {target}, installing...")
 
+    # Once the copy lands, file equality alone would tell the next boot the work
+    # is done, so nothing may stay copied unless every follow-up step succeeded.
+    previous_unit = None if target_missing else target.read_bytes()
+    copied = False
+
     try:
         logger.info(f"Copying {source} to {target}")
         subprocess.run(
@@ -326,6 +372,7 @@ def check_and_update_gpio_shutdown_service() -> None:
             capture_output=True,
             text=True,
         )
+        copied = True
         subprocess.run(
             ["sudo", "systemctl", "daemon-reload"],
             check=True,
@@ -350,8 +397,12 @@ def check_and_update_gpio_shutdown_service() -> None:
         logger.info("Successfully updated gpio-shutdown service")
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to update gpio-shutdown service: {e.stderr}")
+        if copied:
+            _revert_gpio_unit(target, previous_unit)
     except Exception as e:
         logger.error(f"Unexpected error while updating gpio-shutdown service: {e}")
+        if copied:
+            _revert_gpio_unit(target, previous_unit)
 
 
 def check_and_sync_apps_venv_sdk() -> bool:
@@ -374,13 +425,13 @@ def check_and_sync_apps_venv_sdk() -> bool:
     try:
         daemon_info = get_install_source("reachy_mini")
     except Exception as e:
-        print(f"Could not get daemon SDK info: {e}")
+        logger.error(f"Could not get daemon SDK info: {e}")
         return False
 
     # Check apps_venv exists
     apps_venv_python = APPS_VENV / "bin/python"
     if not apps_venv_python.exists():
-        print("apps_venv not found, skipping SDK sync")
+        logger.info("apps_venv not found, skipping SDK sync")
         return True
 
     # Get apps_venv install info by reading metadata directly (avoid importing from apps_venv)
@@ -404,20 +455,20 @@ def check_and_sync_apps_venv_sdk() -> bool:
             timeout=10,
         )
         if result.returncode != 0:
-            print(f"Could not get apps_venv SDK info: {result.stderr}")
+            logger.error(f"Could not get apps_venv SDK info: {result.stderr}")
             return False
         apps_info = json.loads(result.stdout.strip())
     except subprocess.TimeoutExpired:
-        print("Timeout getting apps_venv SDK info")
+        logger.error("Timeout getting apps_venv SDK info")
         return False
     except Exception as e:
-        print(f"Error getting apps_venv SDK info: {e}")
+        logger.error(f"Error getting apps_venv SDK info: {e}")
         return False
 
-    print(
+    logger.info(
         f"Daemon: {daemon_info['version']} (source={daemon_info['source']}, ref={daemon_info.get('git_ref')})"
     )
-    print(
+    logger.info(
         f"Apps:   {apps_info['version']} (source={apps_info['source']}, ref={apps_info.get('git_ref')})"
     )
 
@@ -430,7 +481,7 @@ def check_and_sync_apps_venv_sdk() -> bool:
         needs_sync = apps_info["version"] != daemon_info["version"]
 
     if not needs_sync:
-        print("Apps venv SDK is up to date")
+        logger.info("Apps venv SDK is up to date")
         return True
 
     # Build install command
@@ -446,16 +497,16 @@ def check_and_sync_apps_venv_sdk() -> bool:
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=300, env=resolved_env, cwd=Path.home())
         if result.returncode == 0:
-            print("Successfully synced apps_venv SDK")
+            logger.info("Successfully synced apps_venv SDK")
             return True
         else:
-            print(f"Failed to sync apps_venv SDK: {result.stderr}")
+            logger.error(f"Failed to sync apps_venv SDK: {result.stderr}")
             return False
     except subprocess.TimeoutExpired:
-        print("Timeout syncing apps_venv SDK")
+        logger.error("Timeout syncing apps_venv SDK")
         return False
     except Exception as e:
-        print(f"Error syncing apps_venv SDK: {e}")
+        logger.error(f"Error syncing apps_venv SDK: {e}")
         return False
 
 
@@ -473,7 +524,7 @@ def check_and_fix_restore_venv() -> bool:
     restore_python = RESTORE_VENV / "bin/python"
 
     if not restore_python.exists():
-        print("Restore venv not found, skipping")
+        logger.info("Restore venv not found, skipping")
         return True
 
     # Check if editable install
@@ -485,14 +536,14 @@ def check_and_fix_restore_venv() -> bool:
             timeout=30,
         )
     except subprocess.TimeoutExpired:
-        print("Timeout checking restore venv")
+        logger.error("Timeout checking restore venv")
         return False
     except Exception as e:
-        print(f"Error checking restore venv: {e}")
+        logger.error(f"Error checking restore venv: {e}")
         return False
 
     if "Editable project location" in result.stdout:
-        print("Legacy editable install detected in restore venv, reinstalling...")
+        logger.warning("Legacy editable install detected in restore venv, reinstalling...")
         try:
             subprocess.run(
                 [str(restore_python), "-m", "pip", "install", "reachy-mini==1.2.8"],
@@ -501,19 +552,19 @@ def check_and_fix_restore_venv() -> bool:
                 text=True,
                 timeout=300,
             )
-            print("Successfully reinstalled reachy-mini in restore venv")
+            logger.info("Successfully reinstalled reachy-mini in restore venv")
             return True
         except subprocess.CalledProcessError as e:
-            print(f"Failed to reinstall in restore venv: {e.stderr}")
+            logger.error(f"Failed to reinstall in restore venv: {e.stderr}")
             return False
         except subprocess.TimeoutExpired:
-            print("Timeout reinstalling in restore venv")
+            logger.error("Timeout reinstalling in restore venv")
             return False
         except Exception as e:
-            print(f"Error reinstalling in restore venv: {e}")
+            logger.error(f"Error reinstalling in restore venv: {e}")
             return False
     else:
-        print("Restore venv install is correct")
+        logger.info("Restore venv install is correct")
         return True
 
 
@@ -534,7 +585,7 @@ def _clear_startup_stamp_best_effort() -> None:
     try:
         clear_startup_stamp()
     except OSError as e:
-        print(f"Could not remove startup stamp: {e}")
+        logger.error(f"Could not remove startup stamp: {e}")
 
 
 def _dist_record_sig(venv_root: Path) -> str | None:
@@ -598,7 +649,7 @@ def _quick_ownership_ok() -> bool:
     ]
     for probe in probes:
         if probe.exists() and probe.stat().st_uid != uid:
-            print(f"Fast path aborted: {probe} not owned by {USER}")
+            logger.warning(f"Fast path aborted: {probe} not owned by {USER}")
             return False
     return True
 
@@ -607,7 +658,7 @@ def _startup_stamp_valid() -> bool:
     """Check that the stored stamp matches the freshly computed signature."""
     stored = json.loads(STAMP_PATH.read_text())
     if stored != _compute_stamp_signature():
-        print("Startup stamp mismatch (install state changed); running full startup checks")
+        logger.warning("Startup stamp mismatch (install state changed); running full startup checks")
         return False
     return _quick_ownership_ok()
 
@@ -618,12 +669,10 @@ def _write_startup_stamp() -> None:
     tmp = STAMP_PATH.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(signature, sort_keys=True))
     os.replace(tmp, STAMP_PATH)
-    print(f"Startup stamp written to {STAMP_PATH}")
+    logger.info(f"Startup stamp written to {STAMP_PATH}")
 
 
-def run_wireless_startup_checks(
-    custom_logger: logging.Logger | None = None,
-) -> None:
+def run_wireless_startup_checks() -> None:
     """Run wireless startup checks, skipping the expensive ones when nothing changed.
 
     Cheap checks (bluetooth service files, wireless and gpio-shutdown systemd
@@ -636,17 +685,17 @@ def run_wireless_startup_checks(
     try:
         fast_path = _startup_stamp_valid()
     except Exception as e:
-        print(f"Startup stamp not usable ({e}); running full startup checks")
+        logger.warning(f"Startup stamp not usable ({e}); running full startup checks")
         fast_path = False
 
     if fast_path:
-        print("Startup stamp valid, skipping expensive startup checks")
+        logger.info("Startup stamp valid, skipping expensive startup checks")
         check_and_update_bluetooth_service()
         check_and_update_wireless_launcher()
         check_and_update_gpio_shutdown_service()
         return
 
-    all_ok = check_and_fix_venvs_ownership(custom_logger=custom_logger)
+    all_ok = check_and_fix_venvs_ownership()
     check_and_update_bluetooth_service()
     check_and_update_wireless_launcher()
     check_and_update_gpio_shutdown_service()
@@ -654,7 +703,7 @@ def run_wireless_startup_checks(
     all_ok = check_and_fix_restore_venv() and all_ok
 
     if not all_ok:
-        print("Some startup checks did not succeed; not writing startup stamp")
+        logger.warning("Some startup checks did not succeed; not writing startup stamp")
         _clear_startup_stamp_best_effort()
         return
 
@@ -663,7 +712,7 @@ def run_wireless_startup_checks(
     except Exception as e:
         # Never fatal: worst case the full checks simply run again next boot.
         # Drop any stale stamp so what's on disk is always fresh or absent.
-        print(f"Could not write startup stamp: {e}")
+        logger.error(f"Could not write startup stamp: {e}")
         _clear_startup_stamp_best_effort()
 
 

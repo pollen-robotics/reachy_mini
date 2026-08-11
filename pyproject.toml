@@ -84,6 +84,13 @@ wireless-version = [
     "lgpio>=0.2.2.0; sys_platform == 'linux'",
 ]
 opencv = ["opencv-python<=5.0", "cv2_enumerate_cameras>=1.2.1"]
+# `media.central_consumer` only: a cloud backend consuming a robot over the
+# HF central relay. Kept out of the base install because a robot never runs
+# the consumer, and aiortc pulls a native SRTP/crypto stack with it.
+central-consumer = [
+    "aiortc>=1.9",
+    "av>=12",
+]
 all = [
     "reachy_mini[examples]",
     "reachy_mini[mujoco]",
@@ -91,6 +98,7 @@ all = [
     "reachy_mini[rerun]",
     "reachy_mini[wireless-version]",
     "reachy_mini[opencv]",
+    "reachy_mini[central-consumer]",
 ]
 
 [dependency-groups]

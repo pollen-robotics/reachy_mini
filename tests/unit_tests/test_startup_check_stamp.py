@@ -9,6 +9,7 @@ only ever written after every expensive check succeeded.
 """
 
 import json
+import logging
 import os
 from pathlib import Path
 
@@ -212,7 +213,7 @@ def test_stamp_write_is_atomic_no_tmp_left_behind(fake_venvs, spy_checks):
     assert leftovers == []
 
 
-def test_stale_stamp_says_why_full_checks_run(fake_venvs, spy_checks, capsys):
+def test_stale_stamp_says_why_full_checks_run(fake_venvs, spy_checks, caplog):
     """A parseable-but-stale stamp must say WHY the full checks run.
 
     Field debugging relies on the journal: a silent fallback would look
@@ -223,10 +224,12 @@ def test_stale_stamp_says_why_full_checks_run(fake_venvs, spy_checks, capsys):
         fake_venvs["daemon"].glob("lib/python*/site-packages/*.dist-info/RECORD")
     )
     os.utime(record, ns=(9, 9))
-    capsys.readouterr()
 
-    sc.run_wireless_startup_checks()
-    assert "Startup stamp mismatch" in capsys.readouterr().out
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger=sc.logger.name):
+        sc.run_wireless_startup_checks()
+
+    assert "Startup stamp mismatch" in caplog.text
 
 
 def test_stamp_path_being_a_directory_never_crashes_boot(fake_venvs, spy_checks):

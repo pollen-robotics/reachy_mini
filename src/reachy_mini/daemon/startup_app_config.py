@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 _KEY = "startup_app"
 _EQ_KEY = "speaker_eq_gains"
+_TURN_KEY = "turn_enabled"
 # equalizer-10bands accepts per-band gains in [-24, +12] dB.
 _EQ_GAIN_MIN, _EQ_GAIN_MAX = -24.0, 12.0
 
@@ -83,6 +84,29 @@ def get_speaker_eq_gains() -> list[float] | None:
         _EQ_KEY,
         _EQ_GAIN_MIN,
         _EQ_GAIN_MAX,
+    )
+    return None
+
+
+def get_turn_enabled() -> bool | None:
+    """Return whether the media server should offer TURN relay candidates.
+
+    Returns None if unset or malformed, so the caller keeps its default. A
+    relay lets a remote consumer behind a restrictive NAT reach the robot;
+    turning it off saves a background thread refreshing credentials on a
+    robot that is only ever reached from its own network.
+    """
+    config = _read()
+    if _TURN_KEY not in config:
+        return None
+    value = config[_TURN_KEY]
+    if isinstance(value, bool):
+        return value
+    # Present but malformed: warn so the user knows it was ignored.
+    logger.warning(
+        "Ignoring invalid '%s' in daemon config (need true or false); "
+        "using the built-in default.",
+        _TURN_KEY,
     )
     return None
 
