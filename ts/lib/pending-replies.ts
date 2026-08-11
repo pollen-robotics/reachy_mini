@@ -48,6 +48,7 @@ export interface ReplySlotValues {
     hardware_id: string | null;
     volume: number | null;
     mic_volume: number | null;
+    first_wake_up: boolean | null;
     tracked_face: FaceTarget | null;
     robot_name: string | null;
     delete_hf_token: boolean | null;
