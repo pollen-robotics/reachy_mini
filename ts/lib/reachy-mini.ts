@@ -1211,6 +1211,29 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     /**
+     * Query whether the first wake-up setup wizard has been completed.
+     * Robot-wide, persisted on the robot. Resolves `false` when pending,
+     * `true` when done, or `null` when the channel isn't open / the daemon
+     * predates the `get_first_wake_up` command (callers should fail-open
+     * and skip the wizard on `null`).
+     */
+    getFirstWakeUp(): Promise<boolean | null> {
+        // Fail-open, so this never rejects: the wizard gate runs right after
+        // connect, which is exactly when the channel may not be open yet.
+        if (!this._dc || this._dc.readyState !== 'open') return Promise.resolve(null);
+        return this._slotRoundtrip('first_wake_up', { type: 'get_first_wake_up' });
+    }
+
+    /**
+     * Persist the first wake-up wizard completion flag on the robot.
+     * Resolves with the stored value (or `null` on channel-closed).
+     */
+    setFirstWakeUp(isCompleted: boolean): Promise<boolean | null> {
+        if (!this._dc || this._dc.readyState !== 'open') return Promise.resolve(null);
+        return this._slotRoundtrip('first_wake_up', { type: 'set_first_wake_up', is_completed: isCompleted });
+    }
+
+    /**
      * Query the persisted robot display name. Resolves the stored name,
      * `null` when none is set / the channel isn't open / the daemon predates
      * the `get_robot_name` command.
@@ -1958,6 +1981,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         }
         if (data.command === 'get_microphone_volume' || data.command === 'set_microphone_volume') {
             this._pending.settleReplySlot('mic_volume', data.status === 'error' ? null : (data.volume as number));
+            return;
+        }
+        if (data.command === 'get_first_wake_up' || data.command === 'set_first_wake_up') {
+            this._pending.settleReplySlot(
+                'first_wake_up',
+                data.status === 'error' ? null : !!data.is_completed,
+            );
             return;
         }
         if (data.command === 'get_robot_name' || data.command === 'set_robot_name') {
