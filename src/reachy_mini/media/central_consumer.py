@@ -188,17 +188,44 @@ class ReachyCentralConsumer:
         Audio/command arguments are all optional; with none set this behaves
         exactly as the original video-only consumer.
 
-        on_pcm: called with each decoded chunk of the robot's microphone as a
-            mono float32 ndarray (shape ``(n,)``) resampled to
-            ``audio_sample_rate``. When ``None``, inbound audio is ignored.
-        out_track: an :class:`aiortc.MediaStreamTrack` (``kind == "audio"``)
-            whose frames are sent to the robot speaker. Added to the peer
-            connection on the robot's sendrecv audio m-line before
-            ``createAnswer``. When ``None``, we send no audio.
-        on_command_ready: called (no args) once the robot ``data`` channel
-            opens, so callers can send one-shot setup commands — e.g.
-            ``send_command({"type": "set_wobbling", "enabled": True})``.
-        audio_sample_rate: rate the mic audio is resampled to for ``on_pcm``.
+        Args:
+            hf_token: the visitor's HF token, sent as ``Authorization:
+                Bearer`` on every central call. Scopes discovery to the
+                robots that visitor actually owns.
+            central_url: base URL of the HF central signaling relay.
+            robot_peer_id: pin the session to this producer peerId. When
+                ``None`` we auto-pick the first producer whose meta name
+                matches ``robot_name``, and re-pick after a robot restart.
+            robot_name: producer meta name to match when auto-picking.
+            ice_servers_provider: async callable returning the
+                :class:`aiortc.RTCIceServer` list used to build the peer
+                connection. ``None`` means STUN-only, which is the
+                recommended setup: the robot daemon offers the TURN relay
+                candidate, and GStreamer's TURN client works where aiortc's
+                currently does not. Only pass a provider when the consumer
+                must allocate its own relay — worked example and caveats in
+                ``docs/source/SDK/cloud-backend-consumer.md`` ("TURN
+                configuration").
+            consumer_label: human-readable label reported to central and
+                used to prefix this consumer's log lines.
+            on_pcm: called with each decoded chunk of the robot's microphone
+                as a mono float32 ndarray (shape ``(n,)``) resampled to
+                ``audio_sample_rate``. When ``None``, inbound audio is
+                ignored.
+            out_track: an :class:`aiortc.MediaStreamTrack` (``kind ==
+                "audio"``) whose frames are sent to the robot speaker. Added
+                to the peer connection on the robot's sendrecv audio m-line
+                before ``createAnswer``. When ``None``, we send no audio.
+            on_command_ready: called (no args) once the robot ``data``
+                channel opens, so callers can send one-shot setup commands —
+                e.g. ``send_command({"type": "set_wobbling", "enabled":
+                True})``.
+            audio_sample_rate: rate the mic audio is resampled to for
+                ``on_pcm``.
+
+        Raises:
+            ValueError: if ``hf_token`` is empty.
+
         """
         if not hf_token:
             raise ValueError("hf_token is required for ReachyCentralConsumer")

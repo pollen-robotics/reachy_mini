@@ -107,8 +107,8 @@ so visitors only see their own robots.
 
 By default the consumer asks Google's public STUN server, which is
 enough whenever the robot daemon already offers a TURN-relay
-candidate of its own (see the [Media Server's
-`_apply_turn_servers`](../../../src/reachy_mini/media/media_server.py)).
+candidate of its own (see `_apply_turn_servers` in
+`reachy_mini/media/media_server.py`).
 If you need the consumer to allocate its own relay (e.g. when neither
 side can hole-punch), pass an `ice_servers_provider` returning
 `aiortc.RTCIceServer` objects with TURN credentials. The HF-hosted
@@ -140,8 +140,8 @@ consumer = ReachyCentralConsumer(
 > broken against Cloudflare's TURN. The recommended setup is to leave
 > the consumer on STUN-only and let the **robot daemon** offer a
 > relay candidate — that path goes through GStreamer's TURN client,
-> which works. The patched daemon in `reachy_mini_wt_turn` already
-> does this in `media_server._apply_turn_servers`.
+> which works. The daemon does this in
+> `media_server._apply_turn_servers`.
 
 ## Sending commands
 
