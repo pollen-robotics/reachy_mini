@@ -834,7 +834,7 @@ def main() -> None:
 
     if args.wireless_version:
         # Check and fix ownership of /venvs directory
-        check_and_fix_venvs_ownership(custom_logger=logging.getLogger())
+        check_and_fix_venvs_ownership()
 
         # Check and update bluetooth service if needed
         check_and_update_bluetooth_service()
