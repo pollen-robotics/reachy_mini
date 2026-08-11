@@ -289,38 +289,37 @@ def check_and_update_gpio_shutdown_service() -> None:
     On a difference the packaged unit is copied over and the service is
     restarted; a missing unit is installed and enabled.
     """
+    # parents[2] is the reachy_mini package root (this file lives in
+    # utils/wireless_version/).
     source = (
-        Path(__file__).parent
-        / ".."
-        / ".."
+        Path(__file__).parents[2]
         / "daemon"
         / "app"
         / "services"
         / "gpio_shutdown"
         / "gpio-shutdown-daemon.service"
-    )
-    source = source.resolve()
+    ).resolve()
     target = GPIO_SHUTDOWN_UNIT_TARGET
 
     if not source.exists():
-        print(f"Source gpio-shutdown service file not found at {source}")
+        logger.warning(f"Source gpio-shutdown service file not found at {source}")
         return
 
     target_missing = not target.exists()
     if not target_missing:
         try:
             if filecmp.cmp(str(source), str(target), shallow=False):
-                print("gpio-shutdown service is up to date")
+                logger.info("gpio-shutdown service is up to date")
                 return
-            print("gpio-shutdown service has changed, updating...")
+            logger.info("gpio-shutdown service has changed, updating...")
         except Exception as e:
-            print(f"Error comparing gpio-shutdown service files: {e}")
+            logger.error(f"Error comparing gpio-shutdown service files: {e}")
             return
     else:
-        print(f"gpio-shutdown service not installed at {target}, installing...")
+        logger.info(f"gpio-shutdown service not installed at {target}, installing...")
 
     try:
-        print(f"Copying {source} to {target}")
+        logger.info(f"Copying {source} to {target}")
         subprocess.run(
             ["sudo", "cp", str(source), str(target)],
             check=True,
@@ -348,11 +347,11 @@ def check_and_update_gpio_shutdown_service() -> None:
                 capture_output=True,
                 text=True,
             )
-        print("Successfully updated gpio-shutdown service")
+        logger.info("Successfully updated gpio-shutdown service")
     except subprocess.CalledProcessError as e:
-        print(f"Failed to update gpio-shutdown service: {e.stderr}")
+        logger.error(f"Failed to update gpio-shutdown service: {e.stderr}")
     except Exception as e:
-        print(f"Unexpected error while updating gpio-shutdown service: {e}")
+        logger.error(f"Unexpected error while updating gpio-shutdown service: {e}")
 
 
 def check_and_sync_apps_venv_sdk() -> bool:
