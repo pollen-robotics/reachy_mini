@@ -85,7 +85,7 @@ body:
       label: Update Status
       description: Select all that apply (at least one must be true).
       options:
-        - label: My robot is up-to-date via the dashboard.
+        - label: My robot is up to date with the latest stable version.
         - label: I'm running the latest Reachy Mini release from this repo.
     validations:
       required: true
