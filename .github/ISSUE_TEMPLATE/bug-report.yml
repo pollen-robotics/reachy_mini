@@ -123,3 +123,10 @@ body:
     attributes:
       label: Additional Info / Workarounds
       description: Anything else we should know? Include workarounds if you found any.
+
+  - type: input
+    id: ai-assistance
+    attributes:
+      label: AI assistance
+      description: Did an AI assistant help write this report? Name it, or leave `none`. This is not held against you, it just tells us how to read the report.
+      placeholder: none
