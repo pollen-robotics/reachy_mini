@@ -817,7 +817,7 @@ class Backend:
             move (Move): The Move object to be played.
             play_frequency (float): The frequency at which to evaluate the move (in Hz).
             initial_goto_duration (float): Duration for an initial goto to the move's starting position. If 0.0, no initial goto is performed.
-            audio_lead_s (float): How many seconds the audio (if any) starts BEFORE the motion. Positive values compensate for the constant GStreamer playbin latency on the robot so the audio reaches the speaker at the same moment the actuator starts moving. Negative values delay audio relative to motion. No-op when the move has no sound_path. Default 0.
+            audio_lead_s (float): How many seconds the audio (if any) starts BEFORE the motion. The sound is prerolled (PAUSED) before the motion clock starts, so 0 means audio and motion start together with no GStreamer warmup skew. Positive values start the audio ahead of the motion, negative values delay it. No-op when the move has no sound_path. Default 0.
             cancel_token (_PlaybackCancelToken, optional): If provided, the inner loop polls ``cancel_token.cancelled`` every tick and exits when flipped. Used by ``_async_play_uploaded_move`` to wire ``cancel_move`` to a specific upload_id; direct callers (goto_target, etc.) pass None and stay non-cancellable.
 
         """
@@ -838,27 +838,46 @@ class Backend:
                 )
             sleep_period = 1.0 / play_frequency
 
-            # Sound handoff.  audio_lead_s shifts the audio start
-            # relative to the motion loop:
+            # Sound handoff. We PREROLL the playbin first (drive it to PAUSED
+            # and block until GStreamer has opened the sink + filled its ring
+            # buffer), so flipping it to PLAYING makes the first sample hit the
+            # speaker essentially immediately. This removes the variable
+            # playbin warmup that used to make the motion visibly lead the
+            # audio. audio_lead_s then shifts a *prerolled* start around the
+            # motion clock, with a clean, warmup-free meaning:
             #   > 0: audio starts first, motion follows after the wait
             #   < 0: motion starts first, audio follows
-            #   = 0: kick off audio just before entering the loop (legacy behaviour)
-            if move.sound_path is not None and audio_lead_s > 0:
-                self.play_sound(str(move.sound_path))
+            #   = 0: both start together (now genuinely in sync)
+            #
+            # Preroll blocks for the warmup duration, so run it off the event
+            # loop to avoid stalling the daemon while GStreamer wakes up.
+            sound_ready = False
+            if move.sound_path is not None:
+                loop = asyncio.get_running_loop()
+                sound_ready = await loop.run_in_executor(
+                    None, self.prepare_sound, str(move.sound_path)
+                )
+                if not sound_ready:
+                    # Preroll failed / no media: fall back to the old
+                    # fire-and-forget start so the move isn't silent
+                    # (accepts the legacy warmup latency).
+                    self.play_sound(str(move.sound_path))
+
+            if sound_ready and audio_lead_s > 0:
+                self.start_prepared_sound()
                 await asyncio.sleep(audio_lead_s)
-            elif move.sound_path is not None and audio_lead_s == 0:
-                self.play_sound(str(move.sound_path))
+            elif sound_ready and audio_lead_s == 0:
+                self.start_prepared_sound()
 
             t0 = time.time()
-            # Negative audio_lead_s: schedule sound to fire mid-loop,
-            # |audio_lead_s| seconds after t0. We hold a reference to
-            # the background task so the finally block can cancel it
-            # if the motion loop exits before the sleep elapses (short
-            # move + big negative lead would otherwise leak a task that
-            # plays audio after the move has ended).
+            # Negative audio_lead_s: start the (already prerolled) sound
+            # mid-loop, |audio_lead_s| seconds after t0. We hold a reference
+            # to the background task so the finally block can cancel it if the
+            # motion loop exits before the sleep elapses (short move + big
+            # negative lead would otherwise leak a task that plays audio after
+            # the move has ended).
             delayed_sound_task: Optional["asyncio.Task[None]"] = None
-            if move.sound_path is not None and audio_lead_s < 0:
-                sound_path_str = str(move.sound_path)
+            if sound_ready and audio_lead_s < 0:
 
                 async def _delayed_sound() -> None:
                     try:
@@ -867,7 +886,7 @@ class Backend:
                         return
                     if cancel_token is not None and cancel_token.cancelled:
                         return
-                    self.play_sound(sound_path_str)
+                    self.start_prepared_sound()
 
                 delayed_sound_task = asyncio.create_task(_delayed_sound())
             try:
@@ -894,9 +913,15 @@ class Backend:
                 # Don't leak the delayed-sound task past the loop. Two
                 # cases this matters: the move duration was shorter
                 # than |audio_lead_s|, or the loop was cancelled before
-                # the sleep elapsed.
+                # the sleep elapsed. Because the sound is prerolled (playbin
+                # sitting in PAUSED with the audio sink claimed), if the
+                # scheduled start never fired we must also release it via
+                # stop_sound, otherwise the device stays held until the next
+                # play. The task runs on this same loop, so "not done()" here
+                # reliably means the sound was never started.
                 if delayed_sound_task is not None and not delayed_sound_task.done():
                     delayed_sound_task.cancel()
+                    self.stop_sound()
         finally:
             self._end_move()
 
@@ -1144,6 +1169,33 @@ class Backend:
         """
         if self._media_server is not None:
             self._media_server.play_sound(sound_file)
+
+    def prepare_sound(self, sound_file: str) -> bool:
+        """Preroll a sound for a warmup-free start_prepared_sound().
+
+        Delegates to the media server.  Returns False if the server is not
+        available (no_media mode) or the preroll failed, in which case the
+        caller should fall back to play_sound.
+
+        Args:
+            sound_file (str): The name of the sound file to prepare.
+
+        Returns:
+            bool: True when the sound is prerolled and ready to start.
+
+        """
+        if self._media_server is None:
+            return False
+        return self._media_server.prepare_sound(sound_file)
+
+    def start_prepared_sound(self) -> None:
+        """Start a sound previously prerolled via prepare_sound().
+
+        Delegates to the media server.  No-op if the server is not
+        available (no_media mode) or nothing was prepared.
+        """
+        if self._media_server is not None:
+            self._media_server.start_prepared_sound()
 
     def stop_sound(self) -> None:
         """Stop the currently playing sound file.
