@@ -49,18 +49,20 @@
       title: Core Concepts
     - local: SDK/quickstart
       title: Quickstart Guide
-    - local: SDK/python-sdk
-      title: Python SDK
-    - local: SDK/integration
-      title: AI Integrations
-    - local: SDK/apps
-      title: Building & Publishing Apps
-    - local: API/rest-api
-      title: REST API
     - local: SDK/javascript-sdk
       title: JavaScript SDK & Web Apps
+    - local: SDK/apps
+      title: Building & Publishing Apps
+    - local: SDK/integration
+      title: AI Integrations
+    - local: SDK/python-sdk
+      title: Python SDK
+    - local: API/rest-api
+      title: REST API
     - local: SDK/media-architecture
       title: Media Architecture
+    - local: SDK/cloud-backend-consumer
+      title: Cloud-Backend Consumer
     - local: SDK/gstreamer-installation
       title: GStreamer Installation
   title: Software guide

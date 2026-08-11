@@ -1,6 +1,8 @@
 """Unit tests for the wireless_version update helpers."""
 
+import logging
 import shlex
+import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -61,14 +63,21 @@ def test_build_external_venv_pip_fallback(monkeypatch):
     assert tokens[:2] == [str(py.parent / "pip"), "install"]
 
 
+def _split_git_ref_cmd(cmd):
+    """Split `step1 && ( step2 || step3 )` into its three steps."""
+    step1, rest = cmd.split(" && ", 1)
+    assert rest.startswith("( ") and rest.endswith(" )")
+    step2, step3 = rest[2:-2].split(" || ", 1)
+    return step1, step2, step3
+
+
 def test_build_git_ref_uv(monkeypatch):
     """Git ref install chains three steps and sets the LFS env var (uv)."""
     monkeypatch.setattr(utils, "_check_uv_available", lambda: True)
     cmd, env = utils.build_install_command("wireless-version", git_ref="main")
     assert env == {"GIT_LFS_SKIP_SMUDGE": "1"}
 
-    step1, rest = cmd.split(" && ", 1)
-    step2, step3 = rest.split(" || ", 1)
+    step1, step2, step3 = _split_git_ref_cmd(cmd)
 
     t1 = shlex.split(step1)
     assert "--force-reinstall" in t1 and "--no-deps" in t1 and "--no-cache-dir" in t1
@@ -85,11 +94,55 @@ def test_build_git_ref_pip_fallback(monkeypatch):
     """Git ref via pip appends the only-if-needed upgrade strategy."""
     monkeypatch.setattr(utils, "_check_uv_available", lambda: False)
     cmd, _ = utils.build_install_command("wireless-version", git_ref="dev")
-    _, rest = cmd.split(" && ", 1)
-    step2, step3 = rest.split(" || ", 1)
+    _, step2, step3 = _split_git_ref_cmd(cmd)
     assert shlex.split(step2) == ["pip", "check"]
     t3 = shlex.split(step3)
     assert "--upgrade-strategy" in t3 and "only-if-needed" in t3
+
+
+def test_git_ref_grouping_shell_precedence():
+    """Regression: with the grouped form, a failed step1 fails the whole chain."""
+    assert subprocess.run("false && true || true", shell=True).returncode == 0  # old form, masked
+    assert subprocess.run("false && ( true || true )", shell=True).returncode != 0  # grouped, honest
+
+
+# --- call_logger_wrapper ---
+
+
+@pytest.mark.asyncio
+async def test_call_logger_wrapper_success():
+    """A zero exit code returns without raising."""
+    await utils.call_logger_wrapper("true", logging.getLogger("test"))
+
+
+@pytest.mark.asyncio
+async def test_call_logger_wrapper_nonzero_raises():
+    """Regression: a non-zero exit code must raise, not pass silently."""
+    with pytest.raises(RuntimeError, match="exit code 7"):
+        await utils.call_logger_wrapper("exit 7", logging.getLogger("test"))
+
+
+@pytest.mark.asyncio
+async def test_call_logger_wrapper_tolerated_returncode():
+    """A code listed in ok_returncodes does not raise (the restart's 143/-15)."""
+    # 143 = exit status relayed by the shell.
+    await utils.call_logger_wrapper("exit 143", logging.getLogger("test"), ok_returncodes=(0, -15, 143))
+    # -15 = process killed by SIGTERM (asyncio reports the negated signal), the
+    # real self-inflicted signal seen inside the daemon's cgroup.
+    await utils.call_logger_wrapper("kill -TERM $$", logging.getLogger("test"), ok_returncodes=(0, -15, 143))
+    # A code outside the list still raises.
+    with pytest.raises(RuntimeError, match="exit code 5"):
+        await utils.call_logger_wrapper("exit 5", logging.getLogger("test"), ok_returncodes=(0, -15, 143))
+
+
+def test_restart_argv_matches_sudoers_whitelist():
+    """The restart argv is whitelisted verbatim in /etc/sudoers.d/010-pollen-reachy.
+
+    Any extra flag (e.g. --no-block) stops sudo matching the NOPASSWD rule, so the
+    restart fails with "a password is required" and the update never applies.
+    """
+    src = Path(update.__file__).read_text()
+    assert '"sudo systemctl restart reachy-mini-daemon"' in src
 
 
 # --- _semver_version ---
@@ -284,8 +337,6 @@ async def test_update_with_apps_venv(monkeypatch):
     monkeypatch.setattr(update, "call_logger_wrapper", calls)
     monkeypatch.setattr(update.Path, "exists", lambda self: True)
 
-    import logging
-
     await update.update_reachy_mini(logging.getLogger("test"))
 
     assert calls.call_count == 3
@@ -299,9 +350,57 @@ async def test_update_without_apps_venv(monkeypatch):
     monkeypatch.setattr(update, "call_logger_wrapper", calls)
     monkeypatch.setattr(update.Path, "exists", lambda self: False)
 
-    import logging
-
     await update.update_reachy_mini(logging.getLogger("test"), pre_release=True)
 
     assert calls.call_count == 2
     assert calls.await_args_list[-1].args[0] == "sudo systemctl restart reachy-mini-daemon"
+
+
+@pytest.mark.asyncio
+async def test_update_daemon_install_failure_aborts_before_restart(monkeypatch):
+    """A failed daemon venv install propagates and never restarts the daemon."""
+    calls = AsyncMock(side_effect=RuntimeError("pip install failed"))
+    monkeypatch.setattr(update, "call_logger_wrapper", calls)
+    monkeypatch.setattr(update.Path, "exists", lambda self: True)
+
+    with pytest.raises(RuntimeError, match="pip install failed"):
+        await update.update_reachy_mini(logging.getLogger("test"))
+
+    # Only the daemon venv install ran: no apps_venv step, no restart.
+    assert calls.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_update_apps_venv_failure_still_restarts(monkeypatch):
+    """An apps_venv failure is non-fatal: the restart still applies the update."""
+    commands: list[str] = []
+
+    async def fake_call(cmd, logger, env=None, ok_returncodes=(0,)):
+        commands.append(cmd)
+        if len(commands) == 2:  # second call = apps_venv install
+            raise RuntimeError("apps_venv install failed")
+
+    monkeypatch.setattr(update, "call_logger_wrapper", fake_call)
+    monkeypatch.setattr(update.Path, "exists", lambda self: True)
+
+    await update.update_reachy_mini(logging.getLogger("test"))
+
+    assert len(commands) == 3
+    assert commands[-1] == "sudo systemctl restart reachy-mini-daemon"
+
+
+@pytest.mark.asyncio
+async def test_update_restart_failure_propagates(monkeypatch):
+    """A failed restart command surfaces as a failed job, not a silent pass."""
+    commands: list[str] = []
+
+    async def fake_call(cmd, logger, env=None, ok_returncodes=(0,)):
+        commands.append(cmd)
+        if cmd.startswith("sudo systemctl"):
+            raise RuntimeError("systemctl failed")
+
+    monkeypatch.setattr(update, "call_logger_wrapper", fake_call)
+    monkeypatch.setattr(update.Path, "exists", lambda self: False)
+
+    with pytest.raises(RuntimeError, match="systemctl failed"):
+        await update.update_reachy_mini(logging.getLogger("test"))
