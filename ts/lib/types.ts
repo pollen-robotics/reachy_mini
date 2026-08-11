@@ -365,6 +365,15 @@ export interface ReachyMiniInstance extends EventTarget {
      * channel isn't open, or the daemon predates the `get_robot_name` command.
      */
     getRobotName(): Promise<string | null>;
+
+    /**
+     * Query whether the first wake-up setup wizard has been completed
+     * (robot-wide, persisted). `null` when the channel isn't open or the
+     * daemon predates the command (callers should fail-open).
+     */
+    getFirstWakeUp(): Promise<boolean | null>;
+    /** Persist the first wake-up wizard completion flag on the robot. */
+    setFirstWakeUp(isCompleted: boolean): Promise<boolean | null>;
     /**
      * Set and persist the robot display name. Applied live by the daemon
      * (status + central relay + mDNS), so it takes effect right away without a

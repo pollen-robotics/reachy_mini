@@ -226,6 +226,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _hardwareIdResolve: ((v: string | null) => void) | null = null;
     private _volumeResolve: ((v: number | null) => void) | null = null;
     private _micVolumeResolve: ((v: number | null) => void) | null = null;
+    private _firstWakeUpResolve: ((v: boolean | null) => void) | null = null;
     private _trackedFaceResolve: ((v: FaceTarget | null) => void) | null = null;
     private _robotNameResolve: ((v: string | null) => void) | null = null;
     private _deleteHfTokenResolve: ((v: boolean | null) => void) | null = null;
@@ -813,6 +814,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._firstWakeUpResolve) { this._firstWakeUpResolve(null); this._firstWakeUpResolve = null; }
         if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
@@ -864,6 +866,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        if (this._firstWakeUpResolve) { this._firstWakeUpResolve(null); this._firstWakeUpResolve = null; }
         if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
         if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
         if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
@@ -1415,6 +1418,37 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             () => this._micVolumeResolve,
             (next) => { this._micVolumeResolve = next; },
             { type: 'set_microphone_volume', volume: clampVolume(volume) },
+        );
+    }
+
+    /**
+     * Query whether the first wake-up setup wizard has been completed.
+     * Robot-wide, persisted on the robot. Resolves `false` when pending,
+     * `true` when done, or `null` when the channel isn't open / the daemon
+     * predates the `get_first_wake_up` command (callers should fail-open
+     * and skip the wizard on `null`).
+     */
+    getFirstWakeUp(): Promise<boolean | null> {
+        // Fail-open, so this never rejects: the wizard gate runs right after
+        // connect, which is exactly when the channel may not be open yet.
+        if (!this._dc || this._dc.readyState !== 'open') return Promise.resolve(null);
+        return this._slotRoundtrip(
+            () => this._firstWakeUpResolve,
+            (next) => { this._firstWakeUpResolve = next; },
+            { type: 'get_first_wake_up' },
+        );
+    }
+
+    /**
+     * Persist the first wake-up wizard completion flag on the robot.
+     * Resolves with the stored value (or `null` on channel-closed).
+     */
+    setFirstWakeUp(isCompleted: boolean): Promise<boolean | null> {
+        if (!this._dc || this._dc.readyState !== 'open') return Promise.resolve(null);
+        return this._slotRoundtrip(
+            () => this._firstWakeUpResolve,
+            (next) => { this._firstWakeUpResolve = next; },
+            { type: 'set_first_wake_up', is_completed: isCompleted },
         );
     }
 
@@ -2221,6 +2255,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             if (this._micVolumeResolve) {
                 this._micVolumeResolve(data.status === 'error' ? null : (data.volume as number));
                 this._micVolumeResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'get_first_wake_up' || data.command === 'set_first_wake_up') {
+            if (this._firstWakeUpResolve) {
+                this._firstWakeUpResolve(
+                    data.status === 'error' ? null : !!data.is_completed,
+                );
+                this._firstWakeUpResolve = null;
             }
             return;
         }
