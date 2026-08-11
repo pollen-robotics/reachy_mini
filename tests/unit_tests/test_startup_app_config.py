@@ -58,7 +58,9 @@ def test_update_none_clears_key(config_path: Path):
     assert _stored(config_path) == {}
 
 
-def test_update_none_on_absent_key_is_noop(config_path: Path):
+def test_update_none_on_absent_key_writes_empty_config(config_path: Path):
+    # Not a no-op on disk: clearing a key a fresh install never had still
+    # creates the config file, holding an empty object.
     startup_app_config._update("some_key", None)
     assert _stored(config_path) == {}
 
@@ -70,13 +72,15 @@ def test_update_recovers_from_corrupt_file(config_path: Path):
     assert _stored(config_path) == {"some_key": "value"}
 
 
-def test_update_raises_on_write_error(
-    config_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    def boom(*a, **k):
-        raise OSError("read-only filesystem")
-
-    monkeypatch.setattr(startup_app_config.Path, "open", boom)
+def test_update_raises_on_write_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # A plain file where the config's parent dir should be: mkdir and open
+    # fail for real, without patching pathlib globally (which would also
+    # break the _read() at the top of _update, masking what is under test).
+    blocked = tmp_path / "blocked"
+    blocked.write_text("not a directory")
+    monkeypatch.setattr(
+        startup_app_config, "_config_path", lambda: blocked / "daemon_config.json"
+    )
     with pytest.raises(OSError):
         startup_app_config._update("some_key", "value")
 

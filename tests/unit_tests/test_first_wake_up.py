@@ -70,10 +70,13 @@ def test_set_preserves_other_config_keys(config_path: Path):
 
 
 def test_set_is_failsafe_on_write_error(
-    config_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    def boom(*a, **k):
-        raise OSError("read-only filesystem")
-
-    monkeypatch.setattr(startup_app_config.Path, "open", boom)
+    # A plain file where the config's parent dir should be, so the write
+    # fails for real instead of patching pathlib globally.
+    blocked = tmp_path / "blocked"
+    blocked.write_text("not a directory")
+    monkeypatch.setattr(
+        startup_app_config, "_config_path", lambda: blocked / "daemon_config.json"
+    )
     assert startup_app_config.set_first_wake_up_completed(True) is False

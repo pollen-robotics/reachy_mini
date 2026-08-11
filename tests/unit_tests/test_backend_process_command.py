@@ -23,6 +23,7 @@ from reachy_mini.io.protocol import (
     AudioParamPair,
     ClearIncomingAudioCmd,
     DeleteHfTokenCmd,
+    GetFirstWakeUpCmd,
     GetHardwareIdCmd,
     GetImuCmd,
     GetMicrophoneVolumeCmd,
@@ -39,6 +40,7 @@ from reachy_mini.io.protocol import (
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
     SetBodyYawCmd,
+    SetFirstWakeUpCmd,
     SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
@@ -461,6 +463,51 @@ def test_delete_hf_token_error(
     monkeypatch.setattr(hf_auth, "delete_hf_token", lambda: False)
     responses = _dispatch(sim_backend, DeleteHfTokenCmd())
     assert responses == [{"command": "delete_hf_token", "status": "error"}]
+
+
+# ------------------------------------------------------------------
+# First wake-up flag
+# ------------------------------------------------------------------
+
+
+@pytest.fixture
+def first_wake_up_config(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the daemon config at a throwaway path."""
+    from reachy_mini.daemon import startup_app_config
+
+    monkeypatch.setattr(
+        startup_app_config, "_config_path", lambda: tmp_path / "daemon_config.json"
+    )
+
+
+def test_first_wake_up_round_trips(
+    sim_backend: Any, first_wake_up_config: None
+) -> None:
+    """Get defaults to False; a successful set acks ok and persists."""
+    assert _dispatch(sim_backend, GetFirstWakeUpCmd()) == [
+        {"command": "get_first_wake_up", "is_completed": False}
+    ]
+    assert _dispatch(sim_backend, SetFirstWakeUpCmd(is_completed=True)) == [
+        {"command": "set_first_wake_up", "status": "ok", "is_completed": True}
+    ]
+    assert _dispatch(sim_backend, GetFirstWakeUpCmd()) == [
+        {"command": "get_first_wake_up", "is_completed": True}
+    ]
+
+
+def test_first_wake_up_write_failure_acks_stored_value(
+    sim_backend: Any, first_wake_up_config: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed set acks status error with the STORED value, not the requested one."""
+    from reachy_mini.daemon import startup_app_config
+
+    def boom(*a: Any, **k: Any) -> None:
+        raise OSError("read-only filesystem")
+
+    monkeypatch.setattr(startup_app_config, "_update", boom)
+    assert _dispatch(sim_backend, SetFirstWakeUpCmd(is_completed=True)) == [
+        {"command": "set_first_wake_up", "status": "error", "is_completed": False}
+    ]
 
 
 # ------------------------------------------------------------------
