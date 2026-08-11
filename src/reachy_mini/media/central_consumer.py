@@ -132,14 +132,14 @@ def _patch_aiortc_dtls_ciphers() -> None:
     try:
         from aiortc.rtcdtlstransport import RTCCertificate
     except Exception as e:  # pragma: no cover
-        logger.warning("[reachy] dtls-patch: aiortc import failed: %r", e)
+        logger.warning("dtls-patch: aiortc import failed: %r", e)
         return
     if getattr(RTCCertificate, "_reachy_cipher_patched", False):
         return
     try:
         _orig = RTCCertificate._create_ssl_context
     except AttributeError as e:
-        logger.warning("[reachy] dtls-patch: _create_ssl_context not found: %r", e)
+        logger.warning("dtls-patch: _create_ssl_context not found: %r", e)
         return
     ciphers = (
         b"ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:"
@@ -152,12 +152,12 @@ def _patch_aiortc_dtls_ciphers() -> None:
         try:
             ctx.set_cipher_list(ciphers)
         except Exception as e:  # pragma: no cover
-            logger.warning("[reachy] dtls-patch: set_cipher_list failed: %r", e)
+            logger.warning("dtls-patch: set_cipher_list failed: %r", e)
         return ctx
 
     RTCCertificate._create_ssl_context = _patched
     RTCCertificate._reachy_cipher_patched = True
-    logger.info("[reachy] DTLS cipher list extended (+ECDHE-RSA-AES128-GCM-SHA256)")
+    logger.info("DTLS cipher list extended (+ECDHE-RSA-AES128-GCM-SHA256)")
 
 
 # Applied once at import: harmless and idempotent, and required for the
@@ -206,8 +206,10 @@ class ReachyCentralConsumer:
                 must allocate its own relay — worked example and caveats in
                 ``docs/source/SDK/cloud-backend-consumer.md`` ("TURN
                 configuration").
-            consumer_label: human-readable label reported to central and
-                used to prefix this consumer's log lines.
+            consumer_label: human-readable label reported to central as this
+                listener's meta name, so a robot's peer list shows who is
+                connected. Also identifies the instance in log lines when a
+                process runs several consumers.
             on_pcm: called with each decoded chunk of the robot's microphone
                 as a mono float32 ndarray (shape ``(n,)``) resampled to
                 ``audio_sample_rate``. When ``None``, inbound audio is
@@ -319,7 +321,11 @@ class ReachyCentralConsumer:
             except Exception as e:
                 self._cmd_send_errors += 1
                 if self._cmd_send_errors <= 3:
-                    print(f"[{self._consumer_label}] send_command failed: {e!r}")
+                    logger.warning(
+                        "send_command failed (consumer=%s): %r",
+                        self._consumer_label,
+                        e,
+                    )
 
         try:
             loop.call_soon_threadsafe(_do_send)
@@ -335,7 +341,7 @@ class ReachyCentralConsumer:
             try:
                 self._on_command_ready()
             except Exception as e:
-                logger.warning("[reachy] on_command_ready hook failed: %r", e)
+                logger.warning("on_command_ready hook failed: %r", e)
 
     def latest_frame(self) -> Optional[Tuple[int, npt.NDArray[np.uint8]]]:
         """Return ``(frame_id, ndarray)`` or ``None`` if no frame yet.
@@ -397,7 +403,7 @@ class ReachyCentralConsumer:
                 raise
             except Exception as e:
                 logger.warning(
-                    "[reachy] connection error: %r; reconnecting in %.1fs",
+                    "connection error: %r; reconnecting in %.1fs",
                     e, backoff,
                 )
             await self._teardown_session()
@@ -422,7 +428,7 @@ class ReachyCentralConsumer:
             if resp.status != 200:
                 txt = (await resp.text())[:200]
                 raise RuntimeError(f"SSE /events HTTP {resp.status}: {txt!r}")
-            logger.info("[reachy] SSE connected to %s", url)
+            logger.info("SSE connected to %s", url)
             self._sse_resp = resp
             try:
                 async for event in self._iter_sse_events(resp):
@@ -442,7 +448,7 @@ class ReachyCentralConsumer:
         """
         resp = self._sse_resp
         if resp is not None:
-            print(f"[reachy] forcing SSE reconnect ({why})")
+            logger.info("forcing SSE reconnect (%s)", why)
             try:
                 resp.close()  # breaks readline() -> _connect_once returns
             except Exception:
@@ -466,7 +472,7 @@ class ReachyCentralConsumer:
                     try:
                         yield json.loads(payload)
                     except json.JSONDecodeError:
-                        logger.debug("[reachy] non-json SSE data: %r", payload[:200])
+                        logger.debug("non-json SSE data: %r", payload[:200])
                 continue
             if line.startswith(":"):
                 continue
@@ -486,8 +492,11 @@ class ReachyCentralConsumer:
                 self._heartbeat_interval = max(2.0, float(rec))
             elif isinstance(lease, (int, float)) and lease > 0:
                 self._heartbeat_interval = max(2.0, float(lease) / 3.0)
-            print(f"[reachy] welcome peerId={self._self_peer_id} "
-                  f"(heartbeat {self._heartbeat_interval:.1f}s)")
+            logger.info(
+                "welcome peerId=%s (heartbeat %.1fs)",
+                self._self_peer_id,
+                self._heartbeat_interval,
+            )
             await self._post({
                 "type": "setPeerStatus",
                 "roles": ["listener"],
@@ -508,7 +517,11 @@ class ReachyCentralConsumer:
         elif t == "list":
             producers = msg.get("producers") or []
             names = [(p.get("meta") or {}).get("name") for p in producers]
-            print(f"[reachy] list event (informational): {len(producers)} producers names={names!r}")
+            logger.debug(
+                "list event (informational): %d producers names=%r",
+                len(producers),
+                names,
+            )
         elif t == "peer":
             sdp = msg.get("sdp")
             ice = msg.get("ice")
@@ -525,18 +538,23 @@ class ReachyCentralConsumer:
             # match anything in this process, so we just acknowledge and
             # keep the SSE open instead of tearing down and reconnecting.
             if self._session_id is not None and sid == self._session_id:
-                print(f"[reachy] endSession for our session {sid} (reason={reason!r})")
+                logger.info(
+                    "endSession for our session %s (reason=%r)", sid, reason
+                )
                 raise RuntimeError(f"endSession: {reason}")
-            print(
-                f"[reachy] ignoring stale endSession sessionId={sid} "
-                f"reason={reason!r} (we hold session={self._session_id!r})"
+            logger.debug(
+                "ignoring stale endSession sessionId=%s "
+                "reason=%r (we hold session=%r)",
+                sid,
+                reason,
+                self._session_id,
             )
         elif t == "sessionRejected":
             reason = msg.get("reason")
-            logger.warning("[reachy] sessionRejected (reason=%s)", reason)
+            logger.warning("sessionRejected (reason=%s)", reason)
             raise RuntimeError(f"sessionRejected: {reason}")
         else:
-            logger.debug("[reachy] unhandled event type=%r", t)
+            logger.debug("unhandled event type=%r", t)
 
     @staticmethod
     def _canonical_name(name: Optional[str]) -> str:
@@ -551,7 +569,7 @@ class ReachyCentralConsumer:
             if self._canonical_name(meta.get("name")) == target:
                 self._target_peer_id = p.get("id")
                 logger.info(
-                    "[reachy] selected robot peerId=%s name=%r transport=%r",
+                    "selected robot peerId=%s name=%r transport=%r",
                     self._target_peer_id, meta.get("name"), meta.get("transport"),
                 )
                 return
@@ -563,14 +581,14 @@ class ReachyCentralConsumer:
             meta = only.get("meta") or {}
             self._target_peer_id = only.get("id")
             logger.info(
-                "[reachy] only one producer visible (name=%r) and name didn't match "
+                "only one producer visible (name=%r) and name didn't match "
                 "%r — picking it anyway. Set REACHY_ROBOT_PEER_ID to pin a specific id.",
                 meta.get("name"), self._robot_name,
             )
             return
         names = [(p.get("meta") or {}).get("name") for p in producers]
         logger.info(
-            "[reachy] no producer matched name=%r (canonical=%r) among %d producers %r; "
+            "no producer matched name=%r (canonical=%r) among %d producers %r; "
             "waiting for next list",
             self._robot_name, target, len(producers), names,
         )
@@ -605,7 +623,7 @@ class ReachyCentralConsumer:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                print(f"[reachy] heartbeat error: {e!r}")
+                logger.warning("heartbeat error: %r", e)
 
     # ----------------------------------------------------------- discovery
 
@@ -672,7 +690,11 @@ class ReachyCentralConsumer:
                     robots = await self._robot_status()
                     names = [(r.get("meta") or {}).get("name")
                              or r.get("robotName") for r in robots]
-                    print(f"[reachy] robot-status poll: {len(robots)} robots names={names!r}")
+                    logger.debug(
+                        "robot-status poll: %d robots names=%r",
+                        len(robots),
+                        names,
+                    )
                     if robots:
                         self._auto_pick_producer(self._normalize_robot_status(robots))
                 if self._target_peer_id is not None and self._session_id is None:
@@ -680,7 +702,7 @@ class ReachyCentralConsumer:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                print(f"[reachy] discovery error: {e!r}")
+                logger.warning("discovery error: %r", e)
                 # Re-discover next pass unless the robot id was pinned.
                 if self._target_peer_id_pinned is None:
                     self._target_peer_id = None
@@ -705,8 +727,12 @@ class ReachyCentralConsumer:
             ) as resp:
                 if resp.status != 200:
                     txt = (await resp.text())[:200]
-                    print(f"[reachy] POST /send type={body.get('type')} "
-                          f"-> HTTP {resp.status}: {txt}")
+                    logger.warning(
+                        "POST /send type=%s -> HTTP %d: %s",
+                        body.get("type"),
+                        resp.status,
+                        txt,
+                    )
                     # Central deregistered our peer but our SSE is a zombie.
                     # Force a fresh SSE connection (new welcome re-registers).
                     if resp.status == 400 and "Connect to /events" in txt:
@@ -717,7 +743,7 @@ class ReachyCentralConsumer:
                 except Exception:
                     return None
         except Exception as e:
-            logger.warning("[reachy] POST /send type=%s failed: %r",
+            logger.warning("POST /send type=%s failed: %r",
                            body.get("type"), e)
             return None
 
@@ -741,7 +767,7 @@ class ReachyCentralConsumer:
                 raise RuntimeError("startSession: no response from central")
             if resp.get("type") == "sessionStarted":
                 self._session_id = resp.get("sessionId")
-                print(f"[reachy] sessionStarted sessionId={self._session_id}")
+                logger.info("sessionStarted sessionId=%s", self._session_id)
                 # The robot will now push an SDP offer to us via SSE.
                 return
             # Any other response means the producer we targeted is unusable:
@@ -750,9 +776,11 @@ class ReachyCentralConsumer:
             # by name on its next poll instead of hammering a dead peerId
             # forever. Not raised — a stale pin is a recoverable condition.
             detail = resp.get("reason") or resp.get("details") or resp.get("type")
-            print(
-                f"[reachy] startSession failed (peerId={self._target_peer_id} "
-                f"reason={detail!r}); re-discovering by name"
+            logger.warning(
+                "startSession failed (peerId=%s reason=%r); "
+                "re-discovering by name",
+                self._target_peer_id,
+                detail,
             )
             self._target_peer_id = None
         finally:
@@ -769,13 +797,13 @@ class ReachyCentralConsumer:
             for u in urls:
                 scheme = (u or "").split(":", 1)[0]
                 kinds.append(scheme + (" (auth)" if s.username else ""))
-        print(f"[reachy] building pc with ice servers: {kinds}")
+        logger.info("building pc with ice servers: %s", kinds)
         config = RTCConfiguration(iceServers=ice_servers)
         pc = RTCPeerConnection(configuration=config)
 
         @pc.on("track")  # type: ignore[misc]  # pyee .on() is untyped
         def _on_track(track: MediaStreamTrack) -> None:
-            print(f"[reachy] received remote track kind={track.kind}")
+            logger.info("received remote track kind=%s", track.kind)
             if track.kind == "video":
                 asyncio.create_task(self._consume_video(track))
             elif track.kind == "audio" and self._on_pcm is not None:
@@ -787,7 +815,9 @@ class ReachyCentralConsumer:
             # envelopes (set_full_target / goto_target / ...). We capture
             # it and expose send_command(); we don't read telemetry yet.
             if channel.label != "data":
-                print(f"[reachy] ignoring unexpected data channel: {channel.label!r}")
+                logger.warning(
+                    "ignoring unexpected data channel: %r", channel.label
+                )
                 return
             self._cmd_channel = channel
             # ``on("datachannel")`` fires inside aiortc's event loop, so
@@ -796,7 +826,9 @@ class ReachyCentralConsumer:
                 self._cmd_loop = asyncio.get_running_loop()
             except RuntimeError:
                 self._cmd_loop = asyncio.get_event_loop()
-            print(f"[reachy] robot data channel attached (state={channel.readyState})")
+            logger.info(
+                "robot data channel attached (state=%s)", channel.readyState
+            )
             if channel.readyState == "open":
                 self._cmd_channel_open = True
                 self._on_cmd_ready()
@@ -804,7 +836,7 @@ class ReachyCentralConsumer:
             @channel.on("open")  # type: ignore[misc]  # pyee .on() is untyped
             def _open() -> None:
                 self._cmd_channel_open = True
-                print("[reachy] robot data channel open")
+                logger.info("robot data channel open")
                 self._on_cmd_ready()
 
             @channel.on("close")  # type: ignore[misc]  # pyee .on() is untyped
@@ -819,7 +851,7 @@ class ReachyCentralConsumer:
         @pc.on("connectionstatechange")  # type: ignore[misc]  # pyee .on() is untyped
         async def _on_state() -> None:
             st = pc.connectionState
-            print(f"[reachy] pc state: {st}")
+            logger.info("pc state: %s", st)
             self._pc_connected = (st == "connected")
             if st == "failed":
                 # Exceptions raised inside an aiortc event handler don't
@@ -831,11 +863,11 @@ class ReachyCentralConsumer:
 
         @pc.on("iceconnectionstatechange")  # type: ignore[misc]  # pyee .on() is untyped
         async def _on_ice_state() -> None:
-            print(f"[reachy] ice state: {pc.iceConnectionState}")
+            logger.info("ice state: %s", pc.iceConnectionState)
 
         @pc.on("icegatheringstatechange")  # type: ignore[misc]  # pyee .on() is untyped
         async def _on_ice_gather_state() -> None:
-            print(f"[reachy] ice gathering: {pc.iceGatheringState}")
+            logger.info("ice gathering: %s", pc.iceGatheringState)
 
         self._pc = pc
         self._remote_desc_set = False
@@ -849,7 +881,7 @@ class ReachyCentralConsumer:
                 if servers:
                     return servers
             except Exception as e:
-                logger.warning("[reachy] ice_servers_provider failed: %r", e)
+                logger.warning("ice_servers_provider failed: %r", e)
         # Fallback to the same STUN the JS SDK uses.
         return [RTCIceServer(urls=["stun:stun.l.google.com:19302"])]
 
@@ -857,7 +889,7 @@ class ReachyCentralConsumer:
         sdp_type = sdp_msg.get("type")
         sdp_text = sdp_msg.get("sdp")
         if not sdp_text or sdp_type != "offer":
-            logger.warning("[reachy] unexpected sdp envelope: type=%r", sdp_type)
+            logger.warning("unexpected sdp envelope: type=%r", sdp_type)
             return
         if self._pc is None:
             await self._build_pc()
@@ -873,9 +905,9 @@ class ReachyCentralConsumer:
             try:
                 self._pc.addTrack(self._out_track)
                 self._out_track_added = True
-                print("[reachy] added outbound audio track")
+                logger.info("added outbound audio track")
             except Exception as e:
-                logger.warning("[reachy] addTrack(out) failed: %r", e)
+                logger.warning("addTrack(out) failed: %r", e)
         # Drain any ICE candidates that arrived before the offer.
         pending, self._pending_remote_ice = self._pending_remote_ice, []
         for c in pending:
@@ -895,7 +927,7 @@ class ReachyCentralConsumer:
                 "sdp": local_sdp,
             },
         })
-        logger.info("[reachy] sent SDP answer for session %s", self._session_id)
+        logger.info("sent SDP answer for session %s", self._session_id)
 
     @staticmethod
     def _log_candidate_types(label: str, sdp: str) -> None:
@@ -904,7 +936,9 @@ class ReachyCentralConsumer:
         # Candidate line: "candidate:<foundation> <comp> <proto> <prio> <ip> <port> typ <type> ..."
         types = Counter(re.findall(r"candidate:[^\r\n]* typ (\w+)", sdp or ""))
         n = sum(types.values())
-        print(f"[reachy] {label} ICE candidates: {n} total by type {dict(types) or '{}'}")
+        logger.debug(
+            "%s ICE candidates: %d total by type %s", label, n, dict(types)
+        )
 
     async def _handle_remote_ice(self, ice: dict[str, Any]) -> None:
         if not self._remote_desc_set or self._pc is None:
@@ -931,9 +965,13 @@ class ReachyCentralConsumer:
             # Log the type so we can see what the robot offers us.
             import re
             m = re.search(r" typ (\w+)", cand_str)
-            print(f"[reachy] +remote ICE {m.group(1) if m else '?'}: {cand_str[:80]}")
+            logger.debug(
+                "+remote ICE %s: %s",
+                m.group(1) if m else "?",
+                cand_str[:80],
+            )
         except Exception as e:
-            logger.warning("[reachy] addIceCandidate failed: %r (cand=%r)",
+            logger.warning("addIceCandidate failed: %r (cand=%r)",
                            e, cand_str)
 
     async def _consume_video(self, track: MediaStreamTrack) -> None:
@@ -942,12 +980,13 @@ class ReachyCentralConsumer:
                 try:
                     frame = await track.recv()
                 except MediaStreamError:
-                    print("[reachy] video track ended (MediaStreamError)")
+                    # Normal end-of-track: aiortc raises this on teardown.
+                    logger.debug("video track ended")
                     return
                 try:
                     arr = frame.to_ndarray(format="rgb24")
                 except Exception as e:
-                    print(f"[reachy] frame decode failed: {e!r}")
+                    logger.warning("frame decode failed: %r", e)
                     continue
                 # Atomic reference swap of the (id, ndarray) tuple — readers
                 # see either the prior pair or this one, never a mismatch.
@@ -961,14 +1000,17 @@ class ReachyCentralConsumer:
                     or self._source_size != (arr.shape[1], arr.shape[0])
                 ):
                     self._source_size = (arr.shape[1], arr.shape[0])
-                    print(
-                        f"[reachy] source frame size: "
-                        f"{self._source_size[0]}x{self._source_size[1]}"
+                    logger.info(
+                        "source frame size: %dx%d",
+                        self._source_size[0],
+                        self._source_size[1],
                     )
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            print(f"[reachy] video consumer error: {e!r}")
+            # Terminal for this track: nothing restarts the consumer, so the
+            # traceback is the only clue left. `exception` logs it at error.
+            logger.exception("video consumer stopped: %r", e)
 
     async def _consume_audio(self, track: MediaStreamTrack) -> None:
         """Decode the robot mic to mono float32 and hand chunks to ``on_pcm``.
@@ -986,7 +1028,8 @@ class ReachyCentralConsumer:
                 try:
                     frame = await track.recv()
                 except MediaStreamError:
-                    print("[reachy] audio track ended (MediaStreamError)")
+                    # Normal end-of-track: aiortc raises this on teardown.
+                    logger.debug("audio track ended")
                     return
                 try:
                     for out in resampler.resample(frame):
@@ -1000,12 +1043,13 @@ class ReachyCentralConsumer:
                         if self._on_pcm is not None:
                             self._on_pcm(pcm)
                 except Exception as e:
-                    print(f"[reachy] audio frame decode failed: {e!r}")
+                    logger.warning("audio frame decode failed: %r", e)
                     continue
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            print(f"[reachy] audio consumer error: {e!r}")
+            # Terminal for this track (see _consume_video).
+            logger.exception("audio consumer stopped: %r", e)
 
     # ----------------------------------------------------------- teardown
 
@@ -1063,7 +1107,7 @@ def from_env(
     hf_token = (os.getenv("HF_TOKEN") or "").strip()
     if not hf_token:
         logger.warning(
-            "[reachy] HF_TOKEN is not set; ReachyCentralConsumer cannot start"
+            "HF_TOKEN is not set; ReachyCentralConsumer cannot start"
         )
         return None
     central_url = (
