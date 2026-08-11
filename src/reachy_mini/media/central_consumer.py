@@ -88,6 +88,7 @@ from typing import (
     AsyncIterator,
     Awaitable,
     Callable,
+    Coroutine,
     List,
     Optional,
     Tuple,
@@ -258,6 +259,9 @@ class ReachyCentralConsumer:
         self._task: Optional[asyncio.Task[None]] = None
         self._discovery_task: Optional[asyncio.Task[None]] = None
         self._heartbeat_task: Optional[asyncio.Task[None]] = None
+        # Track consumers, held so the loop's weak reference isn't the only
+        # one. See _spawn_track_task; cleared on teardown.
+        self._track_tasks: set[asyncio.Task[None]] = set()
         self._stopping = False
         # The live SSE response, so other tasks can force a reconnect by
         # closing it (e.g. when central has deregistered our peer).
@@ -813,6 +817,18 @@ class ReachyCentralConsumer:
 
     # ------------------------------------------------------------ WebRTC
 
+    def _spawn_track_task(self, coro: Coroutine[Any, Any, None]) -> None:
+        """Run a track consumer, holding a reference for its whole life.
+
+        The event loop only keeps a weak reference to a running task, so a
+        bare ``create_task`` can be collected mid-flight and the track
+        silently stops being consumed. Discarding on completion keeps the
+        set from growing across reconnects.
+        """
+        task = asyncio.create_task(coro)
+        self._track_tasks.add(task)
+        task.add_done_callback(self._track_tasks.discard)
+
     async def _build_pc(self) -> None:
         ice_servers = await self._fetch_ice_servers()
         # Log the URL kinds we got — invaluable for diagnosing TURN issues.
@@ -830,9 +846,9 @@ class ReachyCentralConsumer:
         def _on_track(track: MediaStreamTrack) -> None:
             logger.info("received remote track kind=%s", track.kind)
             if track.kind == "video":
-                asyncio.create_task(self._consume_video(track))
+                self._spawn_track_task(self._consume_video(track))
             elif track.kind == "audio" and self._on_pcm is not None:
-                asyncio.create_task(self._consume_audio(track))
+                self._spawn_track_task(self._consume_audio(track))
 
         @pc.on("datachannel")
         def _on_datachannel(channel: RTCDataChannel) -> None:
@@ -1125,6 +1141,13 @@ class ReachyCentralConsumer:
             except Exception:
                 pass
             self._pc = None
+        # Closing the pc ends the tracks, so the consumers normally exit on
+        # their own MediaStreamError. Cancel anyway: a consumer blocked
+        # elsewhere would otherwise outlive the session it belongs to and
+        # keep feeding on_pcm from a connection the caller thinks is gone.
+        for task in list(self._track_tasks):
+            task.cancel()
+        self._track_tasks.clear()
         # If the robot peerId wasn't pinned via env, force a fresh pick on
         # the next list event in case the robot reconnected with a new id.
         if self._target_peer_id_pinned is None:
