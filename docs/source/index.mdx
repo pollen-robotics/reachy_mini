@@ -41,7 +41,11 @@ Reachy Mini comes with an app store powered by Hugging Face Spaces. You can inst
 />
 
 ### Quick Look
-Control your robot in just **a few lines of code**:
+Most Reachy Mini apps are **web / JS apps**: a static page that drives the robot over WebRTC from any browser, with zero install for whoever uses it. This is the recommended path for new apps. The fastest way is to describe your idea to an AI coding agent:
+
+> *I'd like to build a Reachy Mini web app that **[waves when I say hello]**. Read https://github.com/pollen-robotics/reachy_mini/blob/main/AGENTS.md first — it has everything you need.*
+
+Prefer to stay in Python for on-robot control loops? The Python SDK is still available:
 
 ```python
 from reachy_mini import ReachyMini
@@ -58,10 +62,11 @@ with ReachyMini() as mini:
 ### User guides
 * **[Installation](./SDK/installation.md)**: 5 minutes to set up your computer
 * **[Quickstart Guide](./SDK/quickstart.md)**: Run your first behavior on Reachy Mini
-* **[Python SDK](./SDK/python-sdk.md)**: Learn to move, see, speak, and hear.
-* **[AI Integrations](./SDK/integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
+* **[JavaScript SDK & Web Apps](./SDK/javascript-sdk.md)**: Build browser apps that drive the robot over WebRTC — **the easiest way to share your apps**.
 * **[Building & Publishing Apps](./SDK/apps.md)**: Create, test, publish, and debug Reachy Mini apps.
+* **[AI Integrations](./SDK/integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
 * **[Core Concepts](./SDK/core-concept.md)**: Architecture, coordinate systems, and safety limits.
+* **[Python SDK](./SDK/python-sdk.md)**: Full robot control from Python — scripts, control loops, and on-robot code.
 * **[Tutorials](./sdk-tutorials.md)**: Hands-on Jupyter notebooks to learn the SDK step by step.
 * 📂 [**Browse the Examples Folder**](https://github.com/pollen-robotics/reachy_mini/tree/main/examples)
 
