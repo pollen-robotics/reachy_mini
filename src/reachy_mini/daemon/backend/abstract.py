@@ -22,7 +22,6 @@ from typing import Annotated, Any, Callable, Dict, Optional
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.io.jsonrpc import looks_like_jsonrpc
 from reachy_mini.io.protocol import (
@@ -93,6 +92,7 @@ from reachy_mini.io.protocol import (
     command_adapter,
 )
 from reachy_mini.io.publisher import Publisher
+from reachy_mini.utils.rotation import Rotation as R
 
 if typing.TYPE_CHECKING:
     from reachy_mini.kinematics import AnyKinematics
