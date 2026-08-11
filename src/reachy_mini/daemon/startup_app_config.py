@@ -134,8 +134,13 @@ def _update(key: str, value: object | None) -> None:
 
     path = _config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as f:
+    # Write to a sibling then rename: a crash mid-write would otherwise
+    # truncate the file, and the next _update() rebuilds it from the empty
+    # dict _read() returns for unparseable JSON, dropping every other key.
+    tmp = path.with_suffix(".json.tmp")
+    with tmp.open("w") as f:
         json.dump(config, f, indent=2)
+    tmp.replace(path)
 
 
 def set_startup_app(name: str | None) -> None:
