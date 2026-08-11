@@ -28,6 +28,7 @@ single :class:`~aiortc.RTCPeerConnection` to one robot.
 
 Example::
 
+    from reachy_mini.io.protocol import GotoTargetCmd
     from reachy_mini.media.central_consumer import ReachyCentralConsumer
 
     consumer = ReachyCentralConsumer(
@@ -45,10 +46,11 @@ Example::
         frame_id, rgb = snap
         ...
 
-    # Send a JSON command on the robot's "data" data channel (e.g.
-    # ``set_full_target`` / ``goto_target``). Thread-safe — schedules
-    # the actual ``RTCDataChannel.send`` on aiortc's event loop.
-    consumer.send_command({"type": "goto_target", "head": [...], "duration": 0.4})
+    # Drive the robot over its "data" channel. Build the envelope from
+    # the shared protocol models so a typo is a type error here rather
+    # than an "Invalid command" reply from the far end. Thread-safe —
+    # schedules the actual ``RTCDataChannel.send`` on aiortc's loop.
+    consumer.send_command(GotoTargetCmd(head=[...], duration=0.4))
 
     await consumer.stop()
 
@@ -106,6 +108,9 @@ from aiortc import (
 )
 from aiortc.mediastreams import MediaStreamError
 from aiortc.sdp import candidate_from_sdp
+from pydantic import BaseModel
+
+from reachy_mini.io.protocol import AnyCommand
 
 logger = logging.getLogger(__name__)
 
@@ -220,8 +225,7 @@ class ReachyCentralConsumer:
                 before ``createAnswer``. When ``None``, we send no audio.
             on_command_ready: called (no args) once the robot ``data``
                 channel opens, so callers can send one-shot setup commands —
-                e.g. ``send_command({"type": "set_wobbling", "enabled":
-                True})``.
+                e.g. ``send_command(SetWobblingCmd(enabled=True))``.
             audio_sample_rate: rate the mic audio is resampled to for
                 ``on_pcm``.
 
@@ -302,18 +306,37 @@ class ReachyCentralConsumer:
         """Return True once the robot's ``data`` channel is open for commands."""
         return self._cmd_channel_open and self._cmd_channel is not None
 
-    def send_command(self, envelope: dict[str, Any]) -> bool:
+    def send_command(self, envelope: AnyCommand | dict[str, Any]) -> bool:
         """Write ``envelope`` to the robot's data channel as JSON.
 
         Thread-safe: schedules the actual ``send()`` on the event loop that
-        owns the aiortc peer connection. Returns True if the send was
-        queued, False if the channel isn't open.
+        owns the aiortc peer connection.
+
+        Args:
+            envelope: preferably a command model from
+                :mod:`reachy_mini.io.protocol` — the daemon validates what
+                arrives against that same ``AnyCommand`` union, so building
+                one here gets the wire format checked statically instead of
+                at the far end of a WebRTC link. A raw dict is still
+                accepted for frames the union doesn't cover, notably the
+                JSON-RPC app-control calls that share this channel.
+
+        Returns:
+            True if the send was queued, False if the channel isn't open.
+
         """
         ch = self._cmd_channel
         loop = self._cmd_loop
         if ch is None or not self._cmd_channel_open or loop is None:
             return False
-        payload = json.dumps(envelope)
+        # `exclude_none` keeps optional fields off the wire; every nullable
+        # field in the union defaults to None, so the daemon parses either
+        # form identically. Worth it on set_full_target at control rate.
+        payload = (
+            envelope.model_dump_json(exclude_none=True)
+            if isinstance(envelope, BaseModel)
+            else json.dumps(envelope)
+        )
 
         def _do_send() -> None:
             try:

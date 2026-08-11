@@ -145,16 +145,26 @@ consumer = ReachyCentralConsumer(
 
 ## Sending commands
 
-`send_command(envelope)` accepts any of the JSON envelopes the daemon's
-WebRTC data channel accepts, defined in
-`reachy_mini.io.protocol`. Most useful for cloud backends:
+`send_command(envelope)` takes a command model from
+`reachy_mini.io.protocol`. The daemon validates what arrives against that
+same union, so building the model here makes a malformed command a type
+error in your editor instead of an `"Invalid command"` reply from the
+other end of a WebRTC link. Most useful for cloud backends:
 
-- `{"type": "set_full_target", "head": [...], "antennas": [...], "body_yaw": ...}` —
-  immediate (no daemon-side interpolation). Suitable for ~50–100 Hz
-  streaming control.
-- `{"type": "goto_target", "head": [...], "duration": ..., ...}` —
-  smooth daemon-side interpolation; the right choice for one-shot
-  movements (e.g. "look at this object").
+```python
+from reachy_mini.io.protocol import GotoTargetCmd, SetFullTargetCmd
+
+# Immediate, no daemon-side interpolation. For ~50-100 Hz streaming control.
+consumer.send_command(SetFullTargetCmd(head=[...], antennas=[...], body_yaw=0.1))
+
+# Smooth daemon-side interpolation; the right choice for one-shot
+# movements (e.g. "look at this object").
+consumer.send_command(GotoTargetCmd(head=[...], duration=0.4))
+```
+
+A raw dict is still accepted, for frames the command union doesn't
+describe — notably the JSON-RPC app-control calls that share this
+channel.
 
 The `head` field is a flat 16-float row-major 4×4 pose matrix.
 `reachy_mini.ReachyMini.set_target` and `goto_target` build the same
