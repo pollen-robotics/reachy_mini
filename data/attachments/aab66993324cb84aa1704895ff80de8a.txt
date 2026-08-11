@@ -1,0 +1,1 @@
+WARNING  test_pose:media_server.py:1911 No webrtcbin for peer ghost-peer, cannot open pose channel

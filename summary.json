@@ -1,40 +1,118 @@
 {
   "stats": {
-    "total": 826,
-    "passed": 811,
+    "total": 841,
+    "passed": 826,
     "skipped": 15,
-    "new": 2
+    "new": 15
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "e0b1505f011150a9fa0b5648a03a6239",
-      "name": "test_handler_rejects_relative_path_traversal",
+      "id": "642c64727d26c9fe9e7f1b0fa1a1775e",
+      "name": "test_enable_turn_false_starts_no_refresher",
+      "status": "passed",
+      "duration": 35
+    },
+    {
+      "id": "bb9097121b1704c4d1f3ae9bf6ab9728",
+      "name": "test_ice_servers_to_turn_uris_percent_encodes_credentials",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "ee5d6f4449d77c9e7987bfa89864f87e",
+      "name": "test_turn_credentials_without_token_logs_once",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "8a9d5dc6af808404178b4793d253f69d",
+      "name": "test_send_command_serializes_a_protocol_model",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "05b48d98142a995aa10a9cbe4fdb902c",
-      "name": "test_handler_rejects_absolute_path_payload",
+      "id": "8794852b2899ad0cc816b6a03c183107",
+      "name": "test_turn_credentials_network_failure_retries_soon",
       "status": "passed",
       "duration": 1
+    },
+    {
+      "id": "d56e66dd0f707ab81b0cf78426df23bc",
+      "name": "test_ice_servers_to_turn_uris_skips_stun_and_credentialless",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "5562115aa7999f62fa0a620b39f2945d",
+      "name": "test_ice_servers_to_turn_uris_builds_userinfo_uris",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "936bbaa69afe769a9e0444bb9e0f5833",
+      "name": "test_turn_credentials_without_token_does_not_fetch",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "2a6f90d846ed32da96a7fdd0646b0a9b",
+      "name": "test_turn_credentials_refresh_once_populates_cache",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "39cecb0bc9544e2377c791632171faac",
+      "name": "test_turn_credentials_uris_empty_before_any_fetch",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "1e621f24b45c5e46d9c4c48faacf6944",
+      "name": "test_ice_servers_to_turn_uris_expands_url_lists",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "6daf0764b9efacadc26878ce9109b651",
+      "name": "test_send_command_passes_dicts_through_unchanged",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "087946ce4069e18a6a8df95dbf54cfe7",
+      "name": "test_send_command_refuses_when_channel_closed",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "47bc705eb101d76e30432beecd8a071f",
+      "name": "test_get_turn_enabled_reads_daemon_config",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "aa0f820b2bfc4bde400f07565fb4b89b",
+      "name": "test_send_command_omits_unset_optional_fields",
+      "status": "passed",
+      "duration": 0
     }
   ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 100563,
-  "createdAt": 1786347557879,
+  "duration": 94946,
+  "createdAt": 1786452438407,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "a028d786-0ea0-42ad-9c1f-83812e445f33",
+    "reportId": "4ce83170-b8a8-4a84-a529-a3af3cad09d6",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31366469644",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31492627222",
   "href": "awesome/",
-  "coverage": 53
+  "coverage": 52
 }

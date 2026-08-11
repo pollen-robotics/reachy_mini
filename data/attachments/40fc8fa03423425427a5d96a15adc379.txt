@@ -1,1 +1,0 @@
-ERROR    test_pose:media_server.py:1878 Failed to create pose channel for peer peer-1
