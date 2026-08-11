@@ -1,0 +1,2 @@
+ERROR    reachy_mini.utils.wireless_version.startup_check:startup_check.py:379 Failed to update gpio-shutdown service: systemctl refused
+WARNING  reachy_mini.utils.wireless_version.startup_check:startup_check.py:277 Removed the half-installed /tmp/pytest-of-runner/pytest-0/test_failed_enable_on_fresh_in0/gpio-shutdown-daemon.service; the next boot will retry

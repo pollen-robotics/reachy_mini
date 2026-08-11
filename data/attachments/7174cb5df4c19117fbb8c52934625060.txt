@@ -1,0 +1,1 @@
+ERROR    reachy_mini.utils.wireless_version.startup_check:startup_check.py:379 Failed to update gpio-shutdown service: permission denied

@@ -1,1 +1,1 @@
-{"id":"6f347bdf36ec2ac3c4791e4c722b4ed5","fullName":"tests.unit_tests.test_apps_hf_auth#test_delete_hf_token_failure","name":"test_delete_hf_token_failure","status":"passed","testResultsByEnv":{"default":"eab4b92be731baa4c89fc0303bae27c4"}}
+{"id":"6f347bdf36ec2ac3c4791e4c722b4ed5","fullName":"tests.unit_tests.test_apps_hf_auth#test_delete_hf_token_failure","name":"test_delete_hf_token_failure","status":"passed","testResultsByEnv":{"default":"56ebbdcbe50699bb392d0d651077f0a2"}}

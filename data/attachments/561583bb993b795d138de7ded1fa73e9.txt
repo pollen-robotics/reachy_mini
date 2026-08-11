@@ -1,0 +1,1 @@
+WARNING  reachy_mini.utils.wireless_version.startup_check:startup_check.py:326 Source gpio-shutdown service file not found at /home/runner/work/reachy_mini/reachy_mini/src/reachy_mini/daemon/app/services/gpio_shutdown/gpio-shutdown-daemon.service

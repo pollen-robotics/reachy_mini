@@ -1,39 +1,63 @@
 {
   "stats": {
-    "total": 846,
-    "passed": 831,
-    "new": 5,
-    "skipped": 15
+    "total": 855,
+    "passed": 840,
+    "skipped": 15,
+    "new": 9
   },
   "status": "passed",
   "newTests": [
     {
-      "id": "5d28b0eb7de776bf55a8e484ac058424",
-      "name": "test_unconfigured_root_drops_info",
+      "id": "63a94ee020f108a6ad559718e7b50958",
+      "name": "test_failed_daemon_reload_is_retried_on_the_next_boot",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "ff6ff003ec4e3312c80c77a9ef15c3bd",
-      "name": "test_log_file_is_added_alongside_stderr_not_instead",
+      "id": "e7772f0c8e27abf51815cdec774fcaf2",
+      "name": "test_target_missing_gets_installed_and_enabled",
       "status": "passed",
       "duration": 1
     },
     {
-      "id": "e10c8314f85384a6f68d18ada822b45d",
-      "name": "test_configure_is_idempotent",
-      "status": "passed",
-      "duration": 1
-    },
-    {
-      "id": "169e772b3e88c8dcdef37088da8eeb06",
-      "name": "test_level_is_honoured",
+      "id": "6673043691d5b00b1122bfd2aa920821",
+      "name": "test_packaged_unit_exists_and_points_at_venv_launcher",
       "status": "passed",
       "duration": 0
     },
     {
-      "id": "a160f1b90b7f272663e1f1891af90c1a",
-      "name": "test_configure_sends_info_to_stderr",
+      "id": "e70078253af281750a871f25ed988576",
+      "name": "test_target_differs_gets_copied_and_restarted",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "0e6d41af39188c9330c4a01305e14cb9",
+      "name": "test_source_missing_is_a_noop",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "08516c9477ce58538a4de8a0167a7aba",
+      "name": "test_failed_systemctl_is_tolerated",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "e10c643e8aa4a0ce1d2561f3cf2d59cf",
+      "name": "test_target_same_is_untouched",
+      "status": "passed",
+      "duration": 0
+    },
+    {
+      "id": "171588e81c4e00c7fbf8395120c0b67b",
+      "name": "test_failed_copy_leaves_the_installed_unit_alone",
+      "status": "passed",
+      "duration": 1
+    },
+    {
+      "id": "418bf05224837a20376d2635581c4b67",
+      "name": "test_failed_enable_on_fresh_install_is_retried_on_the_next_boot",
       "status": "passed",
       "duration": 1
     }
@@ -42,17 +66,17 @@
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 101420,
-  "createdAt": 1786460786488,
+  "duration": 97197,
+  "createdAt": 1786466327119,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "9be846d8-376a-47c4-8646-d7d01a824d1a",
+    "reportId": "7006f86e-8d01-4176-817e-71e1743f0034",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31504847175",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31513157103",
   "href": "awesome/",
   "coverage": 52
 }

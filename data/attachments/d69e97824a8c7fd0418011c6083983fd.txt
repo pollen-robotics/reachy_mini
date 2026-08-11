@@ -1,0 +1,4 @@
+ERROR    reachy_mini.media.audio_control_utils:audio_control_utils.py:556 No USB backend was found! Make sure libusb_package is correctly installed with `pip install libusb_package`.
+WARNING  reachy_mini.media.webrtc_client_gstreamer:webrtc_client_gstreamer.py:123 No camera_specs provided — defaulting to ReachyMiniLiteCamSpecs.
+INFO     reachy_mini.media.webrtc_client_gstreamer:webrtc_client_gstreamer.py:148 GstWebRTCClient initialized (bidirectional audio support)
+INFO     reachy_mini.media.webrtc_client_gstreamer:webrtc_client_gstreamer.py:218 Transceiver configured for SENDRECV
