@@ -55,6 +55,7 @@ from reachy_mini.media.camera_constants import (
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
 from reachy_mini.media.gstreamer_utils import handle_default_bus_message
+from reachy_mini.media.webrtc_utils import TurnCredentials
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
@@ -177,6 +178,7 @@ class GstMediaServer:
         self,
         log_level: str = "INFO",
         sim_mode: SimulationMode = SimulationMode.NONE,
+        enable_turn: Optional[bool] = None,
     ) -> None:
         """Initialize the GStreamer WebRTC pipeline.
 
@@ -184,6 +186,11 @@ class GstMediaServer:
             log_level: Logging level for WebRTC daemon operations.
             sim_mode: Simulation mode. MUJOCO receives video via UDP,
                 MOCKUP uses autovideosrc, NONE detects a physical camera.
+            enable_turn: offer TURN relay candidates to consumers, so a
+                remote one behind a restrictive NAT can still reach us.
+                Costs one background thread refreshing credentials. None
+                (the default) reads ``turn_enabled`` from the daemon
+                config file, falling back to True when it is unset.
 
         Raises:
             RuntimeError: If no camera is detected (unless in simulation mode)
@@ -279,6 +286,22 @@ class GstMediaServer:
         self._aec_enabled = False
         self._webrtcechoprobe: Optional[Gst.Element] = None
 
+        if enable_turn is None:
+            # Deferred like the speaker-EQ lookup in audio_utils, so this
+            # module doesn't pull in the daemon package at import time.
+            from reachy_mini.daemon.startup_app_config import get_turn_enabled
+
+            configured = get_turn_enabled()
+            enable_turn = True if configured is None else configured
+        # Refreshed off-thread so `_consumer_added` can read credentials
+        # without doing I/O on the thread that builds the SDP offer.
+        # None when relay candidates are disabled.
+        self._turn: Optional[TurnCredentials] = (
+            TurnCredentials() if enable_turn else None
+        )
+        if self._turn is not None:
+            self._turn.start()
+
         self._build_pipeline()
 
     def _build_pipeline(self) -> None:
@@ -305,6 +328,9 @@ class GstMediaServer:
         bury that real error under an unraisable `AttributeError`.
         """
         self._logger.debug("Cleaning up GstMediaServer")
+        turn = getattr(self, "_turn", None)
+        if turn is not None:
+            turn.stop()
         # A non-None source id implies a completed `__init__`, hence a lock.
         if getattr(self, "_pose_push_source_id", None) is not None:
             with self._pose_lock:
@@ -395,6 +421,12 @@ class GstMediaServer:
         #     self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
         # )
 
+        # Add TURN relay servers to this consumer's webrtcbin BEFORE the
+        # offer is generated, so our offer advertises a relay candidate.
+        # Without it we only offer host/srflx and a NAT-restricted remote
+        # consumer (e.g. a cloud backend) can't reach us.
+        self._apply_turn_servers(webrtcbin)
+
         GLib.timeout_add_seconds(5, self._dump_latency)
 
         self._setup_data_channel(peer_id, webrtcbin)
@@ -417,6 +449,29 @@ class GstMediaServer:
         # and report it (instead of letting the JS client spin
         # forever). See `ICE_NEGOTIATION_DEADLINE_S`.
         self._install_negotiation_watchdog(peer_id, webrtcbin)
+
+    def _apply_turn_servers(self, webrtcbin: Gst.Element) -> None:
+        """Add the currently held TURN relay servers to this webrtcbin.
+
+        Must run before the SDP offer is generated so the offer carries a
+        ``relay`` candidate. Reads cached credentials only and never does
+        I/O: this runs on the thread that builds the offer, so blocking
+        here would delay the connection for every consumer, including LAN
+        ones that will never use a relay. Credentials are never logged.
+        """
+        if self._turn is None:
+            return
+        uris = self._turn.turn_uris()
+        if not uris:
+            # Normal right after boot, or when the proxy is unreachable.
+            self._logger.info("No TURN servers held; offering host/srflx only")
+            return
+        for uri in uris:
+            try:
+                webrtcbin.emit("add-turn-server", uri)
+            except Exception as e:  # noqa: BLE001 - never break negotiation
+                self._logger.warning("add-turn-server failed: %r", e)
+        self._logger.debug("Configured %d TURN server(s) on webrtcbin", len(uris))
 
     # GstWebRTCRTPTransceiverDirection enum values
     _WEBRTC_DIRECTION_SENDRECV = 4

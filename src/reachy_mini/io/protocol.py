@@ -382,6 +382,22 @@ class DeleteHfTokenCmd(BaseModel):
     type: Literal["delete_hf_token"] = "delete_hf_token"
 
 
+# First wake-up setup wizard. A persistent, robot-wide boolean (not
+# per-session): once the owner has run the post-connection hardware
+# diagnostic wizard the daemon remembers it so it only ever shows once.
+class GetFirstWakeUpCmd(BaseModel):
+    """Query whether the first wake-up setup wizard has been completed."""
+
+    type: Literal["get_first_wake_up"] = "get_first_wake_up"
+
+
+class SetFirstWakeUpCmd(BaseModel):
+    """Mark the first wake-up setup wizard completed (or reset it)."""
+
+    type: Literal["set_first_wake_up"] = "set_first_wake_up"
+    is_completed: bool = True
+
+
 class SetSpeechOffsetsCmd(BaseModel):
     """Set head-wobbler speech offsets (composed with target pose before IK)."""
 
@@ -865,6 +881,8 @@ AnyCommand = Annotated[
     | GetRobotNameCmd
     | SetRobotNameCmd
     | DeleteHfTokenCmd
+    | GetFirstWakeUpCmd
+    | SetFirstWakeUpCmd
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
     | SubscribePoseCmd

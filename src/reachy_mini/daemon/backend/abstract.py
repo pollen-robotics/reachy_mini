@@ -35,6 +35,7 @@ from reachy_mini.io.protocol import (
     DeleteHfTokenCmd,
     DoaSnapshot,
     FaceTarget,
+    GetFirstWakeUpCmd,
     GetHardwareIdCmd,
     GetImuCmd,
     GetMicrophoneVolumeCmd,
@@ -63,6 +64,7 @@ from reachy_mini.io.protocol import (
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
     SetBodyYawCmd,
+    SetFirstWakeUpCmd,
     SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
@@ -1830,6 +1832,36 @@ class Backend:
                     "status": "ok" if ok else "error",
                 }
             )
+
+        elif isinstance(cmd, (GetFirstWakeUpCmd, SetFirstWakeUpCmd)):
+            # First wake-up wizard completion is a persistent, robot-wide
+            # flag stored in the daemon config file (next to startup_app &
+            # co) so the post-connection setup wizard only ever shows once,
+            # whichever client connects. Read/write helpers are fail-safe
+            # (never raise) so a storage error can't break the command loop.
+            from reachy_mini.daemon.startup_app_config import (
+                get_first_wake_up_completed,
+                set_first_wake_up_completed,
+            )
+
+            if isinstance(cmd, SetFirstWakeUpCmd):
+                ok = set_first_wake_up_completed(cmd.is_completed)
+                send_response(
+                    {
+                        "command": "set_first_wake_up",
+                        "status": "ok" if ok else "error",
+                        "is_completed": cmd.is_completed
+                        if ok
+                        else get_first_wake_up_completed(),
+                    }
+                )
+            else:  # GetFirstWakeUpCmd
+                send_response(
+                    {
+                        "command": "get_first_wake_up",
+                        "is_completed": get_first_wake_up_completed(),
+                    }
+                )
 
         elif isinstance(
             cmd,
