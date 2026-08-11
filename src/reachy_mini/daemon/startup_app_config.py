@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 _KEY = "startup_app"
 _EQ_KEY = "speaker_eq_gains"
 _TURN_KEY = "turn_enabled"
+_FIRST_WAKE_UP_KEY = "first_wake_up_completed"
 # equalizer-10bands accepts per-band gains in [-24, +12] dB.
 _EQ_GAIN_MIN, _EQ_GAIN_MAX = -24.0, 12.0
 
@@ -88,6 +89,26 @@ def get_speaker_eq_gains() -> list[float] | None:
     return None
 
 
+def _get_bool(key: str) -> bool | None:
+    """Return the boolean at `key`, or None when unset or malformed.
+
+    A present-but-malformed value is warned about (so the user knows their
+    hand-edited config was ignored) and treated as unset.
+    """
+    config = _read()
+    if key not in config:
+        return None
+    value = config[key]
+    if isinstance(value, bool):
+        return value
+    logger.warning(
+        "Ignoring invalid '%s' in daemon config (need true or false); "
+        "using the built-in default.",
+        key,
+    )
+    return None
+
+
 def get_turn_enabled() -> bool | None:
     """Return whether the media server should offer TURN relay candidates.
 
@@ -96,30 +117,53 @@ def get_turn_enabled() -> bool | None:
     turning it off saves a background thread refreshing credentials on a
     robot that is only ever reached from its own network.
     """
-    config = _read()
-    if _TURN_KEY not in config:
-        return None
-    value = config[_TURN_KEY]
-    if isinstance(value, bool):
-        return value
-    # Present but malformed: warn so the user knows it was ignored.
-    logger.warning(
-        "Ignoring invalid '%s' in daemon config (need true or false); "
-        "using the built-in default.",
-        _TURN_KEY,
-    )
-    return None
+    return _get_bool(_TURN_KEY)
 
 
-def set_startup_app(name: str | None) -> None:
-    """Persist the startup app name; a falsy name clears it."""
+def _update(key: str, value: object | None) -> None:
+    """Read-modify-write a single config key; `None` clears it.
+
+    Other keys are preserved. May raise OSError on a write error; callers
+    that must never raise (e.g. the daemon command loop) wrap it themselves.
+    """
     config = _read()
-    if name:
-        config[_KEY] = name
+    if value is None:
+        config.pop(key, None)
     else:
-        config.pop(_KEY, None)
+        config[key] = value
 
     path = _config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as f:
         json.dump(config, f, indent=2)
+
+
+def set_startup_app(name: str | None) -> None:
+    """Persist the startup app name; a falsy name clears it."""
+    _update(_KEY, name if name else None)
+
+
+def get_first_wake_up_completed() -> bool:
+    """Return True if the first wake-up setup wizard has been completed.
+
+    Robot-wide, persistent flag (not per-session): the mobile / desktop apps
+    run a one-time, post-connection hardware diagnostic wizard, and gate it on
+    this so it only ever shows once, whichever client connects. Defaults to
+    False (wizard pending) when unset or malformed, so a config problem can
+    never trap the daemon command loop.
+    """
+    return _get_bool(_FIRST_WAKE_UP_KEY) is True
+
+
+def set_first_wake_up_completed(is_completed: bool) -> bool:
+    """Persist the first wake-up completion flag. Returns True on success.
+
+    Fail-safe: a write error is logged and reported as False instead of
+    raising, so a storage problem can't break the daemon command loop.
+    """
+    try:
+        _update(_FIRST_WAKE_UP_KEY, bool(is_completed))
+        return True
+    except OSError as e:
+        logger.warning(f"Could not persist first-wake-up flag: {e}")
+        return False
