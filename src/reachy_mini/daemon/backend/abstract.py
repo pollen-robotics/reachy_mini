@@ -2640,7 +2640,12 @@ class Backend:
 
         dataset = cmd.dataset_name or DEFAULT_EMOTIONS_DATASET
         try:
-            move = RecordedMoves(dataset).get(cmd.move_name)
+            # On a cold cache RecordedMoves() triggers a blocking
+            # snapshot_download: run it in a worker thread so it cannot stall
+            # the daemon's event loop (and its pose stream) mid-session.
+            move = await asyncio.to_thread(
+                lambda: RecordedMoves(dataset).get(cmd.move_name)
+            )
         except Exception as e:
             self.logger.warning(
                 f"play_recorded_move: {cmd.move_name!r} from {dataset!r} "
