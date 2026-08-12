@@ -1,1 +1,1 @@
-{"id":"71a63b2380fa51774dde03ae9b8a9748","fullName":"tests.unit_tests.test_backend_wake_up#test_wake_up_runs_when_antennas_off_init","name":"test_wake_up_runs_when_antennas_off_init","status":"passed","testResultsByEnv":{"default":"53e5d0f826be9f7c1a3a4399d67a0ead"}}
+{"id":"71a63b2380fa51774dde03ae9b8a9748","fullName":"tests.unit_tests.test_backend_wake_up#test_wake_up_runs_when_antennas_off_init","name":"test_wake_up_runs_when_antennas_off_init","status":"passed","testResultsByEnv":{"default":"45b11fffe8eb6daacd681f75870a1432"}}

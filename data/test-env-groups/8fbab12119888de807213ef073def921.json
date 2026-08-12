@@ -1,1 +1,1 @@
-{"id":"8fbab12119888de807213ef073def921","fullName":"tests.unit_tests.test_backend_process_command#test_stop_recording","name":"test_stop_recording","status":"passed","testResultsByEnv":{"default":"e979a1ea030d981b31aab6b4d7cd7cf2"}}
+{"id":"8fbab12119888de807213ef073def921","fullName":"tests.unit_tests.test_backend_process_command#test_stop_recording","name":"test_stop_recording","status":"passed","testResultsByEnv":{"default":"e2e8170b6c227337788495771eb3fa98"}}

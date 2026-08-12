@@ -1,0 +1,2 @@
+ERROR    reachy_mini.daemon.app.startup_app:startup_app.py:58 Failed to auto-start app 'foo': an app is already running
+INFO     reachy_mini.media.camera_gstreamer:camera_gstreamer.py:238 Pipeline latency (live=False, min_latency=0, max_latency=18446744073709551615)
