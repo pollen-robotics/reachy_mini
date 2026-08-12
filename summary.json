@@ -2,87 +2,25 @@
   "stats": {
     "total": 892,
     "passed": 877,
-    "new": 10,
     "skipped": 15
   },
   "status": "passed",
-  "newTests": [
-    {
-      "id": "23344387cb850fa9c7578ef362fa8112",
-      "name": "test_idle_reset_skips_when_limp_at_the_sleep_pose",
-      "status": "passed",
-      "duration": 22
-    },
-    {
-      "id": "e8b553255a1c92cc6eca4e205e48d96e",
-      "name": "test_lift_targets_the_init_pose",
-      "status": "passed",
-      "duration": 203
-    },
-    {
-      "id": "c876a873b3277b5af20c6db4d6b942af",
-      "name": "test_is_at_sleep_pose_false_before_first_kinematics_update",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "4c7545dd3cdc46c2650396c251535aca",
-      "name": "test_idle_reset_runs_in_gravity_compensation",
-      "status": "passed",
-      "duration": 22
-    },
-    {
-      "id": "f6e9d3017dba99ce3af3c1587b923876",
-      "name": "test_lift_duration_stays_within_bounds",
-      "status": "passed",
-      "duration": 607
-    },
-    {
-      "id": "dcefcc8b885d8aab2933493efda48fe4",
-      "name": "test_torque_is_restored_before_any_motion",
-      "status": "passed",
-      "duration": 202
-    },
-    {
-      "id": "1d2246106f84822d19a3af05b91c122c",
-      "name": "test_is_at_sleep_pose_true_at_the_sleep_pose",
-      "status": "passed",
-      "duration": 0
-    },
-    {
-      "id": "cd96a4c21a9da30d5edb8428fd083748",
-      "name": "test_idle_reset_runs_when_limp_away_from_the_sleep_pose",
-      "status": "passed",
-      "duration": 21
-    },
-    {
-      "id": "f909286015aa39324601ef8259137eef",
-      "name": "test_sleep_still_runs_when_already_near_init",
-      "status": "passed",
-      "duration": 202
-    },
-    {
-      "id": "2a0aa87b7ebc7ee56eef675d2f1636d6",
-      "name": "test_is_at_sleep_pose_false_at_init",
-      "status": "passed",
-      "duration": 1
-    }
-  ],
+  "newTests": [],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 102887,
-  "createdAt": 1786543962151,
+  "duration": 103342,
+  "createdAt": 1786548476919,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "9f0935e6-9f84-4d89-bed7-624646431d96",
+    "reportId": "639eb157-7bc5-4b15-954b-30c7ca66f222",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31605177692",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/31612080880",
   "href": "awesome/",
   "coverage": 53
 }

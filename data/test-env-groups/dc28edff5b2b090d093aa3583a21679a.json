@@ -1,1 +1,1 @@
-{"id":"dc28edff5b2b090d093aa3583a21679a","fullName":"tests.unit_tests.test_backend_process_command#test_get_version","name":"test_get_version","status":"passed","testResultsByEnv":{"default":"ddf1b0305552ecdc0a40d257620d7215"}}
+{"id":"dc28edff5b2b090d093aa3583a21679a","fullName":"tests.unit_tests.test_backend_process_command#test_get_version","name":"test_get_version","status":"passed","testResultsByEnv":{"default":"db0fd2d1cf3d2250854c44e56427031e"}}

@@ -1,1 +1,1 @@
-{"id":"320bcc1fb19b51a0ac33f07bcc0b0af9","fullName":"tests.unit_tests.test_ws_client#test_is_loopback_host_true_for_loopback_addresses","name":"test_is_loopback_host_true_for_loopback_addresses[localhost]","status":"passed","testResultsByEnv":{"default":"b0c01cdab713bb5bc80c872832c6a2de"}}
+{"id":"320bcc1fb19b51a0ac33f07bcc0b0af9","fullName":"tests.unit_tests.test_ws_client#test_is_loopback_host_true_for_loopback_addresses","name":"test_is_loopback_host_true_for_loopback_addresses[127.0.0.2]","status":"passed","testResultsByEnv":{"default":"4279ca6bd7c13612244313170c31c48d"}}
