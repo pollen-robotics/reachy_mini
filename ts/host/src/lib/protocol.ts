@@ -14,10 +14,12 @@
  * - Every message carries `source: 'reachy-mini'`. Lets receivers
  *   distinguish our envelopes from unrelated `postMessage` traffic
  *   (DevTools, MUI portals, browser extensions, ...).
- * - Both sides validate `event.origin` against the expected origin
- *   before trusting the payload. In our deployment (same-origin
- *   iframe within an HF Space) the expected origin is
- *   `event.origin === window.location.origin`.
+ * - Both sides validate `event.origin` before trusting the payload,
+ *   but against different references: the web shell requires strict
+ *   same-origin (`window.location.origin` - Mode A, the Space embeds
+ *   itself), while the embed accepts its PARENT's origin resolved via
+ *   `document.referrer` (Mode B, the mobile shell at e.g.
+ *   `tauri.localhost` is a different origin by construction).
  *
  * Message families
  * ────────────────
@@ -101,8 +103,19 @@ export interface HostInitMsg {
   hfToken?: string;
   /** HF account user name, when known. */
   userName?: string | null;
-  /** Robot ID selected by the host's picker. */
+  /** Robot ID selected by the host's picker. Unstable: the central
+   *  peer id rotates on every relay reconnect, so the embed treats
+   *  this as a starting point and re-resolves the live id from
+   *  `robotHardwareId` right before `startSession()`. */
   robotPeerId: string;
+  /** Stable hardware id of the selected robot (central
+   *  `meta.hardware_id`), when the daemon exposes one. Lets the embed
+   *  re-resolve the CURRENT `robotPeerId` from central just before
+   *  dialing, so a rotated peer id (long iframe cold-start, relay
+   *  reconnect) doesn't strand the app on a dead producer. Omitted for
+   *  daemons too old to advertise it - the embed then uses
+   *  `robotPeerId` as-is. */
+  robotHardwareId?: string | null;
   /** Optional opaque payload from `?config=<base64>` or from the
    *  mobile-app handoff. App is responsible for parsing /
    *  validating. */
@@ -151,11 +164,53 @@ export interface HostLeavingMsg {
   timeoutMs: number;
 }
 
+/**
+ * Ask the embed to trigger the daemon's PyPI self-update.
+ *
+ * Only the embed holds a data channel, so the host cannot send
+ * `start_update` itself - it delegates here and watches the
+ * `embed:update-progress` replies. A successful update ends with a
+ * `systemctl restart` on the robot, which kills the session: the embed
+ * will go silent and the host is expected to remount the iframe once
+ * the robot is back on central.
+ *
+ * Additive message (no version bump): an embed too old to know this
+ * type ignores it, so the host must not block on a reply.
+ */
+export interface HostStartUpdateMsg {
+  source: typeof PROTOCOL_SOURCE;
+  type: 'host:start-update';
+  version: 1;
+  /** Install the latest pre-release instead of the latest stable. */
+  preRelease?: boolean;
+}
+
+/**
+ * The host gave up on the update it started (its own stall timer
+ * fired while the session was still alive). This does NOT abort the
+ * daemon-side job - nothing can, the install owns the robot - it
+ * disarms the embed's update-mode plumbing: the sessionStopped →
+ * `rebooting` translator and the auto-reconnect stand-down. Without
+ * it, the user's next NORMAL end-session would replay a stale
+ * `rebooting` frame into a host that already declared the update
+ * failed.
+ *
+ * Additive message (no version bump): an embed too old to know this
+ * type ignores it, and its own translator dies with the iframe.
+ */
+export interface HostCancelUpdateMsg {
+  source: typeof PROTOCOL_SOURCE;
+  type: 'host:cancel-update';
+  version: 1;
+}
+
 export type HostToEmbedMsg =
   | HostInitMsg
   | HostThemeChangedMsg
   | HostConfigChangedMsg
-  | HostLeavingMsg;
+  | HostLeavingMsg
+  | HostStartUpdateMsg
+  | HostCancelUpdateMsg;
 
 /* ─────────────────── EMBED → HOST ─────────────────── */
 
@@ -201,6 +256,66 @@ export interface EmbedAppStateMsg {
    * ignore it.
    */
   rttMs?: number | null;
+  /**
+   * Daemon version reported by the robot (`get_version` over the data
+   * channel), resolved once the session is up. Additive field (no
+   * version bump).
+   *
+   * The host has no data channel of its own and central exposes no
+   * version, so this is the ONLY way a shell can tell whether the robot
+   * it just handed the app to is running current software. The web
+   * shell uses it to gate on a minimum supported version; hosts that
+   * don't care ignore it.
+   *
+   * `null` (or omitted) until resolved, or when the daemon predates
+   * `get_version`. Receivers MUST treat "unknown" as "fine" - never
+   * block a robot just because it stayed silent.
+   */
+  daemonVersion?: string | null;
+  /**
+   * Build version of the SDK bundle the app loaded
+   * (`ReachyMini.version`, generated at publish time). Additive field
+   * (no version bump).
+   *
+   * The embed rides whatever `window.ReachyMini` the app shipped, so
+   * this tells the shell how stale the app's robot stack is - e.g. to
+   * warn that behaviour may be off against a newer daemon. `null` (or
+   * omitted) when the SDK predates the field - which, unlike
+   * `daemonVersion`, is a meaningful signal: every SDK from the release
+   * that introduced this field reports it, so silence through a live
+   * session means "built before that". Receivers may surface a notice
+   * on it, but MUST never block on it.
+   */
+  sdkVersion?: string | null;
+}
+
+/**
+ * Progress of a `host:start-update` job, relayed from the SDK's
+ * `update_progress` stream one message per log line.
+ *
+ *   in_progress : a log line of the install.
+ *   rebooting   : the WebRTC session died while the update was in
+ *                 flight. Synthesised by the embed, NOT by the daemon -
+ *                 a successful install restarts the daemon before it
+ *                 can report anything, so the transport dropping is the
+ *                 success signal. Nothing more will arrive on this
+ *                 channel: the host should tear the iframe down and
+ *                 wait for the robot to reappear on central.
+ *   done        : the daemon explicitly reported completion. Rare (see
+ *                 above), but forwarded when it happens.
+ *   failed      : the daemon declined the job (not wireless, no update
+ *                 available, one already running) or the install raised
+ *                 before the restart.
+ */
+export interface EmbedUpdateProgressMsg {
+  source: typeof PROTOCOL_SOURCE;
+  type: 'embed:update-progress';
+  version: 1;
+  status: 'in_progress' | 'rebooting' | 'done' | 'failed';
+  /** Log line for `in_progress`. */
+  line?: string | null;
+  /** Reason for `failed`. */
+  error?: string | null;
 }
 
 /** App requests to leave (user clicked an in-app exit, error,
@@ -209,6 +324,23 @@ export interface EmbedAppStateMsg {
 export interface EmbedRequestLeaveMsg {
   source: typeof PROTOCOL_SOURCE;
   type: 'embed:request-leave';
+  version: 1;
+}
+
+/**
+ * The embed finished its `host:leaving` tear-down: app `onLeave`
+ * callbacks ran AND the SDK's host-owned sleep sequence completed
+ * (goto_sleep trajectory + motors disabled). Lets the host unmount as
+ * soon as the robot is actually asleep instead of after a fixed
+ * worst-case timeout - and, because the WebRTC session is still up when
+ * this fires, the motors are already `Disabled` before the app-slot lock
+ * frees, so the daemon's idle-reset sees "already asleep" and does NOT
+ * replay a second goto_sleep (no double trajectory / go_sleep sound).
+ * The host still force-unmounts after its own cap if this never arrives.
+ */
+export interface EmbedLeftMsg {
+  source: typeof PROTOCOL_SOURCE;
+  type: 'embed:left';
   version: 1;
 }
 
@@ -227,7 +359,9 @@ export type EmbedToHostMsg =
   | EmbedReadyMsg
   | EmbedAppStateMsg
   | EmbedRequestLeaveMsg
-  | EmbedErrorMsg;
+  | EmbedLeftMsg
+  | EmbedErrorMsg
+  | EmbedUpdateProgressMsg;
 
 /* ─────────────────── CREDS BUNDLE ─────────────────── */
 
@@ -247,6 +381,14 @@ export interface CredsBundle {
   hfToken?: string | null;
   userName?: string | null;
   robotPeerId: string;
+  /** Stable hardware id of the selected robot (central
+   *  `meta.hardware_id`), when the daemon exposes one. Lets the embed
+   *  re-resolve the CURRENT `robotPeerId` from central just before
+   *  dialing, so a rotated peer id (long iframe cold-start, relay
+   *  reconnect) doesn't strand the app on a dead producer. Omitted for
+   *  daemons too old to advertise it - the embed then uses
+   *  `robotPeerId` as-is. */
+  robotHardwareId?: string | null;
   signalingUrl: string;
   theme: ThemeMode;
   config: ConfigPayload;
