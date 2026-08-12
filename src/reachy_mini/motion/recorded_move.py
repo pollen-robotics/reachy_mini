@@ -24,23 +24,13 @@ SOUND_EXTENSIONS = (".wav", ".mp3", ".ogg", ".oga", ".opus", ".flac", ".m4a", ".
 # Pre-downloaded on the robot at daemon startup.
 DEFAULT_EMOTIONS_DATASET = "pollen-robotics/reachy-mini-emotions-library"
 
-# Onboarding cues (wake-mini-up / toc-toc-toc / waiting / mini-deep-sleep) used by
-# the setup + first-wake-up wizards. TEMPORARY: not yet in the official emotions
-# library, so we source (and preload) them from this dataset. Drop once merged
-# into DEFAULT_EMOTIONS_DATASET (also update the app's ONBOARDING_MOVES_DATASET).
-ONBOARDING_MOVES_DATASET = "Anne-Charlotte/new-emotions"
-
-# Onboarding-tuned move variants we host ourselves. Currently just `proud2` with
-# its ~1.4 s of leading sound silence trimmed off, so the first-wake-up speaker
-# check is audible immediately. Keep in sync with the app's
-# ONBOARDING_TUNED_DATASET.
-ONBOARDING_TUNED_DATASET = "tfrere/reachy-mini-onboarding-moves"
-
-# Default datasets to preload at daemon startup
+# Default datasets to preload at daemon startup. Deliberately restricted to the
+# official pollen-robotics libraries: feature-specific datasets (e.g. the mobile
+# app's onboarding cues) are the client's business - clients preload them at
+# session start with the `preload_dataset` data-channel command instead of the
+# daemon hardcoding knowledge of one app's features.
 DEFAULT_DATASETS = [
     DEFAULT_EMOTIONS_DATASET,
-    ONBOARDING_MOVES_DATASET,
-    ONBOARDING_TUNED_DATASET,
     "pollen-robotics/reachy-mini-dances-library",
 ]
 

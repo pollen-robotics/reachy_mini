@@ -58,6 +58,7 @@ from reachy_mini.io.protocol import (
     PlayUploadedAudioCmd,
     PlayUploadedMoveCmd,
     PoseFrame,
+    PreloadDatasetCmd,
     ReadAudioParameterCmd,
     RecordedDataMsg,
     RestartDaemonCmd,
@@ -1680,6 +1681,9 @@ class Backend:
         elif isinstance(cmd, PlayRecordedMoveCmd):
             asyncio.create_task(self._async_play_recorded_move(cmd, send_response))
 
+        elif isinstance(cmd, PreloadDatasetCmd):
+            asyncio.create_task(self._async_preload_dataset(cmd, send_response))
+
         elif isinstance(cmd, ClearIncomingAudioCmd):
             self.clear_incoming_audio()
             send_response({"status": "ok", "command": "clear_incoming_audio"})
@@ -2664,6 +2668,42 @@ class Backend:
             await self.play_move(move, initial_goto_duration=cmd.initial_goto_duration)
         except Exception as e:
             self.logger.warning(f"play_recorded_move: playback failed: {e}")
+
+    async def _async_preload_dataset(
+        self,
+        cmd: PreloadDatasetCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Warm the local HF cache for a recorded-move dataset.
+
+        Runs ``snapshot_download`` (cache-first, so a no-op when already
+        cached) in a worker thread: it does blocking network + disk IO and
+        must not stall the daemon's event loop mid-session. The ack carries
+        the cached path on success so clients can log/verify; a failure is
+        reported but deliberately not fatal - ``play_recorded_move`` will
+        retry the download on demand at playback time.
+        """
+        from reachy_mini.motion.recorded_move import preload_dataset
+
+        local_path = await asyncio.to_thread(preload_dataset, cmd.dataset_name)
+        if local_path is None:
+            send_response(
+                {
+                    "command": "preload_dataset",
+                    "status": "error",
+                    "dataset_name": cmd.dataset_name,
+                    "error": "download failed (see daemon logs)",
+                }
+            )
+            return
+        send_response(
+            {
+                "command": "preload_dataset",
+                "status": "ok",
+                "dataset_name": cmd.dataset_name,
+                "local_path": local_path,
+            }
+        )
 
     async def _async_play_uploaded_move(self, cmd: PlayUploadedMoveCmd) -> None:
         """Run Backend.play_move on a previously-uploaded move slot.

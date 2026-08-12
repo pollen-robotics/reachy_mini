@@ -530,6 +530,16 @@ export interface ReachyMiniInstance extends EventTarget {
         moveName: string,
         opts?: { dataset?: string; initialGotoDuration?: number },
     ): boolean;
+    /**
+     * Ask the daemon to pre-download a recorded-move dataset into its local
+     * HF cache, so a later `playRecordedMove` from that dataset starts
+     * instantly instead of blocking on the download. Send it right after
+     * connecting for any non-official dataset you plan to play (the daemon
+     * only preloads the official pollen-robotics libraries by itself).
+     * Fire-and-forget and idempotent: cache-first daemon-side, so repeats
+     * are cheap; on failure `playRecordedMove` still downloads on demand.
+     */
+    preloadDataset(dataset: string): boolean;
     /** Drop incoming audio queued for the robot speaker (barge-in). */
     clearIncomingAudio(): boolean;
     /** Enable daemon-side visual head tracking. */

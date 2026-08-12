@@ -265,6 +265,26 @@ class PlayRecordedMoveCmd(BaseModel):
     initial_goto_duration: float = 0.0
 
 
+class PreloadDatasetCmd(BaseModel):
+    """Pre-download a HF recorded-move dataset into the daemon's local cache.
+
+    Generic warm-up primitive for ``play_recorded_move``: a client that knows
+    it will play moves from a given dataset soon (e.g. the mobile app's
+    onboarding wizards) sends this right after connecting, so the first
+    ``play_recorded_move`` hits a warm cache instead of blocking on a network
+    download. The download runs in the background; the ack reports the cached
+    local path (or ``status: "error"`` if the download failed). Idempotent and
+    cache-first: re-sending for an already-cached dataset is a fast no-op.
+
+    This keeps feature-specific dataset knowledge out of the daemon: it only
+    preloads the official libraries by itself (``DEFAULT_DATASETS``), anything
+    else is the caller's responsibility.
+    """
+
+    type: Literal["preload_dataset"] = "preload_dataset"
+    dataset_name: str
+
+
 class SetMotorModeCmd(BaseModel):
     """Set the motor control mode (enabled, disabled, gravity_compensation)."""
 
@@ -881,6 +901,7 @@ AnyCommand = Annotated[
     | GotoSleepCmd
     | PlaySoundCmd
     | PlayRecordedMoveCmd
+    | PreloadDatasetCmd
     | SetMotorModeCmd
     | SetTorqueCmd
     | GetMotorModeCmd

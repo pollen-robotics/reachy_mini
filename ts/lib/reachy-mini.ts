@@ -1062,6 +1062,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         });
     }
 
+    preloadDataset(dataset: string): boolean {
+        return this._sendCommand({ type: 'preload_dataset', dataset_name: dataset });
+    }
+
     clearIncomingAudio(): boolean {
         return this._sendCommand({ type: 'clear_incoming_audio' });
     }
