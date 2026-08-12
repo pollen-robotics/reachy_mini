@@ -80,6 +80,14 @@ export interface RobotState {
     head?: number[];
     /** [rightRad, leftRad]. */
     antennas?: number[];
+    /**
+     * Per-motor head joint values (7 numbers, body yaw at [0]), streamed by
+     * the daemon alongside `head` so clients can check the physical pose
+     * motor by motor (e.g. the first wake-up wizard's sleep-position check).
+     * The antennas need no twin field: `antennas` already is the two motor
+     * values. Absent on daemons that predate the field.
+     */
+    head_joint_positions?: number[];
     /** Radians. */
     body_yaw?: number;
     motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';

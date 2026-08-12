@@ -2086,6 +2086,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             const s = data.state as {
                 head_pose?: number[][];
                 antennas?: [number, number];
+                head_joint_positions?: number[];
                 body_yaw?: number;
                 motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';
                 is_move_running?: boolean;
@@ -2094,6 +2095,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             };
             if (s.head_pose) this._robotState.head = s.head_pose.flat();
             if (s.antennas) this._robotState.antennas = [s.antennas[0], s.antennas[1]];
+            if (s.head_joint_positions) this._robotState.head_joint_positions = s.head_joint_positions;
             if (typeof s.body_yaw === 'number') this._robotState.body_yaw = s.body_yaw;
             if (s.motor_mode) this._robotState.motor_mode = s.motor_mode;
             if (typeof s.is_move_running === 'boolean') this._robotState.is_move_running = s.is_move_running;
