@@ -46,6 +46,7 @@ import {
 } from '../lib/protocol';
 import { fetchRobotsFromCentral } from '../lib/centralRest';
 import { createLogger } from '@pollen-robotics/reachy-mini-sdk';
+import { maybeWarnSdkStale } from '../lib/sdkStaleness';
 import type {
   AppConnectingStep,
   AppPhase,
@@ -240,9 +241,11 @@ export interface ConnectedHandle<TConfig = unknown> {
   readonly media: RobotMedia;
 
   /** Register a teardown callback. Fires on `host:leaving`
-   *  (one-shot) or `pagehide`. Return a promise to keep the host
-   *  waiting (bounded by the host's `timeoutMs`). Returns an
-   *  unsubscribe function. */
+   *  (one-shot) or `pagehide`. Callbacks are fire-and-forget: a
+   *  returned promise is NOT awaited, but on the graceful-leave
+   *  path async cleanup still gets several seconds of wall time
+   *  because the `embed:left` ack only goes out after the sleep +
+   *  motors-off sequence. Returns an unsubscribe function. */
   onLeave(cb: () => void | Promise<void>): () => void;
   /** Register a theme-change handler. */
   onThemeChange(cb: (theme: ThemeMode) => void): () => void;
@@ -540,6 +543,13 @@ async function bootOnce(
   // of a dead frozen app. No-op against an older SDK bundle that doesn't
   // emit these events.
   installReconnectBridge(sdk);
+
+  // Self-serve staleness check: runs INSIDE the app's iframe, so it
+  // covers every consumer (web shell, mobile app, anything else)
+  // without the parent lifting a finger. Fire-and-forget: the npm
+  // registry lookup must never delay or break going live. See
+  // lib/sdkStaleness.ts for the (deliberately conservative) policy.
+  void maybeWarnSdkStale(appSdkVersion);
 
   // 9. Start sampling our own WebRTC RTT and reporting it upstream so
   //    a host shell that handed its session off to us (mobile app)
@@ -1224,7 +1234,8 @@ let daemonVersion: string | null = null;
 
 /**
  * Version of the SDK bundle the app loaded (`instance.sdkVersion`),
- * captured at construction in `bootOnce`. Advertised on every
+ * captured at construction in `bootOnce`. Drives the staleness
+ * self-check (`lib/sdkStaleness.ts`) and is advertised on every
  * app-state for parents that update independently of the app (see
  * `sdkVersion` in protocol.ts) - the mobile app reads its ABSENCE as
  * "bundle predates the field". `null` against an SDK old enough not

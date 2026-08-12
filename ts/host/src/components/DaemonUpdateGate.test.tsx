@@ -8,8 +8,8 @@
  * reboot budget, latches surviving re-renders), so wall-clock tests
  * would either lie or take minutes.
  *
- * The last describe block pins the two regressions called out in the
- * #1316 review:
+ * The last describe block pins the regressions called out in the
+ * #1316 review (all fixed since - these tests are the guard rails):
  *
  *  - the stall timeout must measure SILENCE, not total install time -
  *    a slow-but-progressing install (pip on weak wifi) must not be
@@ -17,11 +17,11 @@
  *  - after the gate locally times out and the user dismisses it, a
  *    late `rebooting` progress frame (the embed's sessionStopped
  *    translator firing on a normal end-session) must NOT resurrect
- *    the full-screen overlay nor fire `onSessionLost` mid-leave.
+ *    the full-screen overlay nor fire `onSessionLost` mid-leave;
+ *  - dismissing the notice must work without a parent re-render.
  *
- * These two are written against the DESIRED behavior and are expected
- * to be red until the corresponding fixes land. Do not "fix" them by
- * asserting the buggy behavior.
+ * If one of these goes red, a fix regressed - do not "fix" the test
+ * by asserting the buggy behavior.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
