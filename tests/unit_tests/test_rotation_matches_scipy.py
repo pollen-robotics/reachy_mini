@@ -34,7 +34,9 @@ def rng():
 
 
 def _random_matrices(rng, count):
-    return ScipyRotation.random(count, random_state=int(rng.integers(0, 2**31))).as_matrix()
+    return ScipyRotation.random(
+        count, random_state=int(rng.integers(0, 2**31))
+    ).as_matrix()
 
 
 def test_from_euler_xyz_radians(rng):
@@ -129,12 +131,30 @@ def test_shapes_and_types_match_scipy(rng):
     """A (1,3,3) for a (3,3) would slip through allclose but break callers."""
     matrix = _random_matrices(rng, 1)[0]
     pairs = [
-        (ScipyRotation.from_matrix(matrix).as_matrix(), Rotation.from_matrix(matrix).as_matrix()),
-        (ScipyRotation.from_euler("xyz", [0.1, 0.2, 0.3]).as_matrix(), Rotation.from_euler("xyz", [0.1, 0.2, 0.3]).as_matrix()),
-        (ScipyRotation.from_euler("z", 0.4).as_matrix(), Rotation.from_euler("z", 0.4).as_matrix()),
-        (ScipyRotation.from_rotvec([0.1, 0.2, 0.3]).as_matrix(), Rotation.from_rotvec([0.1, 0.2, 0.3]).as_matrix()),
-        (ScipyRotation.from_matrix(matrix).as_euler("xyz"), Rotation.from_matrix(matrix).as_euler("xyz")),
-        (ScipyRotation.from_matrix(matrix).as_rotvec(), Rotation.from_matrix(matrix).as_rotvec()),
+        (
+            ScipyRotation.from_matrix(matrix).as_matrix(),
+            Rotation.from_matrix(matrix).as_matrix(),
+        ),
+        (
+            ScipyRotation.from_euler("xyz", [0.1, 0.2, 0.3]).as_matrix(),
+            Rotation.from_euler("xyz", [0.1, 0.2, 0.3]).as_matrix(),
+        ),
+        (
+            ScipyRotation.from_euler("z", 0.4).as_matrix(),
+            Rotation.from_euler("z", 0.4).as_matrix(),
+        ),
+        (
+            ScipyRotation.from_rotvec([0.1, 0.2, 0.3]).as_matrix(),
+            Rotation.from_rotvec([0.1, 0.2, 0.3]).as_matrix(),
+        ),
+        (
+            ScipyRotation.from_matrix(matrix).as_euler("xyz"),
+            Rotation.from_matrix(matrix).as_euler("xyz"),
+        ),
+        (
+            ScipyRotation.from_matrix(matrix).as_rotvec(),
+            Rotation.from_matrix(matrix).as_rotvec(),
+        ),
     ]
     for expected, actual in pairs:
         assert np.shape(expected) == np.shape(actual)
@@ -164,10 +184,14 @@ def test_linear_pose_interpolation_matches_a_scipy_reference(rng):
             res_end = ScipyRotation.from_euler("z", -yaw_end) * rot_end
             rotvec_rel = (res_start.inv() * res_end).as_rotvec()
             res_interp = res_start * ScipyRotation.from_rotvec(rotvec_rel * t)
-            rot_interp = (ScipyRotation.from_euler("z", yaw_interp) * res_interp).as_matrix()
+            rot_interp = (
+                ScipyRotation.from_euler("z", yaw_interp) * res_interp
+            ).as_matrix()
         else:
             rotvec_rel = (rot_start.inv() * rot_end).as_rotvec()
-            rot_interp = (rot_start * ScipyRotation.from_rotvec(rotvec_rel * t)).as_matrix()
+            rot_interp = (
+                rot_start * ScipyRotation.from_rotvec(rotvec_rel * t)
+            ).as_matrix()
         out = np.eye(4)
         out[:3, :3] = rot_interp
         out[:3, 3] = start[:3, 3] + (target[:3, 3] - start[:3, 3]) * t
@@ -196,6 +220,44 @@ def test_from_matrix_orthonormalises_like_scipy(rng):
             Rotation.from_matrix(drifted).as_matrix(),
             atol=1e-9,
         )
+
+
+def test_as_euler_at_exact_gimbal_lock(rng):
+    """Pitch = +/-90 deg, the one region random fuzzing cannot land on.
+
+    Random rotations never fall within the lock threshold, so this branch
+    needs its own cases: scipy pins the third angle to 0 there and we must
+    pick the exact same representative.
+    """
+    import warnings
+
+    for sign in (1.0, -1.0):
+        for alpha, gamma in rng.uniform(-np.pi, np.pi, size=(50, 2)):
+            matrix = ScipyRotation.from_euler(
+                "xyz", [alpha, sign * np.pi / 2, gamma]
+            ).as_matrix()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")  # scipy warns at gimbal lock
+                expected = ScipyRotation.from_matrix(matrix).as_euler("xyz")
+            assert np.allclose(
+                expected, Rotation.from_matrix(matrix).as_euler("xyz"), atol=TOL
+            )
+
+
+def test_rejects_the_same_input_scipy_rejects(rng):
+    """Invalid input raises ValueError exactly where scipy raises it."""
+    reflection = np.diag([1.0, 1.0, -1.0])
+    degenerate = np.zeros((3, 3))
+    for bad_matrix in (reflection, degenerate):
+        with pytest.raises(ValueError):
+            ScipyRotation.from_matrix(bad_matrix)
+        with pytest.raises(ValueError):
+            Rotation.from_matrix(bad_matrix)
+    for seq, angles in (("", []), ("xyzx", [1, 2, 3, 4]), ("xx", [0.1, 0.2])):
+        with pytest.raises(ValueError):
+            ScipyRotation.from_euler(seq, angles)
+        with pytest.raises(ValueError):
+            Rotation.from_euler(seq, angles)
 
 
 def test_rejects_what_it_does_not_support():

@@ -18,6 +18,11 @@ Conventions match ``scipy.spatial.transform.Rotation`` exactly:
 ``tests/unit_tests/test_rotation_matches_scipy.py`` fuzzes every operation
 against scipy itself, which stays a dependency purely as that oracle.
 
+Only the API shape and conventions are borrowed from scipy (BSD-3-Clause);
+the implementation is independent, built from the standard published
+algorithms (Rodrigues' formula, Shepperd's quaternion extraction, SVD
+orthonormalisation).
+
 Only single rotations are supported, which is all the SDK constructs. scipy is
 built around batches and beats this implementation by a wide margin on arrays;
 it is only slower on the one-rotation-at-a-time calls the SDK actually makes,
@@ -74,6 +79,13 @@ class Rotation:
         array = np.asarray(matrix, dtype=float)
         if array.shape != (3, 3):
             raise ValueError(f"expected a single 3x3 matrix, got shape {array.shape}")
+        if np.linalg.det(array) <= 0:
+            # scipy rejects these too: a reflection or a degenerate matrix is
+            # corrupt input, and silently "repairing" it would hide the bug.
+            raise ValueError(
+                "Non-positive determinant (left-handed or null coordinate "
+                "frame) in rotation matrix"
+            )
         u, _, vt = np.linalg.svd(array)
         rotation = u @ vt
         if np.linalg.det(rotation) < 0:
@@ -101,6 +113,12 @@ class Rotation:
         values = np.atleast_1d(np.asarray(angles, dtype=float))
         if degrees:
             values = np.deg2rad(values)
+        # Same rejections as scipy, in the same order.
+        if not 1 <= len(seq) <= 3:
+            raise ValueError(
+                "Expected axis specification to be a non-empty string of "
+                f"upto 3 characters, got {seq!r}"
+            )
         if seq != seq.lower():
             raise ValueError(
                 f"sequence {seq!r} is intrinsic; only extrinsic (lowercase) "
@@ -108,6 +126,8 @@ class Rotation:
             )
         if any(axis not in _AXIS_INDEX for axis in seq):
             raise ValueError(f"sequence {seq!r} must only contain 'x', 'y' or 'z'")
+        if any(seq[i] == seq[i + 1] for i in range(len(seq) - 1)):
+            raise ValueError(f"Expected consecutive axes to be different, got {seq}")
         if len(seq) != values.size:
             raise ValueError(
                 f"sequence {seq!r} needs {len(seq)} angle(s), got {values.size}"
@@ -208,13 +228,16 @@ class Rotation:
         if trace > 0:
             scale = np.sqrt(trace + 1.0) * 2
             w = 0.25 * scale
-            xyz = np.array(
-                [
-                    matrix[2, 1] - matrix[1, 2],
-                    matrix[0, 2] - matrix[2, 0],
-                    matrix[1, 0] - matrix[0, 1],
-                ]
-            ) / scale
+            xyz = (
+                np.array(
+                    [
+                        matrix[2, 1] - matrix[1, 2],
+                        matrix[0, 2] - matrix[2, 0],
+                        matrix[1, 0] - matrix[0, 1],
+                    ]
+                )
+                / scale
+            )
         elif matrix[0, 0] > matrix[1, 1] and matrix[0, 0] > matrix[2, 2]:
             scale = np.sqrt(1.0 + matrix[0, 0] - matrix[1, 1] - matrix[2, 2]) * 2
             w = (matrix[2, 1] - matrix[1, 2]) / scale
