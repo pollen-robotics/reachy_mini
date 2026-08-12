@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
@@ -974,7 +975,11 @@ class BluetoothCommandService:
             if not self.connected:
                 return "ERROR: Not connected. Please authenticate first."
             try:
-                script_name = command_str[4:].strip() + ".sh"
+                # Constrain to a bare filename so it cannot escape commands/.
+                raw_name = command_str[4:].strip().split("/")[-1]
+                if not re.fullmatch(r"[A-Za-z0-9_-]+", raw_name):
+                    return f"ERROR: Invalid command '{raw_name}'"
+                script_name = raw_name + ".sh"
                 script_path = os.path.join("commands", script_name)
                 if os.path.isfile(script_path):
                     try:

@@ -42,7 +42,6 @@ dependencies = [
     "requests>=2.33.0",
     "rich",
     "rustypot>=1.4.2",
-    "scipy>=1.15.3, <2.0.0",
     "starlette<1.0.0", # TODO: update TemplateResponse(request, name, context) before allowing Starlette 1.x
     "toml",
     "uvicorn[standard]",
@@ -84,6 +83,13 @@ wireless-version = [
     "lgpio>=0.2.2.0; sys_platform == 'linux'",
 ]
 opencv = ["opencv-python<=5.0", "cv2_enumerate_cameras>=1.2.1"]
+# `media.central_consumer` only: a cloud backend consuming a robot over the
+# HF central relay. Kept out of the base install because a robot never runs
+# the consumer, and aiortc pulls a native SRTP/crypto stack with it.
+central-consumer = [
+    "aiortc>=1.9",
+    "av>=12",
+]
 all = [
     "reachy_mini[examples]",
     "reachy_mini[mujoco]",
@@ -91,11 +97,16 @@ all = [
     "reachy_mini[rerun]",
     "reachy_mini[wireless-version]",
     "reachy_mini[opencv]",
+    "reachy_mini[central-consumer]",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    # Test-only: the oracle that test_rotation_matches_scipy.py fuzzes
+    # utils/rotation.py against, plus scipy.signal in test_audio.py. The SDK
+    # itself no longer imports scipy at runtime (see #1342).
+    "scipy>=1.15.3,<2.0.0",
     "pytest-asyncio",
     "ruff==0.12.0",
     "onshape-to-robot==1.7.6",

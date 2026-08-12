@@ -6,9 +6,9 @@ from typing import cast
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
-from scipy.spatial.transform import Rotation as R
 
-from reachy_mini.io.protocol import MotorControlMode
+from reachy_mini.io.protocol import DoaSnapshot, MotorControlMode
+from reachy_mini.utils.rotation import Rotation as R
 
 
 class Matrix4x4Pose(BaseModel):
@@ -141,11 +141,9 @@ class FullBodyTarget(BaseModel):
     }
 
 
-class DoAInfo(BaseModel):
-    """Direction of Arrival info from the microphone array."""
-
-    angle: float  # Angle in radians (0=left, π/2=front, π=right)
-    speech_detected: bool
+# Kept as the REST surface's historical name. One model backs both the REST
+# replies and the pushed state snapshot, so the two surfaces can't drift.
+DoAInfo = DoaSnapshot
 
 
 class FullState(BaseModel):

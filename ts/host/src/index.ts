@@ -27,8 +27,12 @@ export type { ReachyHostProps } from './ReachyHost';
 export { mountHost } from './mountHost';
 export type { MountHostOptions, MountedHost } from './mountHost';
 
-export { connectToHost } from './embed';
-export type { ConnectedHandle, ConnectToHostOptions } from './embed';
+export { connectToHost, connectToHostCredsOnly } from './embed';
+export type {
+  ConnectedHandle,
+  ConnectToHostOptions,
+  CredsOnlyHandle,
+} from './embed';
 
 // Protocol types (useful for app authors implementing custom
 // flows or unit-testing their dispatcher).

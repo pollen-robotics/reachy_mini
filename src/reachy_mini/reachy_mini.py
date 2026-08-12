@@ -43,6 +43,7 @@ from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.discovery import find_robots
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
+from reachy_mini.utils.rotation import Rotation as R
 from reachy_mini.vision.look_at import (
     default_head_to_camera_transform,
     look_at_image_pose,
@@ -63,7 +64,10 @@ SLEEP_HEAD_JOINT_POSITIONS = [
 ]
 
 
-INIT_ANTENNAS_JOINT_POSITIONS = [-0.1745, 0.1745]  # ~10° offset to reduce shaking at vertical
+INIT_ANTENNAS_JOINT_POSITIONS = [
+    -0.1745,
+    0.1745,
+]  # ~10° offset to reduce shaking at vertical
 SLEEP_ANTENNAS_JOINT_POSITIONS = [-3.05, 3.05]
 SLEEP_HEAD_POSE = np.array(
     [
@@ -234,7 +238,9 @@ class ReachyMini:
             return
 
         self.media_manager.close()
-        self.media_manager = self._configure_mediamanager(self._media_backend, self._log_level)
+        self.media_manager = self._configure_mediamanager(
+            self._media_backend, self._log_level
+        )
         self._media_released = False
         self.logger.info("Media re-acquired by daemon.")
 
@@ -252,7 +258,10 @@ class ReachyMini:
         incoming WebRTC audio also produce head movement.
 
         """
-        def _send_offsets(offsets: tuple[float, float, float, float, float, float]) -> None:
+
+        def _send_offsets(
+            offsets: tuple[float, float, float, float, float, float],
+        ) -> None:
             try:
                 self.client.send_command(SetSpeechOffsetsCmd(offsets=list(offsets)))
             except ConnectionError:
@@ -722,16 +731,13 @@ class ReachyMini:
 
     def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
-        self.goto_target(INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=2)
+        self.goto_target(
+            INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=2
+        )
         time.sleep(0.1)
 
         # Toudoum
         self.media.play_sound("wake_up.wav")
-
-        # Roll 20° to the left
-        # Imported here so that `import reachy_mini` doesn't pay for scipy (~1s
-        # on the wireless robot). wake_up is a one-shot behavior, not a hot path.
-        from scipy.spatial.transform import Rotation as R
 
         pose = INIT_HEAD_POSE.copy()
         pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
@@ -758,7 +764,9 @@ class ReachyMini:
         ]
         dist = np.linalg.norm(np.array(current_positions) - np.array(init_positions))
         if dist > 0.2:
-            self.goto_target(INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=1)
+            self.goto_target(
+                INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=1
+            )
             time.sleep(0.2)
 
         # Pfiou

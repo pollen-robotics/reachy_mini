@@ -4,6 +4,7 @@ import numpy as np
 import numpy.typing as npt
 
 from reachy_mini.media.camera_utils import undistort_points
+from reachy_mini.utils.rotation import Rotation as R
 
 # Camera extrinsics from the CAD: camera offset in the head frame, plus the optical→head axis rotation.
 DEFAULT_HEAD_TO_CAMERA_TRANSFORM: npt.NDArray[np.float64] = np.eye(4)
@@ -24,10 +25,6 @@ def default_head_to_camera_transform() -> npt.NDArray[np.float64]:
 
 def look_at_world_pose(x: float, y: float, z: float) -> npt.NDArray[np.float64]:
     """Return a head pose that re-centers the head on the origin and aims its +X axis at the world point."""
-    # Imported here so that `import reachy_mini` doesn't pay for scipy (~1s on
-    # the wireless robot). look_at_* are per-request methods, not hot loops.
-    from scipy.spatial.transform import Rotation as R
-
     target_position = np.array([x, y, z], dtype=np.float64)
     target_norm = np.linalg.norm(target_position)
     if target_norm < 1e-12:

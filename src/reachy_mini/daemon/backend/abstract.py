@@ -22,7 +22,6 @@ from typing import Annotated, Any, Callable, Dict, Optional
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.io.jsonrpc import looks_like_jsonrpc
 from reachy_mini.io.protocol import (
@@ -33,8 +32,10 @@ from reachy_mini.io.protocol import (
     CancelMoveCmd,
     ClearIncomingAudioCmd,
     DeleteHfTokenCmd,
+    DoaSnapshot,
     FaceTarget,
     GetHardwareIdCmd,
+    GetImuCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
     GetRobotNameCmd,
@@ -44,6 +45,7 @@ from reachy_mini.io.protocol import (
     GetVolumeCmd,
     GotoSleepCmd,
     GotoTargetCmd,
+    ImuDataMsg,
     LogLineMsg,
     LogStreamErrorMsg,
     MockupSimBackendStatus,
@@ -52,6 +54,7 @@ from reachy_mini.io.protocol import (
     PlaySoundCmd,
     PlayUploadedAudioCmd,
     PlayUploadedMoveCmd,
+    PoseFrame,
     ReadAudioParameterCmd,
     RecordedDataMsg,
     RestartDaemonCmd,
@@ -73,9 +76,12 @@ from reachy_mini.io.protocol import (
     SetWobblingCmd,
     StartRecordingCmd,
     StartUpdateCmd,
+    StateSnapshot,
     StopRecordingCmd,
     SubscribeLogsCmd,
+    SubscribePoseCmd,
     UnsubscribeLogsCmd,
+    UnsubscribePoseCmd,
     UploadAudioChunkCmd,
     UploadAudioFinishCmd,
     UploadAudioStartCmd,
@@ -86,6 +92,7 @@ from reachy_mini.io.protocol import (
     command_adapter,
 )
 from reachy_mini.io.publisher import Publisher
+from reachy_mini.utils.rotation import Rotation as R
 
 if typing.TYPE_CHECKING:
     from reachy_mini.kinematics import AnyKinematics
@@ -143,6 +150,20 @@ class Backend:
         self.use_audio = use_audio
 
         self.doa = AudioDoA() if use_audio else None
+        # Cache for the latest DoA reading, refreshed by a demand-driven
+        # poller thread (see `_doa_poll_loop` for the rationale and the
+        # locking rules).
+        self._doa_lock = threading.Lock()
+        # Serializes every daemon-side ReSpeaker USB conversation (DoA reads
+        # and audio-config commands): `ReSpeaker.read()` is a multi-step
+        # conversation on a non-thread-safe pyusb device, so two of them must
+        # never interleave.
+        self._doa_usb_lock = threading.Lock()
+        self._last_doa: tuple[float, bool] | None = None
+        # Monotonic time of the last cache consumer; keeps the poller alive.
+        self._doa_demand_ts: float = 0.0
+        self._doa_stop = threading.Event()
+        self._doa_thread: threading.Thread | None = None
 
         self.should_stop = threading.Event()
         self.ready = threading.Event()
@@ -352,6 +373,12 @@ class Backend:
         # sends `subscribe_logs`, cancelled on `unsubscribe_logs` or
         # peer disconnect (the latter is wired in setup_media_server).
         self._log_tasks: dict[str, "asyncio.Task[None]"] = {}
+        # Monotonic sequence number stamped on every pushed pose frame so the
+        # client can drop out-of-order/stale frames that arrive on the
+        # unordered `pose` data channel (see `build_state_json`). Bumped only
+        # from the media server's GLib thread (single writer), so a plain int
+        # is safe.
+        self._pose_seq = 0
         # Asyncio loop on which the log-streaming tasks run. Captured
         # in setup_media_server alongside the WebRTC handler loop, so
         # cross-thread cleanup (peer disconnect fires from gstreamer's
@@ -421,6 +448,21 @@ class Backend:
         Subclasses must still implement their own cleanup for backend-specific resources.
         """
         self.logger.debug("Backend.close() - cleaning up resources")
+        # Stop the DoA poller and release the ReSpeaker USB handle.
+        self._doa_stop.set()
+        if self._doa_thread is not None:
+            self._doa_thread.join(timeout=1.0)
+            self._doa_thread = None
+        # `join(timeout=...)` can return with a wedged USB read still in
+        # flight, so only the lock proves the poller isn't mid-`ctrl_transfer`
+        # when the device is disposed.
+        with self._doa_usb_lock:
+            if self.doa is not None:
+                try:
+                    self.doa.close()
+                except Exception:  # noqa: BLE001 - best-effort teardown
+                    self.logger.debug("DoA close failed", exc_info=True)
+                self.doa = None
         self._media_server = None
 
     @property
@@ -479,6 +521,10 @@ class Backend:
 
         """
         self.imu_publisher = publisher
+
+    def get_imu_data(self) -> ImuDataMsg | None:
+        """Latest IMU reading; None on backends without an IMU."""
+        return None
 
     def update_target_head_joints_from_ik(
         self,
@@ -1143,14 +1189,58 @@ class Backend:
         ]
     )
 
-    async def wake_up(self) -> None:
-        """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
+    # Bounds the goto interpolation tail, not the hardware: play_move never
+    # evaluates a move at exactly t=duration, so the last written target sits
+    # a (velocity-eased) tick short of the commanded endpoint.
+    INIT_TARGET_ATOL: float = 1e-2
+
+    def is_awake_at_init_pose(self) -> bool:
+        """Motors on and init is the pose the controller is actively holding.
+
+        Compares the commanded targets, not the measured pose: a head sagging
+        a few mm under its own weight while commanded to init IS standing at
+        init, and per-unit calibration residual must not flip the answer.
+        """
+        if self.target_head_pose is None or self.target_antenna_joint_positions is None:
+            return False
+        return (
+            self.get_motor_control_mode() == MotorControlMode.Enabled
+            and bool(
+                np.allclose(
+                    self.target_head_pose,
+                    self.INIT_HEAD_POSE,
+                    atol=self.INIT_TARGET_ATOL,
+                )
+            )
+            and bool(
+                np.allclose(
+                    self.target_antenna_joint_positions,
+                    self.INIT_ANTENNAS_JOINT_POSITIONS,
+                    atol=self.INIT_TARGET_ATOL,
+                )
+            )
+        )
+
+    async def wake_up(self, *, force: bool = False) -> None:
+        """Wake up the robot - go to the initial head position and play the wake up emote and sound.
+
+        Stands down (silently - no motion, no sound) when the robot is already
+        awake at the init pose, so a boot-time ``wake_up`` after a session
+        handoff doesn't replay the emote. The wake-completed callback still
+        fires either way: the robot IS awake. ``force=True`` bypasses the
+        stand-down, e.g. for a deliberate replay or a caller that just
+        enabled the motors itself and knows a real wake is due.
+        """
         await asyncio.sleep(0.1)
+
+        if not force and self.is_awake_at_init_pose():
+            if self._on_wake_up_callback is not None:
+                self._on_wake_up_callback()
+            return
 
         _, _, magic_distance = distance_between_poses(
             self.get_current_head_pose(), self.INIT_HEAD_POSE
         )
-
         await self.goto_target(
             self.INIT_HEAD_POSE,
             antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
@@ -1289,6 +1379,153 @@ class Backend:
             "passive_7_y": self.head_kinematics.get_joint("passive_7_y"),  # type: ignore [union-attr]
             "passive_7_z": self.head_kinematics.get_joint("passive_7_z"),  # type: ignore [union-attr]
         }
+
+    # ------------------------------------------------------------------
+    # Direction of Arrival (cached, off the hot state path)
+    # ------------------------------------------------------------------
+
+    # ~10 Hz: fast enough to track a speaker turning, slow enough to keep the
+    # blocking ReSpeaker USB reads off the ~30 Hz pose-push loop.
+    DOA_POLL_INTERVAL_S = 0.1
+    # The poller exits after this long without a cache consumer. DoA rides
+    # the state snapshot, so "demand" means any connected client reading
+    # state; the gain is that an idle daemon (no client at all - the common
+    # state for an always-on robot) generates zero USB traffic. Must stay
+    # comfortably above any plausible REST polling cadence: the idle exit
+    # clears the cache, so a client polling slower than this would only
+    # ever see the null it re-primed on its previous request.
+    DOA_IDLE_STOP_S = 60.0
+
+    def _note_doa_demand(self) -> None:
+        """Record cache demand and make sure the poller is running.
+
+        Spawning is guarded by ``_doa_lock`` so the ~30 Hz push loop and
+        concurrent REST requests can't start two threads.
+        """
+        now = time.monotonic()
+        with self._doa_lock:
+            self._doa_demand_ts = now
+            if self._doa_thread is not None and self._doa_thread.is_alive():
+                return
+            self._doa_thread = threading.Thread(
+                target=self._doa_poll_loop, name="doa-poller", daemon=True
+            )
+            self._doa_thread.start()
+
+    def _doa_poll_loop(self) -> None:
+        """Cache the latest DoA reading until shutdown or idle timeout.
+
+        ``get_DoA()`` is a blocking USB control transfer with no bounded
+        latency (retry handshake of up to 100 attempts, 100 s worst-case
+        transfer timeout), so it must never run on the ~30 Hz pose-push
+        path or the HTTP event loop. This thread is the only place the
+        daemon reads DoA; every consumer goes through the cache (see
+        :meth:`read_doa`). Reads hold ``_doa_usb_lock`` so they never
+        interleave with the audio-config commands' own ReSpeaker
+        conversation, and every failure path is swallowed so a flaky USB
+        read can never take the thread down.
+        """
+        while not self._doa_stop.is_set():
+            with self._doa_lock:
+                idle_for = time.monotonic() - self._doa_demand_ts
+            if idle_for > self.DOA_IDLE_STOP_S:
+                with self._doa_lock:
+                    # Never serve a pre-idle reading to a late consumer.
+                    self._last_doa = None
+                return
+            try:
+                with self._doa_usb_lock:
+                    reading = self.doa.get_DoA() if self.doa is not None else None
+            except Exception:  # noqa: BLE001 - never kill the poller
+                reading = None
+            with self._doa_lock:
+                self._last_doa = reading
+            # `wait()` returns True once stopped, False on timeout - so this
+            # both paces the poll and exits promptly on shutdown.
+            if self._doa_stop.wait(self.DOA_POLL_INTERVAL_S):
+                return
+
+    def read_doa(self) -> DoaSnapshot | None:
+        """Return the latest cached DoA reading, or ``None``.
+
+        Never blocks: serves both the ~30 Hz pose push (via
+        :meth:`build_state_snapshot`) and the REST surface (`/state/doa`,
+        `/state/full?with_doa=true`). Registers demand so the poller
+        (re)starts, and returns ``None`` when no ReSpeaker is present or
+        the first poll hasn't landed yet (~one ``DOA_POLL_INTERVAL_S``
+        after the first demand).
+        """
+        if self.doa is None or not self.doa.available:
+            return None
+        self._note_doa_demand()
+        with self._doa_lock:
+            reading = self._last_doa
+        if reading is None:
+            return None
+        angle, speech_detected = reading
+        return DoaSnapshot(angle=angle, speech_detected=speech_detected)
+
+    # ------------------------------------------------------------------
+    # State snapshot (shared by get_state replies and the pose push)
+    # ------------------------------------------------------------------
+
+    def build_state_snapshot(self) -> StateSnapshot:
+        """Build the present-state snapshot sent to clients.
+
+        Single source of truth for both the polled ``get_state`` reply and
+        the pushed pose stream (see :meth:`build_state_json`). All getters
+        read cached motor values (``get_last_position``), so this is cheap
+        and safe to call from a thread other than the motor loop.
+        """
+        return StateSnapshot(
+            head_pose=self.get_present_head_pose().tolist()
+            if self.current_head_pose is not None
+            else None,
+            antennas=self.get_present_antenna_joint_positions().tolist()
+            if self.current_antenna_joint_positions is not None
+            else None,
+            # Per-motor head values (7, body yaw at [0]) so WebRTC clients
+            # can check the physical pose motor by motor without the LAN
+            # /ws/sdk stream. The antennas need no twin field: `antennas`
+            # already is the two motor values.
+            head_joint_positions=self.get_present_head_joint_positions().tolist()
+            if self.current_head_joint_positions is not None
+            else None,
+            body_yaw=self.get_present_body_yaw(),
+            motor_mode=self.get_motor_control_mode(),
+            is_recording=self.is_recording,
+            is_move_running=self.is_move_running,
+            face_target=self.get_tracked_face(),
+            # Sound Direction of Arrival (ReSpeaker mic array), or None when
+            # unavailable. Cached, never blocks (see _doa_poll_loop).
+            doa=self.read_doa(),
+        )
+
+    def build_state_dict(self) -> dict[str, Any]:
+        """JSON-safe dict view of :meth:`build_state_snapshot`.
+
+        Used by the ``get_state`` reply, whose envelope is assembled by the
+        transport as a plain dict.
+        """
+        return self.build_state_snapshot().model_dump(mode="json")
+
+    def build_state_json(self) -> Optional[str]:
+        """Serialize the present state as the client-facing envelope.
+
+        Returns the ``{"state": ..., "seq": ...}`` payload, or ``None`` if
+        it can't be built yet. Wired into the media server as the
+        pose-stream provider (``set_pose_provider``) so the daemon can
+        *push* pose over the unreliable/unordered ``pose`` data channel at
+        a steady rate instead of the client round-tripping ``get_state``
+        over Wi-Fi. Returning ``None`` (e.g. before the first kinematics
+        update, or during shutdown) simply skips that tick.
+        """
+        try:
+            snapshot = self.build_state_snapshot()
+        except Exception:
+            return None
+        self._pose_seq += 1
+        return PoseFrame(state=snapshot, seq=self._pose_seq).model_dump_json()
 
     # ------------------------------------------------------------------
     # Transport-agnostic command processing
@@ -1461,20 +1698,7 @@ class Backend:
             send_response({"status": "ok", "command": "set_automatic_body_yaw"})
 
         elif isinstance(cmd, GetStateCmd):
-            state = {
-                "head_pose": self.get_present_head_pose().tolist()
-                if self.current_head_pose is not None
-                else None,
-                "antennas": self.get_present_antenna_joint_positions().tolist()
-                if self.current_antenna_joint_positions is not None
-                else None,
-                "body_yaw": self.get_present_body_yaw(),
-                "motor_mode": self.get_motor_control_mode().value,
-                "is_recording": self.is_recording,
-                "is_move_running": self.is_move_running,
-                "face_target": self.get_tracked_face().model_dump(),
-            }
-            send_response({"state": state})
+            send_response({"state": self.build_state_dict()})
 
         elif isinstance(cmd, GetVersionCmd):
             from importlib.metadata import version
@@ -1485,6 +1709,13 @@ class Backend:
             from reachy_mini.utils.hardware_id import get_hardware_id
 
             send_response({"hardware_id": get_hardware_id()})
+
+        elif isinstance(cmd, GetImuCmd):
+            # `imu` is None on IMU-less hardware (Lite, simulation) so
+            # clients can tell "no IMU" from "no reply" (old daemon).
+            imu = self.get_imu_data()
+            payload = imu.model_dump(exclude={"type"}) if imu is not None else None
+            send_response({"command": "get_imu", "imu": payload})
 
         elif isinstance(cmd, (GetRobotNameCmd, SetRobotNameCmd)):
             # Robot display name is a persistent, robot-wide string stored on
@@ -1596,54 +1827,73 @@ class Backend:
         elif isinstance(cmd, (ApplyAudioConfigCmd, ReadAudioParameterCmd)):
             from reachy_mini.media.audio_control_utils import init_respeaker_usb
 
-            try:
-                respeaker = init_respeaker_usb()
-            except Exception as e:
-                self.logger.warning("ReSpeaker init failed: %s", e)
-                send_response(
-                    {"error": f"ReSpeaker init failed: {e}", "command": cmd.type}
-                )
-                return
+            # This is a multi-transfer ReSpeaker conversation, so it holds
+            # `_doa_usb_lock` end to end: it must never interleave with the
+            # DoA poller (see _doa_poll_loop). Reuse the long-lived DoA
+            # handle when the probe found a device; fall back to a transient
+            # handle otherwise (no DoA handle also means no poller).
+            with self._doa_usb_lock:
+                transient = None
+                if self.doa is not None and self.doa.available:
+                    respeaker = self.doa.respeaker
+                else:
+                    try:
+                        transient = init_respeaker_usb()
+                    except Exception as e:
+                        self.logger.warning("ReSpeaker init failed: %s", e)
+                        send_response(
+                            {
+                                "error": f"ReSpeaker init failed: {e}",
+                                "command": cmd.type,
+                            }
+                        )
+                        return
+                    respeaker = transient
 
-            if respeaker is None:
-                send_response(
-                    {
-                        "error": "ReSpeaker audio board not available",
-                        "command": cmd.type,
-                    }
-                )
-                return
-
-            try:
-                if isinstance(cmd, ApplyAudioConfigCmd):
-                    config = [(p.name, p.values) for p in cmd.config]
-                    applied = respeaker.apply_audio_config(config, verify=cmd.verify)
+                if respeaker is None:
                     send_response(
                         {
-                            "status": "ok" if applied else "error",
-                            "command": "apply_audio_config",
-                            "applied": applied,
+                            "error": "ReSpeaker audio board not available",
+                            "command": cmd.type,
                         }
                     )
-                else:  # ReadAudioParameterCmd
-                    values = respeaker.read_values(cmd.name)
+                    return
+
+                try:
+                    if isinstance(cmd, ApplyAudioConfigCmd):
+                        config = [(p.name, p.values) for p in cmd.config]
+                        applied = respeaker.apply_audio_config(
+                            config, verify=cmd.verify
+                        )
+                        send_response(
+                            {
+                                "status": "ok" if applied else "error",
+                                "command": "apply_audio_config",
+                                "applied": applied,
+                            }
+                        )
+                    else:  # ReadAudioParameterCmd
+                        values = respeaker.read_values(cmd.name)
+                        send_response(
+                            {
+                                "command": "read_audio_parameter",
+                                "name": cmd.name,
+                                "values": list(values) if values is not None else None,
+                            }
+                        )
+                except Exception as e:
+                    self.logger.warning(
+                        "Audio config command %s failed: %s", cmd.type, e
+                    )
                     send_response(
                         {
-                            "command": "read_audio_parameter",
-                            "name": cmd.name,
-                            "values": list(values) if values is not None else None,
+                            "error": f"Audio config command failed: {e}",
+                            "command": cmd.type,
                         }
                     )
-            except Exception as e:
-                self.logger.warning("Audio config command %s failed: %s", cmd.type, e)
-                send_response(
-                    {
-                        "error": f"Audio config command failed: {e}",
-                        "command": cmd.type,
-                    }
-                )
-            finally:
-                respeaker.close()
+                finally:
+                    if transient is not None:
+                        transient.close()
 
         elif isinstance(cmd, StartRecordingCmd):
             self.start_recording()
@@ -1663,6 +1913,13 @@ class Backend:
             self._start_log_subscription(peer_id, send_response)
         elif isinstance(cmd, UnsubscribeLogsCmd):
             self._cancel_log_subscription(peer_id)
+
+        elif isinstance(cmd, SubscribePoseCmd):
+            self._set_pose_subscription(peer_id, True)
+            send_response({"status": "ok", "command": "subscribe_pose"})
+        elif isinstance(cmd, UnsubscribePoseCmd):
+            self._set_pose_subscription(peer_id, False)
+            send_response({"status": "ok", "command": "unsubscribe_pose"})
 
         elif isinstance(cmd, RestartDaemonCmd):
             # Ack BEFORE triggering the restart: the WebRTC transport
@@ -2127,6 +2384,18 @@ class Backend:
         if task is not None and not task.done():
             task.cancel()
 
+    def _set_pose_subscription(self, peer_id: Optional[str], enabled: bool) -> None:
+        """Enable/disable the pushed pose stream for a peer.
+
+        Delegated to the media server, which owns the per-peer ``pose`` data
+        channels and the push timer. No-op without a peer id (non-multiplexed
+        transports) or on an older media server lacking the hook.
+        """
+        if peer_id is None or self._media_server is None:
+            return
+        if hasattr(self._media_server, "set_pose_subscription"):
+            self._media_server.set_pose_subscription(peer_id, enabled)
+
     def _on_peer_disconnect(self, peer_id: str) -> None:
         """Cancel any per-peer state when the WebRTC peer goes away.
 
@@ -2473,6 +2742,13 @@ class Backend:
         if hasattr(media_server, "set_peer_disconnect_handler"):
             media_server.set_peer_disconnect_handler(self._on_peer_disconnect)
         self._send_message_to_webrtc = media_server.send_data_message
+        # Feed the media server the present-state snapshot so it can *push*
+        # pose over the unreliable/unordered `pose` data channel at a steady
+        # rate (immune to Wi-Fi jitter), instead of the client polling
+        # `get_state` on the reliable-ordered channel. No-op on older media
+        # servers that don't expose the hook (falls back to polling).
+        if hasattr(media_server, "set_pose_provider"):
+            media_server.set_pose_provider(self.build_state_json)
 
     def set_jsonrpc_handler(
         self, handler: Callable[[str, Callable[[dict[str, Any]], None]], None]
@@ -2528,7 +2804,12 @@ class Backend:
     # an intermediate pose.
     IDLE_RESET_DEBOUNCE_S: float = 1.5
 
-    def request_idle_reset(self) -> None:
+    # Longer grace used when the slot was released on purpose for a successor
+    # (covers a Space cold-start). Also bounds how long a client that died on
+    # the endSession path keeps the robot needlessly awake.
+    IDLE_RESET_HANDOFF_GRACE_S: float = 15.0
+
+    def request_idle_reset(self, *, expect_handoff: bool = False) -> None:
         """Return the robot to a clean idle state when no managed app owns it.
 
         Called by the daemon when the shared ``RobotAppLock`` transitions to
@@ -2545,11 +2826,22 @@ class Backend:
         one that also handles data-channel commands) and returns immediately.
         No-op when that loop isn't up yet (e.g. ``--no-media`` daemons, which
         have no remote sessions anyway).
+
+        Args:
+            expect_handoff: True when the slot was released on purpose for a
+                successor session, which earns the longer
+                ``IDLE_RESET_HANDOFF_GRACE_S`` instead of the default debounce.
+
         """
         loop = getattr(self, "_log_loop", None)
         if loop is None:
             return
-        loop.call_soon_threadsafe(self._maybe_start_idle_reset)
+        grace_s = (
+            self.IDLE_RESET_HANDOFF_GRACE_S
+            if expect_handoff
+            else self.IDLE_RESET_DEBOUNCE_S
+        )
+        loop.call_soon_threadsafe(self._maybe_start_idle_reset, grace_s)
 
     def cancel_idle_reset(self) -> None:
         """Cancel a pending/in-flight idle reset from any thread.
@@ -2572,7 +2864,7 @@ class Backend:
             task.cancel()
         self._idle_reset_task = None
 
-    def _maybe_start_idle_reset(self) -> None:
+    def _maybe_start_idle_reset(self, grace_s: float) -> None:
         """Kick off a goto_sleep if the robot is still awake. Runs on the loop."""
         try:
             if not self.ready.is_set() or self.is_shutting_down:
@@ -2583,17 +2875,17 @@ class Backend:
             if self.get_motor_control_mode() == MotorControlMode.Disabled:
                 return
             self._cancel_idle_reset()
-            self._idle_reset_task = asyncio.create_task(self._async_idle_reset())
+            self._idle_reset_task = asyncio.create_task(self._async_idle_reset(grace_s))
         except Exception:
             self.logger.warning("Idle reset scheduling failed", exc_info=True)
 
-    async def _async_idle_reset(self) -> None:
+    async def _async_idle_reset(self, grace_s: float) -> None:
         """Graceful return to the sleep pose, which ends with motors disabled.
 
-        Starts with a short debounce (``IDLE_RESET_DEBOUNCE_S``): a fast
-        reconnect or a local app grabbing the robot cancels the task during that
-        window, so no motion happens at all on transient drops. Only if the slot
-        stays free past the grace period do we actually goto_sleep.
+        Starts with a debounce (``grace_s``): a fast reconnect or a local app
+        grabbing the robot cancels the task during that window, so no motion
+        happens at all on transient drops. Only if the slot stays free past the
+        grace period do we actually goto_sleep.
 
         Mirrors the reference leave behaviour clients already run by hand
         (gotoSleep -> motors off). ``goto_sleep()`` finishes with
@@ -2602,7 +2894,7 @@ class Backend:
         correctly triggers a fresh wake.
         """
         try:
-            await asyncio.sleep(self.IDLE_RESET_DEBOUNCE_S)
+            await asyncio.sleep(grace_s)
             # Conditions may have changed during the grace period (shutdown
             # started, or the robot was already put to sleep by whoever briefly
             # held the slot). Re-check before committing to the trajectory.

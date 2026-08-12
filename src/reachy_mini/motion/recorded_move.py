@@ -8,12 +8,6 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import numpy.typing as npt
-
-# scipy is imported eagerly on purpose: RecordedMove.evaluate() runs
-# linear_pose_interpolation() inside 100 Hz playback loops
-# (ReachyMini.async_play_move), and its lazy scipy import must not
-# first-trigger there (~1s stall on the wireless robot).
-import scipy.spatial.transform  # noqa: F401
 from huggingface_hub import snapshot_download
 from huggingface_hub.errors import LocalEntryNotFoundError
 

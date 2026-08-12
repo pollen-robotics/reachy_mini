@@ -6,6 +6,8 @@ from typing import Callable, Optional, Tuple
 import numpy as np
 import numpy.typing as npt
 
+from reachy_mini.utils.rotation import Rotation as R
+
 InterpolationFunc = Callable[[float], npt.NDArray[np.float64]]
 
 
@@ -65,12 +67,6 @@ def linear_pose_interpolation(
     Use `yaw_as_scalar` to interpolate yaw as a signed scalar Euler angle instead of along the SO(3) geodesic.
     This keeps the path through the front rather than taking the shortest 3D rotation through +-180° (the back).
     """
-    # Imported here so that `import reachy_mini` doesn't pay for scipy (~1s on
-    # the wireless robot). Callers that evaluate this in a control loop must
-    # import scipy at module scope to avoid a first-call stall (see
-    # recorded_move.py and daemon/backend/abstract.py).
-    from scipy.spatial.transform import Rotation as R
-
     # Extract rotations
     rot_start = R.from_matrix(start_pose[:3, :3])
     rot_end = R.from_matrix(target_pose[:3, :3])

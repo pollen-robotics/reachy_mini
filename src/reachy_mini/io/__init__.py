@@ -1,9 +1,9 @@
 """IO module.
 
 ``WSServer`` is exposed lazily (PEP 562): importing it eagerly pulls the whole
-daemon backend (scipy, vision.face_tracking, onnxruntime, fastapi, ...) into
-every client app, which costs ~0.7s of startup on the wireless robot. Only the
-daemon process needs it.
+daemon backend (vision.face_tracking, onnxruntime, fastapi, ...) into every
+client app, which costs ~1s of startup on the wireless robot. Only the daemon
+process needs it.
 """
 
 from typing import TYPE_CHECKING
