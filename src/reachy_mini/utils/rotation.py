@@ -252,8 +252,9 @@ class Rotation:
         if norm < 1e-12:
             rotvec = 2.0 * xyz
         else:
-            rotvec = xyz * (2.0 * np.arctan2(norm, w) / norm)
-        return np.rad2deg(rotvec) if degrees else rotvec
+            rotvec = xyz * (2.0 * float(np.arctan2(norm, w)) / norm)
+        out: npt.NDArray[np.float64] = np.rad2deg(rotvec) if degrees else rotvec
+        return out
 
     # --- algebra --------------------------------------------------------
 
