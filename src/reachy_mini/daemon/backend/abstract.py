@@ -53,10 +53,12 @@ from reachy_mini.io.protocol import (
     MockupSimBackendStatus,
     MotorControlMode,
     MujocoBackendStatus,
+    PlayRecordedMoveCmd,
     PlaySoundCmd,
     PlayUploadedAudioCmd,
     PlayUploadedMoveCmd,
     PoseFrame,
+    PreloadDatasetCmd,
     ReadAudioParameterCmd,
     RecordedDataMsg,
     RestartDaemonCmd,
@@ -80,6 +82,7 @@ from reachy_mini.io.protocol import (
     StartRecordingCmd,
     StartUpdateCmd,
     StateSnapshot,
+    StopMoveCmd,
     StopRecordingCmd,
     SubscribeLogsCmd,
     SubscribePoseCmd,
@@ -276,6 +279,11 @@ class Backend:
         self._active_move_depth = (
             0  # Tracks nested acquisitions within the owning thread
         )
+        # Global "stop now" flag flipped by ``StopMoveCmd`` and polled by
+        # every ``play_move`` loop (nested gotos included), regardless of
+        # who started the move. Cleared when a new top-level move starts,
+        # so a stale stop can't kill the next run.
+        self._stop_move_requested = False
 
         # Per-run cancellation handle for the active play_uploaded_move.
         # Set by ``_async_play_uploaded_move`` before each play, cleared
@@ -820,12 +828,19 @@ class Backend:
             play_frequency (float): The frequency at which to evaluate the move (in Hz).
             initial_goto_duration (float): Duration for an initial goto to the move's starting position. If 0.0, no initial goto is performed.
             audio_lead_s (float): How many seconds the audio (if any) starts BEFORE the motion. Positive values compensate for the constant GStreamer playbin latency on the robot so the audio reaches the speaker at the same moment the actuator starts moving. Negative values delay audio relative to motion. No-op when the move has no sound_path. Default 0.
-            cancel_token (_PlaybackCancelToken, optional): If provided, the inner loop polls ``cancel_token.cancelled`` every tick and exits when flipped. Used by ``_async_play_uploaded_move`` to wire ``cancel_move`` to a specific upload_id; direct callers (goto_target, etc.) pass None and stay non-cancellable.
+            cancel_token (_PlaybackCancelToken, optional): If provided, the inner loop polls ``cancel_token.cancelled`` every tick and exits when flipped. Used by ``_async_play_uploaded_move`` to wire ``cancel_move`` to a specific upload_id; direct callers (goto_target, etc.) pass None. Independently of the token, every loop also polls the global ``_stop_move_requested`` flag flipped by ``StopMoveCmd``, so any move is interruptible by ``stop_move``.
 
         """
         if not self._try_start_move():
             self.logger.warning("Ignoring play_move request: another move is running.")
             return
+
+        if self._active_move_depth == 1:
+            # New top-level move: clear any stop request left over from a
+            # previous run so a stale stop_move can't kill this one. Nested
+            # play_moves (initial goto, goto_target inside a recorded move)
+            # keep the flag so one stop interrupts the whole stack.
+            self._stop_move_requested = False
 
         try:
             if initial_goto_duration > 0.0:
@@ -869,13 +884,19 @@ class Backend:
                         return
                     if cancel_token is not None and cancel_token.cancelled:
                         return
+                    if self._stop_move_requested:
+                        return
                     self.play_sound(sound_path_str)
 
                 delayed_sound_task = asyncio.create_task(_delayed_sound())
+            interrupted = False
             try:
                 while time.time() - t0 < move.duration:
-                    if cancel_token is not None and cancel_token.cancelled:
+                    if self._stop_move_requested or (
+                        cancel_token is not None and cancel_token.cancelled
+                    ):
                         self.logger.info("play_move cancelled, exiting playback loop")
+                        interrupted = True
                         break
                     t = time.time() - t0
 
@@ -899,6 +920,14 @@ class Backend:
                 # the sleep elapsed.
                 if delayed_sound_task is not None and not delayed_sound_task.done():
                     delayed_sound_task.cancel()
+                # Interrupted mid-move: silence the sidecar sound too,
+                # otherwise a recorded move's audio would keep playing to
+                # the end of the WAV after the motion has stopped.
+                if interrupted and move.sound_path is not None:
+                    try:
+                        self.stop_sound()
+                    except Exception as e:
+                        self.logger.warning(f"play_move: stop_sound failed: {e}")
         finally:
             self._end_move()
 
@@ -1676,6 +1705,12 @@ class Backend:
             self.play_sound(cmd.file)
             send_response({"status": "ok", "command": "play_sound"})
 
+        elif isinstance(cmd, PlayRecordedMoveCmd):
+            asyncio.create_task(self._async_play_recorded_move(cmd, send_response))
+
+        elif isinstance(cmd, PreloadDatasetCmd):
+            asyncio.create_task(self._async_preload_dataset(cmd, send_response))
+
         elif isinstance(cmd, ClearIncomingAudioCmd):
             self.clear_incoming_audio()
             send_response({"status": "ok", "command": "clear_incoming_audio"})
@@ -2082,6 +2117,8 @@ class Backend:
             asyncio.create_task(self._async_play_uploaded_move(cmd))
         elif isinstance(cmd, CancelMoveCmd):
             self._handle_cancel_move(cmd)
+        elif isinstance(cmd, StopMoveCmd):
+            self._handle_stop_move(send_response)
         elif isinstance(cmd, PlayUploadedAudioCmd):
             self._handle_play_uploaded_audio(cmd)
         elif isinstance(cmd, CancelAudioCmd):
@@ -2381,6 +2418,38 @@ class Backend:
                 return
             token.cancelled = True
 
+    def _handle_stop_move(
+        self, send_response: Callable[[dict[str, Any]], None]
+    ) -> None:
+        """Stop whatever move is currently playing (recorded, uploaded, goto).
+
+        The blunt client-facing counterpart of ``_handle_cancel_move``: no
+        upload_id needed, it flips the global stop flag every ``play_move``
+        loop polls, and also cancels the active uploaded-move token (if any)
+        so that run's end broadcast reports ``cancelled`` instead of
+        ``finished``. Idempotent: always acks ok, with ``stopped`` telling
+        whether a move was actually interrupted.
+        """
+        if not self.is_move_running:
+            send_response(
+                {
+                    "status": "ok",
+                    "command": "stop_move",
+                    "stopped": False,
+                    "info": "no active move",
+                }
+            )
+            return
+        self._stop_move_requested = True
+        # Also flip the per-run token (RLock is reentrant on the event-loop
+        # thread, same as _handle_cancel_move) so an in-flight
+        # play_uploaded_move bookkeeps this as a cancellation.
+        with self._play_move_lock:
+            token = self._active_move_token
+            if token is not None:
+                token.cancelled = True
+        send_response({"status": "ok", "command": "stop_move", "stopped": True})
+
     def _handle_upload_finish(self, cmd: UploadMoveFinishCmd) -> None:
         slot = self._upload_chunks.pop(cmd.upload_id, None)
         meta = self._upload_meta.pop(cmd.upload_id, None)
@@ -2610,6 +2679,97 @@ class Backend:
             send_response({"status": "ok", "command": "goto_sleep", "completed": True})
         except Exception as e:
             send_response({"error": str(e), "command": "goto_sleep"})
+
+    async def _async_play_recorded_move(
+        self,
+        cmd: PlayRecordedMoveCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Load a named move from a dataset and play it (motion + sound).
+
+        Mirrors the ``/api/move/play/recorded-move-dataset`` route but over the
+        data channel so it works on a remote WebRTC session. Fire-and-forget:
+        the ack reports dispatch success/failure (unknown move, missing
+        dataset), not playback completion. ``RecordedMoves`` reads the local
+        HF cache first, so on a pre-downloaded robot this stays off the
+        network.
+        """
+        from reachy_mini.motion.recorded_move import (
+            DEFAULT_EMOTIONS_DATASET,
+            RecordedMoves,
+        )
+
+        dataset = cmd.dataset_name or DEFAULT_EMOTIONS_DATASET
+        try:
+            # On a cold cache RecordedMoves() triggers a blocking
+            # snapshot_download: run it in a worker thread so it cannot stall
+            # the daemon's event loop (and its pose stream) mid-session.
+            move = await asyncio.to_thread(
+                lambda: RecordedMoves(dataset).get(cmd.move_name)
+            )
+        except Exception as e:
+            self.logger.warning(
+                f"play_recorded_move: {cmd.move_name!r} from {dataset!r} "
+                f"failed to load: {e}"
+            )
+            send_response(
+                {
+                    "command": "play_recorded_move",
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
+            return
+
+        # Dispatched: ack now (fire-and-forget), then run the move. play_move
+        # self-guards against a concurrent move, so a double-tap is a no-op.
+        send_response(
+            {
+                "command": "play_recorded_move",
+                "status": "ok",
+                "move_name": cmd.move_name,
+            }
+        )
+        try:
+            await self.play_move(move, initial_goto_duration=cmd.initial_goto_duration)
+        except Exception as e:
+            self.logger.warning(f"play_recorded_move: playback failed: {e}")
+
+    async def _async_preload_dataset(
+        self,
+        cmd: PreloadDatasetCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Warm the local HF cache for a recorded-move dataset.
+
+        Runs ``snapshot_download`` (cache-first, so a no-op when already
+        cached) in a worker thread: it does blocking network + disk IO and
+        must not stall the daemon's event loop mid-session. The ack carries
+        the cached path on success so clients can log/verify; a failure is
+        reported but deliberately not fatal - ``play_recorded_move`` will
+        retry the download on demand at playback time.
+        """
+        from reachy_mini.motion.recorded_move import preload_dataset
+
+        local_path = await asyncio.to_thread(preload_dataset, cmd.dataset_name)
+        if local_path is None:
+            send_response(
+                {
+                    "command": "preload_dataset",
+                    "status": "error",
+                    "dataset_name": cmd.dataset_name,
+                    "error": "download failed (see daemon logs)",
+                }
+            )
+            return
+        send_response(
+            {
+                "command": "preload_dataset",
+                "status": "ok",
+                "dataset_name": cmd.dataset_name,
+                "local_path": local_path,
+            }
+        )
 
     async def _async_play_uploaded_move(self, cmd: PlayUploadedMoveCmd) -> None:
         """Run Backend.play_move on a previously-uploaded move slot.

@@ -13,7 +13,7 @@ Client->Server command types:
     restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
-    play_uploaded_move, cancel_move,
+    play_uploaded_move, cancel_move, stop_move,
     play_uploaded_audio, cancel_audio, clear_incoming_audio,
     apply_audio_config, read_audio_parameter,
     set_speech_offsets, set_wobbling, set_head_tracking, get_tracked_face
@@ -241,6 +241,48 @@ class PlaySoundCmd(BaseModel):
 
     type: Literal["play_sound"] = "play_sound"
     file: str
+
+
+class PlayRecordedMoveCmd(BaseModel):
+    """Play a named recorded move (motion + its sidecar sound) from a dataset.
+
+    Daemon-side equivalent of ``POST /api/move/play/recorded-move-dataset``:
+    the backend loads the move from the (cache-first) HF dataset and runs it
+    through ``Backend.play_move``, so the bundled sound plays in lockstep on
+    the robot speaker. Fire-and-forget: the ack only reports that the move was
+    dispatched (or an error like an unknown name / missing dataset), not that
+    playback finished. ``dataset_name`` defaults to the pre-downloaded emotions
+    library; callers can override it to source a move from another repo.
+    """
+
+    type: Literal["play_recorded_move"] = "play_recorded_move"
+    move_name: str
+    dataset_name: Optional[str] = None
+    # Seconds to smoothly interpolate to the move's first frame before playing
+    # (0 = snap instantly, the default). Lets callers ease into a move whose
+    # start pose is far from the robot's current pose (e.g. replaying the
+    # wake-from-sleep move while already awake) instead of jumping.
+    initial_goto_duration: float = 0.0
+
+
+class PreloadDatasetCmd(BaseModel):
+    """Pre-download a HF recorded-move dataset into the daemon's local cache.
+
+    Generic warm-up primitive for ``play_recorded_move``: a client that knows
+    it will play moves from a given dataset soon (e.g. the mobile app's
+    onboarding wizards) sends this right after connecting, so the first
+    ``play_recorded_move`` hits a warm cache instead of blocking on a network
+    download. The download runs in the background; the ack reports the cached
+    local path (or ``status: "error"`` if the download failed). Idempotent and
+    cache-first: re-sending for an already-cached dataset is a fast no-op.
+
+    This keeps feature-specific dataset knowledge out of the daemon: it only
+    preloads the official libraries by itself (``DEFAULT_DATASETS``), anything
+    else is the caller's responsibility.
+    """
+
+    type: Literal["preload_dataset"] = "preload_dataset"
+    dataset_name: str
 
 
 class SetMotorModeCmd(BaseModel):
@@ -800,6 +842,23 @@ class CancelMoveCmd(BaseModel):
     upload_id: str
 
 
+class StopMoveCmd(BaseModel):
+    """Stop whatever move is currently playing (recorded move, uploaded move, goto).
+
+    Client-facing "stop now" primitive. Unlike :class:`CancelMoveCmd`, which
+    is deliberately scoped to a single ``upload_id`` so back-to-back uploaded
+    plays can't cross-cancel, this command needs no handle: it interrupts the
+    active ``Backend.play_move`` run whoever started it, and silences the
+    move's sidecar sound if one is playing.
+
+    Acked with ``{"status": "ok", "command": "stop_move", "stopped": true}``
+    when a move was interrupted, or ``stopped: false`` (plus an ``info``
+    field) when nothing was running - idempotent, never an error.
+    """
+
+    type: Literal["stop_move"] = "stop_move"
+
+
 class PlayUploadedAudioCmd(BaseModel):
     """Play a previously-uploaded audio standalone (no motion).
 
@@ -858,6 +917,8 @@ AnyCommand = Annotated[
     | WakeUpCmd
     | GotoSleepCmd
     | PlaySoundCmd
+    | PlayRecordedMoveCmd
+    | PreloadDatasetCmd
     | SetMotorModeCmd
     | SetTorqueCmd
     | GetMotorModeCmd
@@ -897,6 +958,7 @@ AnyCommand = Annotated[
     | UploadAudioFinishCmd
     | PlayUploadedMoveCmd
     | CancelMoveCmd
+    | StopMoveCmd
     | PlayUploadedAudioCmd
     | CancelAudioCmd
     | ClearIncomingAudioCmd

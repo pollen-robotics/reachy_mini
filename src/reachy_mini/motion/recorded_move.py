@@ -19,9 +19,18 @@ logger = logging.getLogger(__name__)
 # Sidecar audio containers; mirrors media.py ALLOWED_SOUND_EXTENSIONS. .wav wins ties.
 SOUND_EXTENSIONS = (".wav", ".mp3", ".ogg", ".oga", ".opus", ".flac", ".m4a", ".aac")
 
-# Default datasets to preload at daemon startup
+# Canonical emotions library: motion + optional sidecar sound per move. This is
+# the default source for named-move playback (WebRTC `play_recorded_move` cmd).
+# Pre-downloaded on the robot at daemon startup.
+DEFAULT_EMOTIONS_DATASET = "pollen-robotics/reachy-mini-emotions-library"
+
+# Default datasets to preload at daemon startup. Deliberately restricted to the
+# official pollen-robotics libraries: feature-specific datasets (e.g. the mobile
+# app's onboarding cues) are the client's business - clients preload them at
+# session start with the `preload_dataset` data-channel command instead of the
+# daemon hardcoding knowledge of one app's features.
 DEFAULT_DATASETS = [
-    "pollen-robotics/reachy-mini-emotions-library",
+    DEFAULT_EMOTIONS_DATASET,
     "pollen-robotics/reachy-mini-dances-library",
 ]
 
