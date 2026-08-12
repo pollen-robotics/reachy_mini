@@ -9,12 +9,23 @@ import {
     oauthLoginUrl,
 } from '@huggingface/hub';
 
+import { createLogger } from './logger.js';
 import { degToRad, rpyToMatrix } from './math.js';
+import { BroadcastTimeoutError, PendingReplies, SLOT_ROUNDTRIP_TIMEOUT_MS } from './pending-replies.js';
+import type { MotionCommand, ReplySlotKey, ReplySlotValues } from './pending-replies.js';
+import { SessionSupervisor } from './session-supervisor.js';
+import { SDK_VERSION } from './version.js';
 import {
     consumeFragmentCredentials,
     readPreselectedRobotIdFromUrl,
     sdpHasAudioSendRecv,
 } from './url-helpers.js';
+import {
+    clearStoredToken,
+    consumeOAuthErrorParams,
+    readUsableToken,
+    writeStoredToken,
+} from './token-store.js';
 import {
     UPLOAD_CHUNK_SIZE,
     UPLOAD_BUFFERED_HIGH_WATER,
@@ -33,6 +44,8 @@ import type {
     AutoConnectResult,
     AutoConnectRobotChoice,
     FaceTarget,
+    ImuData,
+    LoginOptions,
     MotionAwaitOptions,
     MoveData,
     PlayMoveOptions,
@@ -41,38 +54,24 @@ import type {
     ReachyMiniEventMap,
     ReachyMiniInstance,
     ReachyMiniOptions,
+    RequestOptions,
     RobotInfo,
     RobotState,
     SessionRejectError,
+    StartDaemonUpdateOptions,
     SubscribeLogsOptions,
+    UpdateProgressEvent,
     UploadAudioOptions,
 } from './types.js';
 
-interface PendingMotion {
-    resolve: () => void;
-    reject: (err: Error) => void;
-    timer: ReturnType<typeof setTimeout>;
-}
-
-interface BroadcastWaiter {
-    predicate: (m: Record<string, unknown>) => boolean;
-    resolve: (m: Record<string, unknown>) => void;
-    timer: ReturnType<typeof setTimeout>;
-}
+const log = createLogger('sdk');
 
 interface LogSubscriber {
     onLine: (entry: { timestamp: string; line: string }) => void;
     onError?: (error: string) => void;
 }
 
-/** One progress event from an in-flight `startDaemonUpdate()`. */
-export interface UpdateProgressEvent {
-    status: 'in_progress' | 'done' | 'failed';
-    /** A log line of the underlying update job (when `in_progress`). */
-    line?: string;
-    /** Set when `status === 'failed'`. */
-    error?: string;
-}
+export type { UpdateProgressEvent };
 
 type UpdateProgressCallback = (event: UpdateProgressEvent) => void;
 
@@ -100,41 +99,8 @@ interface OAuthRedirectResult {
 }
 
 // ─── Internal constants ──────────────────────────────────────────────────────
-
-/**
- * How long we tolerate `iceConnectionState === 'disconnected'` before
- * surfacing it as an error. The spec defines this state as transient
- * (browsers keep STUN keep-alives running and usually heal in 1-2 s
- * on WiFi blips, AP roams, brief 4G dropouts). Consumers watching
- * `iceStateChange` directly should outlive this window before
- * showing any fatal UI.
- */
-const ICE_DISCONNECT_GRACE_MS = 3000;
-
-/**
- * Grace before treating `iceConnectionState === 'failed'` as terminal.
- * The spec says `failed` IS terminal, but we've observed real
- * `failed → connected` flips on rapid AP roams and iOS BT route
- * changes — 1 s of debounce absorbs those without noticeably
- * delaying a real failure.
- */
-const ICE_FAILED_GRACE_MS = 1000;
-
-/**
- * Ceiling on how long we'll keep `_armIceGraceOnVisibility` waiting
- * for the tab to come back. The daemon's `webrtcsink` runs a STUN
- * consent-freshness check (RFC 7675, ~30 s default) and unilaterally
- * tears its side of the session down past that window, releasing the
- * producer slot on central. If the user backgrounded the tab for
- * longer than this, running another 3 s foreground grace is a lie —
- * the underlying transport is gone, nothing can recover. Give up
- * straight away so the host shows the real "session expired" UX
- * instead of a fake "Reconnecting…" badge that's never going to
- * heal. 60 s gives a 2× margin over the daemon-side timeout — long
- * enough to absorb a "phone in pocket for 45 s" case, short enough
- * to be honest with the user.
- */
-const MAX_VISIBILITY_DEFER_MS = 60_000;
+// Resilience tunables (ICE grace windows, re-dial backoff, DC-silence
+// watchdog thresholds) live in `session-supervisor.ts`.
 
 /**
  * How long a pushed pose frame keeps the periodic `get_state` poll on hold -
@@ -153,19 +119,14 @@ const MAX_VISIBILITY_DEFER_MS = 60_000;
 const POSE_STREAM_FRESH_MS = 750;
 
 /**
- * Fail-open ceiling for a single `_slotRoundtrip` request/response.
- * Every slot command has a strict "one reply per request" contract, so
- * a missing reply means the daemon either never got it or - crucially -
- * predates that command entirely: an older daemon silently drops an
- * unknown `type` and sends nothing back, which would otherwise leave the
- * caller's promise pending forever (e.g. a newer SDK calling a command a
- * 1.8.x daemon doesn't implement). Resolving `null` on timeout maps
- * cleanly onto the "unsupported / failed" value every slot caller already
- * handles. 4 s is comfortably above a WebRTC data-channel round trip on a
- * congested phone link while still failing fast enough that a gated UI
- * doesn't feel hung.
+ * Upper bound on how long `ensureAwake()` waits for the wake trajectory to
+ * complete. The emote itself takes ~2-3 s on hardware; the extra headroom
+ * covers a cold trajectory player. Deliberately shorter than `wakeUp()`'s
+ * own 8 s default: `ensureAwake()` gates app boot, and a daemon that hasn't
+ * confirmed within 5 s isn't going to - better to let the app in degraded
+ * than trap it on the splash.
  */
-const SLOT_ROUNDTRIP_TIMEOUT_MS = 4000;
+const WAKE_TRAJECTORY_BUDGET_MS = 5000;
 
 export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
@@ -221,38 +182,19 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _latencyMonitorId: ReturnType<typeof setInterval> | null = null;
     private _stateRefreshInterval: ReturnType<typeof setInterval> | null = null;
 
-    // ─── Single-slot promise resolvers ───────────────────────────────────
-    private _versionResolve: ((v: string | null) => void) | null = null;
-    private _hardwareIdResolve: ((v: string | null) => void) | null = null;
-    private _volumeResolve: ((v: number | null) => void) | null = null;
-    private _micVolumeResolve: ((v: number | null) => void) | null = null;
-    private _firstWakeUpResolve: ((v: boolean | null) => void) | null = null;
-    private _trackedFaceResolve: ((v: FaceTarget | null) => void) | null = null;
-    private _robotNameResolve: ((v: string | null) => void) | null = null;
-    private _deleteHfTokenResolve: ((v: boolean | null) => void) | null = null;
-    // applyAudioConfig() / readAudioParameter() share the same single-slot
-    // pattern as the volume helpers. Separate slots so the two can be
-    // in-flight concurrently without collision.
-    private _applyAudioConfigResolve: ((v: boolean | null) => void) | null = null;
-    private _readAudioParameterResolve: ((v: number[] | null) => void) | null = null;
+    // ─── Pending replies (reply slots / JSON-RPC / motion / broadcast) ───
+    // All request/response waiters on the data channel live in one
+    // ledger so every teardown path settles them in a single call.
+    private readonly _pending = new PendingReplies();
 
     // ─── Log subscribers ─────────────────────────────────────────────────
     private readonly _logSubscribers: Set<LogSubscriber> = new Set();
     private readonly _updateProgressSubscribers: Set<UpdateProgressCallback> = new Set();
 
-    // ─── JSON-RPC app control (over the same DataChannel) ────────────────
-    // rpcCall() sends {jsonrpc,id,method,params} and awaits the matching
-    // response; onNotification() subscribes to one-way events (no id) the
-    // robot/app pushes (conversation.phase/turn/transcript, ...).
-    private _rpcCounter = 0;
-    private readonly _pendingRpc = new Map<
-        string,
-        { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }
-    >();
+    // ─── JSON-RPC notification listeners (one-way events, no id) ─────────
+    // onNotification() subscribes to events the robot/app pushes
+    // (conversation.phase/turn/transcript, ...).
     private readonly _rpcListeners = new Map<string, Set<(params: Record<string, unknown>) => void>>();
-
-    // ─── Broadcast waiters (playMove / playUploadedAudio) ────────────────
-    private _broadcastWaiters: BroadcastWaiter[] = [];
 
     // ─── Active upload ids for no-arg cancels ────────────────────────────
     private _activeMoveUploadId: string | null = null;
@@ -264,25 +206,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _iceConnected = false;
     private _dcOpen = false;
 
-    // ─── Resilience: ICE-blip debounce + network awareness ──────────────
-    // Backs `_scheduleIceGrace` / `_armIceGraceOnVisibility` and the
-    // `networkOnline` / `networkOffline` / `networkChange` forwarders.
-    // All three handler slots are scoped to the lifetime of a live
-    // session (installed in `startSession`, cleared in
-    // `stopSession` / `disconnect` / `_handleEndSession` /
-    // `_failSessionRejected`).
-    private _iceGraceTimer: ReturnType<typeof setTimeout> | null = null;
-    private _iceGraceReason: 'disconnected' | 'failed' | null = null;
-    private _pendingVisibilityHandler: (() => void) | null = null;
-    private _onlineHandler: (() => void) | null = null;
-    private _offlineHandler: (() => void) | null = null;
-    private _connectionChangeHandler: (() => void) | null = null;
-
-    // ─── Motion completion plumbing (wake_up / goto_sleep) ───────────────
-    private readonly _pendingMotionCompletions: Record<'wake_up' | 'goto_sleep', PendingMotion[]> = {
-        wake_up: [],
-        goto_sleep: [],
-    };
+    // ─── Resilience ──────────────────────────────────────────────────────
+    // ICE-blip debounce, network awareness, automatic session re-dial and
+    // the data-channel silence watchdog all live in the supervisor; the
+    // class forwards pc/browser events to it and implements its deps as
+    // closures over the private state below (see the constructor).
+    private readonly _supervisor: SessionSupervisor;
 
     // ─── Video element ───────────────────────────────────────────────────
     private _videoElement: HTMLVideoElement | null = null;
@@ -300,6 +229,30 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._autoStartFromUrl = options.autoStartFromUrl === true;
         this._autoStartAttempted = false;
         this._preselectedRobotId = readPreselectedRobotIdFromUrl();
+        // Arrow closures so every dep call reads the CURRENT class state.
+        this._supervisor = new SessionSupervisor({
+            iceState: () => this._pc?.iceConnectionState ?? null,
+            hasPc: () => !!this._pc,
+            isStreaming: () => this._state === 'streaming',
+            isMidSetup: () => !!(this._sessionResolve || this._sessionReject),
+            isSignalingDown: () => this._state === 'disconnected',
+            selectedRobotId: () => this._selectedRobotId,
+            rejectPendingSession: (err) => {
+                if (!this._sessionReject) return false;
+                const reject = this._sessionReject;
+                this._sessionResolve = null;
+                this._sessionReject = null;
+                reject(err);
+                return true;
+            },
+            reconnectSignaling: () => this.connect(),
+            // The private dial skips the public startSession()'s
+            // cancelRedial, so the loop's own attempts don't cancel it.
+            dial: (robotId) => this._startSessionInternal(robotId),
+            teardownForRedial: () => this._teardownForRedial(),
+            nudgeState: () => { this.requestState(); },
+            emit: (name, detail) => this._emit(name, detail),
+        }, { autoReconnect: options.autoReconnect !== false });
     }
 
     // ─── Read-only properties ────────────────────────────────────────────
@@ -314,6 +267,26 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     get audioMuted(): boolean { return this._audioMuted; }
     get preselectedRobotId(): string | null { return this._preselectedRobotId; }
     get isEmbedded(): boolean { return this._preselectedRobotId !== null; }
+    /**
+     * Live RTCPeerConnection, or `null` between sessions. Read-only escape
+     * hatch for stats sampling (`getStats()`); mutating it is unsupported.
+     * Auto-reconnect re-dials REPLACE this object, so re-read it on every
+     * use — never capture it across ticks.
+     */
+    get peerConnection(): RTCPeerConnection | null { return this._pc; }
+
+    /**
+     * Build version of this SDK (npm package `version`), injected from
+     * package.json at build time. This is the JS SDK's OWN version and is
+     * distinct from `getVersion()`, which asks the DAEMON its version over
+     * the data channel. `0.0.0-managed-by-ci` means an unreleased/branch
+     * build (npm releases carry a real semver).
+     */
+    get sdkVersion(): string { return SDK_VERSION; }
+
+    /** Same value as the instance `sdkVersion`, reachable without an
+     *  instance: `ReachyMini.version`. */
+    static get version(): string { return SDK_VERSION; }
 
     /**
      * Internal: try to honour the `autoStartFromUrl` constructor
@@ -333,7 +306,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         setTimeout(() => {
             if (this._state !== 'connected') return;
             this.startSession(peerId).catch((err) => {
-                console.warn('[reachy-mini] autoStartFromUrl: startSession rejected:', err);
+                log.warn('autoStartFromUrl: startSession rejected:', err);
             });
         }, 0);
     }
@@ -344,48 +317,66 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         try {
             consumeFragmentCredentials();
 
+            // A failed silent login (`login({ prompt: 'none' })`) returns as
+            // `?error=login_required` / `consent_required` query params.
+            // Strip them so they don't linger in the URL; the fall-through
+            // to the cached-token check below then reports "not signed in".
+            const silentError = consumeOAuthErrorParams();
+            if (silentError) {
+                log.info('silent sign-in declined:', silentError);
+            }
+
             const result = (await oauthHandleRedirectIfPresent()) as OAuthRedirectResult | false | null;
             if (result) {
                 this._username = result.userInfo.preferred_username || result.userInfo.name || null;
                 this._token = result.accessToken;
                 this._tokenExpires = result.accessTokenExpiresAt;
-                sessionStorage.setItem('hf_token', this._token);
-                sessionStorage.setItem('hf_username', this._username ?? '');
-                sessionStorage.setItem(
-                    'hf_token_expires',
-                    typeof this._tokenExpires === 'string'
-                        ? this._tokenExpires
-                        : this._tokenExpires.toISOString(),
-                );
+                writeStoredToken({
+                    token: this._token,
+                    username: this._username ?? '',
+                    expires:
+                        typeof this._tokenExpires === 'string'
+                            ? this._tokenExpires
+                            : this._tokenExpires.toISOString(),
+                });
                 return true;
             }
 
-            const t = sessionStorage.getItem('hf_token');
-            const u = sessionStorage.getItem('hf_username');
-            const e = sessionStorage.getItem('hf_token_expires');
-            if (t && u && e && new Date(e) > new Date()) {
-                this._token = t;
-                this._username = u;
-                this._tokenExpires = e;
+            // Cached-token path. `readUsableToken` enforces both the OAuth
+            // expiry and a sliding idle window (see token-store.ts).
+            const stored = readUsableToken();
+            if (stored && stored.username) {
+                this._token = stored.token;
+                this._username = stored.username;
+                this._tokenExpires = stored.expires;
                 return true;
             }
             return false;
         } catch (e) {
-            console.error('Auth error:', e);
+            log.error('authenticate failed:', e);
             return false;
         }
     }
 
-    async login(): Promise<void> {
+    async login(options?: LoginOptions): Promise<void> {
         const opts: { clientId?: string } = {};
         if (this._clientId) opts.clientId = this._clientId;
-        window.location.href = await oauthLoginUrl(opts);
+        let url = await oauthLoginUrl(opts);
+        // OIDC prompt param. `oauthLoginUrl` doesn't expose it, but the HF
+        // authorize endpoint honours it (verified empirically): with
+        // `prompt=none` an already-authorized user comes straight back with
+        // a code and no screen, anyone else comes back with `?error=...`
+        // instead of landing on the HF login page.
+        if (options?.prompt) {
+            const u = new URL(url);
+            u.searchParams.set('prompt', options.prompt);
+            url = u.toString();
+        }
+        window.location.href = url;
     }
 
     logout(): void {
-        sessionStorage.removeItem('hf_token');
-        sessionStorage.removeItem('hf_username');
-        sessionStorage.removeItem('hf_token_expires');
+        clearStoredToken();
         this._username = null;
         this._tokenExpires = null;
         this.disconnect();
@@ -536,7 +527,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
             if (wakeOnConnect && typeof this.ensureAwake === 'function') {
                 try { await this.ensureAwake(); }
-                catch (e) { console.warn('[reachy-mini] autoConnect: ensureAwake failed:', e); }
+                catch (e) { log.warn('autoConnect: ensureAwake failed:', e); }
             }
 
             return { robotId, robotName, isEmbedded: this.isEmbedded };
@@ -580,7 +571,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 (a, b) => (a.lastSeenAgeSeconds ?? Infinity) - (b.lastSeenAgeSeconds ?? Infinity),
             );
         } catch (e) {
-            console.warn('[reachy-mini] /api/robot-status unavailable, using SSE list:', e);
+            log.warn('/api/robot-status unavailable, using SSE list:', e);
             return (this._robots || []).map((r) => ({
                 id: r.id,
                 name: r.meta?.name ?? null,
@@ -611,6 +602,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     async startSession(robotId: string): Promise<void> {
+        // An explicit dial from the app supersedes any in-flight
+        // auto-reconnect (possibly towards a different robot). The
+        // redial loop dials through `_startSessionInternal` directly,
+        // so its own attempts never trip this.
+        this._supervisor.cancelRedial();
+        return this._startSessionInternal(robotId);
+    }
+
+    private async _startSessionInternal(robotId: string): Promise<void> {
         if (this._state !== 'connected') throw new Error('Not connected');
         this._selectedRobotId = robotId;
         this._iceConnected = false;
@@ -650,7 +650,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._micStream = stream;
             this._micMuted = true;
         } catch (e) {
-            console.warn('Audio sender placeholder setup failed:', e);
+            log.warn('audio sender placeholder setup failed:', e);
             this._micStream = null;
         }
 
@@ -660,7 +660,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
         // Scope `networkOnline` / `networkOffline` / `networkChange`
         // event forwarding to the lifetime of this session.
-        this._installNetworkListeners();
+        this._supervisor.installNetworkListeners();
 
         return new Promise<void>((resolve, reject) => {
             this._sessionResolve = resolve;
@@ -706,29 +706,17 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
                 if (s === 'connected' || s === 'completed') {
                     // Healed — cancel any pending grace from a previous blip.
-                    this._clearIceGrace();
+                    this._supervisor.onIceHealed();
                     this._iceConnected = true;
                     this._checkSessionReady();
                     return;
                 }
                 if (s === 'disconnected') {
-                    // TRANSIENT per spec — debounce before escalating.
-                    // If the tab is hidden, JS timers are throttled and
-                    // would fire unpredictably late, so defer the grace
-                    // window to the next foreground frame.
-                    if (typeof document !== 'undefined' && document.hidden) {
-                        this._armIceGraceOnVisibility();
-                    } else {
-                        this._scheduleIceGrace(ICE_DISCONNECT_GRACE_MS, 'disconnected');
-                    }
+                    this._supervisor.onIceDisconnected();
                     return;
                 }
                 if (s === 'failed') {
-                    // Terminal per spec, but in practice we've seen
-                    // `failed → connected` on rapid AP roams / BT route
-                    // changes on iOS. Give the ICE agent a short window
-                    // to surprise us before rejecting the session.
-                    this._scheduleIceGrace(ICE_FAILED_GRACE_MS, 'failed');
+                    this._supervisor.onIceFailed();
                     return;
                 }
             };
@@ -779,6 +767,45 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         });
     }
 
+    /**
+     * Common transport teardown shared by every session-ending path
+     * (stopSession, disconnect, the auto-redial, a session rejection):
+     * settle the pending-reply ledger and the startSession() resolvers
+     * with `settleErr`, stand the resilience plumbing down, stop the
+     * session-scoped timers, release the mic placeholder and close the
+     * pc/dc. Returns the session id (already cleared on the instance)
+     * so each caller decides whether and how to send `endSession`.
+     * What else differs — events, subscriber wipes, where `_state`
+     * lands — stays with the callers.
+     */
+    private _closeTransport(settleErr: Error): string | null {
+        this._pending.settleAll(settleErr);
+        if (this._sessionReject) {
+            const reject = this._sessionReject;
+            this._sessionResolve = null;
+            this._sessionReject = null;
+            reject(settleErr);
+        }
+        this._sessionResolve = null;
+        // Resilience teardown BEFORE closing `_pc` so a queued grace
+        // callback can't dereference a dead handle.
+        this._supervisor.clearIceGrace();
+        this._supervisor.uninstallNetworkListeners();
+        this._supervisor.stopDcWatchdog();
+        if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
+        if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
+        if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
+        this._micMuted = true;
+        this._micSupported = false;
+        if (this._pc) { this._pc.close(); this._pc = null; }
+        if (this._dc) { this._dc.close(); this._dc = null; }
+        this._iceConnected = false;
+        this._dcOpen = false;
+        const sessionId = this._sessionId;
+        this._sessionId = null;
+        return sessionId;
+    }
+
     private _failSessionRejected(msg: SignalingMessage): void {
         const err = new Error(
             msg.reason === 'robot_busy'
@@ -788,69 +815,29 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         err.reason = msg.reason ?? null;
         err.activeApp = msg.activeApp ?? null;
 
-        // Resilience teardown BEFORE closing `_pc` so a queued grace
-        // callback can't dereference a dead handle.
-        this._clearIceGrace();
-        this._uninstallNetworkListeners();
-        if (this._pc) { this._pc.close(); this._pc = null; }
-        if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
-        this._iceConnected = false;
-        this._dcOpen = false;
-        this._micMuted = true;
-        this._micSupported = false;
+        // No endSession: the robot side never granted this session.
+        this._closeTransport(err);
 
-        this._emit('sessionRejected', { reason: msg.reason, activeApp: msg.activeApp });
-
-        if (this._sessionReject) {
-            const reject = this._sessionReject;
-            this._sessionResolve = null;
-            this._sessionReject = null;
-            reject(err);
+        // During an auto-reconnect the rejection is expected noise (the
+        // robot side may still hold the dead session for a few seconds) —
+        // the loop retries, the app only sees `sessionReconnecting`.
+        if (!this._supervisor.redialing) {
+            this._emit('sessionRejected', { reason: msg.reason, activeApp: msg.activeApp });
         }
     }
 
     async stopSession(): Promise<void> {
-        if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
-        if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
-        if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
-        if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
-        if (this._firstWakeUpResolve) { this._firstWakeUpResolve(null); this._firstWakeUpResolve = null; }
-        if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
-        if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
-        if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
-        if (this._robotNameResolve) { this._robotNameResolve(null); this._robotNameResolve = null; }
-        if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
+        // A deliberate stop always wins over a pending auto-reconnect:
+        // the in-flight dial attempt (if any) is rejected inside
+        // `_closeTransport`, and the loop exits on the cleared flag.
+        this._supervisor.cancelRedial();
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
-        this._rejectPendingMotionCompletions(new Error('Session stopped'));
-        this._rejectPendingRpc(new Error('Session stopped'));
-        // Tear down resilience plumbing BEFORE closing `_pc` so a
-        // queued grace callback can't dereference a dead handle.
-        this._clearIceGrace();
-        this._uninstallNetworkListeners();
-        if (this._sessionReject) {
-            this._sessionReject(new Error('Session stopped'));
-            this._sessionResolve = null;
-            this._sessionReject = null;
+
+        const sessionId = this._closeTransport(new Error('Session stopped'));
+        if (sessionId) {
+            await this._sendToServer({ type: 'endSession', sessionId });
         }
-
-        if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
-        if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
-
-        if (this._sessionId) {
-            await this._sendToServer({ type: 'endSession', sessionId: this._sessionId });
-        }
-
-        if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
-        this._micMuted = true;
-        this._micSupported = false;
-
-        if (this._pc) { this._pc.close(); this._pc = null; }
-        if (this._dc) { this._dc.close(); this._dc = null; }
-
-        this._sessionId = null;
-        this._iceConnected = false;
-        this._dcOpen = false;
 
         const wasStreaming = this._state === 'streaming';
         if (wasStreaming) {
@@ -860,245 +847,64 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     disconnect(): void {
+        this._supervisor.cancelRedial();
         if (this._sseAbortController) { this._sseAbortController.abort(); this._sseAbortController = null; }
-
-        if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
-        if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
-        if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
-        if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
-        if (this._firstWakeUpResolve) { this._firstWakeUpResolve(null); this._firstWakeUpResolve = null; }
-        if (this._trackedFaceResolve) { this._trackedFaceResolve(null); this._trackedFaceResolve = null; }
-        if (this._applyAudioConfigResolve) { this._applyAudioConfigResolve(false); this._applyAudioConfigResolve = null; }
-        if (this._readAudioParameterResolve) { this._readAudioParameterResolve(null); this._readAudioParameterResolve = null; }
-        if (this._robotNameResolve) { this._robotNameResolve(null); this._robotNameResolve = null; }
-        if (this._deleteHfTokenResolve) { this._deleteHfTokenResolve(null); this._deleteHfTokenResolve = null; }
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
-        this._rejectPendingMotionCompletions(new Error('Disconnected'));
-        // Mirrors the resilience teardown in `stopSession()`.
-        this._clearIceGrace();
-        this._uninstallNetworkListeners();
-        if (this._sessionReject) {
-            this._sessionReject(new Error('Disconnected'));
-            this._sessionResolve = null;
-            this._sessionReject = null;
+
+        const sessionId = this._closeTransport(new Error('Disconnected'));
+        if (sessionId && this._token) {
+            void this._sendToServer({ type: 'endSession', sessionId });
         }
 
-        if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
-        if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
-
-        if (this._sessionId && this._token) {
-            this._sendToServer({ type: 'endSession', sessionId: this._sessionId });
-        }
-
-        if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
-        if (this._pc) { this._pc.close(); this._pc = null; }
-        if (this._dc) { this._dc.close(); this._dc = null; }
-
-        this._sessionId = null;
-        this._micMuted = true;
-        this._micSupported = false;
-        this._iceConnected = false;
-        this._dcOpen = false;
         this._robots = [];
         this._state = 'disconnected';
         this._emit('disconnected', { reason: 'user' });
     }
 
-    // ─── Resilience: ICE-blip debounce + network awareness ───────────────
-    //
-    // Both halves below are intentionally generic (they don't know about
-    // motion, audio, or the FSM): they just smooth out browser-level
-    // events so the consumer's own state machine doesn't get torn down
-    // by routine WiFi/4G/screen-off noise.
+    // ─── Resilience: supervisor delegation ───────────────────────────────
+    // The policy lives in `session-supervisor.ts`; only the transport
+    // teardown below stays here because it manipulates the class's own
+    // private state.
 
     /**
-     * Cancel any pending ICE grace timer and visibility handler. Called
-     * on a healed `connected`/`completed` transition AND from the
-     * lifecycle teardown paths so a callback can't fire after `_pc`
-     * is closed.
-     */
-    private _clearIceGrace(): void {
-        if (this._iceGraceTimer !== null) {
-            clearTimeout(this._iceGraceTimer);
-            this._iceGraceTimer = null;
-        }
-        this._iceGraceReason = null;
-        if (this._pendingVisibilityHandler && typeof document !== 'undefined') {
-            document.removeEventListener('visibilitychange', this._pendingVisibilityHandler);
-        }
-        this._pendingVisibilityHandler = null;
-    }
-
-    /**
-     * Start a grace window. After `ms`, re-check the live ICE state:
-     *   - If we healed back to `connected`/`completed`, the timer was
-     *     already cancelled in `oniceconnectionstatechange`, so we
-     *     never get here.
-     *   - If we're still in the originally-observed bad state (or
-     *     worse), surface the error and reject any pending session
-     *     promise. The original code path is preserved verbatim so
-     *     downstream consumers see the same `error` payload shape.
-     */
-    private _scheduleIceGrace(ms: number, reason: 'disconnected' | 'failed'): void {
-        // Coalesce: if a grace is already pending and the reason hasn't
-        // changed, keep the original timer so a flurry of identical
-        // transitions doesn't reset the clock. If the reason changed
-        // (typically `disconnected` → `failed`, but also the reverse on
-        // some Android WebViews), replace the timer with the new
-        // (reason, ms) pair — the latest signal wins.
-        if (this._iceGraceTimer !== null) {
-            if (this._iceGraceReason === reason) return;
-            clearTimeout(this._iceGraceTimer);
-        }
-        this._iceGraceReason = reason;
-        this._iceGraceTimer = setTimeout(() => {
-            this._iceGraceTimer = null;
-            const r = this._iceGraceReason;
-            this._iceGraceReason = null;
-            const s = this._pc?.iceConnectionState;
-            if (s === 'connected' || s === 'completed') return; // healed
-            if (r === 'disconnected' && s === 'disconnected') {
-                this._emit('error', {
-                    source: 'webrtc',
-                    error: new Error(`ICE stuck in 'disconnected' for > ${ms}ms`),
-                });
-                return;
-            }
-            if (r === 'failed' || s === 'failed') {
-                const err = new Error('ICE connection failed');
-                if (this._sessionReject) {
-                    this._sessionReject(err);
-                    this._sessionResolve = null;
-                    this._sessionReject = null;
-                }
-                this._emit('error', { source: 'webrtc', error: err });
-            }
-        }, ms);
-    }
-
-    /**
-     * `disconnected` while the tab is hidden. JS timers are throttled
-     * in background tabs (Chrome clamps to ~1 Hz, Safari can pause
-     * altogether), so a foreground grace timer would either miss the
-     * window or fire long after the connection healed. Wait for the
-     * tab to come back, then re-evaluate.
-     */
-    private _armIceGraceOnVisibility(): void {
-        if (this._pendingVisibilityHandler) return;
-        const deferredAt = Date.now();
-        const handler = (): void => {
-            if (typeof document !== 'undefined' && document.hidden) return;
-            document.removeEventListener('visibilitychange', handler);
-            this._pendingVisibilityHandler = null;
-            if (!this._pc) return;
-            const s = this._pc.iceConnectionState;
-            if (s === 'connected' || s === 'completed') return; // healed in bg
-
-            // Ceiling: if the user backgrounded past the daemon's
-            // ICE-consent freshness window the session is gone from
-            // the daemon's side regardless of what `_pc` reports
-            // locally. Running another foreground grace would tell
-            // the user "Reconnecting…" for a recovery that can never
-            // happen. Escalate immediately so the host renders the
-            // real "session expired" UX. See MAX_VISIBILITY_DEFER_MS.
-            if (Date.now() - deferredAt > MAX_VISIBILITY_DEFER_MS) {
-                const err = new Error(
-                    'Session expired while tab was backgrounded',
-                );
-                if (this._sessionReject) {
-                    this._sessionReject(err);
-                    this._sessionResolve = null;
-                    this._sessionReject = null;
-                }
-                this._emit('error', { source: 'webrtc', error: err });
-                return;
-            }
-
-            if (s === 'failed') {
-                this._scheduleIceGrace(ICE_FAILED_GRACE_MS, 'failed');
-                return;
-            }
-            // Still disconnected when we came back — give it a normal
-            // foreground grace window now that timers fire reliably.
-            this._scheduleIceGrace(ICE_DISCONNECT_GRACE_MS, 'disconnected');
-        };
-        document.addEventListener('visibilitychange', handler);
-        this._pendingVisibilityHandler = handler;
-    }
-
-    /**
-     * Install browser-level network listeners and forward them as
-     * public `networkOnline` / `networkOffline` / `networkChange`
-     * events on this instance. Idempotent: called from
-     * `startSession()`, removed by `_uninstallNetworkListeners` on
-     * teardown. Reachable only when there's a live `window`
-     * (defensive guard for SSR / test environments).
+     * Enable/disable the automatic session re-dial at runtime.
+     * Disabling also aborts any re-dial already in flight. Used by
+     * flows that EXPECT the transport to die — e.g. the daemon
+     * self-update, whose `systemctl restart` teardown must surface as
+     * `sessionStopped` immediately (it's the "install done, rebooting"
+     * signal), not get absorbed by ~22 s of doomed reconnect attempts
+     * against a robot that is rebooting anyway.
      *
-     * `online` / `offline` are semantically about CONNECTIVITY:
-     * "does the OS think we can reach the internet". They flip
-     * symmetrically.
-     *
-     * `connection.change` (NetworkInformation API, Chrome / Android
-     * WebView only) is semantically about the TRANSPORT: it fires
-     * on Wi-Fi → 4G swaps, AP roams, etc. without necessarily going
-     * through `offline`. We forward it as its own `networkChange`
-     * event rather than aliasing it onto `networkOnline`, so
-     * consumers don't have to guess whether they're seeing a real
-     * connectivity recovery or a silent transport swap.
+     * Sharp edge: cancelling an in-flight re-dial leaves the session
+     * torn down without emitting `sessionStopped` or `error` — the
+     * caller owns the terminal event (see `ReachyMiniInstance`).
      */
-    private _installNetworkListeners(): void {
-        if (this._onlineHandler || typeof window === 'undefined') return;
-        const onOnline = (): void => this._emit('networkOnline', {});
-        const onOffline = (): void => this._emit('networkOffline', {});
-        window.addEventListener('online', onOnline);
-        window.addEventListener('offline', onOffline);
-        this._onlineHandler = onOnline;
-        this._offlineHandler = onOffline;
-
-        const conn = (navigator as Navigator & {
-            connection?: {
-                effectiveType?: string;
-                downlink?: number;
-                rtt?: number;
-                saveData?: boolean;
-                addEventListener?: (type: string, listener: () => void) => void;
-                removeEventListener?: (type: string, listener: () => void) => void;
-            };
-        }).connection;
-        if (conn && typeof conn.addEventListener === 'function') {
-            const onChange = (): void => this._emit('networkChange', {
-                effectiveType: conn.effectiveType,
-                downlink: conn.downlink,
-                rtt: conn.rtt,
-                saveData: conn.saveData,
-            });
-            conn.addEventListener('change', onChange);
-            this._connectionChangeHandler = onChange;
-        }
+    setAutoReconnect(enabled: boolean): void {
+        this._supervisor.setAutoReconnect(enabled);
     }
 
-    /** Counterpart to `_installNetworkListeners`. */
-    private _uninstallNetworkListeners(): void {
-        if (typeof window !== 'undefined') {
-            if (this._onlineHandler) {
-                window.removeEventListener('online', this._onlineHandler);
-            }
-            if (this._offlineHandler) {
-                window.removeEventListener('offline', this._offlineHandler);
-            }
+    /**
+     * Transport-only teardown: everything stopSession() does EXCEPT the
+     * user-facing state flip (`sessionStopped` is not emitted, `_state`
+     * falls back to 'connected' so the re-dial can start a session).
+     * Pending promises that ride the dead channel are settled just like
+     * stopSession() settles them — callers see the same failure shape a
+     * manual stop would produce; that includes a timed-out dial
+     * attempt's own startSession() promise (its resolvers were left
+     * armed, and a late signaling reply could otherwise settle them
+     * against a closed pc).
+     */
+    private _teardownForRedial(): void {
+        const sessionId = this._closeTransport(new Error('Session reconnecting'));
+        // Free the robot-side slot: the relay refuses a second session
+        // while it still tracks the dead one, and only endSession (or its
+        // own consent-freshness timeout, ~30 s) clears it. Fire and
+        // forget — _sendToServer never throws.
+        if (sessionId && this._token) {
+            void this._sendToServer({ type: 'endSession', sessionId });
         }
-        const conn = (navigator as Navigator & {
-            connection?: {
-                removeEventListener?: (type: string, listener: () => void) => void;
-            };
-        }).connection;
-        if (conn && this._connectionChangeHandler && typeof conn.removeEventListener === 'function') {
-            conn.removeEventListener('change', this._connectionChangeHandler);
-        }
-        this._onlineHandler = null;
-        this._offlineHandler = null;
-        this._connectionChangeHandler = null;
+        if (this._state === 'streaming') this._state = 'connected';
     }
 
     // ─── Commands ────────────────────────────────────────────────────────
@@ -1260,11 +1066,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     getTrackedFace(): Promise<FaceTarget | null> {
-        return this._slotRoundtrip(
-            () => this._trackedFaceResolve,
-            (next) => { this._trackedFaceResolve = next; },
-            { type: 'get_tracked_face' },
-        );
+        return this._slotRoundtrip('tracked_face', { type: 'get_tracked_face' });
     }
 
     /**
@@ -1282,7 +1084,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * Returns `false` if the data channel isn't open.
      */
     startDaemonUpdate(
-        { preRelease = false, onProgress }: { preRelease?: boolean; onProgress?: UpdateProgressCallback } = {},
+        { preRelease = false, onProgress }: StartDaemonUpdateOptions = {},
     ): boolean {
         if (onProgress) this._updateProgressSubscribers.add(onProgress);
         return this._sendCommand({ type: 'start_update', pre_release: preRelease });
@@ -1306,36 +1108,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     private _sendCommandAwaitCompletion(
-        command: 'wake_up' | 'goto_sleep',
+        command: MotionCommand,
         timeoutMs: number,
     ): Promise<void> {
         if (!this._sendCommand({ type: command })) {
             return Promise.reject(new Error(`${command}: data channel not open`));
         }
-        return new Promise<void>((resolve, reject) => {
-            const entry: PendingMotion = {
-                resolve,
-                reject,
-                timer: setTimeout(() => {
-                    const queue = this._pendingMotionCompletions[command];
-                    const idx = queue.indexOf(entry);
-                    if (idx !== -1) queue.splice(idx, 1);
-                    reject(new Error(`${command} timed out after ${timeoutMs}ms`));
-                }, timeoutMs),
-            };
-            this._pendingMotionCompletions[command].push(entry);
-        });
-    }
-
-    private _rejectPendingMotionCompletions(error: Error): void {
-        for (const command of Object.keys(this._pendingMotionCompletions) as Array<'wake_up' | 'goto_sleep'>) {
-            const queue = this._pendingMotionCompletions[command];
-            while (queue.length) {
-                const entry = queue.shift()!;
-                clearTimeout(entry.timer);
-                entry.reject(error);
-            }
-        }
+        return this._pending.awaitMotion(command, timeoutMs);
     }
 
     isAwake(): boolean {
@@ -1356,69 +1135,79 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 this.requestState();
             });
         }
-        if (this.isAwake()) return true;
-        this.wakeUp().catch(() => { /* swallow: caller may have torn down */ });
+        // Gravity compensation counts as awake - the robot is standing - but
+        // it runs under current control, where the daemon ignores position
+        // targets outright. An app inheriting that state from its predecessor
+        // (a fast handoff cancels the daemon's idle reset, so the mode
+        // survives) would see every goto silently do nothing. Flip back to
+        // position control without replaying the emote: the robot is already
+        // up, and the daemon pins targets to the measured pose on the way in,
+        // so nothing snaps.
+        if (this._robotState?.motor_mode === 'gravity_compensation') {
+            log.info('ensureAwake: gravity compensation inherited, flipping to enabled (no emote)');
+            this.setMotorMode('enabled');
+            // Refresh the cache so a caller reading isAwake() right after us
+            // doesn't see the mode we just left.
+            this.requestState();
+            return true;
+        }
+        if (this.isAwake()) {
+            log.info('ensureAwake: already awake, nothing to do');
+            return true;
+        }
+        // Await the trajectory: callers treat resolution as "robot ready for
+        // position targets", and the emote keeps moving the head for ~2 s
+        // after the command is acked - an app that starts commanding poses
+        // under it fights it. Failures are swallowed: a torn-down session or
+        // a daemon that never acks must not take the whole boot down with it.
+        log.info(`ensureAwake: robot asleep (motor_mode=${this._robotState?.motor_mode ?? 'unknown'}), playing wake-up`);
+        const wakeStartedAt = Date.now();
+        try {
+            await this.wakeUp({ timeoutMs: WAKE_TRAJECTORY_BUDGET_MS });
+            log.info(`ensureAwake: wake-up trajectory done in ${Date.now() - wakeStartedAt}ms`);
+        } catch (e) {
+            /* timed out, or the session went away under us */
+            log.warn(`ensureAwake: wake-up not confirmed after ${Date.now() - wakeStartedAt}ms (continuing):`, e);
+        }
         return true;
     }
 
+    /**
+     * Query the daemon version. Resolves `null` when the daemon predates
+     * `get_version` (fail-open on the shared slot timeout) or the reply is
+     * superseded by session teardown.
+     */
     getVersion(): Promise<string | null> {
-        return new Promise<string | null>((resolve, reject) => {
-            if (!this._dc || this._dc.readyState !== 'open') {
-                reject(new Error('Data channel not open'));
-                return;
-            }
-            if (this._versionResolve) {
-                this._versionResolve(null);
-            }
-            this._versionResolve = resolve;
-            this._sendCommand({ type: 'get_version' });
-        });
+        return this._slotRoundtrip('version', { type: 'get_version' });
     }
 
     getHardwareId(): Promise<string | null> {
-        return new Promise<string | null>((resolve, reject) => {
-            if (!this._dc || this._dc.readyState !== 'open') {
-                reject(new Error('Data channel not open'));
-                return;
-            }
-            if (this._hardwareIdResolve) {
-                this._hardwareIdResolve(null);
-            }
-            this._hardwareIdResolve = resolve;
-            this._sendCommand({ type: 'get_hardware_id' });
-        });
+        return this._slotRoundtrip('hardware_id', { type: 'get_hardware_id' });
+    }
+
+    /**
+     * One-shot IMU reading (BMI088, wireless version only). Resolves `null`
+     * when the robot has no IMU (Lite, simulation) or the daemon predates
+     * the `get_imu` command (fail-open on the shared slot timeout).
+     */
+    getImu(): Promise<ImuData | null> {
+        return this._slotRoundtrip('imu', { type: 'get_imu' });
     }
 
     getVolume(): Promise<number | null> {
-        return this._slotRoundtrip(
-            () => this._volumeResolve,
-            (next) => { this._volumeResolve = next; },
-            { type: 'get_volume' },
-        );
+        return this._slotRoundtrip('volume', { type: 'get_volume' });
     }
 
     setVolume(volume: number): Promise<number | null> {
-        return this._slotRoundtrip(
-            () => this._volumeResolve,
-            (next) => { this._volumeResolve = next; },
-            { type: 'set_volume', volume: clampVolume(volume) },
-        );
+        return this._slotRoundtrip('volume', { type: 'set_volume', volume: clampVolume(volume) });
     }
 
     getMicrophoneVolume(): Promise<number | null> {
-        return this._slotRoundtrip(
-            () => this._micVolumeResolve,
-            (next) => { this._micVolumeResolve = next; },
-            { type: 'get_microphone_volume' },
-        );
+        return this._slotRoundtrip('mic_volume', { type: 'get_microphone_volume' });
     }
 
     setMicrophoneVolume(volume: number): Promise<number | null> {
-        return this._slotRoundtrip(
-            () => this._micVolumeResolve,
-            (next) => { this._micVolumeResolve = next; },
-            { type: 'set_microphone_volume', volume: clampVolume(volume) },
-        );
+        return this._slotRoundtrip('mic_volume', { type: 'set_microphone_volume', volume: clampVolume(volume) });
     }
 
     /**
@@ -1432,11 +1221,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         // Fail-open, so this never rejects: the wizard gate runs right after
         // connect, which is exactly when the channel may not be open yet.
         if (!this._dc || this._dc.readyState !== 'open') return Promise.resolve(null);
-        return this._slotRoundtrip(
-            () => this._firstWakeUpResolve,
-            (next) => { this._firstWakeUpResolve = next; },
-            { type: 'get_first_wake_up' },
-        );
+        return this._slotRoundtrip('first_wake_up', { type: 'get_first_wake_up' });
     }
 
     /**
@@ -1445,11 +1230,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      */
     setFirstWakeUp(isCompleted: boolean): Promise<boolean | null> {
         if (!this._dc || this._dc.readyState !== 'open') return Promise.resolve(null);
-        return this._slotRoundtrip(
-            () => this._firstWakeUpResolve,
-            (next) => { this._firstWakeUpResolve = next; },
-            { type: 'set_first_wake_up', is_completed: isCompleted },
-        );
+        return this._slotRoundtrip('first_wake_up', { type: 'set_first_wake_up', is_completed: isCompleted });
     }
 
     /**
@@ -1458,11 +1239,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * the `get_robot_name` command.
      */
     getRobotName(): Promise<string | null> {
-        return this._slotRoundtrip(
-            () => this._robotNameResolve,
-            (next) => { this._robotNameResolve = next; },
-            { type: 'get_robot_name' },
-        );
+        return this._slotRoundtrip('robot_name', { type: 'get_robot_name' });
     }
 
     /**
@@ -1473,11 +1250,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * on the next start.
      */
     setRobotName(name: string): Promise<string | null> {
-        return this._slotRoundtrip(
-            () => this._robotNameResolve,
-            (next) => { this._robotNameResolve = next; },
-            { type: 'set_robot_name', name },
-        );
+        return this._slotRoundtrip('robot_name', { type: 'set_robot_name', name });
     }
 
     /**
@@ -1497,86 +1270,79 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * ahead of the ack.
      */
     signOut(): Promise<boolean | null> {
-        return this._slotRoundtrip(
-            () => this._deleteHfTokenResolve,
-            (next) => { this._deleteHfTokenResolve = next; },
-            { type: 'delete_hf_token' },
-        );
+        return this._slotRoundtrip('delete_hf_token', { type: 'delete_hf_token' });
     }
 
     applyAudioConfig(
         config: AudioConfigEntry[],
         { verify = true }: ApplyAudioConfigOptions = {},
     ): Promise<boolean> {
-        return this._slotRoundtrip(
-            () => this._applyAudioConfigResolve,
-            (next) => { this._applyAudioConfigResolve = next; },
-            { type: 'apply_audio_config', config, verify },
-        ).then((v) => v === true);
+        return this._slotRoundtrip('apply_audio_config', { type: 'apply_audio_config', config, verify })
+            .then((v) => v === true);
     }
 
     readAudioParameter(name: string): Promise<number[] | null> {
-        return this._slotRoundtrip(
-            () => this._readAudioParameterResolve,
-            (next) => { this._readAudioParameterResolve = next; },
-            { type: 'read_audio_parameter', name },
-        );
+        return this._slotRoundtrip('read_audio_parameter', { type: 'read_audio_parameter', name });
     }
 
     /**
      * Internal: send a command and await the matching daemon response in a
-     * named single-resolver slot. Used by the volume helpers and the
-     * XVF3800 audio-config helpers — every one of them has a strict
-     * request/response shape where a single in-flight call per slot is
-     * sufficient. If a previous request on the same slot is still
-     * pending when a new one comes in, the older promise is resolved to
-     * `null` so its caller doesn't hang forever.
-     *
-     * Slot access is passed in as getter/setter closures rather than a
-     * key into `this`: that keeps the helper fully generic-checked (T is
-     * inferred from the slot's resolver type at each call site) with no
-     * indexed-property casts.
+     * named single-resolver slot (see `PendingReplies.slotRoundtrip`).
+     * Every caller has a strict request/response shape where a single
+     * in-flight call per slot is sufficient.
      */
-    private _slotRoundtrip<T>(
-        getSlot: () => ((v: T | null) => void) | null,
-        setSlot: (next: ((v: T | null) => void) | null) => void,
+    private _slotRoundtrip<K extends ReplySlotKey>(
+        slot: K,
         command: Record<string, unknown>,
-    ): Promise<T | null> {
-        return new Promise<T | null>((resolve, reject) => {
-            if (!this._dc || this._dc.readyState !== 'open') {
-                reject(new Error('Data channel not open'));
-                return;
-            }
-            const prev = getSlot();
-            if (prev) prev(null);
-            let timer: ReturnType<typeof setTimeout> | undefined;
-            // Single settle path shared by the daemon response, supersession
-            // by a newer call, and the fail-open timeout below. It clears the
-            // timer once and detaches itself from the slot only if it's still
-            // the current occupant, so a stale settle (timed-out or superseded)
-            // can't clear a newer call's slot registration. The message handler
-            // stores `settle` (not `resolve`), so every response route funnels
-            // through here.
-            // Note: slots are keyed by command type, not request id, so this
-            // does not prevent a genuinely late daemon reply from being routed
-            // to a newer same-command caller — that cross-talk is inherent to
-            // the single-flight slot design and unchanged here.
-            const settle = (v: T | null): void => {
-                if (timer !== undefined) {
-                    clearTimeout(timer);
-                    timer = undefined;
-                }
-                if (getSlot() === settle) setSlot(null);
-                resolve(v);
-            };
-            setSlot(settle);
-            timer = setTimeout(() => settle(null), SLOT_ROUNDTRIP_TIMEOUT_MS);
-            this._sendCommand(command);
-        });
+    ): Promise<ReplySlotValues[K] | null> {
+        if (!this._dc || this._dc.readyState !== 'open') {
+            return Promise.reject(new Error('Data channel not open'));
+        }
+        return this._pending.slotRoundtrip(slot, () => { this._sendCommand(command); });
     }
 
     sendRaw(data: unknown): boolean {
         return this._sendCommand(data);
+    }
+
+    /**
+     * Generic command round-trip for daemon commands the SDK has no typed
+     * wrapper for (yet). Escape hatch so an app can use a newer daemon
+     * feature without waiting for an SDK release: sends `command` and
+     * resolves with the first robot message whose `command` field equals
+     * the sent `type` - the daemon's reply convention - or with `null` on
+     * the fail-open timeout (daemon predates the command, or the command
+     * is fire-and-forget and never replies).
+     *
+     * Rejects when the data channel isn't open or the session tears down
+     * mid-flight, mirroring the typed wrappers.
+     *
+     * Replies the SDK already consumes internally (`get_imu`,
+     * `get_volume`, ...) are swallowed by their own handlers and never
+     * reach this matcher - use the typed wrappers for those. Pass `match`
+     * for replies that don't follow the `command` echo convention.
+     */
+    request(
+        command: { type: string } & Record<string, unknown>,
+        { timeoutMs = SLOT_ROUNDTRIP_TIMEOUT_MS, match }: RequestOptions = {},
+    ): Promise<Record<string, unknown> | null> {
+        // Send before registering the waiter (safe: replies arrive on a
+        // later task), so a channel closed mid-flight rejects instead of
+        // hanging a waiter to its timeout and resolving `null`.
+        if (!this._sendCommand(command)) {
+            return Promise.reject(new Error('Data channel not open'));
+        }
+        const predicate = match
+            ?? ((m: Record<string, unknown>): boolean => m.command === command.type);
+        return this._pending
+            .awaitBroadcast(predicate, { timeoutMs, debugLabel: `request(${command.type})` })
+            .catch((err: unknown): null => {
+                // Fail-open on the waiter timeout only; teardown rejections
+                // (settleAll) propagate to the caller like every other
+                // in-flight round-trip.
+                if (err instanceof BroadcastTimeoutError) return null;
+                throw err;
+            });
     }
 
     subscribeLogs({ onLine, onError }: SubscribeLogsOptions): () => void {
@@ -1809,7 +1575,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 has_audio: startedAck.has_audio === true,
             });
         } catch (e) {
-            console.warn('playMove.onStarted threw:', e);
+            log.warn('playMove.onStarted threw:', e);
         }
         onProgress({ phase: 'playing', duration_s: startedAck.duration_s as number });
 
@@ -1911,27 +1677,16 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     private _emit<K extends keyof ReachyMiniEventMap>(
         name: K,
-        detail: ReachyMiniEventMap[K] extends CustomEvent<infer D> ? D : never,
+        detail: ReachyMiniEventMap[K]['detail'],
     ): void {
         this.dispatchEvent(new CustomEvent(name, { detail }));
     }
 
     private _waitForBroadcast(
         predicate: (m: Record<string, unknown>) => boolean,
-        { timeoutMs = 5000, debugLabel = '' }: { timeoutMs?: number; debugLabel?: string } = {},
+        opts: { timeoutMs?: number; debugLabel?: string } = {},
     ): Promise<Record<string, unknown>> {
-        return new Promise<Record<string, unknown>>((resolve, reject) => {
-            const slot: BroadcastWaiter = {
-                predicate,
-                resolve,
-                timer: setTimeout(() => {
-                    const i = this._broadcastWaiters.indexOf(slot);
-                    if (i !== -1) this._broadcastWaiters.splice(i, 1);
-                    reject(new Error(`broadcast timeout (${timeoutMs} ms): ${debugLabel}`));
-                }, timeoutMs),
-            };
-            this._broadcastWaiters.push(slot);
-        });
+        return this._pending.awaitBroadcast(predicate, opts);
     }
 
     private async _awaitDataChannelDrain(): Promise<void> {
@@ -1959,14 +1714,14 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             if (!res.ok) {
                 let body = '';
                 try { body = await res.text(); } catch { /* ignore */ }
-                console.warn(
-                    `[reachy-mini] /send rejected (${res.status}) for type=${(message as { type?: string })?.type}; body=${body || '<empty>'}`,
+                log.warn(
+                    `/send rejected (${res.status}) for type=${(message as { type?: string })?.type}; body=${body || '<empty>'}`,
                 );
                 return null;
             }
             return await res.json() as SignalingMessage;
         } catch (e) {
-            console.error('Send error:', e);
+            log.error('signaling /send failed:', e);
             return null;
         }
     }
@@ -1990,21 +1745,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         opts: { timeoutMs?: number } = {},
     ): Promise<T> {
         const timeoutMs = opts.timeoutMs ?? 20000;
-        const id = `rpc-${++this._rpcCounter}`;
-        if (!this._sendCommand({ jsonrpc: '2.0', id, method, params })) {
-            return Promise.reject(new Error(`rpcCall(${method}): data channel not open`));
-        }
-        return new Promise<T>((resolve, reject) => {
-            const timer = setTimeout(() => {
-                this._pendingRpc.delete(id);
-                reject(new Error(`rpcCall(${method}) timed out after ${timeoutMs}ms`));
-            }, timeoutMs);
-            this._pendingRpc.set(id, {
-                resolve: (v) => resolve(v as T),
-                reject,
-                timer,
-            });
-        });
+        return this._pending.rpcRoundtrip(method, timeoutMs, (id) =>
+            this._sendCommand({ jsonrpc: '2.0', id, method, params }),
+        ) as Promise<T>;
     }
 
     /**
@@ -2026,31 +1769,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         };
     }
 
-    private _rejectPendingRpc(err: Error): void {
-        for (const pending of this._pendingRpc.values()) {
-            clearTimeout(pending.timer);
-            pending.reject(err);
-        }
-        this._pendingRpc.clear();
-    }
-
     private _handleRpcMessage(data: Record<string, unknown>): void {
         // Response to an rpcCall (correlated by id)...
-        if ('id' in data && data.id != null && ('result' in data || 'error' in data)) {
-            const pending = this._pendingRpc.get(data.id as string);
-            if (!pending) return;
-            this._pendingRpc.delete(data.id as string);
-            clearTimeout(pending.timer);
-            if ('error' in data && data.error) {
-                const err = data.error as { message?: string; data?: { reason?: string } };
-                const e = new Error(err.message ?? 'rpc error');
-                (e as Error & { reason?: string }).reason = err.data?.reason;
-                pending.reject(e);
-            } else {
-                pending.resolve((data as { result?: unknown }).result);
-            }
-            return;
-        }
+        if (this._pending.settleRpcResponse(data)) return;
         // ...or a one-way notification (event): dispatch to listeners.
         if (typeof data.method === 'string') {
             const params = (data.params as Record<string, unknown> | undefined) ?? {};
@@ -2058,7 +1779,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 try {
                     cb(params);
                 } catch (e) {
-                    console.error(`onNotification(${data.method}) threw:`, e);
+                    log.error(`onNotification(${data.method}) threw:`, e);
                 }
             }
         }
@@ -2082,6 +1803,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 if (Date.now() - this._lastPoseFrameAt < POSE_STREAM_FRESH_MS) return;
                 this.requestState();
             }, 500);
+            this._supervisor.startDcWatchdog();
             this._emit('streaming', { sessionId: this._sessionId!, robotId: this._selectedRobotId! });
             this._sessionResolve();
             this._sessionResolve = null;
@@ -2137,10 +1859,14 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 friendly || `Session ended before it could start: ${reason || 'unknown reason'}`,
             ) as SessionRejectError;
             err.reason = reason ?? null;
-            this._emit('sessionRejected', { reason, activeApp: null });
+            // Same suppression as _failSessionRejected: retries during an
+            // auto-reconnect must not surface as `sessionRejected`.
+            if (!this._supervisor.redialing) {
+                this._emit('sessionRejected', { reason, activeApp: null });
+            }
             // Resilience teardown alongside the PC close path.
-            this._clearIceGrace();
-            this._uninstallNetworkListeners();
+            this._supervisor.clearIceGrace();
+            this._supervisor.uninstallNetworkListeners();
             if (this._pc) { this._pc.close(); this._pc = null; }
             if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
             this._iceConnected = false;
@@ -2197,7 +1923,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                         try {
                             await this._pc.addIceCandidate(new RTCIceCandidate(ice));
                         } catch (err) {
-                            console.warn('[reachy-mini] buffered ICE candidate rejected:', err);
+                            log.warn('buffered ICE candidate rejected:', err);
                         }
                     }
                 }
@@ -2217,7 +1943,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 }
             }
         } catch (e) {
-            console.error('WebRTC error:', e);
+            log.error('webrtc signaling failed:', e);
             this._emit('error', { source: 'webrtc', error: e as Error });
         }
     }
@@ -2228,111 +1954,84 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      *   mirror while the stream is live (see the `data.state` branch).
      */
     private _handleRobotMessage(data: Record<string, unknown>, fromPoseStream = false): void {
+        // Liveness stamp for the data-channel silence watchdog: every
+        // inbound message — control replies, broadcasts, pose frames —
+        // proves the transport is alive.
+        this._supervisor.stampDcInbound();
         // JSON-RPC frames (app control surface) are handled separately from
         // the legacy {command|type} robot messages that share this channel.
         if (data.jsonrpc === '2.0') {
             this._handleRpcMessage(data);
             return;
         }
-        if ('version' in data && this._versionResolve) {
-            this._versionResolve(data.version as string | null);
-            this._versionResolve = null;
+        // Bare `version` / `hardware_id` replies carry no `command` key:
+        // only swallow them when a waiter is actually pending, otherwise
+        // let the message fall through to the branches below.
+        if ('version' in data
+            && this._pending.settleReplySlot('version', (data.version as string | null) ?? null)) {
             return;
         }
-        if ('hardware_id' in data && this._hardwareIdResolve) {
-            this._hardwareIdResolve(data.hardware_id as string | null);
-            this._hardwareIdResolve = null;
+        if ('hardware_id' in data
+            && this._pending.settleReplySlot('hardware_id', (data.hardware_id as string | null) ?? null)) {
             return;
         }
         if (data.command === 'get_volume' || data.command === 'set_volume') {
-            if (this._volumeResolve) {
-                this._volumeResolve(data.status === 'error' ? null : (data.volume as number));
-                this._volumeResolve = null;
-            }
+            this._pending.settleReplySlot('volume', data.status === 'error' ? null : (data.volume as number));
             return;
         }
         if (data.command === 'get_microphone_volume' || data.command === 'set_microphone_volume') {
-            if (this._micVolumeResolve) {
-                this._micVolumeResolve(data.status === 'error' ? null : (data.volume as number));
-                this._micVolumeResolve = null;
-            }
+            this._pending.settleReplySlot('mic_volume', data.status === 'error' ? null : (data.volume as number));
             return;
         }
         if (data.command === 'get_first_wake_up' || data.command === 'set_first_wake_up') {
-            if (this._firstWakeUpResolve) {
-                this._firstWakeUpResolve(
-                    data.status === 'error' ? null : !!data.is_completed,
-                );
-                this._firstWakeUpResolve = null;
-            }
+            this._pending.settleReplySlot(
+                'first_wake_up',
+                data.status === 'error' ? null : !!data.is_completed,
+            );
             return;
         }
         if (data.command === 'get_robot_name' || data.command === 'set_robot_name') {
-            if (this._robotNameResolve) {
-                this._robotNameResolve(
-                    data.status === 'error' ? null : ((data.name as string | null) ?? null),
-                );
-                this._robotNameResolve = null;
-            }
+            this._pending.settleReplySlot(
+                'robot_name',
+                data.status === 'error' ? null : ((data.name as string | null) ?? null),
+            );
             return;
         }
         if (data.command === 'delete_hf_token') {
-            if (this._deleteHfTokenResolve) {
-                this._deleteHfTokenResolve(data.status === 'error' ? false : true);
-                this._deleteHfTokenResolve = null;
-            }
+            this._pending.settleReplySlot('delete_hf_token', data.status !== 'error');
             return;
         }
         if (data.command === 'apply_audio_config') {
-            if (this._applyAudioConfigResolve) {
-                this._applyAudioConfigResolve(data.error ? false : !!data.applied);
-                this._applyAudioConfigResolve = null;
-            }
+            this._pending.settleReplySlot('apply_audio_config', data.error ? false : !!data.applied);
             return;
         }
         if (data.command === 'read_audio_parameter') {
-            if (this._readAudioParameterResolve) {
-                this._readAudioParameterResolve(
-                    data.error ? null : ((data.values as number[] | undefined) ?? null),
-                );
-                this._readAudioParameterResolve = null;
-            }
+            this._pending.settleReplySlot(
+                'read_audio_parameter',
+                data.error ? null : ((data.values as number[] | undefined) ?? null),
+            );
             return;
         }
         if (data.command === 'get_tracked_face') {
-            if (this._trackedFaceResolve) {
-                this._trackedFaceResolve(
-                    (data.face_target as FaceTarget | undefined) ?? null,
-                );
-                this._trackedFaceResolve = null;
-            }
+            this._pending.settleReplySlot('tracked_face', (data.face_target as FaceTarget | undefined) ?? null);
+            return;
+        }
+        if (data.command === 'get_imu') {
+            this._pending.settleReplySlot('imu', (data.imu as ImuData | null | undefined) ?? null);
             return;
         }
         if (
             (data.command === 'wake_up' || data.command === 'goto_sleep')
-            && this._pendingMotionCompletions
-            && this._pendingMotionCompletions[data.command as 'wake_up' | 'goto_sleep']
+            && this._pending.settleMotion(data.command as MotionCommand, data)
         ) {
-            const queue = this._pendingMotionCompletions[data.command as 'wake_up' | 'goto_sleep'];
-            if (data.completed === true && queue.length > 0) {
-                const entry = queue.shift()!;
-                clearTimeout(entry.timer);
-                entry.resolve();
-                return;
-            }
-            if (data.error && queue.length > 0) {
-                const entry = queue.shift()!;
-                clearTimeout(entry.timer);
-                entry.reject(new Error(`${data.command}: ${data.error}`));
-                return;
-            }
+            return;
         }
         if (data.type === 'log_line') {
             for (const sub of this._logSubscribers) {
                 try {
                     sub.onLine({ timestamp: data.timestamp as string, line: data.line as string });
                 } catch (e) {
-                    console.error('subscribeLogs onLine threw:', e);
+                    log.error('subscribeLogs onLine threw:', e);
                 }
             }
             return;
@@ -2341,7 +2040,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             for (const sub of this._logSubscribers) {
                 if (typeof sub.onError === 'function') {
                     try { sub.onError(data.error as string); }
-                    catch (e) { console.error('subscribeLogs onError threw:', e); }
+                    catch (e) { log.error('subscribeLogs onError threw:', e); }
                 }
             }
             return;
@@ -2355,7 +2054,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 const event: UpdateProgressEvent = { status: 'failed', error: data.error };
                 for (const cb of this._updateProgressSubscribers) {
                     try { cb(event); }
-                    catch (e) { console.error('startDaemonUpdate onProgress threw:', e); }
+                    catch (e) { log.error('startDaemonUpdate onProgress threw:', e); }
                 }
             }
             return;
@@ -2368,7 +2067,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             };
             for (const cb of this._updateProgressSubscribers) {
                 try { cb(event); }
-                catch (e) { console.error('startDaemonUpdate onProgress threw:', e); }
+                catch (e) { log.error('startDaemonUpdate onProgress threw:', e); }
             }
             return;
         }
@@ -2387,33 +2086,29 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             const s = data.state as {
                 head_pose?: number[][];
                 antennas?: [number, number];
+                head_joint_positions?: number[];
                 body_yaw?: number;
                 motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';
                 is_move_running?: boolean;
                 face_target?: FaceTarget;
+                doa?: { angle: number; speech_detected: boolean } | null;
             };
             if (s.head_pose) this._robotState.head = s.head_pose.flat();
             if (s.antennas) this._robotState.antennas = [s.antennas[0], s.antennas[1]];
+            if (s.head_joint_positions) this._robotState.head_joint_positions = s.head_joint_positions;
             if (typeof s.body_yaw === 'number') this._robotState.body_yaw = s.body_yaw;
             if (s.motor_mode) this._robotState.motor_mode = s.motor_mode;
             if (typeof s.is_move_running === 'boolean') this._robotState.is_move_running = s.is_move_running;
             if (s.face_target) this._robotState.face_target = s.face_target;
+            // DoA is null when there's no mic array / no reading yet - reflect
+            // that by clearing our mirror so stale angles don't linger.
+            if ('doa' in s) this._robotState.doa = s.doa ?? undefined;
             this._emit('state', { ...this._robotState });
         }
         if (data.error) {
             this._emit('error', { source: 'robot', error: data.error as string });
         }
-        if (this._broadcastWaiters.length > 0) {
-            for (let i = this._broadcastWaiters.length - 1; i >= 0; i--) {
-                const slot = this._broadcastWaiters[i]!;
-                if (slot.predicate(data)) {
-                    this._broadcastWaiters.splice(i, 1);
-                    clearTimeout(slot.timer);
-                    slot.resolve(data);
-                    return;
-                }
-            }
-        }
+        if (this._pending.matchBroadcast(data)) return;
     }
 
     /** Snap video playback to live edge if buffered lag exceeds 0.5 s. */
@@ -2426,7 +2121,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 const end = buf.end(buf.length - 1);
                 const lag = end - video.currentTime;
                 if (lag > 0.5) {
-                    console.log(`Latency correction: was ${lag.toFixed(2)}s behind`);
+                    log.debug(`video latency correction: was ${lag.toFixed(2)}s behind`);
                     video.currentTime = end - 0.1;
                 }
             }
