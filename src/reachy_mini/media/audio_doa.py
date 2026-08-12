@@ -16,7 +16,7 @@ Note:
 """
 
 import logging
-from threading import Lock
+from typing import Optional
 
 from reachy_mini.media.audio_control_utils import ReSpeaker, init_respeaker_usb
 
@@ -28,7 +28,7 @@ class AudioDoA:
 
     Attributes:
         _respeaker: The underlying ReSpeaker device, or ``None`` if no
-            compatible hardware was detected on first use.
+            compatible hardware was detected at init time.
 
     Example::
 
@@ -42,68 +42,44 @@ class AudioDoA:
     """
 
     def __init__(self) -> None:
-        """Initialize the DoA helper without probing USB until first use."""
-        self._respeaker: ReSpeaker | None = None
-        self._discovery_complete = False
-        self._closed = False
-        self._lock = Lock()
-
-    @property
-    def discovery_complete(self) -> bool:
-        """Return whether ReSpeaker discovery has completed."""
-        return self._discovery_complete
+        """Initialize the DoA helper, probing for a ReSpeaker USB device."""
+        self._respeaker: Optional[ReSpeaker] = init_respeaker_usb()
 
     @property
     def available(self) -> bool:
-        """Return whether a ReSpeaker is available, discovering it on demand."""
-        with self._lock:
-            return self._discover_respeaker() is not None
+        """True while a ReSpeaker device is held (probe succeeded, not closed)."""
+        return self._respeaker is not None
 
     @property
-    def respeaker(self) -> ReSpeaker | None:
-        """Return the ReSpeaker handle, discovering it on demand.
+    def respeaker(self) -> Optional[ReSpeaker]:
+        """The underlying ReSpeaker handle, for raw parameter access.
 
         Callers sharing this handle are responsible for serializing their
         USB conversations with any concurrent ``get_DoA()`` reader.
         """
-        with self._lock:
-            return self._discover_respeaker()
-
-    def _discover_respeaker(self) -> ReSpeaker | None:
-        if self._closed:
-            return None
-        if not self._discovery_complete:
-            self._respeaker = init_respeaker_usb()
-            self._discovery_complete = True
         return self._respeaker
 
     def get_DoA(self) -> tuple[float, bool] | None:
         """Read the current Direction of Arrival from the ReSpeaker.
-
-        The USB device is discovered on first demand and reused thereafter.
 
         Returns:
             A tuple ``(angle_radians, speech_detected)`` or ``None`` when
             the device is not available or the read fails.
 
         """
-        with self._lock:
-            respeaker = self._discover_respeaker()
-            if respeaker is None:
-                return None
+        if not self._respeaker:
+            return None
 
-            result = respeaker.read("DOA_VALUE_RADIANS")
-            if result is None:
-                return None
-            return float(result[0]), bool(result[1])
+        result = self._respeaker.read("DOA_VALUE_RADIANS")
+        if result is None:
+            return None
+        return float(result[0]), bool(result[1])
 
     def close(self) -> None:
         """Release the USB resource."""
-        with self._lock:
-            self._closed = True
-            if self._respeaker:
-                self._respeaker.close()
-                self._respeaker = None
+        if self._respeaker:
+            self._respeaker.close()
+            self._respeaker = None
 
 
 def main() -> None:
@@ -114,14 +90,14 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     doa = AudioDoA()
-    result = doa.get_DoA()
-    if not doa.available:
+    if doa._respeaker is None:
         print("No ReSpeaker device found. Exiting.")
         return
 
     print("Reading DoA — press Ctrl+C to stop.\n")
     try:
         while True:
+            result = doa.get_DoA()
             if result is not None:
                 angle, speech = result
                 print(
@@ -132,7 +108,6 @@ def main() -> None:
             else:
                 print("no reading")
             time.sleep(0.1)
-            result = doa.get_DoA()
     except KeyboardInterrupt:
         print("\nStopped.")
     finally:
