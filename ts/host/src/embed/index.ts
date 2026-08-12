@@ -586,7 +586,7 @@ async function bootOnceCredsOnly(
   // 4. (Skipped — no `new ReachyMini`.)
 
   // 5. Bridge + post ready.
-  const bridge = createBridge(expectedOrigin);
+  const bridge = createBridge(expectedOrigin, null);
   postToHost({
     source: PROTOCOL_SOURCE,
     type: 'embed:ready',
@@ -679,7 +679,9 @@ async function resolveLivePeerId(
   }
 }
 
-function createBridge(expectedOrigin: string, sdk: ReachyMiniInstance) {
+// `sdk` is null for credentials-only embeds (no ReachyMini instance):
+// they can't drive a daemon update, so `host:start-update` is ignored.
+function createBridge(expectedOrigin: string, sdk: ReachyMiniInstance | null) {
   type LeaveCb = () => void | Promise<void>;
   type ThemeCb = (t: ThemeMode) => void;
   type ConfigCb = (c: unknown) => void;
@@ -723,7 +725,7 @@ function createBridge(expectedOrigin: string, sdk: ReachyMiniInstance) {
         break;
       }
       case 'host:start-update': {
-        startDaemonUpdateForHost(sdk, msg.preRelease === true);
+        if (sdk) startDaemonUpdateForHost(sdk, msg.preRelease === true);
         break;
       }
       case 'host:cancel-update': {
@@ -779,36 +781,41 @@ function createBridge(expectedOrigin: string, sdk: ReachyMiniInstance) {
     postDebug('leave:start');
     runLeaveOnce();
 
-    const sleepStartedAt = Date.now();
-    let sleepOutcome: 'ok' | 'hard-timeout' | 'error' = 'ok';
-    try {
-      sleepOutcome = await Promise.race([
-        sdk.gotoSleep({ timeoutMs: LEAVE_SLEEP_TIMEOUT_MS }).then(() => 'ok' as const),
-        new Promise<'hard-timeout'>((resolve) =>
-          window.setTimeout(() => resolve('hard-timeout'), LEAVE_SLEEP_HARD_TIMEOUT_MS),
-        ),
-      ]);
-    } catch {
-      /* wedged/older daemon: fall through to the explicit disable */
-      sleepOutcome = 'error';
-    }
-    postDebug('leave:sleep', { outcome: sleepOutcome, ms: Date.now() - sleepStartedAt });
+    // Credentials-only embeds have no SDK session to wind down: their
+    // backend owns the robot connection, so we only fire the leave
+    // handlers (which typically beacon the backend) and ack right away.
+    if (sdk) {
+      const sleepStartedAt = Date.now();
+      let sleepOutcome: 'ok' | 'hard-timeout' | 'error' = 'ok';
+      try {
+        sleepOutcome = await Promise.race([
+          sdk.gotoSleep({ timeoutMs: LEAVE_SLEEP_TIMEOUT_MS }).then(() => 'ok' as const),
+          new Promise<'hard-timeout'>((resolve) =>
+            window.setTimeout(() => resolve('hard-timeout'), LEAVE_SLEEP_HARD_TIMEOUT_MS),
+          ),
+        ]);
+      } catch {
+        /* wedged/older daemon: fall through to the explicit disable */
+        sleepOutcome = 'error';
+      }
+      postDebug('leave:sleep', { outcome: sleepOutcome, ms: Date.now() - sleepStartedAt });
 
-    const disableStartedAt = Date.now();
-    let disableConfirmed = false;
-    try {
-      sdk.setMotorMode('disabled');
-      // Only ack once the daemon has echoed the mode back: the host unmounts
-      // this iframe on the ack, which would kill the command in flight.
-      await awaitMotorsDisabled(sdk);
-      disableConfirmed = true;
-    } catch {
-      /* channel may already be closing - best effort */
+      const disableStartedAt = Date.now();
+      let disableConfirmed = false;
+      try {
+        sdk.setMotorMode('disabled');
+        // Only ack once the daemon has echoed the mode back: the host unmounts
+        // this iframe on the ack, which would kill the command in flight.
+        await awaitMotorsDisabled(sdk);
+        disableConfirmed = true;
+      } catch {
+        /* channel may already be closing - best effort */
+      }
+      postDebug('leave:motors-disabled', {
+        confirmed: disableConfirmed,
+        ms: Date.now() - disableStartedAt,
+      });
     }
-    postDebug('leave:motors-disabled', {
-      confirmed: disableConfirmed,
-      ms: Date.now() - disableStartedAt,
-    });
 
     postDebug('leave:ack');
     postToHost({
