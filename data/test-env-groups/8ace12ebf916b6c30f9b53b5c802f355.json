@@ -1,1 +1,1 @@
-{"id":"8ace12ebf916b6c30f9b53b5c802f355","fullName":"tests.unit_tests.test_backend_doa#test_close_joins_poller_and_releases_device","name":"test_close_joins_poller_and_releases_device","status":"passed","testResultsByEnv":{"default":"3d665143e00ffb01fd2772767c7ce590"}}
+{"id":"8ace12ebf916b6c30f9b53b5c802f355","fullName":"tests.unit_tests.test_backend_doa#test_close_joins_poller_and_releases_device","name":"test_close_joins_poller_and_releases_device","status":"passed","testResultsByEnv":{"default":"ac31b8fb57a49416f5a1f22b37459f87"}}

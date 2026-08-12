@@ -1,0 +1,2 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:181 Using AnalyticalKinematics kinematics engine
+WARNING  reachy_mini.daemon.startup_app_config:startup_app_config.py:173 Could not persist first-wake-up flag: read-only filesystem

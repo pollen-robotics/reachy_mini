@@ -1,1 +1,1 @@
-{"id":"bab11f60dcf2542810272b633c526809","fullName":"tests.unit_tests.test_device_detection.TestFindVideoDevice#test_arducam_only","name":"test_arducam_only","status":"passed","testResultsByEnv":{"default":"fb3c07cfa5d5dab6a444425124aeb760"}}
+{"id":"bab11f60dcf2542810272b633c526809","fullName":"tests.unit_tests.test_device_detection.TestFindVideoDevice#test_arducam_only","name":"test_arducam_only","status":"passed","testResultsByEnv":{"default":"770596563abf63650ae36fa66b8b60fc"}}
