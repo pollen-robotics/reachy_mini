@@ -25,7 +25,8 @@ VIDEO_BACKENDS = [
 ]
 
 
-def test_open_defers_initial_frame_wait_until_first_read(
+@pytest.mark.video
+def test_open_close_open_defers_initial_frame_wait_until_first_read(
     ipc_video_source: CameraSpecs,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -36,6 +37,8 @@ def test_open_defers_initial_frame_wait_until_first_read(
 
     try:
         camera.open()
+        camera.close()
+        camera.open()
         get_sample.assert_not_called()
         assert camera.read() is None
         assert camera.read() is None
@@ -43,7 +46,7 @@ def test_open_defers_initial_frame_wait_until_first_read(
         camera.close()
 
     first_call, second_call = get_sample.call_args_list
-    assert first_call.kwargs == {"timeout_ns": camera.INITIAL_FRAME_TIMEOUT_NS}
+    assert first_call.kwargs == {"timeout_ns": 2 * camera_gstreamer.Gst.SECOND}
     assert second_call.kwargs == {}
 
 

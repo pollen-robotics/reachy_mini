@@ -89,8 +89,6 @@ class GStreamerCamera(CameraBase):
 
     """
 
-    INITIAL_FRAME_TIMEOUT_NS = 2_000_000_000
-
     def __init__(
         self,
         log_level: str = "INFO",
@@ -260,7 +258,7 @@ class GStreamerCamera(CameraBase):
             data = get_sample(
                 self._appsink_video,
                 self.logger,
-                timeout_ns=self.INITIAL_FRAME_TIMEOUT_NS,
+                timeout_ns=2 * Gst.SECOND,
             )
         else:
             data = get_sample(self._appsink_video, self.logger)
@@ -272,7 +270,17 @@ class GStreamerCamera(CameraBase):
 
     def close(self) -> None:
         """Stop the pipeline and release resources."""
-        self._initial_frame_pending = False
         self._release_jpeg_encoder()
-        self._loop.quit()
+        thread = self._thread_bus_calls
+        if thread is not None and thread.is_alive():
+
+            def quit_loop() -> bool:
+                if not self._loop.is_running():
+                    return True
+                self._loop.quit()
+                return False
+
+            GLib.idle_add(quit_loop)
+            thread.join()
+        self._thread_bus_calls = None
         self.pipeline.set_state(Gst.State.NULL)
