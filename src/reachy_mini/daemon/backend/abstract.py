@@ -82,6 +82,7 @@ from reachy_mini.io.protocol import (
     StartRecordingCmd,
     StartUpdateCmd,
     StateSnapshot,
+    StopMoveCmd,
     StopRecordingCmd,
     SubscribeLogsCmd,
     SubscribePoseCmd,
@@ -278,6 +279,11 @@ class Backend:
         self._active_move_depth = (
             0  # Tracks nested acquisitions within the owning thread
         )
+        # Global "stop now" flag flipped by ``StopMoveCmd`` and polled by
+        # every ``play_move`` loop (nested gotos included), regardless of
+        # who started the move. Cleared when a new top-level move starts,
+        # so a stale stop can't kill the next run.
+        self._stop_move_requested = False
 
         # Per-run cancellation handle for the active play_uploaded_move.
         # Set by ``_async_play_uploaded_move`` before each play, cleared
@@ -822,12 +828,19 @@ class Backend:
             play_frequency (float): The frequency at which to evaluate the move (in Hz).
             initial_goto_duration (float): Duration for an initial goto to the move's starting position. If 0.0, no initial goto is performed.
             audio_lead_s (float): How many seconds the audio (if any) starts BEFORE the motion. Positive values compensate for the constant GStreamer playbin latency on the robot so the audio reaches the speaker at the same moment the actuator starts moving. Negative values delay audio relative to motion. No-op when the move has no sound_path. Default 0.
-            cancel_token (_PlaybackCancelToken, optional): If provided, the inner loop polls ``cancel_token.cancelled`` every tick and exits when flipped. Used by ``_async_play_uploaded_move`` to wire ``cancel_move`` to a specific upload_id; direct callers (goto_target, etc.) pass None and stay non-cancellable.
+            cancel_token (_PlaybackCancelToken, optional): If provided, the inner loop polls ``cancel_token.cancelled`` every tick and exits when flipped. Used by ``_async_play_uploaded_move`` to wire ``cancel_move`` to a specific upload_id; direct callers (goto_target, etc.) pass None. Independently of the token, every loop also polls the global ``_stop_move_requested`` flag flipped by ``StopMoveCmd``, so any move is interruptible by ``stop_move``.
 
         """
         if not self._try_start_move():
             self.logger.warning("Ignoring play_move request: another move is running.")
             return
+
+        if self._active_move_depth == 1:
+            # New top-level move: clear any stop request left over from a
+            # previous run so a stale stop_move can't kill this one. Nested
+            # play_moves (initial goto, goto_target inside a recorded move)
+            # keep the flag so one stop interrupts the whole stack.
+            self._stop_move_requested = False
 
         try:
             if initial_goto_duration > 0.0:
@@ -871,13 +884,19 @@ class Backend:
                         return
                     if cancel_token is not None and cancel_token.cancelled:
                         return
+                    if self._stop_move_requested:
+                        return
                     self.play_sound(sound_path_str)
 
                 delayed_sound_task = asyncio.create_task(_delayed_sound())
+            interrupted = False
             try:
                 while time.time() - t0 < move.duration:
-                    if cancel_token is not None and cancel_token.cancelled:
+                    if self._stop_move_requested or (
+                        cancel_token is not None and cancel_token.cancelled
+                    ):
                         self.logger.info("play_move cancelled, exiting playback loop")
+                        interrupted = True
                         break
                     t = time.time() - t0
 
@@ -901,6 +920,14 @@ class Backend:
                 # the sleep elapsed.
                 if delayed_sound_task is not None and not delayed_sound_task.done():
                     delayed_sound_task.cancel()
+                # Interrupted mid-move: silence the sidecar sound too,
+                # otherwise a recorded move's audio would keep playing to
+                # the end of the WAV after the motion has stopped.
+                if interrupted and move.sound_path is not None:
+                    try:
+                        self.stop_sound()
+                    except Exception as e:
+                        self.logger.warning(f"play_move: stop_sound failed: {e}")
         finally:
             self._end_move()
 
@@ -2090,6 +2117,8 @@ class Backend:
             asyncio.create_task(self._async_play_uploaded_move(cmd))
         elif isinstance(cmd, CancelMoveCmd):
             self._handle_cancel_move(cmd)
+        elif isinstance(cmd, StopMoveCmd):
+            self._handle_stop_move(send_response)
         elif isinstance(cmd, PlayUploadedAudioCmd):
             self._handle_play_uploaded_audio(cmd)
         elif isinstance(cmd, CancelAudioCmd):
@@ -2388,6 +2417,38 @@ class Backend:
             if token is None or token.upload_id != cmd.upload_id:
                 return
             token.cancelled = True
+
+    def _handle_stop_move(
+        self, send_response: Callable[[dict[str, Any]], None]
+    ) -> None:
+        """Stop whatever move is currently playing (recorded, uploaded, goto).
+
+        The blunt client-facing counterpart of ``_handle_cancel_move``: no
+        upload_id needed, it flips the global stop flag every ``play_move``
+        loop polls, and also cancels the active uploaded-move token (if any)
+        so that run's end broadcast reports ``cancelled`` instead of
+        ``finished``. Idempotent: always acks ok, with ``stopped`` telling
+        whether a move was actually interrupted.
+        """
+        if not self.is_move_running:
+            send_response(
+                {
+                    "status": "ok",
+                    "command": "stop_move",
+                    "stopped": False,
+                    "info": "no active move",
+                }
+            )
+            return
+        self._stop_move_requested = True
+        # Also flip the per-run token (RLock is reentrant on the event-loop
+        # thread, same as _handle_cancel_move) so an in-flight
+        # play_uploaded_move bookkeeps this as a cancellation.
+        with self._play_move_lock:
+            token = self._active_move_token
+            if token is not None:
+                token.cancelled = True
+        send_response({"status": "ok", "command": "stop_move", "stopped": True})
 
     def _handle_upload_finish(self, cmd: UploadMoveFinishCmd) -> None:
         slot = self._upload_chunks.pop(cmd.upload_id, None)

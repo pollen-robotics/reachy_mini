@@ -1062,6 +1062,16 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         });
     }
 
+    /**
+     * Stop whatever move is currently playing on the daemon (recorded move,
+     * uploaded move, goto). Fire-and-forget and idempotent: the daemon acks
+     * ok with `stopped: false` when nothing was running. Returns `false` if
+     * the data channel is not open.
+     */
+    stopMove(): boolean {
+        return this._sendCommand({ type: 'stop_move' });
+    }
+
     preloadDataset(dataset: string): boolean {
         return this._sendCommand({ type: 'preload_dataset', dataset_name: dataset });
     }

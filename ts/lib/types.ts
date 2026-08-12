@@ -531,6 +531,13 @@ export interface ReachyMiniInstance extends EventTarget {
         opts?: { dataset?: string; initialGotoDuration?: number },
     ): boolean;
     /**
+     * Stop whatever move is currently playing on the daemon (recorded move,
+     * uploaded move, goto), silencing its bundled sound too. Fire-and-forget
+     * and idempotent: a stop with no move running is acked as a no-op, not
+     * an error. Returns `false` if the data channel is not open.
+     */
+    stopMove(): boolean;
+    /**
      * Ask the daemon to pre-download a recorded-move dataset into its local
      * HF cache, so a later `playRecordedMove` from that dataset starts
      * instantly instead of blocking on the download. Send it right after

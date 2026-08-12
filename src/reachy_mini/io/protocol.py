@@ -13,7 +13,7 @@ Client->Server command types:
     restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
-    play_uploaded_move, cancel_move,
+    play_uploaded_move, cancel_move, stop_move,
     play_uploaded_audio, cancel_audio, clear_incoming_audio,
     apply_audio_config, read_audio_parameter,
     set_speech_offsets, set_wobbling, set_head_tracking, get_tracked_face
@@ -842,6 +842,23 @@ class CancelMoveCmd(BaseModel):
     upload_id: str
 
 
+class StopMoveCmd(BaseModel):
+    """Stop whatever move is currently playing (recorded move, uploaded move, goto).
+
+    Client-facing "stop now" primitive. Unlike :class:`CancelMoveCmd`, which
+    is deliberately scoped to a single ``upload_id`` so back-to-back uploaded
+    plays can't cross-cancel, this command needs no handle: it interrupts the
+    active ``Backend.play_move`` run whoever started it, and silences the
+    move's sidecar sound if one is playing.
+
+    Acked with ``{"status": "ok", "command": "stop_move", "stopped": true}``
+    when a move was interrupted, or ``stopped: false`` (plus an ``info``
+    field) when nothing was running - idempotent, never an error.
+    """
+
+    type: Literal["stop_move"] = "stop_move"
+
+
 class PlayUploadedAudioCmd(BaseModel):
     """Play a previously-uploaded audio standalone (no motion).
 
@@ -941,6 +958,7 @@ AnyCommand = Annotated[
     | UploadAudioFinishCmd
     | PlayUploadedMoveCmd
     | CancelMoveCmd
+    | StopMoveCmd
     | PlayUploadedAudioCmd
     | CancelAudioCmd
     | ClearIncomingAudioCmd
