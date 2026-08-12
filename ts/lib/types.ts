@@ -547,6 +547,18 @@ export interface ReachyMiniInstance extends EventTarget {
      * are cheap; on failure `playRecordedMove` still downloads on demand.
      */
     preloadDataset(dataset: string): boolean;
+    /**
+     * Like `preloadDataset()`, but resolves once the daemon acks the preload,
+     * i.e. when the dataset is actually in the local HF cache. `true` on
+     * success, `false` on a daemon-reported download failure, `null` on the
+     * fail-open timeout (slow download, or a daemon that predates the
+     * command). Rejects when the channel isn't open or the session tears
+     * down mid-flight.
+     */
+    preloadDatasetAndWait(
+        dataset: string,
+        options?: { timeoutMs?: number },
+    ): Promise<boolean | null>;
     /** Drop incoming audio queued for the robot speaker (barge-in). */
     clearIncomingAudio(): boolean;
     /** Enable daemon-side visual head tracking. */

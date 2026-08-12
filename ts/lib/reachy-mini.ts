@@ -1076,6 +1076,38 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         return this._sendCommand({ type: 'preload_dataset', dataset_name: dataset });
     }
 
+    /**
+     * Like `preloadDataset()`, but resolves once the daemon acks the preload
+     * (`{command: "preload_dataset", ...}` on the data channel), i.e. when the
+     * dataset is actually in the local HF cache. Resolves `true` on success,
+     * `false` when the daemon reports a download failure, and `null` on the
+     * fail-open timeout (download slower than `timeoutMs`, or a daemon that
+     * predates the command and never replies) - callers should proceed in all
+     * three cases, `playRecordedMove` still downloads on demand. Rejects when
+     * the data channel isn't open or the session tears down mid-flight.
+     */
+    preloadDatasetAndWait(
+        dataset: string,
+        { timeoutMs = 120000 }: { timeoutMs?: number } = {},
+    ): Promise<boolean | null> {
+        // Send before registering the waiter (same rationale as `request()`):
+        // a channel closed mid-flight rejects instead of hanging a waiter to
+        // its timeout.
+        if (!this.preloadDataset(dataset)) {
+            return Promise.reject(new Error('Data channel not open'));
+        }
+        return this._pending
+            .awaitBroadcast(
+                (m) => m.command === 'preload_dataset' && m.dataset_name === dataset,
+                { timeoutMs, debugLabel: `preload_dataset(${dataset})` },
+            )
+            .then((m) => m.status === 'ok')
+            .catch((err: unknown): null => {
+                if (err instanceof BroadcastTimeoutError) return null;
+                throw err;
+            });
+    }
+
     clearIncomingAudio(): boolean {
         return this._sendCommand({ type: 'clear_incoming_audio' });
     }
