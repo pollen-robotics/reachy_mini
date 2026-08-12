@@ -16,8 +16,8 @@ statically in `pyproject.toml` (single source of truth): `main` carries
 | Mode | Trigger from | What it does |
 |------|--------------|--------------|
 | `dry-run` | anywhere | Read-only preflight: checks every secret/var is set, that `RELEASE_PAT` can push both repos, that the `pypi` environment exists, that OpenCode + the model + the HF token work (tiny live call), and previews the versions each mode would produce. Tags nothing, publishes nothing, opens no PR. Run this first. |
-| `minor-prerelease` | `main` | Reads `X.Y.Z.dev0` → cuts `X.Y.Zrc<N>` (RC starts at 1), creates/reuses `vX.Y-release`, tags, publishes to PyPI, AI-drafts a **draft** GitHub release, and opens an RC-test PR in `reachy_mini_conversation_app`. |
-| `minor-release` | `main` | Promotes the latest RC → `X.Y.Z`, publishes to PyPI, promotes the draft release to the final tag (marked *latest*), triggers the docs build, and opens a PR bumping `main` to `X.(Y+1).0.dev0`. |
+| `minor-prerelease` | `main` | Reads `X.Y.Z.dev0` → cuts `X.Y.Zrc<N>` (RC starts at 1), creates/reuses `vX.Y-release`, tags, publishes to PyPI, regenerates the AI release notes, and publishes/refreshes **this minor's GitHub prerelease** (one release per minor: each RC retags it and refreshes its notes, so the releases page always shows the newest RC as a published prerelease). Also opens an RC-test PR in `reachy_mini_conversation_app`. |
+| `minor-release` | `main` | Promotes the latest RC → `X.Y.Z`, publishes to PyPI, promotes that prerelease to the final tag (marked *latest*, prerelease flag cleared), triggers the docs build, and opens a PR bumping `main` to `X.(Y+1).0.dev0`. |
 | `patch-release` | `vX.Y-release` | Bumps the patch (`X.Y.Z+1`), tags, publishes. Not marked *latest*. |
 
 Typical flow: `minor-prerelease` → validate the RC (its PR CI in the conversation app,
@@ -36,7 +36,7 @@ prepare ──▶ publish-pypi ──┬──▶ release-notes
 
 `prepare` pushes the version-bump commit **and the tag before** publishing, so the tag
 already exists once publishing starts. Everything after `prepare` is gated on a
-successful `publish-pypi`: if the publish fails, no GitHub release is drafted/promoted,
+successful `publish-pypi`: if the publish fails, no GitHub release is published/promoted,
 no RC-test PR and no bump PR are opened — the pipeline stops.
 
 **If `publish-pypi` fails:** do **not** re-trigger the whole workflow (`prepare` would
@@ -81,4 +81,8 @@ python -m utils.release_notes.generate_release_notes --since v1.9.0 --minor
 # → .release-notes/RELEASE_NOTES_v1.10.0.md
 ```
 
-The draft GitHub release is editable before you run `minor-release` — polish tone there.
+The GitHub prerelease is editable before you run `minor-release` — polish tone there.
+
+**Note:** every `minor-prerelease` run regenerates the notes and overwrites that release's
+body, so hand edits are lost if you cut another RC. Do the final polish after the last RC,
+just before `minor-release` (which never regenerates — it publishes the body as-is).
