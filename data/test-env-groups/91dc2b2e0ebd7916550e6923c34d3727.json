@@ -1,1 +1,1 @@
-{"id":"91dc2b2e0ebd7916550e6923c34d3727","fullName":"tests.unit_tests.test_apps_hf_auth#test_check_token_status_no_token","name":"test_check_token_status_no_token","status":"passed","testResultsByEnv":{"default":"5287385cf9cde48f63d99bd6f593ba58"}}
+{"id":"91dc2b2e0ebd7916550e6923c34d3727","fullName":"tests.unit_tests.test_apps_hf_auth#test_check_token_status_no_token","name":"test_check_token_status_no_token","status":"passed","testResultsByEnv":{"default":"4b753d6179f104fb0e5fc2079d133aa7"}}
