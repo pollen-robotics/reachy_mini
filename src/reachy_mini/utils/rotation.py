@@ -86,9 +86,16 @@ class Rotation:
                 "Non-positive determinant (left-handed or null coordinate "
                 "frame) in rotation matrix"
             )
+        # Orthogonal Procrustes: with M = U S V^T, the rotation closest to M
+        # in the Frobenius norm is U V^T (same construction as the Kabsch
+        # algorithm). Dropping S throws away exactly the scaling/shear that
+        # crept in, keeping the directions.
         u, _, vt = np.linalg.svd(array)
         rotation = u @ vt
         if np.linalg.det(rotation) < 0:
+            # U V^T can come out as a reflection; flipping the column of U
+            # paired with the smallest singular value (the last, as numpy
+            # sorts them descending) yields the nearest det=+1 rotation.
             u[:, -1] *= -1
             rotation = u @ vt
         return cls(rotation)
@@ -134,8 +141,11 @@ class Rotation:
             )
 
         matrix = np.eye(3)
-        # Extrinsic: each later axis rotates about a fixed frame, so it
-        # multiplies on the left.
+        # Extrinsic: every rotation is about an axis of the *fixed* frame, so
+        # each subsequent one multiplies on the left (it acts on the already
+        # rotated vector). "xyz" with angles [a, b, c] is Rz(c) @ Ry(b) @ Rx(a)
+        # -- the reverse of the intrinsic (uppercase, body-frame) convention,
+        # where the same string would compose right to left.
         for axis, angle in zip(seq, values):
             matrix = _axis_matrix(axis, float(angle)) @ matrix
         return cls(matrix)
@@ -161,10 +171,16 @@ class Rotation:
 
         theta = float(np.linalg.norm(vector))
         if theta < 1e-12:
-            # Second-order expansion, exact to float precision for tiny angles
-            # and free of the 0/0 in the axis normalisation.
+            # Taylor expansion of Rodrigues below: sin(t)/t -> 1 and
+            # (1-cos(t))/t^2 -> 1/2, written on the *unnormalised* vector so
+            # there is no 0/0 in the axis normalisation. The truncation error
+            # is O(theta^3), far below float64 resolution at theta < 1e-12.
             skew = _skew(vector)
             return cls(np.eye(3) + skew + 0.5 * (skew @ skew))
+        # Rodrigues' rotation formula: R = I + sin(theta) K + (1-cos(theta)) K^2
+        # with K the cross-product (skew) matrix of the unit axis. The K term
+        # rotates in the plane orthogonal to the axis, the K^2 term pulls the
+        # component along the axis back out.
         skew = _skew(vector / theta)
         return cls(
             np.eye(3) + np.sin(theta) * skew + (1.0 - np.cos(theta)) * (skew @ skew)
@@ -224,6 +240,10 @@ class Rotation:
         matrix = self._matrix
         # Via a quaternion (Shepperd's method), which stays well conditioned
         # near pi where the naive trace formula loses all of its digits.
+        # The four branches each solve for a different quaternion component
+        # first -- the one guaranteed largest by the trace/diagonal
+        # comparison -- so the sqrt argument is never small and dividing by
+        # `scale` never amplifies noise.
         trace = matrix[0, 0] + matrix[1, 1] + matrix[2, 2]
         if trace > 0:
             scale = np.sqrt(trace + 1.0) * 2
