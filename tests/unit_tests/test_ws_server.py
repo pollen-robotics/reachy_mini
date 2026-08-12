@@ -63,6 +63,58 @@ async def test_new_client_receives_current_status_immediately() -> None:
 
 
 @pytest.mark.asyncio
+async def test_new_client_ignores_pre_registration_status() -> None:
+    """Check that a fresh status is not followed by an older broadcast."""
+    current_status = DaemonStatus(
+        robot_name="test",
+        state=DaemonState.RUNNING,
+        wireless_version=False,
+        desktop_app_daemon=False,
+        simulation_enabled=False,
+        mockup_sim_enabled=False,
+        backend_status=None,
+    )
+    previous_status = current_status.model_copy(update={"state": DaemonState.STARTING})
+    server = WSServer(
+        backend=MagicMock(),
+        status_provider=lambda: current_status,
+    )
+    existing_websocket = _FakeWebSocket()
+    existing_task = asyncio.create_task(
+        server.handle_client(cast(WebSocket, existing_websocket))
+    )
+
+    async with asyncio.timeout(1):
+        await existing_websocket.message_sent.wait()
+    existing_websocket.message_sent.clear()
+
+    new_websocket = _FakeWebSocket()
+    with patch.object(
+        new_websocket,
+        "accept",
+        side_effect=lambda: server.publish_status(previous_status.model_dump_json()),
+    ):
+        new_task = asyncio.create_task(
+            server.handle_client(cast(WebSocket, new_websocket))
+        )
+
+        async with asyncio.timeout(1):
+            await existing_websocket.message_sent.wait()
+            await new_websocket.message_sent.wait()
+        await asyncio.sleep(0)
+
+    existing_websocket.disconnect()
+    new_websocket.disconnect()
+    await asyncio.gather(existing_task, new_task)
+
+    assert existing_websocket.sent == [
+        current_status.model_dump_json(),
+        previous_status.model_dump_json(),
+    ]
+    assert new_websocket.sent == [current_status.model_dump_json()]
+
+
+@pytest.mark.asyncio
 async def test_status_publish_schedules_nothing_after_last_client_disconnects() -> None:
     """Check that publishing schedules nothing after the last disconnect."""
     server = WSServer(backend=MagicMock())

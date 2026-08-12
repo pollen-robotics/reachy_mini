@@ -54,7 +54,7 @@ class WSServer(AbstractServer):
         self._cmd_event = threading.Event()
 
         # Connected client queues (populated when clients connect via handle_client)
-        self._clients: set[asyncio.Queue[str]] = set()
+        self._clients: tuple[asyncio.Queue[str], ...] = ()
 
         # Captured lazily in handle_client() from uvicorn's event loop
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -81,7 +81,7 @@ class WSServer(AbstractServer):
 
     def stop(self) -> None:
         """Stop the WebSocket server."""
-        self._clients.clear()
+        self._clients = ()
         self._loop = None
 
     def command_received_event(self) -> threading.Event:
@@ -94,22 +94,23 @@ class WSServer(AbstractServer):
 
     def _broadcast(self, msg: str) -> None:
         """Thread-safe broadcast to all connected client queues."""
-        # No clients: skip the per-tick call_soon_threadsafe wakeup.
-        if self._loop is None or not self._clients:
+        loop = self._loop
+        clients = self._clients
+        if loop is None or not clients:
             return
 
-        def _put(msg: str = msg) -> None:
-            for q in list(self._clients):
+        def _put() -> None:
+            for queue in clients:
                 try:
-                    q.put_nowait(msg)
+                    queue.put_nowait(msg)
                 except asyncio.QueueFull:
                     try:
-                        q.get_nowait()
-                        q.put_nowait(msg)
+                        queue.get_nowait()
+                        queue.put_nowait(msg)
                     except (asyncio.QueueEmpty, asyncio.QueueFull):
                         pass
 
-        self._loop.call_soon_threadsafe(_put)
+        loop.call_soon_threadsafe(_put)
 
     def publish_status(self, json_str: str) -> None:
         """Publish daemon status to all connected clients.
@@ -135,7 +136,7 @@ class WSServer(AbstractServer):
         queue: asyncio.Queue[str] = asyncio.Queue(maxsize=100)
         if self._status_provider is not None:
             queue.put_nowait(self._status_provider().model_dump_json())
-        self._clients.add(queue)
+        self._clients += (queue,)
 
         send_task = asyncio.create_task(self._send_loop(websocket, queue))
         try:
@@ -146,7 +147,9 @@ class WSServer(AbstractServer):
             logger.error(f"WS client error: {e}")
         finally:
             send_task.cancel()
-            self._clients.discard(queue)
+            self._clients = tuple(
+                client for client in self._clients if client is not queue
+            )
 
     async def _send_loop(self, websocket: WebSocket, queue: asyncio.Queue[str]) -> None:
         """Forward queued messages to the WebSocket client."""
