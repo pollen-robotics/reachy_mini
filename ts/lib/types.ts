@@ -515,6 +515,21 @@ export interface ReachyMiniInstance extends EventTarget {
     ): Promise<Record<string, unknown> | null>;
     /** Play a sound file on the robot's speakers (basename). */
     playSound(file: string): boolean;
+    /**
+     * Play a named recorded move (motion + its bundled sound) from a HF
+     * dataset, daemon-side. Fire-and-forget: returns `true` once the command
+     * is sent on the data channel (not when playback finishes), `false` if the
+     * channel isn't open. `dataset` defaults to the daemon's emotions library
+     * (`pollen-robotics/reachy-mini-emotions-library`), already pre-downloaded
+     * on the robot; pass it to source a move from another repo.
+     * `initialGotoDuration` (seconds) eases into the move's first frame
+     * instead of snapping. The daemon self-guards against a concurrent move,
+     * so a rapid double call is a no-op.
+     */
+    playRecordedMove(
+        moveName: string,
+        opts?: { dataset?: string; initialGotoDuration?: number },
+    ): boolean;
     /** Drop incoming audio queued for the robot speaker (barge-in). */
     clearIncomingAudio(): boolean;
     /** Enable daemon-side visual head tracking. */

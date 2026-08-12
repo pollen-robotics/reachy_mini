@@ -243,6 +243,28 @@ class PlaySoundCmd(BaseModel):
     file: str
 
 
+class PlayRecordedMoveCmd(BaseModel):
+    """Play a named recorded move (motion + its sidecar sound) from a dataset.
+
+    Daemon-side equivalent of ``POST /api/move/play/recorded-move-dataset``:
+    the backend loads the move from the (cache-first) HF dataset and runs it
+    through ``Backend.play_move``, so the bundled sound plays in lockstep on
+    the robot speaker. Fire-and-forget: the ack only reports that the move was
+    dispatched (or an error like an unknown name / missing dataset), not that
+    playback finished. ``dataset_name`` defaults to the pre-downloaded emotions
+    library; callers can override it to source a move from another repo.
+    """
+
+    type: Literal["play_recorded_move"] = "play_recorded_move"
+    move_name: str
+    dataset_name: Optional[str] = None
+    # Seconds to smoothly interpolate to the move's first frame before playing
+    # (0 = snap instantly, the default). Lets callers ease into a move whose
+    # start pose is far from the robot's current pose (e.g. replaying the
+    # wake-from-sleep move while already awake) instead of jumping.
+    initial_goto_duration: float = 0.0
+
+
 class SetMotorModeCmd(BaseModel):
     """Set the motor control mode (enabled, disabled, gravity_compensation)."""
 
@@ -858,6 +880,7 @@ AnyCommand = Annotated[
     | WakeUpCmd
     | GotoSleepCmd
     | PlaySoundCmd
+    | PlayRecordedMoveCmd
     | SetMotorModeCmd
     | SetTorqueCmd
     | GetMotorModeCmd

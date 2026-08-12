@@ -1045,6 +1045,23 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         return this._sendCommand({ type: 'play_sound', file });
     }
 
+    playRecordedMove(
+        moveName: string,
+        {
+            dataset,
+            initialGotoDuration,
+        }: { dataset?: string; initialGotoDuration?: number } = {},
+    ): boolean {
+        return this._sendCommand({
+            type: 'play_recorded_move',
+            move_name: moveName,
+            ...(dataset ? { dataset_name: dataset } : {}),
+            ...(initialGotoDuration && initialGotoDuration > 0
+                ? { initial_goto_duration: initialGotoDuration }
+                : {}),
+        });
+    }
+
     clearIncomingAudio(): boolean {
         return this._sendCommand({ type: 'clear_incoming_audio' });
     }

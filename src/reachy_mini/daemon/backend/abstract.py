@@ -53,6 +53,7 @@ from reachy_mini.io.protocol import (
     MockupSimBackendStatus,
     MotorControlMode,
     MujocoBackendStatus,
+    PlayRecordedMoveCmd,
     PlaySoundCmd,
     PlayUploadedAudioCmd,
     PlayUploadedMoveCmd,
@@ -1676,6 +1677,9 @@ class Backend:
             self.play_sound(cmd.file)
             send_response({"status": "ok", "command": "play_sound"})
 
+        elif isinstance(cmd, PlayRecordedMoveCmd):
+            asyncio.create_task(self._async_play_recorded_move(cmd, send_response))
+
         elif isinstance(cmd, ClearIncomingAudioCmd):
             self.clear_incoming_audio()
             send_response({"status": "ok", "command": "clear_incoming_audio"})
@@ -2610,6 +2614,56 @@ class Backend:
             send_response({"status": "ok", "command": "goto_sleep", "completed": True})
         except Exception as e:
             send_response({"error": str(e), "command": "goto_sleep"})
+
+    async def _async_play_recorded_move(
+        self,
+        cmd: PlayRecordedMoveCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Load a named move from a dataset and play it (motion + sound).
+
+        Mirrors the ``/api/move/play/recorded-move-dataset`` route but over the
+        data channel so it works on a remote WebRTC session. Fire-and-forget:
+        the ack reports dispatch success/failure (unknown move, missing
+        dataset), not playback completion. ``RecordedMoves`` reads the local
+        HF cache first, so on a pre-downloaded robot this stays off the
+        network.
+        """
+        from reachy_mini.motion.recorded_move import (
+            DEFAULT_EMOTIONS_DATASET,
+            RecordedMoves,
+        )
+
+        dataset = cmd.dataset_name or DEFAULT_EMOTIONS_DATASET
+        try:
+            move = RecordedMoves(dataset).get(cmd.move_name)
+        except Exception as e:
+            self.logger.warning(
+                f"play_recorded_move: {cmd.move_name!r} from {dataset!r} "
+                f"failed to load: {e}"
+            )
+            send_response(
+                {
+                    "command": "play_recorded_move",
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
+            return
+
+        # Dispatched: ack now (fire-and-forget), then run the move. play_move
+        # self-guards against a concurrent move, so a double-tap is a no-op.
+        send_response(
+            {
+                "command": "play_recorded_move",
+                "status": "ok",
+                "move_name": cmd.move_name,
+            }
+        )
+        try:
+            await self.play_move(move, initial_goto_duration=cmd.initial_goto_duration)
+        except Exception as e:
+            self.logger.warning(f"play_recorded_move: playback failed: {e}")
 
     async def _async_play_uploaded_move(self, cmd: PlayUploadedMoveCmd) -> None:
         """Run Backend.play_move on a previously-uploaded move slot.
