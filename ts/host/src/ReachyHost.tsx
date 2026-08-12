@@ -15,6 +15,7 @@ import type { JSX } from 'react';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 
+import { HostErrorBoundary } from './components/HostErrorBoundary';
 import { ReachyHostShell } from './components/ReachyHostShell';
 import { useSdk } from './hooks/useSdk';
 import { resolveSignalingUrl } from './lib/signalingUrl';
@@ -87,18 +88,20 @@ export function ReachyHost({
   return (
     <ThemeProvider theme={theme === 'dark' ? darkTheme : lightTheme}>
       <CssBaseline />
-      <ReachyHostShell
-        sdk={sdk}
-        appName={appName}
-        appIconUrl={appIconUrl}
-        appEmoji={appEmoji}
-        hostName={hostName}
-        theme={theme}
-        initialConfig={config}
-        enableMicrophone={enableMicrophone}
-        embedPath={embedPath}
-        isLocalDevMissingConfig={isLocalDevMissingConfig}
-      />
+      <HostErrorBoundary>
+        <ReachyHostShell
+          sdk={sdk}
+          appName={appName}
+          appIconUrl={appIconUrl}
+          appEmoji={appEmoji}
+          hostName={hostName}
+          theme={theme}
+          initialConfig={config}
+          enableMicrophone={enableMicrophone}
+          embedPath={embedPath}
+          isLocalDevMissingConfig={isLocalDevMissingConfig}
+        />
+      </HostErrorBoundary>
     </ThemeProvider>
   );
 }

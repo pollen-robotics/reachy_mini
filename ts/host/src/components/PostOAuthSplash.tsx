@@ -1,15 +1,20 @@
 /**
- * Covering splash shown on the OAuth return leg, while the SDK
- * resolves the cached token via `authenticate()`.
+ * Covering splash for the OAuth return leg, while the SDK resolves the
+ * cached token via `authenticate()`. Shows the HF logo and the
+ * "Signing you in…" heading: the user DID just authorise on
+ * huggingface.co, so both are promises we know we're keeping. (The
+ * plain boot leg - auth state still unknown - renders a bare neutral
+ * spinner inlined in `ReachyHostShell` instead: no OAuth branding for
+ * a user who didn't just sign in.)
  *
- * Without it the host would render `SignInView` (the "Continue
- * with Hugging Face" button) for the ~30-500 ms the in-flight
- * `authenticate()` takes, so the user briefly bounces back to the
- * sign-in button after already authorising on huggingface.co.
+ * Without this splash the host would render `SignInView` (the
+ * "Continue with Hugging Face" button) for the ~30-500 ms the
+ * in-flight `authenticate()` takes, so an authenticated user would
+ * briefly bounce back to the sign-in button.
  *
- * This splash deliberately mirrors `WelcomeBackOverlay`'s frame
- * (same `background.default` fill, same centred HF logo) so the
- * transition reads as one continuous beat:
+ * It deliberately mirrors `WelcomeBackOverlay`'s frame (same
+ * `background.default` fill, same centred HF logo) so the transition
+ * reads as one continuous beat:
  *
  *   PostOAuthSplash (logo + spinner, no name)
  *     → WelcomeBackOverlay ("Hello, <name>")
@@ -21,7 +26,13 @@
  * `ReachyHostShell`).
  */
 import type { JSX } from 'react';
-import { Box, CircularProgress, Stack, Typography, keyframes } from '@mui/material';
+import {
+  Box,
+  CircularProgress,
+  Stack,
+  Typography,
+  keyframes,
+} from '@mui/material';
 
 import { hfLogoSvg } from '../assets';
 import { FONT_WEIGHT, TYPO } from '../lib/tokens';
@@ -100,7 +111,11 @@ export function PostOAuthSplash(): JSX.Element {
         >
           Signing you in…
         </Typography>
-        <CircularProgress size={22} thickness={5} color="primary" />
+        <CircularProgress
+          size={22}
+          thickness={5}
+          sx={{ color: 'text.secondary' }}
+        />
       </Stack>
     </Box>
   );
