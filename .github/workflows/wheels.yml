@@ -94,6 +94,24 @@ jobs:
           done
           exit $fail
 
+      # post-release and publish-npm dispatch other workflows with this token, which
+      # needs Actions: write on top of contents/pull-requests.
+      - name: Check RELEASE_PAT can dispatch workflows
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          echo "### RELEASE_PAT workflow dispatch" >> "$GITHUB_STEP_SUMMARY"
+          # Listing workflow runs needs Actions: read; dispatching needs Actions: write,
+          # which has no read-only probe — so this catches "no Actions scope at all".
+          if gh api "repos/${{ github.repository }}/actions/workflows" --jq '.total_count' >/dev/null 2>&1; then
+            echo "✅ RELEASE_PAT can read Actions (grant 'Actions: write' for dispatch)"
+            echo "- ✅ Actions scope present (needs *write* to dispatch npm-publish/docs)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ RELEASE_PAT has no Actions access — npm-publish and the docs build won't be dispatched"
+            echo "- ❌ Actions scope missing on \`RELEASE_PAT\`" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
       - name: Check the pypi environment exists
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -381,6 +399,31 @@ jobs:
           print-hash: true
 
   # ============================================================
+  # 2b. PUBLISH — npm (TS SDK), by dispatching npm-publish.yml at this tag
+  #
+  # npm-publish only publishes on a `release` event, which never fires here: releases
+  # created with GITHUB_TOKEN don't trigger workflows (recursion guard), and later RCs
+  # and the final promotion only *edit* an existing release (no `created` event). So the
+  # SDK silently stopped shipping. Dispatch it explicitly instead — it reads the version
+  # from pyproject.toml at the tag, so rc tags land on the `rc` dist-tag and X.Y.Z on
+  # `latest`. Needs RELEASE_PAT (Actions: write); GITHUB_TOKEN would be recursion-guarded.
+  # ============================================================
+  publish-npm:
+    permissions: {}
+    needs: [prepare, publish-pypi]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch npm-publish at ${{ needs.prepare.outputs.tag }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh workflow run npm-publish.yml --repo "${{ github.repository }}" --ref "$TAG"
+          echo "Dispatched npm-publish at $TAG — see the 'Publish npm' workflow."
+          echo "- npm publish dispatched at \`$TAG\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================
   # 3. RELEASE NOTES — AI-drafted, one GitHub release per minor
   #
   #   - minor-prerelease : if no release exists for this minor, generate notes with OpenCode
@@ -446,8 +489,10 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.RELEASE_NOTES_HF_TOKEN }}
           GITHUB_TOKEN_RELEASE_NOTES: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
           RELEASE_NOTES_HEAD: ${{ needs.prepare.outputs.tag }}
+          EXISTING_TAG: ${{ steps.check_draft.outputs.existing_tag }}
         run: |
           # OpenCode reads the huggingface provider credential from its auth store, not from
           # HF_TOKEN env — write it non-interactively so `opencode run` doesn't hang on login.
@@ -457,9 +502,29 @@ jobs:
           mkdir -p "$HOME/.config/opencode"
           jq -n '{provider:{huggingface:{options:{headers:{"X-HF-Bill-To":"pollen-robotics"}}}}}' \
             > "$HOME/.config/opencode/opencode.json"
+
+          # Later RC: seed from the release's current notes so manual edits survive — the
+          # validation loop then only appends PRs merged since, and calls no model at all
+          # when nothing changed. First RC (no release yet) generates from scratch.
+          SEED_ARG=""
+          if [[ -n "$EXISTING_TAG" ]]; then
+            mkdir -p /tmp/seed
+            if gh release view "$EXISTING_TAG" --json body -q '.body' > /tmp/seed/notes.md \
+               && [[ -s /tmp/seed/notes.md ]]; then
+              # The body is stored without the "# <title>" first line; put it back so the
+              # seeded file matches the generator's format (title + body).
+              TITLE=$(gh release view "$EXISTING_TAG" --json name -q '.name')
+              { echo "# ${TITLE}"; cat /tmp/seed/notes.md; } > /tmp/seed/seeded.md
+              SEED_ARG="--seed /tmp/seed/seeded.md"
+              echo "Seeding notes from release $EXISTING_TAG"
+            else
+              echo "::warning::Could not read notes from $EXISTING_TAG — regenerating from scratch."
+            fi
+          fi
+
           python -m utils.release_notes.generate_release_notes \
             --since "${{ needs.prepare.outputs.since_tag }}" \
-            --${{ needs.prepare.outputs.bump_type }}
+            --${{ needs.prepare.outputs.bump_type }} $SEED_ARG
 
       - name: Create or update GitHub release
         if: ${{ inputs.release_type != 'minor-release' }}

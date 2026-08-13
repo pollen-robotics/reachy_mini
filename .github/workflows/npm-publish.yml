@@ -4,6 +4,11 @@ on:
   release:
     types:
       - created
+  # Dispatched by the Release workflow with --ref <tag> after the PyPI publish.
+  # A `release` event is not usable there: releases created with GITHUB_TOKEN don't
+  # trigger workflows (recursion guard), and later RCs / the final promotion only
+  # *edit* an existing release, which never emits `created`.
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -141,8 +146,10 @@ jobs:
         if: github.event_name == 'pull_request'
         run: npm pack --dry-run
 
+      # workflow_dispatch is the Release workflow shipping a tag (rc → `rc`, X.Y.Z →
+      # `latest`); the version-compute step above already treats it like a release.
       - name: Publish (release)
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         run: npm publish --tag "${{ steps.ver.outputs.release_tag }}"
 
       - name: Publish (main)

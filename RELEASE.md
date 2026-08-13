@@ -83,6 +83,16 @@ python -m utils.release_notes.generate_release_notes --since v1.9.0 --minor
 
 The GitHub prerelease is editable before you run `minor-release` — polish tone there.
 
-**Note:** every `minor-prerelease` run regenerates the notes and overwrites that release's
-body, so hand edits are lost if you cut another RC. Do the final polish after the last RC,
-just before `minor-release` (which never regenerates — it publishes the body as-is).
+**Your edits survive later RCs.** The first RC of a minor generates the notes from
+scratch. Every later RC *seeds* from the release's current body (`--seed`) and runs only
+the validation loop, which appends the PRs merged since and drops stale ones — the
+surrounding prose, including anything you rewrote by hand, is left alone. If no new PRs
+landed since the last RC, validation passes immediately and the model is never called.
+
+`minor-release` never regenerates at all: it publishes the body as-is, so the last thing
+you edited is exactly what ships.
+
+**One caveat when editing.** The validation loop enforces an exact match against the PR
+manifest, so a `#1234` reference that is *not* part of this release gets treated as an
+extra and removed on the next RC. Prose is safe; a hand-added issue link or a "thanks,
+see #999" is not. Write those without the `#` (or add them after the last RC).
