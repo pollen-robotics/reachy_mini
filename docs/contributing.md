@@ -6,7 +6,7 @@ Follow the [instructions](https://huggingface.co/docs/reachy_mini/SDK/installati
 
 ## Code quality
 
-The quality of code is insured by ruff and mypy. Please make sure to run them before pushing your code.
+The quality of code is ensured by ruff and mypy. Please make sure to run them before pushing your code.
 
 All the tools are available in the [dev] dependency group, so you can install them with:
 
@@ -36,7 +36,7 @@ To check the type annotations of the code, you can run mypy with the following c
 mypy
 ```
 
-Please note that mpy results depend on the installed package. The [CI](../.github/workflows/lint.yml) runs mypy with the full installation with uv on linux. Any differences between the CI and the local environment are probably due to missing dependencies. To ensure you have the same environment as the CI, you can install the package with all the extras with uv:
+Please note that mypy results depend on the installed package. The [CI](../.github/workflows/lint.yml) runs mypy with the full installation with uv on linux. Any differences between the CI and the local environment are probably due to missing dependencies. To ensure you have the same environment as the CI, you can install the package with all the extras with uv:
 
 ```bash
 uv sync --all-extras --group dev
