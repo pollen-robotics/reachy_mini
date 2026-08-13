@@ -101,16 +101,25 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
           echo "### RELEASE_PAT workflow dispatch" >> "$GITHUB_STEP_SUMMARY"
-          # Listing workflow runs needs Actions: read; dispatching needs Actions: write,
-          # which has no read-only probe — so this catches "no Actions scope at all".
-          if gh api "repos/${{ github.repository }}/actions/workflows" --jq '.total_count' >/dev/null 2>&1; then
-            echo "✅ RELEASE_PAT can read Actions (grant 'Actions: write' for dispatch)"
-            echo "- ✅ Actions scope present (needs *write* to dispatch npm-publish/docs)" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "❌ RELEASE_PAT has no Actions access — npm-publish and the docs build won't be dispatched"
-            echo "- ❌ Actions scope missing on \`RELEASE_PAT\`" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
+          # Probe Actions: *write* without side effects by dispatching a workflow id that
+          # cannot exist: 404 means we were allowed through and only the workflow was
+          # missing, 403 means the token lacks the permission. Reading the workflow list
+          # is useless here — this repo is public, so it succeeds even with no Actions
+          # permission at all (which is how a missing scope slipped through before).
+          CODE=$(gh api -X POST "repos/${{ github.repository }}/actions/workflows/0/dispatches" \
+            -f ref=main --include 2>&1 | grep -oE 'HTTP/[0-9.]+ [0-9]{3}' | grep -oE '[0-9]{3}$' | head -1)
+          case "$CODE" in
+            404)
+              echo "✅ RELEASE_PAT has Actions: write (npm-publish/docs dispatch will work)"
+              echo "- ✅ \`RELEASE_PAT\` has Actions: write" >> "$GITHUB_STEP_SUMMARY" ;;
+            403)
+              echo "❌ RELEASE_PAT lacks Actions: write — npm-publish and the docs build cannot be dispatched."
+              echo "   Fix: fine-grained PAT → Repository permissions → Add permissions → Actions: Read and write."
+              echo "- ❌ \`RELEASE_PAT\` lacks Actions: write" >> "$GITHUB_STEP_SUMMARY"; exit 1 ;;
+            *)
+              echo "⚠️ unexpected status $CODE probing Actions: write — not failing preflight"
+              echo "- ⚠️ Actions: write probe returned $CODE" >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
 
       - name: Check the pypi environment exists
         env:
