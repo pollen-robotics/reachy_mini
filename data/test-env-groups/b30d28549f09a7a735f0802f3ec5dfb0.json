@@ -1,1 +1,1 @@
-{"id":"b30d28549f09a7a735f0802f3ec5dfb0","fullName":"tests.unit_tests.test_discovery#test_robot_collector_add_service","name":"test_robot_collector_add_service","status":"passed","testResultsByEnv":{"default":"84dbae167271febd0eb5f890d31c116b"}}
+{"id":"b30d28549f09a7a735f0802f3ec5dfb0","fullName":"tests.unit_tests.test_discovery#test_robot_collector_add_service","name":"test_robot_collector_add_service","status":"passed","testResultsByEnv":{"default":"42f3f790047f5880e2aa6e908e09321f"}}
