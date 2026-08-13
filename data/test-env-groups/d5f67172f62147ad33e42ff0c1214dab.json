@@ -1,1 +1,1 @@
-{"id":"d5f67172f62147ad33e42ff0c1214dab","fullName":"tests.unit_tests.test_router_hf_auth#test_save_token_failure","name":"test_save_token_failure","status":"passed","testResultsByEnv":{"default":"7a2c29ab403e702822447a5ea87b0b29"}}
+{"id":"d5f67172f62147ad33e42ff0c1214dab","fullName":"tests.unit_tests.test_router_hf_auth#test_save_token_failure","name":"test_save_token_failure","status":"passed","testResultsByEnv":{"default":"418dd417a5023ed49db77dc2595d9d18"}}

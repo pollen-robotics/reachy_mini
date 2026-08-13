@@ -1,1 +1,1 @@
-{"id":"254c46a376d608e23537ede7ad5224d6","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_info_404_is_unknown_job","name":"test_update_info_404_is_unknown_job","status":"passed","testResultsByEnv":{"default":"75be5e10f1362db7e81f9d7360ddd923"}}
+{"id":"254c46a376d608e23537ede7ad5224d6","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_info_404_is_unknown_job","name":"test_update_info_404_is_unknown_job","status":"passed","testResultsByEnv":{"default":"164e0e5a3629976c1f5326b15f7161f5"}}

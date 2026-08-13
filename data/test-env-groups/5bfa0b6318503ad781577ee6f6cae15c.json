@@ -1,1 +1,1 @@
-{"id":"5bfa0b6318503ad781577ee6f6cae15c","fullName":"tests.unit_tests.test_autostart_app#test_install_failure_returns_false","name":"test_install_failure_returns_false","status":"passed","testResultsByEnv":{"default":"237ea247c28137010d80dbef9cb344a3"}}
+{"id":"5bfa0b6318503ad781577ee6f6cae15c","fullName":"tests.unit_tests.test_autostart_app#test_install_failure_returns_false","name":"test_install_failure_returns_false","status":"passed","testResultsByEnv":{"default":"72a70d7a894f05b9421ae57c0b6a3068"}}
