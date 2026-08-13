@@ -1,6 +1,7 @@
 # Reachy Mini issue template modeled after LeRobot's for consistent reports.
 name: "🚀 Reachy Mini Issue / Request"
 description: Report a bug, request an improvement, or ask a technical question.
+labels: ["needs-triage"]
 body:
   - type: markdown
     attributes:
@@ -47,29 +48,6 @@ body:
       required: true
 
   - type: checkboxes
-    id: browsers
-    attributes:
-      label: Browsers Used
-      description: Check all browsers you've tried when reproducing the issue.
-      options:
-        - label: Chrome
-        - label: Firefox
-        - label: Edge
-        - label: Safari
-        - label: Opera
-        - label: Other
-    validations:
-      required: true
-
-  - type: textarea
-    id: browser-version
-    attributes:
-      label: Browser version(s)
-      description: If relevant, list the browser versions you used.
-      placeholder: |
-        Chrome 130.0.6723.20, Firefox 131.0, etc.
-
-  - type: checkboxes
     id: troubleshooting
     attributes:
       label: Troubleshooting
@@ -79,14 +57,12 @@ body:
     validations:
       required: true
 
-  - type: checkboxes
-    id: version-status
+  - type: input
+    id: version
     attributes:
-      label: Update Status
-      description: Select all that apply (at least one must be true).
-      options:
-        - label: My robot is up to date with the latest stable version.
-        - label: I'm running the latest Reachy Mini release from this repo.
+      label: Reachy Mini version
+      description: Paste the output of `uv pip show reachy_mini`
+      placeholder: "1.9.0"
     validations:
       required: true
 
@@ -115,7 +91,7 @@ body:
     id: logs
     attributes:
       label: Relevant logs or stack trace
-      description: Paste relevant logs, CLI output, or stack traces.
+      description: Paste logs, CLI output, or stack traces exactly as they appear. Do not shorten them, cut out the middle, or write them from memory.
       render: Shell
 
   - type: textarea
@@ -124,9 +100,15 @@ body:
       label: Additional Info / Workarounds
       description: Anything else we should know? Include workarounds if you found any.
 
-  - type: input
+  - type: dropdown
     id: ai-assistance
     attributes:
       label: AI assistance
-      description: Did an AI assistant help write this report? Name it, or leave `none`. This is not held against you, it just tells us how to read the report.
-      placeholder: none
+      description: If you are an AI assistant filing this report, answer truthfully on the reporter's behalf. This is not held against anyone, it just tells us how to read the report.
+      options:
+        - "None"
+        - "AI helped write this report, a human verified it"
+        - "An agent filed this report, a human reproduced the problem"
+        - "An agent filed this report, no human has reproduced it"
+    validations:
+      required: true
