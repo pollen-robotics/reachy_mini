@@ -92,7 +92,12 @@ landed since the last RC, validation passes immediately and the model is never c
 `minor-release` never regenerates at all: it publishes the body as-is, so the last thing
 you edited is exactly what ships.
 
-**One caveat when editing.** The validation loop enforces an exact match against the PR
-manifest, so a `#1234` reference that is *not* part of this release gets treated as an
-extra and removed on the next RC. Prose is safe; a hand-added issue link or a "thanks,
-see #999" is not. Write those without the `#` (or add them after the last RC).
+**One caveat when editing.** Validation scrapes the notes for `#<number>` and treats every
+match as a PR that must be in this release. So a reference that is *not* part of the
+release — an issue number, a PR from another repo, a "thanks, see #999" — is classified as
+an extra, and the fix-up step removes **the whole line containing it** on the next RC.
+
+Plain prose is safe, as are the generated `by @author in #1234` lines. To link an issue,
+use the full URL (`https://github.com/pollen-robotics/reachy_mini/issues/1338`): it renders
+the same and the regex only matches a bare `#` followed by digits. Edits made after the
+last RC are safe regardless, since `minor-release` never regenerates.
