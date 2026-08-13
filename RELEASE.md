@@ -16,7 +16,7 @@ statically in `pyproject.toml` (single source of truth): `main` carries
 | Mode | Trigger from | What it does |
 |------|--------------|--------------|
 | `dry-run` | anywhere | Read-only preflight: checks every secret/var is set, that `RELEASE_PAT` can push both repos, that the `pypi` environment exists, that OpenCode + the model + the HF token work (tiny live call), and previews the versions each mode would produce. Tags nothing, publishes nothing, opens no PR. Run this first. |
-| `minor-prerelease` | `main` | Reads `X.Y.Z.dev0` → cuts `X.Y.Zrc<N>` (RC starts at 1), creates/reuses `vX.Y-release`, tags, publishes to PyPI, regenerates the AI release notes, and publishes/refreshes **this minor's GitHub prerelease** (one release per minor: each RC retags it and refreshes its notes, so the releases page always shows the newest RC as a published prerelease). Also opens an RC-test PR in `reachy_mini_conversation_app`. |
+| `minor-prerelease` | `main` | Reads `X.Y.Z.dev0` → cuts `X.Y.Zrc<N>` (RC starts at 1), **resets `vX.Y-release` to `main`** so every RC is a fresh snapshot, tags, publishes to PyPI, regenerates the AI release notes, and publishes/refreshes **this minor's GitHub prerelease** (one release per minor: each RC retags it and refreshes its notes, so the releases page always shows the newest RC as a published prerelease). Also opens an RC-test PR in `reachy_mini_conversation_app`. |
 | `minor-release` | `main` | Promotes the latest RC → `X.Y.Z`, publishes to PyPI, promotes that prerelease to the final tag (marked *latest*, prerelease flag cleared), triggers the docs build, and opens a PR bumping `main` to `X.(Y+1).0.dev0`. |
 | `patch-release` | `vX.Y-release` | Bumps the patch (`X.Y.Z+1`), tags, publishes. Not marked *latest*. |
 
@@ -29,7 +29,8 @@ Always run `dry-run` first to confirm secrets/vars/access are set.
 ## Job graph & recovery
 
 ```
-prepare ──▶ publish-pypi ──┬──▶ release-notes
+prepare ──▶ publish-pypi ──┬──▶ publish-npm      (dispatches the npm workflow at the tag)
+                           ├──▶ release-notes
                            ├──▶ test-downstream   (prerelease only)
                            └──▶ post-release       (minor-release only)
 ```
@@ -44,6 +45,15 @@ error on the now-existing tag). Instead **re-run the `publish-pypi` job from the
 UI** ("Re-run failed jobs"); once it succeeds, `release-notes` and the rest run off it.
 No re-tagging needed. If the tag/branch are wrong and you must start over, delete the tag
 (and the `vX.Y-release` branch if it was just created) before re-triggering.
+
+## The release branch
+
+`vX.Y-release` is **reset to `main` on every `minor-prerelease`** (force-pushed), so each
+RC ships exactly what is on `main` at that moment. Anything committed straight onto the
+release branch is discarded — land the fix on `main` and cut another RC.
+
+`minor-release` and `patch-release` do *not* reset: they build on the branch as the last
+RC left it, so the final release is the code you actually tested.
 
 ## One-time setup
 
