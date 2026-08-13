@@ -73,7 +73,7 @@ Performance and robustness tests on physical robots are highly encouraged whenev
 
 Title the PR like a commit: `type(scope): what it does`, e.g. `fix(media): tear down the playbin on EOS`.
 
-Label every issue and every PR. That is how we triage and filter, so it isn't optional. Pick the kind of change (`bug`, `enhancement`, `documentation`, `ci`, `qol`) and the area it touches (`wireless`, `lite`, `simulation`, `audio`, `video`, `motors`).
+Label every issue and every PR. That is how we triage and filter, so it isn't optional. Pick the kind of change (`bug`, `enhancement`, `documentation`, `ci`, `qol`) and the area it touches (`wireless`, `lite`, `simulation`, `audio`, `video`, `motors`). The issue form adds `needs-triage` on its own; a maintainer removes it after a first read, so leave it alone.
 
 Each commit is one logical change, with a message saying what it does and why. Commits are read individually, so each must stand on its own; squash fixups and work-in-progress before asking for review. On a branch nobody has reviewed yet, rewrite history freely and `git push --force-with-lease`. Once review has started, stop rewriting, or reviewers lose their place.
 
@@ -93,6 +93,6 @@ Assisted-by: Claude:claude-opus-4-7
 
 Append specialized analysis tools if you used any (`Assisted-by: Claude:claude-opus-4-7 coccinelle sparse`); don't list generic ones like git or ruff.
 
-Say it in the issue and in the PR as well, not only in the commits. The same one-line trailer in the description is enough, and `none` is a perfectly good answer. This is not a judgement on the contribution, it just tells reviewers how to read it.
+Say it outside the commits as well. In a PR, tick the matching box in the template's AI assistance section. In an issue, answer the AI assistance dropdown in the form. "No AI involvement" is a perfectly good answer; this is not a judgement on the contribution, it just tells reviewers how to read it.
 
 An assistant must **never** add a `Signed-off-by` trailer, since only a human can certify the DCO. Keep agent and model names out of the PR title too.

@@ -4,7 +4,8 @@
 
 Closes #
 
-<!-- The problem, and how to reproduce it. -->
+<!-- The problem, and how to reproduce it.
+     If there is no issue yet, describe the problem here and drop the "Closes #" line. -->
 
 ## Description
 
@@ -27,5 +28,10 @@ Closes #
 
 ## AI assistance
 
-<!-- `Assisted-by: <Agent>:<model-id>`, or `none`. See docs/contributing.md. -->
+<!-- Tick exactly one. Assisted commits also carry the Assisted-by trailer, see docs/contributing.md. -->
+
+- [ ] No AI involvement
+- [ ] AI helped with wording or boilerplate
+- [ ] AI wrote code here, and I ran and reviewed it
+- [ ] An agent produced this PR, and I have not run it myself
 
