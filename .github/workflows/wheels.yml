@@ -101,16 +101,25 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
           echo "### RELEASE_PAT workflow dispatch" >> "$GITHUB_STEP_SUMMARY"
-          # Listing workflow runs needs Actions: read; dispatching needs Actions: write,
-          # which has no read-only probe — so this catches "no Actions scope at all".
-          if gh api "repos/${{ github.repository }}/actions/workflows" --jq '.total_count' >/dev/null 2>&1; then
-            echo "✅ RELEASE_PAT can read Actions (grant 'Actions: write' for dispatch)"
-            echo "- ✅ Actions scope present (needs *write* to dispatch npm-publish/docs)" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "❌ RELEASE_PAT has no Actions access — npm-publish and the docs build won't be dispatched"
-            echo "- ❌ Actions scope missing on \`RELEASE_PAT\`" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
+          # Probe Actions: *write* without side effects by dispatching a workflow id that
+          # cannot exist: 404 means we were allowed through and only the workflow was
+          # missing, 403 means the token lacks the permission. Reading the workflow list
+          # is useless here — this repo is public, so it succeeds even with no Actions
+          # permission at all (which is how a missing scope slipped through before).
+          CODE=$(gh api -X POST "repos/${{ github.repository }}/actions/workflows/0/dispatches" \
+            -f ref=main --include 2>&1 | grep -oE 'HTTP/[0-9.]+ [0-9]{3}' | grep -oE '[0-9]{3}$' | head -1)
+          case "$CODE" in
+            404)
+              echo "✅ RELEASE_PAT has Actions: write (npm-publish/docs dispatch will work)"
+              echo "- ✅ \`RELEASE_PAT\` has Actions: write" >> "$GITHUB_STEP_SUMMARY" ;;
+            403)
+              echo "❌ RELEASE_PAT lacks Actions: write — npm-publish and the docs build cannot be dispatched."
+              echo "   Fix: fine-grained PAT → Repository permissions → Add permissions → Actions: Read and write."
+              echo "- ❌ \`RELEASE_PAT\` lacks Actions: write" >> "$GITHUB_STEP_SUMMARY"; exit 1 ;;
+            *)
+              echo "⚠️ unexpected status $CODE probing Actions: write — not failing preflight"
+              echo "- ⚠️ Actions: write probe returned $CODE" >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
 
       - name: Check the pypi environment exists
         env:
@@ -324,13 +333,14 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$RELEASE_TYPE" == "minor-prerelease" ]]; then
-            if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
-              git fetch origin "$BRANCH"
-              git checkout "$BRANCH"
-              git pull origin "$BRANCH"
-            else
-              git checkout -b "$BRANCH"
-            fi
+            # Every RC is a fresh snapshot of main. Previously the branch was only
+            # created at rc1 and then reused, so rc2+ silently shipped the rc1 code with
+            # a new version number (v1.10.0rc4 was cut 53 commits behind main).
+            # WARNING: this discards anything committed straight onto the release branch —
+            # land fixes on main and cut another RC instead of pushing here.
+            git fetch origin main
+            git checkout -B "$BRANCH" origin/main
+            echo "Release branch $BRANCH reset to origin/main ($(git rev-parse --short HEAD))"
           else
             if ! git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
               echo "::error::Branch $BRANCH does not exist. Run a minor-prerelease first."
@@ -365,7 +375,11 @@ jobs:
           else
             git tag "$TAG" -m "${TAG} release"
           fi
-          git push -u --tags origin "$BRANCH"
+          # Resetting the branch to main makes this a non-fast-forward push. Only this
+          # workflow writes to the branch, and --force-with-lease still refuses if the
+          # remote moved since our fetch.
+          git push --force-with-lease -u origin "$BRANCH"
+          git push origin "$TAG"
 
   # ============================================================
   # 2. PUBLISH — PyPI via OIDC Trusted Publishing (no stored token)
@@ -441,9 +455,14 @@ jobs:
     needs: [prepare, publish-pypi]
     runs-on: ubuntu-latest
     steps:
+      # Check out main, not the tag: this job only needs the notes tooling and the
+      # OpenCode skill, and those must be the current ones. Checking out the tag ran
+      # whatever tooling that release branch happened to carry, which is how a tag cut
+      # before a tooling change failed with "unrecognized arguments: --seed".
+      # The PR range comes from the API via RELEASE_NOTES_HEAD, not from this checkout.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
-          ref: ${{ needs.prepare.outputs.tag }}
+          ref: main
           fetch-depth: 0
 
       # --- Find the release object for this minor, if any ---
