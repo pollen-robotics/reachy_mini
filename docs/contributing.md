@@ -69,6 +69,8 @@ One PR = one issue. A problem spanning several concerns gets split into unitary 
 
 The description must stand on its own: what's the problem, how to reproduce it, what's the solution, and how you know it works. A reviewer should not have to open the linked issue to follow the change. Drop the reproduction when there's nothing to reproduce, as is usually the case for a new feature.
 
+Performance and robustness tests on physical robots are highly encouraged whenever they make sense. Paste the results (logs, charts, plots) and how to reproduce them as an annex below the main message. [#1294](https://github.com/pollen-robotics/reachy_mini/pull/1294), [#1343](https://github.com/pollen-robotics/reachy_mini/pull/1343) and [#1267](https://github.com/pollen-robotics/reachy_mini/pull/1267) are good examples of the style.
+
 Title the PR like a commit: `type(scope): what it does`, e.g. `fix(media): tear down the playbin on EOS`.
 
 Label every issue and every PR. That is how we triage and filter, so it isn't optional. Pick the kind of change (`bug`, `enhancement`, `documentation`, `ci`, `qol`) and the area it touches (`wireless`, `lite`, `simulation`, `audio`, `video`, `motors`).

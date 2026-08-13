@@ -12,7 +12,10 @@ Closes #
 
 ## Testing
 
-<!-- Evidence it works: test name, log, before/after. -->
+<!-- Evidence it works: test name, log, before/after.
+     Measurements on a physical robot are highly encouraged whenever they make sense.
+     Paste the logs, charts and how to reproduce them as an annex below this message.
+     Good examples: #1294, #1343, #1267. -->
 
 ## Tested on
 
