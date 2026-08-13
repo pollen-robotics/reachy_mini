@@ -1,1 +1,1 @@
-{"id":"50a74a780c93898b1f2e827f9e3c968c","fullName":"tests.unit_tests.test_discovery#test_registered_txt_records_carry_metadata_keys","name":"test_registered_txt_records_carry_metadata_keys[lite]","status":"passed","testResultsByEnv":{"default":"3412373a9c342e2272af5ae7482c0f78"}}
+{"id":"50a74a780c93898b1f2e827f9e3c968c","fullName":"tests.unit_tests.test_discovery#test_registered_txt_records_carry_metadata_keys","name":"test_registered_txt_records_carry_metadata_keys[wireless]","status":"passed","testResultsByEnv":{"default":"6a43f90d4935dbfe61c66fd480369934"}}

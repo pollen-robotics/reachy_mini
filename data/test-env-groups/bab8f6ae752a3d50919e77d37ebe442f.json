@@ -1,1 +1,1 @@
-{"id":"bab8f6ae752a3d50919e77d37ebe442f","fullName":"tests.unit_tests.test_hf_hub_private_api_contract#test_installed_version_within_supported_range","name":"test_installed_version_within_supported_range","status":"passed","testResultsByEnv":{"default":"25afd04cb293e52e0b9d991fa56e057b"}}
+{"id":"bab8f6ae752a3d50919e77d37ebe442f","fullName":"tests.unit_tests.test_hf_hub_private_api_contract#test_installed_version_within_supported_range","name":"test_installed_version_within_supported_range","status":"passed","testResultsByEnv":{"default":"64130a60929b69d40535d9a576a7da0a"}}

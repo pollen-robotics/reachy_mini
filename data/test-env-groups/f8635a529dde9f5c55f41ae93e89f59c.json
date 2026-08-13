@@ -1,1 +1,1 @@
-{"id":"f8635a529dde9f5c55f41ae93e89f59c","fullName":"tests.unit_tests.test_central_consumer#test_send_command_refuses_when_channel_closed","name":"test_send_command_refuses_when_channel_closed","status":"passed","testResultsByEnv":{"default":"466d02bf97a20eb69e0337438c09efc7"}}
+{"id":"f8635a529dde9f5c55f41ae93e89f59c","fullName":"tests.unit_tests.test_central_consumer#test_send_command_refuses_when_channel_closed","name":"test_send_command_refuses_when_channel_closed","status":"passed","testResultsByEnv":{"default":"9050f403b635b7d113f1552ea2ab216e"}}

@@ -1,1 +1,1 @@
-{"id":"57b9c8f715a96e2dfcbd37c6da71e0b9","fullName":"tests.unit_tests.test_wireless_version#test_get_local_version_pep440_dev","name":"test_get_local_version_pep440_dev","status":"passed","testResultsByEnv":{"default":"1edcfec596b17c463ec62d3764f5d506"}}
+{"id":"57b9c8f715a96e2dfcbd37c6da71e0b9","fullName":"tests.unit_tests.test_wireless_version#test_get_local_version_pep440_dev","name":"test_get_local_version_pep440_dev","status":"passed","testResultsByEnv":{"default":"05b5874db362c98193fc35a924292bfd"}}

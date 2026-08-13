@@ -1,1 +1,1 @@
-{"id":"28f2b0cd475c7387ba6e488f72cdc3b3","fullName":"tests.unit_tests.test_startup_app_config#test_update_none_on_absent_key_writes_empty_config","name":"test_update_none_on_absent_key_writes_empty_config","status":"passed","testResultsByEnv":{"default":"61e377f13eedfefce5aeef740d97de39"}}
+{"id":"28f2b0cd475c7387ba6e488f72cdc3b3","fullName":"tests.unit_tests.test_startup_app_config#test_update_none_on_absent_key_writes_empty_config","name":"test_update_none_on_absent_key_writes_empty_config","status":"passed","testResultsByEnv":{"default":"b7b6f0363d048c9539a2e159c428f255"}}

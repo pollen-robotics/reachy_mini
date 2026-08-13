@@ -1,1 +1,1 @@
-{"id":"2ebfeba4cfdd265c52303959cf554dba","fullName":"tests.unit_tests.test_router_hf_auth#test_oauth_session_delete_success","name":"test_oauth_session_delete_success","status":"passed","testResultsByEnv":{"default":"0036ab6b2804a2e97a17de41c7dddd19"}}
+{"id":"2ebfeba4cfdd265c52303959cf554dba","fullName":"tests.unit_tests.test_router_hf_auth#test_oauth_session_delete_success","name":"test_oauth_session_delete_success","status":"passed","testResultsByEnv":{"default":"67a49e3488db8f751655c85f708df020"}}

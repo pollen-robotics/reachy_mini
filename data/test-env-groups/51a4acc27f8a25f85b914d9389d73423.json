@@ -1,1 +1,1 @@
-{"id":"51a4acc27f8a25f85b914d9389d73423","fullName":"tests.unit_tests.test_daemon_logging_config#test_unconfigured_root_drops_info","name":"test_unconfigured_root_drops_info","status":"passed","testResultsByEnv":{"default":"68ae19270fe31da40b606c8460617df0"}}
+{"id":"51a4acc27f8a25f85b914d9389d73423","fullName":"tests.unit_tests.test_daemon_logging_config#test_unconfigured_root_drops_info","name":"test_unconfigured_root_drops_info","status":"passed","testResultsByEnv":{"default":"84f12fef1847c69c9056d1c634be9b8a"}}
