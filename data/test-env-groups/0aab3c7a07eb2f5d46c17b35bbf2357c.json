@@ -1,1 +1,1 @@
-{"id":"0aab3c7a07eb2f5d46c17b35bbf2357c","fullName":"tests.unit_tests.test_app_metadata#test_to_plain_json_normalizes_hf_objects","name":"test_to_plain_json_normalizes_hf_objects","status":"passed","testResultsByEnv":{"default":"409e2b2fc92fc5dbab5f9fc113a69e6b"}}
+{"id":"0aab3c7a07eb2f5d46c17b35bbf2357c","fullName":"tests.unit_tests.test_app_metadata#test_to_plain_json_normalizes_hf_objects","name":"test_to_plain_json_normalizes_hf_objects","status":"passed","testResultsByEnv":{"default":"815130b39b94ac8b2f0188a946be1a39"}}
