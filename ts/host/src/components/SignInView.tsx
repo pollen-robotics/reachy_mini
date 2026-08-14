@@ -167,11 +167,7 @@ export function SignInView({
           disabled={busy}
           startIcon={
             busy ? (
-              <CircularProgress
-                size={18}
-                thickness={5}
-                sx={{ color: 'text.secondary' }}
-              />
+              <CircularProgress size={18} thickness={5} color="primary" />
             ) : (
               <Box
                 component="img"
