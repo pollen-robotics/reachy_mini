@@ -1099,22 +1099,20 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      */
     playRecordedMoveAndWait(
         moveName: string,
-        {
-            dataset,
-            initialGotoDuration,
-            timeoutMs = 120000,
-        }: {
-            dataset?: string;
-            initialGotoDuration?: number;
-            timeoutMs?: number;
-        } = {},
+        opts: { dataset?: string; initialGotoDuration?: number; timeoutMs?: number } = {},
     ): Promise<boolean | null> {
-        // `request()` matches the reply on the `command` echo, which is what
-        // we need here: the daemon's error ack carries only `command`,
-        // `status` and `error` - no `move_name` - so a stricter predicate
-        // would miss every failure and fall through to the timeout.
-        return this.request(recordedMoveCmd(moveName, { dataset, initialGotoDuration }), {
-            timeoutMs,
+        // Key the reply on the move name, not the bare `command` echo:
+        // broadcast matching hands a message to the newest matching waiter,
+        // so with two `play_recorded_move` commands in flight a bare-echo
+        // predicate lets concurrent calls swap results. Error acks also
+        // match on status alone because older daemons omit `move_name`
+        // there (newer ones include it) - a fully-strict name match would
+        // miss those failures and fall through to the timeout.
+        return this.request(recordedMoveCmd(moveName, opts), {
+            timeoutMs: opts.timeoutMs ?? 120000,
+            match: (m) =>
+                m.command === 'play_recorded_move' &&
+                (m.status === 'error' || m.move_name === moveName),
         }).then((reply) => (reply == null ? null : reply.status === 'ok'));
     }
 

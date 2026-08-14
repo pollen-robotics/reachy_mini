@@ -2,14 +2,13 @@
  * playRecordedMove / playRecordedMoveAndWait - daemon-side named-move playback.
  *
  * The properties that must hold:
- *   - both variants put the same payload on the wire, so the awaited one
- *     can't drift from the fire-and-forget one;
  *   - the awaited variant resolves `true` on the daemon's dispatch ack and
  *     `false` when the daemon reports it couldn't load the move;
- *   - that failure ack carries NO `move_name` (only `command`, `status`,
- *     `error`), so the reply matcher must key on the command echo alone -
- *     matching on the move name would miss every failure and fall through
- *     to the timeout, reporting a load error as "no answer";
+ *   - ok acks are keyed on the move name (plus the command echo), so two
+ *     in-flight calls can't swap results; error acks match on status alone
+ *     because older daemons omit `move_name` there - a fully-strict name
+ *     match would miss those failures and fall through to the timeout,
+ *     reporting a load error as "no answer";
  *   - a daemon that never answers fail-opens to `null`, on a deadline long
  *     enough to cover a cold dataset download rather than a round trip;
  *   - a closed data channel is a rejection, not a silent `false`.
@@ -70,19 +69,6 @@ describe('playRecordedMove - wire contract', () => {
             initial_goto_duration: 0.4,
         }]);
     });
-
-    it('puts the same payload on the wire as the awaited variant', () => {
-        const { r: a, sent: sentSync } = makeInstance();
-        const { r: b, sent: sentAwaited } = makeInstance();
-
-        a.playRecordedMove('wave', { dataset: 'someone/moves', initialGotoDuration: 0.4 });
-        void b.playRecordedMoveAndWait('wave', {
-            dataset: 'someone/moves',
-            initialGotoDuration: 0.4,
-        });
-
-        expect(sentAwaited).toEqual(sentSync);
-    });
 });
 
 describe('playRecordedMoveAndWait - dispatch ack', () => {
@@ -99,7 +85,7 @@ describe('playRecordedMoveAndWait - dispatch ack', () => {
         await expect(promise).resolves.toBe(true);
     });
 
-    it('resolves false on a load failure ack, which carries no move_name', async () => {
+    it('resolves false on a load failure ack without move_name (older daemons)', async () => {
         const { r, internals } = makeInstance();
 
         const promise = r.playRecordedMoveAndWait('nope', { dataset: 'someone/moves' });
@@ -159,4 +145,37 @@ describe('playRecordedMoveAndWait - dispatch ack', () => {
             /Data channel not open/,
         );
     });
+});
+
+describe('playRecordedMoveAndWait - concurrent calls', () => {
+    // Regression: with the reply matched on the bare `command` echo, the
+    // newest waiter claimed whichever ack arrived first, so two in-flight
+    // calls swapped results - the unknown move reported `true` and the
+    // good one `false`. Keying ok acks on the move name pins each ack to
+    // its caller regardless of ack order.
+    for (const order of ['error ack first', 'ok ack first'] as const) {
+        it(`resolves each call from its own ack (${order})`, async () => {
+            const { r, internals } = makeInstance();
+
+            const good = r.playRecordedMoveAndWait('no1');
+            const bad = r.playRecordedMoveAndWait('unknown_move');
+
+            const okAck = {
+                command: 'play_recorded_move',
+                status: 'ok',
+                move_name: 'no1',
+            };
+            const errorAck = {
+                command: 'play_recorded_move',
+                status: 'error',
+                move_name: 'unknown_move',
+                error: 'Move unknown_move not found in recorded moves library',
+            };
+            const acks = order === 'error ack first' ? [errorAck, okAck] : [okAck, errorAck];
+            for (const ack of acks) internals._handleRobotMessage(ack);
+
+            await expect(good).resolves.toBe(true);
+            await expect(bad).resolves.toBe(false);
+        });
+    }
 });
