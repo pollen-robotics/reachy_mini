@@ -1072,21 +1072,30 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     /**
      * Like `playRecordedMove()`, but resolves once the daemon acks the
-     * dispatch, i.e. once the move is loaded and playback is starting.
-     * Resolves `true` on dispatch, `false` when the daemon could not load
-     * the move (unknown name, missing dataset), and `null` on the fail-open
-     * timeout. Rejects when the data channel isn't open.
+     * dispatch: `true` when the move was loaded and handed to the player,
+     * `false` when the daemon could not load it (unknown name, missing
+     * dataset), `null` on the fail-open timeout. Rejects when the data
+     * channel isn't open.
      *
      * Use this over the fire-and-forget variant whenever the dataset may be
      * cold: the daemon loads the move *before* acking, downloading the
      * dataset on the spot if it isn't cached, so the ack is the only honest
-     * "it started" signal. Watching `is_move_running` with a short deadline
-     * instead makes a slow download look like a missing move.
+     * "it got that far" signal. Watching `is_move_running` with a short
+     * deadline instead makes a slow download look like a missing move.
      *
      * Hence the generous default timeout: it has to cover a multi-MB
      * download on the robot's Wi-Fi, not just a data-channel round trip.
      * Warm the cache with `preloadDatasetAndWait()` first if you'd rather
      * surface the download as its own step.
+     *
+     * Two things `true` does *not* promise, both daemon-side:
+     * - the robot is moving. The daemon acks before starting the player,
+     *   which then drops the move if another one is already running. Call
+     *   `stopMove()` first when a new move must win.
+     * - the move ran to completion. There is no end-of-playback broadcast
+     *   for recorded moves (unlike `playMove()`), so a caller that needs
+     *   the end still watches `is_move_running` fall - from this ack
+     *   rather than from its own call, which is the point.
      */
     playRecordedMoveAndWait(
         moveName: string,

@@ -532,16 +532,21 @@ export interface ReachyMiniInstance extends EventTarget {
     ): boolean;
     /**
      * Like `playRecordedMove()`, but resolves once the daemon acks the
-     * dispatch, i.e. once the move is loaded and playback is starting.
-     * `true` on dispatch, `false` when the daemon could not load the move
-     * (unknown name, missing dataset), `null` on the fail-open timeout.
-     * Rejects when the data channel isn't open.
+     * dispatch: `true` when the move was loaded and handed to the player,
+     * `false` when the daemon could not load it (unknown name, missing
+     * dataset), `null` on the fail-open timeout. Rejects when the data
+     * channel isn't open.
      *
      * Prefer it over the fire-and-forget variant whenever the dataset may
      * be cold: the daemon loads the move before acking, downloading the
      * dataset on the spot when it isn't cached, so this ack is the only
-     * honest "playback started" signal. `timeoutMs` therefore defaults to
+     * honest signal it got that far. `timeoutMs` therefore defaults to
      * 120 s - it has to cover that download, not a round trip.
+     *
+     * `true` doesn't promise the robot is moving: the daemon acks before
+     * starting the player, which drops the move if another one is already
+     * running (call `stopMove()` first), and never broadcasts the end of a
+     * recorded move.
      */
     playRecordedMoveAndWait(
         moveName: string,
