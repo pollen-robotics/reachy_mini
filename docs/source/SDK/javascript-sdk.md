@@ -146,6 +146,7 @@ new ReachyMini({
 | `readAudioParameter(name)` | `Promise<number[]\|null>` | Read one XVF3800 parameter by name |
 | `subscribeLogs({ onLine, onError? })` | `() => void` | Stream the daemon's `journalctl` logs over the data channel; returns an unsubscribe fn |
 | `playRecordedMove(name, opts?)` | `boolean` | Play a named move (motion + bundled sound) from a HF dataset, daemon-side. Fire-and-forget (resolves on send, not on playback end). `opts.dataset` defaults to the pre-downloaded emotions library; `opts.initialGotoDuration` sets the lead-in goto |
+| `playRecordedMoveAndWait(name, opts?)` | `Promise<boolean\|null>` | Same command, but resolves on the daemon's dispatch ack: `true` once the move is loaded and starting, `false` when it couldn't be loaded (unknown name, missing dataset), `null` on the fail-open timeout. Prefer it when the dataset may be cold — the daemon downloads before acking, so `opts.timeoutMs` defaults to 120 s |
 | `playMove(motion, opts?)` | `Promise<{finished?, cancelled?, error?, has_audio?}>` | Upload + play a recorded move (optionally with audio) on the daemon's local clock; resolves when playback ends — see [Daemon-side recorded-move playback](#daemon-side-recorded-move-playback) |
 | `cancelMove()` | `boolean` | Cancel an in-flight `playMove` |
 | `uploadAudio(blob, opts?)` | `Promise<string>` | Upload a standalone audio slot, returns `uploadId` — pair with `playUploadedAudio` for record-time sync |

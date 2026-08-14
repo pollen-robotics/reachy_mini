@@ -531,6 +531,27 @@ export interface ReachyMiniInstance extends EventTarget {
         opts?: { dataset?: string; initialGotoDuration?: number },
     ): boolean;
     /**
+     * Like `playRecordedMove()`, but resolves once the daemon acks the
+     * dispatch, i.e. once the move is loaded and playback is starting.
+     * `true` on dispatch, `false` when the daemon could not load the move
+     * (unknown name, missing dataset), `null` on the fail-open timeout.
+     * Rejects when the data channel isn't open.
+     *
+     * Prefer it over the fire-and-forget variant whenever the dataset may
+     * be cold: the daemon loads the move before acking, downloading the
+     * dataset on the spot when it isn't cached, so this ack is the only
+     * honest "playback started" signal. `timeoutMs` therefore defaults to
+     * 120 s - it has to cover that download, not a round trip.
+     */
+    playRecordedMoveAndWait(
+        moveName: string,
+        opts?: {
+            dataset?: string;
+            initialGotoDuration?: number;
+            timeoutMs?: number;
+        },
+    ): Promise<boolean | null>;
+    /**
      * Stop whatever move is currently playing on the daemon (recorded move,
      * uploaded move, goto), silencing its bundled sound too. Fire-and-forget
      * and idempotent: a stop with no move running is acked as a no-op, not

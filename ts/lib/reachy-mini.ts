@@ -128,6 +128,24 @@ const POSE_STREAM_FRESH_MS = 750;
  */
 const WAKE_TRAJECTORY_BUDGET_MS = 5000;
 
+/**
+ * Wire payload for `play_recorded_move`, shared by the fire-and-forget and
+ * the awaited variant so the two can't drift apart.
+ */
+function recordedMoveCmd(
+    moveName: string,
+    { dataset, initialGotoDuration }: { dataset?: string; initialGotoDuration?: number },
+): { type: string } & Record<string, unknown> {
+    return {
+        type: 'play_recorded_move',
+        move_name: moveName,
+        ...(dataset ? { dataset_name: dataset } : {}),
+        ...(initialGotoDuration && initialGotoDuration > 0
+            ? { initial_goto_duration: initialGotoDuration }
+            : {}),
+    };
+}
+
 export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Config ──────────────────────────────────────────────────────────
@@ -1047,19 +1065,48 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     playRecordedMove(
         moveName: string,
+        opts: { dataset?: string; initialGotoDuration?: number } = {},
+    ): boolean {
+        return this._sendCommand(recordedMoveCmd(moveName, opts));
+    }
+
+    /**
+     * Like `playRecordedMove()`, but resolves once the daemon acks the
+     * dispatch, i.e. once the move is loaded and playback is starting.
+     * Resolves `true` on dispatch, `false` when the daemon could not load
+     * the move (unknown name, missing dataset), and `null` on the fail-open
+     * timeout. Rejects when the data channel isn't open.
+     *
+     * Use this over the fire-and-forget variant whenever the dataset may be
+     * cold: the daemon loads the move *before* acking, downloading the
+     * dataset on the spot if it isn't cached, so the ack is the only honest
+     * "it started" signal. Watching `is_move_running` with a short deadline
+     * instead makes a slow download look like a missing move.
+     *
+     * Hence the generous default timeout: it has to cover a multi-MB
+     * download on the robot's Wi-Fi, not just a data-channel round trip.
+     * Warm the cache with `preloadDatasetAndWait()` first if you'd rather
+     * surface the download as its own step.
+     */
+    playRecordedMoveAndWait(
+        moveName: string,
         {
             dataset,
             initialGotoDuration,
-        }: { dataset?: string; initialGotoDuration?: number } = {},
-    ): boolean {
-        return this._sendCommand({
-            type: 'play_recorded_move',
-            move_name: moveName,
-            ...(dataset ? { dataset_name: dataset } : {}),
-            ...(initialGotoDuration && initialGotoDuration > 0
-                ? { initial_goto_duration: initialGotoDuration }
-                : {}),
-        });
+            timeoutMs = 120000,
+        }: {
+            dataset?: string;
+            initialGotoDuration?: number;
+            timeoutMs?: number;
+        } = {},
+    ): Promise<boolean | null> {
+        // `request()` matches the reply on the `command` echo, which is what
+        // we need here: the daemon's error ack carries only `command`,
+        // `status` and `error` - no `move_name` - so a stricter predicate
+        // would miss every failure and fall through to the timeout.
+        return this.request(recordedMoveCmd(moveName, { dataset, initialGotoDuration }), {
+            timeoutMs,
+        }).then((reply) => (reply == null ? null : reply.status === 'ok'));
     }
 
     /**
