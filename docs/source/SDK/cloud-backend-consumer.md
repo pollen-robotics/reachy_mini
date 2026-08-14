@@ -118,18 +118,18 @@ so visitors only see their own robots.
 By default the consumer asks Google's public STUN server, which is
 enough whenever the robot daemon already offers a TURN-relay
 candidate of its own (see `_apply_turn_servers` in
-`reachy_mini/media/media_server.py`).
+`reachy_mini/media/media_server.py`). The daemon offers a relay only
+when `REACHY_TURN_URL` is set; there is no default endpoint.
 If you need the consumer to allocate its own relay (e.g. when neither
 side can hole-punch), pass an `ice_servers_provider` returning
-`aiortc.RTCIceServer` objects with TURN credentials. The HF-hosted
-Cloudflare TURN proxy at `https://turn.fastrtc.org/credentials` is a
-reasonable default for HF Spaces:
+`aiortc.RTCIceServer` objects with TURN credentials, fetched from the
+same kind of proxy:
 
 ```python
 async def _ice():
     async with aiohttp.ClientSession() as s:
         r = await s.get(
-            "https://turn.fastrtc.org/credentials",
+            TURN_CREDENTIALS_PROXY_URL,
             headers={"Authorization": f"Bearer {space_secret_hf_token}"},
             params={"ttl": 600},
         )

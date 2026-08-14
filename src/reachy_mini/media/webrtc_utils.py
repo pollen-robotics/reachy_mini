@@ -27,9 +27,11 @@ logger = logging.getLogger(__name__)
 # STUN. So there is no central-server change and no consumer-side
 # credential to manage (which matters because aiortc's STUN client works
 # while its TURN client does not).
-TURN_CREDENTIALS_URL = os.getenv(
-    "REACHY_TURN_URL", "https://turn.fastrtc.org/credentials"
-)
+#
+# No default endpoint: the fastrtc proxy is dead upstream
+# (gradio-app/fastrtc#429). Point REACHY_TURN_URL at a live
+# credentials proxy to offer relay candidates.
+TURN_CREDENTIALS_URL = os.getenv("REACHY_TURN_URL", "")
 TURN_TTL_SECONDS = int(os.getenv("REACHY_TURN_TTL", "600"))
 
 # Credentials are short-lived; re-fetch well before they expire.
@@ -120,7 +122,10 @@ class TurnCredentials:
         self._thread: Optional[threading.Thread] = None
 
     def start(self) -> None:
-        """Start the refresher thread. Idempotent."""
+        """Start the refresher thread. Idempotent; no-op without a URL."""
+        if not self._url:
+            logger.info("TURN relay disabled; set REACHY_TURN_URL to enable.")
+            return
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop.clear()

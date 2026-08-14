@@ -199,9 +199,20 @@ def test_turn_credentials_refresh_once_populates_cache(monkeypatch) -> None:
     assert seen["params"] == {"ttl": 600}
 
 
+def test_turn_credentials_no_url_start_is_a_noop(caplog) -> None:
+    """Without a URL (the default) start() spawns nothing and says so once."""
+    creds = webrtc_utils.TurnCredentials(url="")
+
+    with caplog.at_level("INFO", logger=webrtc_utils.__name__):
+        creds.start()
+
+    assert creds._thread is None
+    assert sum("TURN relay disabled" in r.message for r in caplog.records) == 1
+
+
 def test_turn_credentials_network_failure_retries_soon(monkeypatch) -> None:
     """A transient failure backs off briefly and keeps the last good creds."""
-    creds = webrtc_utils.TurnCredentials()
+    creds = webrtc_utils.TurnCredentials(url="https://turn.example/credentials")
     creds._uris = ["turn://u:p@relay.example:3478"]
 
     def _boom(*_args, **_kwargs):
