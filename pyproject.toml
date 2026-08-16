@@ -42,7 +42,6 @@ dependencies = [
     "requests>=2.33.0",
     "rich",
     "rustypot>=1.4.2",
-    "scipy>=1.15.3, <2.0.0",
     "starlette<1.0.0", # TODO: update TemplateResponse(request, name, context) before allowing Starlette 1.x
     "toml",
     "uvicorn[standard]",
@@ -104,6 +103,10 @@ all = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    # Test-only: the oracle that test_rotation_matches_scipy.py fuzzes
+    # utils/rotation.py against, plus scipy.signal in test_audio.py. The SDK
+    # itself no longer imports scipy at runtime (see #1342).
+    "scipy>=1.15.3,<2.0.0",
     "pytest-asyncio",
     "ruff==0.12.0",
     "onshape-to-robot==1.7.6",
