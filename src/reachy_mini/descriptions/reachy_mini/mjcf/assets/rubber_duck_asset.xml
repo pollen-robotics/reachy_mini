@@ -1,0 +1,7 @@
+<mujocoinclude>
+    <asset>
+        <texture type="2d" name="rubber_duck_texture" file="../assets/textures/rubber_duck_texture.png"/>
+        <material name="rubber_duck_mat" texture="rubber_duck_texture" specular="0.5" shininess="0.5"/>
+        <mesh file="../assets/meshes/rubber_duck/rubber_duck_object.obj" name="rubber_duck" scale="0.4 0.4 0.4"/>
+    </asset>
+</mujocoinclude>
