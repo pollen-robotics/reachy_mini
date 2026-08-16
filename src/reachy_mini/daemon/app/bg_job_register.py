@@ -58,6 +58,16 @@ def run_command(
 
     start_evt = threading.Event()
 
+    # The job runs in its own thread/event loop, but the WS waiters in
+    # ``new_log_evt`` live in the main daemon loop. ``asyncio.Event.set()`` is
+    # not thread-safe and won't wake that loop, so the terminal DONE/FAILED
+    # notification can be lost, leaving ``ws_poll_info`` parked forever. Hop
+    # back onto the main loop via ``call_soon_threadsafe`` to wake the waiters.
+    try:
+        main_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+    except RuntimeError:
+        main_loop = None
+
     async def wrapper() -> None:
         jh.info.status = JobStatus.IN_PROGRESS
 
@@ -65,7 +75,10 @@ def run_command(
             def emit(self, record: logging.LogRecord) -> None:
                 jh.info.logs.append(self.format(record))
                 for ws in jh.new_log_evt.values():
-                    ws.set()
+                    if main_loop is not None:
+                        main_loop.call_soon_threadsafe(ws.set)
+                    else:
+                        ws.set()
 
         logger = logging.getLogger(f"logs_job_{job_uuid}")
         logger.setLevel(logging.INFO)
