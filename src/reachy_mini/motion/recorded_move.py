@@ -2,6 +2,7 @@ import bisect  # noqa: D100
 import json
 import logging
 import os
+import threading
 from glob import glob
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -171,6 +172,9 @@ class RecordedMoves:
     Uses local cache only to avoid blocking network calls during playback.
     The dataset should be pre-downloaded at daemon startup via preload_default_datasets().
     If not cached, falls back to network download (which may cause delays).
+
+    Constructing this re-reads every move file, so daemon code should go through
+    :func:`get_recorded_moves` to reuse a single instance per dataset.
     """
 
     def __init__(self, hf_dataset_name: str):
@@ -233,3 +237,42 @@ class RecordedMoves:
     def list_moves(self) -> List[str]:
         """List all moves in the loaded library."""
         return list(self.moves.keys())
+
+
+# Built libraries, keyed by dataset name, plus one lock per dataset. Building a
+# library parses every move file in the dataset, and on a cold cache downloads
+# it first, so we keep one instance instead of redoing that per request.
+_libraries: Dict[str, RecordedMoves] = {}
+_library_locks: Dict[str, threading.Lock] = {}
+_libraries_guard = threading.Lock()
+
+
+def get_recorded_moves(dataset_name: str) -> RecordedMoves:
+    """Return the shared :class:`RecordedMoves` for ``dataset_name``.
+
+    Blocking: a cold cache downloads the dataset, so call this from a worker
+    thread (``asyncio.to_thread``) and never from the daemon's event loop.
+
+    Args:
+        dataset_name: The HuggingFace dataset holding the moves.
+
+    Returns:
+        The library for that dataset, built on first use and reused after.
+
+    """
+    with _libraries_guard:
+        library = _libraries.get(dataset_name)
+        if library is not None:
+            return library
+        lock = _library_locks.setdefault(dataset_name, threading.Lock())
+
+    # Per-dataset lock: concurrent requests for the same cold dataset wait on a
+    # single build instead of each starting its own download, while requests for
+    # other datasets stay unblocked.
+    with lock:
+        library = _libraries.get(dataset_name)
+        if library is None:
+            library = RecordedMoves(dataset_name)
+            with _libraries_guard:
+                _libraries[dataset_name] = library
+        return library
