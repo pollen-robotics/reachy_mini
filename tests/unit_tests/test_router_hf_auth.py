@@ -198,21 +198,6 @@ def test_oauth_session_delete_not_found(monkeypatch, router_app):
     assert resp.status_code == 404
 
 
-def test_central_robot_status_no_token(monkeypatch, router_app):
-    """No stored token -> early return, no aiohttp/network involved."""
-    monkeypatch.setattr(src, "get_hf_token", lambda: None)
-    client = router_app(hf_auth.router)
-
-    resp = client.get("/hf-auth/central-robot-status")
-
-    assert resp.status_code == 200
-    assert resp.json() == {
-        "available": False,
-        "robots": [],
-        "reason": "not_authenticated",
-    }
-
-
 def test_central_status_refuses_an_untrusted_central_before_sending_the_bearer(
     monkeypatch, router_app
 ):
@@ -233,6 +218,21 @@ def test_central_status_refuses_an_untrusted_central_before_sending_the_bearer(
         "available": False,
         "robots": [],
         "reason": "invalid_configuration",
+    }
+
+
+def test_central_robot_status_no_token(monkeypatch, router_app):
+    """No stored token -> early return, no aiohttp/network involved."""
+    monkeypatch.setattr(src, "get_hf_token", lambda: None)
+    client = router_app(hf_auth.router)
+
+    resp = client.get("/hf-auth/central-robot-status")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "available": False,
+        "robots": [],
+        "reason": "not_authenticated",
     }
 
 
