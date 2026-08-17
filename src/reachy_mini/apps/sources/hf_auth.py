@@ -1,52 +1,145 @@
 """HuggingFace authentication management for private spaces."""
 
 import asyncio
+import json
 import logging
 import os
 import secrets
 import tempfile
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Optional
 
 import aiohttp
-from huggingface_hub import HfApi, get_token, login, logout, whoami
+from huggingface_hub import HfApi, whoami
 from huggingface_hub.constants import HF_TOKEN_PATH
 from huggingface_hub.errors import HfHubHTTPError
 
 logger = logging.getLogger(__name__)
 
-# =============================================================================
-# OAuth Configuration
-# =============================================================================
-# Register ONE OAuth app at https://huggingface.co/settings/connected-applications
-# with TWO redirect URIs:
-#   - http://reachy-mini.local:8000/api/hf-auth/oauth/callback  (wireless)
-#   - http://localhost:8000/api/hf-auth/oauth/callback          (lite)
-#
-# Then set HF_OAUTH_CLIENT_ID on all robots (same value for all).
-#
-# Environment variables:
-#   HF_OAUTH_CLIENT_ID     - Required for OAuth login
-#   HF_OAUTH_CLIENT_SECRET - Optional (for confidential clients)
-#
-# Pollen's HuggingFace OAuth app - works for all Reachy Mini robots
+# One OAuth app registered at huggingface.co/settings/connected-applications,
+# with both redirect URIs below. HF_OAUTH_CLIENT_ID overrides it per robot.
 _DEFAULT_OAUTH_CLIENT_ID = "71146982-8184-45a2-b05a-d561b3cd701d"
 
 OAUTH_CLIENT_ID: Optional[str] = os.environ.get(
     "HF_OAUTH_CLIENT_ID", _DEFAULT_OAUTH_CLIENT_ID
 )
 OAUTH_CLIENT_SECRET: Optional[str] = os.environ.get("HF_OAUTH_CLIENT_SECRET")
-OAUTH_SCOPES = os.environ.get(
-    "HF_OAUTH_SCOPES",
-    "openid profile read-repos write-repos manage-repos inference-api",
-)
+# The robot only reads at runtime. Publishing an app happens on a dev machine.
+OAUTH_SCOPES = "openid profile read-repos"
 
 # Fixed redirect URIs (must match what's registered with HuggingFace)
 OAUTH_REDIRECT_URI_WIRELESS = "http://reachy-mini.local:8000/api/hf-auth/oauth/callback"
 OAUTH_REDIRECT_URI_LITE = "http://localhost:8000/api/hf-auth/oauth/callback"
+
+# Reach HTTP responses, so never carry provider text, exception detail, or tokens.
+AUTHENTICATION_FAILED_MESSAGE = "Authentication failed. Please try again."
+_CANCELLED_SESSION_MESSAGE = "Sign-in was cancelled. Please try again."
+CREDENTIAL_SAVE_FAILED_MESSAGE = "Could not save credentials. Please try again."
+
+# The daemon owns this file. Credentials the user holds elsewhere are never read:
+# a token issued to the CLI was not issued to the robot (RFC 9700).
+_STORE_FILENAME = "reachy_mini_daemon_credentials.json"
+_STORE_VERSION = 1
+_REFRESH_MARGIN_S = 300
+
+_store_lock = threading.RLock()
+
+
+@dataclass(frozen=True)
+class HfCredential:
+    """The daemon bearer and the lifecycle it belongs to, read as one value."""
+
+    token: Optional[str] = field(repr=False)
+    lifecycle_generation: int
+
+
+@dataclass(frozen=True)
+class _Stored:
+    """On-disk shape of the daemon credential store."""
+
+    version: int = _STORE_VERSION
+    signed_out: bool = False
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    expires_at: Optional[int] = None
+    lifecycle_generation: int = 0
+
+
+def _store_path() -> Path:
+    return Path(HF_TOKEN_PATH).with_name(_STORE_FILENAME)
+
+
+def _write_store(stored: _Stored) -> None:
+    """Replace the store atomically. mkstemp already restricts the mode to 0600."""
+    path = _store_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, name = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", text=True
+    )
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            json.dump(asdict(stored), output, separators=(",", ":"))
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    except OSError:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def _read_store() -> _Stored:
+    path = _store_path()
+    if not path.exists():
+        return _Stored(signed_out=True)
+    try:
+        stored = _Stored(**json.loads(path.read_text(encoding="utf-8")))
+        if stored.version != _STORE_VERSION or stored.lifecycle_generation < 0:
+            raise ValueError("unsupported credential record")
+        if not stored.signed_out and not stored.access_token:
+            raise ValueError("credential record has no token")
+        return stored
+    except (OSError, TypeError, ValueError) as error:
+        logger.warning(
+            "[HF Auth] Unreadable credential store (%s)", type(error).__name__
+        )
+        return _Stored(signed_out=True)
+
+
+def _token_fields(response: Any, fallback_refresh: Optional[str]) -> dict[str, Any]:
+    """Map a Hugging Face token response onto the fields we store."""
+    expires_in = response.get("expires_in")
+    return {
+        "signed_out": False,
+        "access_token": response["access_token"],
+        "refresh_token": response.get("refresh_token") or fallback_refresh,
+        "expires_at": int(time.time()) + int(expires_in) if expires_in else None,
+    }
+
+
+def _persist_login(fields: dict[str, Any], expected_generation: int) -> bool:
+    """Store a completed login unless the credential lifecycle moved on meanwhile."""
+    with _store_lock:
+        current = _read_store()
+        if current.lifecycle_generation != expected_generation:
+            return False
+        _write_store(
+            replace(
+                _Stored(),
+                **fields,
+                lifecycle_generation=current.lifecycle_generation + 1,
+            )
+        )
+        return True
+
+
+def current_lifecycle_generation() -> int:
+    """Return the generation a login must still match when it completes."""
+    return _read_store().lifecycle_generation
+
 
 # In-memory storage for OAuth sessions (device-flow-like pattern)
 _oauth_sessions: dict[str, "OAuthSession"] = {}
@@ -66,29 +159,11 @@ class OAuthSession:
     access_token: Optional[str] = None
     username: Optional[str] = None
     error_message: Optional[str] = None
+    lifecycle_generation: int = 0
     created_at: float = field(default_factory=time.time)
     expires_at: float = field(
         default_factory=lambda: time.time() + 600
     )  # 10 min expiry
-
-
-def configure_oauth(
-    client_id: str,
-    client_secret: Optional[str] = None,
-    scopes: str = "openid profile read-repos",
-) -> None:
-    """Configure OAuth credentials.
-
-    Args:
-        client_id: HuggingFace OAuth client ID
-        client_secret: OAuth client secret (optional for public clients)
-        scopes: Space-separated OAuth scopes
-
-    """
-    global OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, OAUTH_SCOPES
-    OAUTH_CLIENT_ID = client_id
-    OAUTH_CLIENT_SECRET = client_secret
-    OAUTH_SCOPES = scopes
 
 
 def _generate_user_code() -> str:
@@ -180,6 +255,7 @@ def create_oauth_session(
         code_verifier=code_verifier,
         wireless_version=wireless_version,
         use_localhost=use_localhost,
+        lifecycle_generation=current_lifecycle_generation(),
     )
     _oauth_sessions[state] = session
 
@@ -288,33 +364,21 @@ async def exchange_code_for_token(
         session.error_message = f"Token request error: {type(e).__name__}: {e}"
         return {"status": "error", "message": session.error_message}
 
-    # Save token directly to HuggingFace token file
-    # (login() doesn't work well with OAuth tokens)
-    temporary_path: Optional[Path] = None
     try:
-        token_path = Path(HF_TOKEN_PATH)
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-        fd, temporary_name = tempfile.mkstemp(
-            dir=token_path.parent,
-            prefix=f".{token_path.name}.",
-            text=True,
+        landed = _persist_login(
+            _token_fields(token_data, None), session.lifecycle_generation
         )
-        temporary_path = Path(temporary_name)
-        os.close(fd)
-        temporary_path.chmod(0o600)
-        with temporary_path.open("w") as token_file:
-            token_file.write(access_token)
-            token_file.flush()
-            os.fsync(token_file.fileno())
-        os.replace(temporary_path, token_path)
-        temporary_path = None
-    except Exception as e:
+    except OSError as error:
+        logger.warning(
+            "[HF Auth] Could not save OAuth credentials (%s)", type(error).__name__
+        )
         session.status = "error"
-        session.error_message = f"Failed to save token: {type(e).__name__}: {e}"
+        session.error_message = CREDENTIAL_SAVE_FAILED_MESSAGE
         return {"status": "error", "message": session.error_message}
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+    if not landed:
+        session.status = "error"
+        session.error_message = _CANCELLED_SESSION_MESSAGE
+        return {"status": "error", "message": session.error_message}
 
     # Get username
     username = ""
@@ -389,35 +453,25 @@ def is_oauth_configured() -> bool:
 # =============================================================================
 # Device Code OAuth (RFC 8628) — refresh-capable, redirect-free login
 # =============================================================================
-# Unlike the authorization-code flow above, the device-code flow:
-#   - needs NO redirect URI, so it does not depend on the robot being reachable
-#     at a fixed hostname (reachy-mini.local) — the phone only displays a short
-#     code + URL and the robot polls Hugging Face for the result.
-#   - yields a refresh token. huggingface_hub persists it next to the access
-#     token (HF_STORED_TOKENS_PATH) and `get_token()` transparently renews the
-#     access token when it is close to expiry, so a long-running robot never
-#     needs the user to re-authenticate by hand.
-#
-# It uses Hugging Face's first-party device-code OAuth client (shipped in
-# huggingface_hub via DEVICE_CODE_OAUTH_CLIENT_ID), not the Pollen OAuth app,
-# so it works even when HF_OAUTH_CLIENT_ID is not configured.
+# No redirect URI, so it does not depend on reaching the robot at a fixed
+# hostname. The phone shows a short code and the robot polls Hugging Face. It
+# uses the hub's first-party device-code client, so it works without
+# HF_OAUTH_CLIENT_ID. We call the hub's private request, poll and refresh
+# helpers because the public login() would write into the user's shared store.
 
 # In-memory storage for device-code login sessions, polled by the frontend.
 _device_code_sessions: dict[str, "DeviceCodeSession"] = {}
 
-# How long an authorized session is kept so the frontend can read the result and
-# the relay can be started once, after which _cleanup removes it (a token-less
-# boot polls for a few seconds; 5 min is a generous margin).
+# Long enough for the client to read the result and the relay to start once.
 _AUTHORIZED_SESSION_TTL_S = 300
 
 
-class _DeviceCodeCancelled(Exception):
-    """Raised inside poll_device_token's on_pending hook to abort a cancelled login.
+class _LoginSuperseded(Exception):
+    """Raised when a login completes after sign-out or another login replaced it."""
 
-    poll_device_token runs in a worker thread and blocks for up to ~15 min;
-    raising from its per-poll hook is what actually stops that thread (see
-    cancel_device_code_session), rather than only detaching the asyncio task.
-    """
+
+class _DeviceCodeCancelled(Exception):
+    """Raised in poll_device_token's on_pending hook to stop its worker thread."""
 
 
 @dataclass
@@ -431,12 +485,13 @@ class DeviceCodeSession:
     status: str = "pending"  # pending, authorized, error, expired, cancelled
     username: Optional[str] = None
     error_message: Optional[str] = None
+    lifecycle_generation: int = 0
     relay_started: bool = False  # set once the central relay has been brought up
     created_at: float = field(default_factory=time.time)
     expires_at: float = field(default_factory=lambda: time.time() + 900)
     # Keep a strong reference to the polling task so it is not garbage-collected.
     task: Optional["asyncio.Task[None]"] = None
-    # Set to request cancellation; observed by the polling thread's on_pending hook.
+    # Set to request cancellation. The polling thread observes it in on_pending.
     cancel_event: threading.Event = field(default_factory=threading.Event)
 
 
@@ -458,26 +513,14 @@ def _cleanup_expired_device_sessions() -> None:
         _device_code_sessions.pop(sid, None)
 
 
-def _persist_device_oauth_token(response: Any) -> tuple[str, str]:
-    """Persist a device-code token response so `get_token()` can auto-refresh it.
-
-    huggingface_hub stores the access token, its `refresh_token` and `expires_at`
-    in HF_STORED_TOKENS_PATH and marks it as the active token. `get_token()` then
-    transparently exchanges the refresh token for a new access token shortly
-    before expiry — no user interaction required.
-
-    Returns:
-        Tuple of (token_name, username).
-
-    """
-    # Private but pinned exactly (see pyproject); guarded by the contract test in
-    # tests/unit_tests/test_hf_hub_private_api_contract.py. `response` is typed Any
-    # because it is an opaque huggingface_hub payload (a private OAuthTokenResponse
-    # TypedDict) that we only ever pass straight back to the hub — annotating it as
-    # dict[str, Any] would clash with the hub's TypedDict under mypy --strict.
-    from huggingface_hub._login import _save_oauth_token
-
-    return _save_oauth_token(response)
+def _persist_device_oauth_token(response: Any, expected_generation: int) -> str:
+    """Store a device-code token in the daemon's own record and return the username."""
+    if not _persist_login(_token_fields(response, None), expected_generation):
+        raise _LoginSuperseded
+    user_info = whoami(token=response["access_token"])
+    if not isinstance(user_info, dict):
+        return ""
+    return str(user_info.get("name") or "")
 
 
 async def start_device_code_login() -> dict[str, Any]:
@@ -506,6 +549,7 @@ async def start_device_code_login() -> dict[str, Any]:
         verification_uri=device_info["verification_uri"],
         verification_uri_complete=device_info["verification_uri_complete"],
         expires_at=time.time() + int(device_info.get("expires_in", 900)),
+        lifecycle_generation=current_lifecycle_generation(),
     )
     _device_code_sessions[session_id] = session
     session.task = asyncio.create_task(_run_device_code_poll(session, device_info))
@@ -527,9 +571,7 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
     from huggingface_hub.utils._oauth_device import poll_device_token
 
     def _abort_if_cancelled() -> None:
-        # poll_device_token calls this after each "authorization pending" poll,
-        # just before it sleeps; raising here unwinds it and frees the worker
-        # thread within ~one poll interval instead of blocking to expiry.
+        # Raising from the hub's per-poll hook frees the worker within one interval.
         if session.cancel_event.is_set():
             raise _DeviceCodeCancelled
 
@@ -554,11 +596,20 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
         return
 
     try:
-        _, username = await asyncio.to_thread(_persist_device_oauth_token, response)
-    except Exception as e:  # noqa: BLE001
-        logger.error("[HF Auth] Failed to persist device-code token: %s", e)
+        username = await asyncio.to_thread(
+            _persist_device_oauth_token, response, session.lifecycle_generation
+        )
+    except _LoginSuperseded:
+        logger.info("[HF Auth] Device-code login superseded: %s", session.session_id)
+        session.status = "cancelled"
+        return
+    except Exception as error:  # noqa: BLE001
+        logger.error(
+            "[HF Auth] Failed to persist device-code token (%s)",
+            type(error).__name__,
+        )
         session.status = "error"
-        session.error_message = f"Failed to save token: {type(e).__name__}: {e}"
+        session.error_message = CREDENTIAL_SAVE_FAILED_MESSAGE
         return
 
     session.username = username or ""
@@ -568,7 +619,7 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
     session.expires_at = time.time() + _AUTHORIZED_SESSION_TTL_S
 
     # Notify a *running* central relay so it reconnects with the new token. A
-    # token-less boot has no relay instance yet; the status route starts one.
+    # token-less boot has no relay instance yet, so the status route starts one.
     try:
         from reachy_mini.media.central_signaling_relay import notify_token_change
 
@@ -675,11 +726,10 @@ def save_hf_token(token: str) -> dict[str, Any]:
         api = HfApi(token=token)
         user_info = api.whoami()
 
-        # Persist token for future runs (no prompt since token is provided)
-        # add_to_git_credential=False keeps it from touching git credentials.
-        login(token=token, add_to_git_credential=False)
+        generation = current_lifecycle_generation()
+        if not _persist_login({"access_token": token}, generation):
+            return {"status": "error", "message": AUTHENTICATION_FAILED_MESSAGE}
 
-        # Notify central relay of new token for immediate reconnection
         _notify_relay_of_token_change(token)
 
         return {
@@ -687,40 +737,73 @@ def save_hf_token(token: str) -> dict[str, Any]:
             "username": user_info.get("name", ""),
         }
     except (HfHubHTTPError, ValueError):
-        # ValueError can be raised by `login()` on invalid token (v1.x behavior)
         return {
             "status": "error",
             "message": "Invalid token or network error",
         }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e),
-        }
+    except Exception as error:  # noqa: BLE001 - callers always get a dict
+        logger.warning(
+            "[HF Auth] Could not save credentials (%s)", type(error).__name__
+        )
+        return {"status": "error", "message": CREDENTIAL_SAVE_FAILED_MESSAGE}
+
+
+def get_hf_credential(force_refresh: bool = False) -> HfCredential:
+    """Return the daemon bearer and its lifecycle generation as one atomic read."""
+    with _store_lock:
+        stored = _read_store()
+        expires_at = stored.expires_at
+        expired = expires_at is not None and expires_at <= time.time()
+        # Also the answer when a due refresh fails: never hand out an expired token.
+        usable = HfCredential(
+            None if expired else stored.access_token, stored.lifecycle_generation
+        )
+        due = force_refresh or (
+            expires_at is not None and expires_at <= time.time() + _REFRESH_MARGIN_S
+        )
+        if not stored.refresh_token or not due:
+            return usable
+
+        from huggingface_hub.utils._oauth_device import refresh_access_token
+
+        try:
+            response = refresh_access_token(stored.refresh_token)
+        except Exception as error:  # noqa: BLE001 - a stale token must not raise
+            logger.warning(
+                "[HF Auth] Could not refresh credentials (%s)", type(error).__name__
+            )
+            return usable
+        refreshed = replace(stored, **_token_fields(response, stored.refresh_token))
+        _write_store(refreshed)
+        return HfCredential(refreshed.access_token, refreshed.lifecycle_generation)
 
 
 def get_hf_token() -> Optional[str]:
-    """Get stored HuggingFace token.
-
-    Returns:
-        The stored token, or None if no token is stored.
-
-    """
-    return get_token()
+    """Return the daemon-owned token, refreshing it when it is close to expiry."""
+    return get_hf_credential().token
 
 
 def delete_hf_token() -> bool:
-    """Delete stored HuggingFace token(s).
+    """Sign the robot out, leaving credentials the daemon does not own alone."""
+    with _store_lock:
+        try:
+            current = _read_store()
+            _write_store(
+                _Stored(
+                    signed_out=True,
+                    lifecycle_generation=current.lifecycle_generation + 1,
+                )
+            )
+        except OSError as error:
+            logger.warning("[HF Auth] Could not sign out (%s)", type(error).__name__)
+            return False
+        for session in _device_code_sessions.values():
+            session.cancel_event.set()
+        _oauth_sessions.clear()
+        _device_code_sessions.clear()
 
-    Note: logout() without arguments logs out from all saved access tokens.
-    """
-    try:
-        logout()
-        # Notify central relay that user logged out
-        _notify_relay_of_token_change(None)
-        return True
-    except Exception:
-        return False
+    _notify_relay_of_token_change(None)
+    return True
 
 
 def check_token_status() -> dict[str, Any]:

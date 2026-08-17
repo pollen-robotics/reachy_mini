@@ -7,12 +7,21 @@ symbols monkeypatched. The real aiohttp token POST in
 """
 
 import time
+from dataclasses import replace
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from huggingface_hub.errors import HfHubHTTPError
 
 from reachy_mini.apps.sources import hf_auth
+
+
+@pytest.fixture(autouse=True)
+def _isolated_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Point the credential store at a throwaway directory."""
+    monkeypatch.setattr(hf_auth, "HF_TOKEN_PATH", str(tmp_path / "token"))
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *_a: None)
 
 
 @pytest.fixture(autouse=True)
@@ -57,18 +66,6 @@ def test_is_oauth_configured_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
     assert hf_auth.is_oauth_configured() is True
     monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "")
     assert hf_auth.is_oauth_configured() is False
-
-
-def test_configure_oauth_sets_globals(monkeypatch: pytest.MonkeyPatch) -> None:
-    """configure_oauth overwrites the module OAuth globals."""
-    # Guard originals so mutation of module state doesn't leak.
-    monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", None)
-    monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_SECRET", None)
-    monkeypatch.setattr(hf_auth, "OAUTH_SCOPES", "")
-    hf_auth.configure_oauth("cid", client_secret="secret", scopes="openid")
-    assert hf_auth.OAUTH_CLIENT_ID == "cid"
-    assert hf_auth.OAUTH_CLIENT_SECRET == "secret"
-    assert hf_auth.OAUTH_SCOPES == "openid"
 
 
 # ---- OAuth-session lifecycle
@@ -186,101 +183,167 @@ async def test_exchange_code_not_configured(monkeypatch: pytest.MonkeyPatch) -> 
     assert session.status == "error"
 
 
-# ---- Token functions (huggingface_hub monkeypatched)
+# ---- Token functions (against the daemon's own store)
 
 
-def test_save_hf_token_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Valid token validates, persists via login, and returns the username."""
+def _validating_api(monkeypatch: pytest.MonkeyPatch, name: str = "alice") -> MagicMock:
     api = MagicMock()
-    api.whoami.return_value = {"name": "alice"}
-    hf_api = MagicMock(return_value=api)
-    login = MagicMock()
-    monkeypatch.setattr(hf_auth, "HfApi", hf_api)
-    monkeypatch.setattr(hf_auth, "login", login)
-    monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *a: None)
-
-    result = hf_auth.save_hf_token("tok")
-    assert result == {"status": "success", "username": "alice"}
-    hf_api.assert_called_once_with(token="tok")
-    login.assert_called_once_with(token="tok", add_to_git_credential=False)
+    api.whoami.return_value = {"name": name}
+    monkeypatch.setattr(hf_auth, "HfApi", MagicMock(return_value=api))
+    return api
 
 
-def test_save_hf_token_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
-    """HfHubHTTPError/ValueError maps to the generic invalid-token message."""
+def test_save_then_read_round_trips_through_the_owned_store(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A saved token is validated, stored, and read back without huggingface_hub."""
+    _validating_api(monkeypatch)
+
+    assert hf_auth.save_hf_token("tok") == {"status": "success", "username": "alice"}
+    assert hf_auth.get_hf_token() == "tok"
+    assert hf_auth.current_lifecycle_generation() == 1
+
+
+def test_save_rejects_an_invalid_token_without_storing_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A token the Hub rejects is never written to the store."""
     api = MagicMock()
     api.whoami.side_effect = ValueError("bad")
     monkeypatch.setattr(hf_auth, "HfApi", MagicMock(return_value=api))
-    monkeypatch.setattr(hf_auth, "login", MagicMock())
-    monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *a: None)
+
+    assert hf_auth.save_hf_token("tok") == {
+        "status": "error",
+        "message": "Invalid token or network error",
+    }
+    assert hf_auth.get_hf_token() is None
+
+
+def test_save_reports_a_write_failure_without_leaking_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A store write failure returns a stable message rather than raising."""
+    _validating_api(monkeypatch)
+    monkeypatch.setattr(
+        hf_auth, "_write_store", MagicMock(side_effect=OSError("secret-marker"))
+    )
 
     result = hf_auth.save_hf_token("tok")
-    assert result == {"status": "error", "message": "Invalid token or network error"}
+
+    assert result == {
+        "status": "error",
+        "message": hf_auth.CREDENTIAL_SAVE_FAILED_MESSAGE,
+    }
+    assert "secret-marker" not in result["message"]
 
 
-def test_save_hf_token_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Other exceptions surface their string in the error message."""
-    api = MagicMock()
-    api.whoami.side_effect = RuntimeError("kaboom")
-    monkeypatch.setattr(hf_auth, "HfApi", MagicMock(return_value=api))
-    monkeypatch.setattr(hf_auth, "login", MagicMock())
-    monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *a: None)
+def test_sign_out_leaves_credentials_the_daemon_does_not_own(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Signing out tombstones our record and never touches the CLI token file."""
+    cli_token = Path(hf_auth.HF_TOKEN_PATH)
+    cli_token.parent.mkdir(parents=True, exist_ok=True)
+    cli_token.write_text("cli-token", encoding="utf-8")
+    _validating_api(monkeypatch)
+    assert hf_auth.save_hf_token("tok")["status"] == "success"
 
-    result = hf_auth.save_hf_token("tok")
-    assert result == {"status": "error", "message": "kaboom"}
-
-
-def test_save_hf_token_hfhub_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """HfHubHTTPError from login maps to the invalid-token message."""
-    api = MagicMock()
-    api.whoami.return_value = {"name": "alice"}
-    login = MagicMock(side_effect=HfHubHTTPError("nope", response=MagicMock()))
-    monkeypatch.setattr(hf_auth, "HfApi", MagicMock(return_value=api))
-    monkeypatch.setattr(hf_auth, "login", login)
-    monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *a: None)
-
-    result = hf_auth.save_hf_token("tok")
-    assert result == {"status": "error", "message": "Invalid token or network error"}
-
-
-def test_get_hf_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """get_hf_token delegates to huggingface_hub.get_token."""
-    monkeypatch.setattr(hf_auth, "get_token", MagicMock(return_value="tok"))
-    assert hf_auth.get_hf_token() == "tok"
-
-
-def test_delete_hf_token_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Successful logout returns True and notifies the relay of no token."""
-    logout = MagicMock()
-    notify = MagicMock()
-    monkeypatch.setattr(hf_auth, "logout", logout)
-    monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", notify)
     assert hf_auth.delete_hf_token() is True
-    logout.assert_called_once_with()
-    notify.assert_called_once_with(None)
+
+    assert hf_auth.get_hf_token() is None
+    assert cli_token.read_text(encoding="utf-8") == "cli-token"
+    assert hf_auth.current_lifecycle_generation() == 2
 
 
-def test_delete_hf_token_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A logout error is swallowed and returns False."""
-    monkeypatch.setattr(hf_auth, "logout", MagicMock(side_effect=RuntimeError("x")))
-    monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *a: None)
+def test_sign_out_reports_a_write_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A store write failure during sign-out is reported, not raised."""
+    monkeypatch.setattr(hf_auth, "_write_store", MagicMock(side_effect=OSError("nope")))
     assert hf_auth.delete_hf_token() is False
 
 
-def test_check_token_status_no_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No stored token means logged out."""
-    monkeypatch.setattr(hf_auth, "get_token", MagicMock(return_value=None))
-    assert hf_auth.check_token_status() == {"is_logged_in": False, "username": None}
+def test_a_login_completing_after_sign_out_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A login that lost its race with sign-out must not authorize the robot."""
+    generation = hf_auth.current_lifecycle_generation()
+    assert hf_auth.delete_hf_token() is True
+
+    assert hf_auth._persist_login({"access_token": "late-token"}, generation) is False
+    assert hf_auth.get_hf_token() is None
 
 
-def test_check_token_status_valid(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A valid token reports logged in with the username."""
-    monkeypatch.setattr(hf_auth, "get_token", MagicMock(return_value="tok"))
-    monkeypatch.setattr(hf_auth, "whoami", MagicMock(return_value={"name": "alice"}))
-    assert hf_auth.check_token_status() == {"is_logged_in": True, "username": "alice"}
+@pytest.mark.parametrize(
+    ("stored", "whoami_result", "expected"),
+    [
+        (None, None, {"is_logged_in": False, "username": None}),
+        ("tok", {"name": "alice"}, {"is_logged_in": True, "username": "alice"}),
+        ("tok", RuntimeError("x"), {"is_logged_in": False, "username": None}),
+    ],
+)
+def test_check_token_status_reflects_the_store(
+    monkeypatch: pytest.MonkeyPatch,
+    stored: str | None,
+    whoami_result: object,
+    expected: dict[str, object],
+) -> None:
+    """Status is derived from our record plus a Hub identity check."""
+    if stored:
+        _validating_api(monkeypatch)
+        assert hf_auth.save_hf_token(stored)["status"] == "success"
+    if isinstance(whoami_result, Exception):
+        monkeypatch.setattr(hf_auth, "whoami", MagicMock(side_effect=whoami_result))
+    else:
+        monkeypatch.setattr(hf_auth, "whoami", MagicMock(return_value=whoami_result))
+
+    assert hf_auth.check_token_status() == expected
 
 
-def test_check_token_status_whoami_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A whoami failure downgrades to logged out."""
-    monkeypatch.setattr(hf_auth, "get_token", MagicMock(return_value="tok"))
-    monkeypatch.setattr(hf_auth, "whoami", MagicMock(side_effect=RuntimeError("x")))
-    assert hf_auth.check_token_status() == {"is_logged_in": False, "username": None}
+def test_an_expiring_token_is_refreshed_and_rotated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A token close to expiry is exchanged, and the rotated refresh token sticks."""
+    _validating_api(monkeypatch)
+    assert hf_auth.save_hf_token("first")["status"] == "success"
+    hf_auth._write_store(
+        replace(
+            hf_auth._read_store(),
+            refresh_token="r1",
+            expires_at=int(time.time()) + 5,
+        )
+    )
+    exchanged: list[str] = []
+
+    def _refresh(refresh_token: str) -> dict[str, object]:
+        exchanged.append(refresh_token)
+        return {"access_token": "second", "refresh_token": "r2", "expires_in": 3600}
+
+    monkeypatch.setattr(
+        "huggingface_hub.utils._oauth_device.refresh_access_token", _refresh
+    )
+
+    assert hf_auth.get_hf_token() == "second"
+    assert exchanged == ["r1"]
+    assert hf_auth._read_store().refresh_token == "r2"
+
+
+def test_a_failed_refresh_does_not_hand_out_an_expired_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the exchange fails an already-expired token is withheld, not returned."""
+    _validating_api(monkeypatch)
+    assert hf_auth.save_hf_token("first")["status"] == "success"
+    hf_auth._write_store(
+        replace(
+            hf_auth._read_store(),
+            refresh_token="r1",
+            expires_at=int(time.time()) - 1,
+        )
+    )
+
+    def _boom(_refresh_token: str) -> dict[str, object]:
+        raise RuntimeError("secret-marker")
+
+    monkeypatch.setattr(
+        "huggingface_hub.utils._oauth_device.refresh_access_token", _boom
+    )
+
+    assert hf_auth.get_hf_token() is None

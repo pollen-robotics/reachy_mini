@@ -14,6 +14,19 @@ import usb.util
 from reachy_mini.media.audio_control_utils import CONTROL_SUCCESS, ReSpeaker
 
 
+@pytest.fixture(autouse=True)
+def _isolated_hf_credentials(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Keep the credential store and HF environment out of the real user config."""
+    from reachy_mini.apps.sources import hf_auth
+
+    root = tmp_path_factory.mktemp("hf-home")
+    monkeypatch.setattr(hf_auth, "HF_TOKEN_PATH", str(root / "token"))
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+
+
 def _webrtc_plugin_available() -> bool:
     """True when the gst-plugins-rs webrtc elements register (libgstrswebrtc.so)."""
     try:

@@ -139,9 +139,10 @@ def test_poll_success_persists_token_and_notifies_relay(
 
     persisted: dict[str, Any] = {}
 
-    def _fake_persist(response: dict[str, Any]) -> tuple[str, str]:
+    def _fake_persist(response: dict[str, Any], generation: int) -> str:
         persisted["response"] = response
-        return ("oauth-alice", "alice")
+        persisted["generation"] = generation
+        return "alice"
 
     monkeypatch.setattr(hf_auth, "_persist_device_oauth_token", _fake_persist)
 
@@ -331,7 +332,7 @@ def test_authorized_session_gets_bounded_ttl(
         monkeypatch, poll_device_token=lambda info, **kw: token_response
     )
     monkeypatch.setattr(
-        hf_auth, "_persist_device_oauth_token", lambda resp: ("name", "user")
+        hf_auth, "_persist_device_oauth_token", lambda resp, generation: "user"
     )
 
     session = hf_auth.DeviceCodeSession(
@@ -374,3 +375,33 @@ def test_cleanup_prunes_authorized_after_expiry() -> None:
 
     assert "live" in hf_auth._device_code_sessions
     assert "stale" not in hf_auth._device_code_sessions
+
+
+def test_wireless_first_run_links_the_robot_with_a_refreshable_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fresh robot finishes the mobile device-code flow holding its own token."""
+    _install_fake_oauth_device(
+        monkeypatch,
+        request_device_code=lambda: dict(_DEVICE_INFO),
+        poll_device_token=lambda info, **kw: {
+            "access_token": "device-token",
+            "refresh_token": "r1",
+            "expires_in": 3600,
+        },
+    )
+    monkeypatch.setattr(hf_auth, "whoami", lambda **_kwargs: {"name": "alice"})
+    monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *_a: None)
+
+    assert hf_auth.check_token_status() == {"is_logged_in": False, "username": None}
+
+    async def scenario() -> dict[str, Any]:
+        start = await hf_auth.start_device_code_login()
+        task = hf_auth._device_code_sessions[start["session_id"]].task
+        assert task is not None
+        await task
+        return hf_auth.get_device_code_session_status(start["session_id"])
+
+    assert asyncio.run(scenario()) == {"status": "authorized", "username": "alice"}
+    assert hf_auth.get_hf_token() == "device-token"
+    assert hf_auth._read_store().refresh_token == "r1"

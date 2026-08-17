@@ -196,9 +196,9 @@ class Daemon:
             return
 
         try:
-            from huggingface_hub import get_token
+            from reachy_mini.apps.sources.hf_auth import get_hf_token
 
-            hf_token = get_token()
+            hf_token = get_hf_token()
         except Exception as e:
             self.logger.debug(f"No HF token available, central signaling disabled: {e}")
             return
