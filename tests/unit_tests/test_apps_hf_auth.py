@@ -186,6 +186,61 @@ async def test_exchange_code_not_configured(monkeypatch: pytest.MonkeyPatch) -> 
     assert session.status == "error"
 
 
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [
+        (400, "provider-secret-marker"),
+        (200, '{"error": "provider-secret-marker"}'),
+    ],
+)
+@pytest.mark.asyncio
+async def test_exchange_code_failure_never_surfaces_provider_text(
+    monkeypatch: pytest.MonkeyPatch, status: int, body: str
+) -> None:
+    """A failed exchange reports a stable message, not the provider response."""
+
+    class _Response:
+        def __init__(self, http_status: int, payload: str) -> None:
+            self.status = http_status
+            self._payload = payload
+
+        async def __aenter__(self) -> "_Response":
+            return self
+
+        async def __aexit__(self, *_exc: object) -> None:
+            return None
+
+        async def text(self) -> str:
+            return self._payload
+
+    class _Session:
+        async def __aenter__(self) -> "_Session":
+            return self
+
+        async def __aexit__(self, *_exc: object) -> None:
+            return None
+
+        def post(self, *_args: object, **_kwargs: object) -> _Response:
+            return _Response(status, body)
+
+    monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "cid")
+    monkeypatch.setattr(hf_auth.aiohttp, "ClientSession", _Session)
+    sid = hf_auth.create_oauth_session(wireless_version=True)["session_id"]
+    session = hf_auth.get_oauth_session(sid)
+    assert session is not None
+
+    result = await hf_auth.exchange_code_for_token("code", session.state, True)
+
+    assert result == {
+        "status": "error",
+        "message": hf_auth.AUTHENTICATION_FAILED_MESSAGE,
+    }
+    assert session.error_message == hf_auth.AUTHENTICATION_FAILED_MESSAGE
+    assert (
+        "provider-secret-marker" not in hf_auth.get_oauth_session_status(sid)["message"]
+    )
+
+
 # ---- Token functions (huggingface_hub monkeypatched)
 
 

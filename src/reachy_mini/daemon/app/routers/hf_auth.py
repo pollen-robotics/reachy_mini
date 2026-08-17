@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from html import escape
 from typing import Any
 
 import aiohttp
@@ -357,19 +358,19 @@ async def oauth_callback(
     This is where HF redirects after user authorizes.
     Shows a success/error page that the user can close.
     """
+    del error_description  # provider-controlled text, accepted but never surfaced
     if error:
-        # OAuth error from HF
+        message = (
+            hf_auth.AUTHORIZATION_DENIED_MESSAGE
+            if error == "access_denied"
+            else hf_auth.AUTHENTICATION_FAILED_MESSAGE
+        )
         session = hf_auth.get_session_by_state(state) if state else None
         if session:
             session.status = "error"
-            session.error_message = error_description or error
+            session.error_message = message
 
-        return HTMLResponse(
-            content=_oauth_result_page(
-                success=False,
-                message=error_description or error,
-            )
-        )
+        return HTMLResponse(content=_oauth_result_page(success=False, message=message))
 
     if not code or not state:
         return HTMLResponse(
@@ -472,7 +473,7 @@ def _oauth_result_page(success: bool, message: str) -> str:
     <div class="container">
         <div class="icon">{icon}</div>
         <h1>{title}</h1>
-        <p>{message}</p>
+        <p>{escape(message)}</p>
         <div class="hint">
             You can close this window and return to your robot's dashboard.
         </div>

@@ -48,6 +48,15 @@ OAUTH_SCOPES = os.environ.get(
 OAUTH_REDIRECT_URI_WIRELESS = "http://reachy-mini.local:8000/api/hf-auth/oauth/callback"
 OAUTH_REDIRECT_URI_LITE = "http://localhost:8000/api/hf-auth/oauth/callback"
 
+# Returned over HTTP, so never carry provider text, exception detail, or tokens.
+AUTHENTICATION_FAILED_MESSAGE = "Authentication failed. Please try again."
+AUTHENTICATION_UNAVAILABLE_MESSAGE = (
+    "Hugging Face authentication is unavailable. Please try again."
+)
+AUTHORIZATION_DENIED_MESSAGE = "Authorization was denied."
+CREDENTIAL_SAVE_FAILED_MESSAGE = "Could not save credentials. Please try again."
+LOGIN_EXPIRED_MESSAGE = "Login expired. Please try again."
+
 # In-memory storage for OAuth sessions (device-flow-like pattern)
 _oauth_sessions: dict[str, "OAuthSession"] = {}
 
@@ -268,8 +277,12 @@ async def exchange_code_for_token(
             async with http_session.post(token_url, data=data) as response:
                 response_text = await response.text()
                 if response.status != 200:
+                    logger.warning(
+                        "[HF Auth] OAuth token exchange returned HTTP %s",
+                        response.status,
+                    )
                     session.status = "error"
-                    session.error_message = f"Token exchange failed (HTTP {response.status}): {response_text}"
+                    session.error_message = AUTHENTICATION_FAILED_MESSAGE
                     return {"status": "error", "message": session.error_message}
 
                 import json
@@ -279,13 +292,17 @@ async def exchange_code_for_token(
         # HuggingFace returns accessToken (camelCase)
         access_token = token_data.get("access_token") or token_data.get("accessToken")
         if not access_token:
+            logger.warning("[HF Auth] OAuth response did not include an access token")
             session.status = "error"
-            session.error_message = f"No access token. Response: {token_data}"
+            session.error_message = AUTHENTICATION_FAILED_MESSAGE
             return {"status": "error", "message": session.error_message}
 
-    except Exception as e:
+    except Exception as error:
+        logger.warning(
+            "[HF Auth] OAuth token request failed (%s)", type(error).__name__
+        )
         session.status = "error"
-        session.error_message = f"Token request error: {type(e).__name__}: {e}"
+        session.error_message = AUTHENTICATION_UNAVAILABLE_MESSAGE
         return {"status": "error", "message": session.error_message}
 
     # Save token directly to HuggingFace token file
@@ -308,9 +325,12 @@ async def exchange_code_for_token(
             os.fsync(token_file.fileno())
         os.replace(temporary_path, token_path)
         temporary_path = None
-    except Exception as e:
+    except Exception as error:
+        logger.warning(
+            "[HF Auth] Could not save OAuth credentials (%s)", type(error).__name__
+        )
         session.status = "error"
-        session.error_message = f"Failed to save token: {type(e).__name__}: {e}"
+        session.error_message = CREDENTIAL_SAVE_FAILED_MESSAGE
         return {"status": "error", "message": session.error_message}
     finally:
         if temporary_path is not None:
@@ -542,23 +562,29 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
         logger.info("[HF Auth] Device-code login cancelled: %s", session.session_id)
         session.status = "cancelled"
         return
-    except DeviceCodeError as e:
-        logger.info("[HF Auth] Device-code login failed: %s", e)
-        session.status = "expired" if "expired" in str(e).lower() else "error"
-        session.error_message = str(e)
+    except DeviceCodeError as error:
+        logger.info("[HF Auth] Device-code login failed (%s)", type(error).__name__)
+        expired = "expired" in str(error).lower()
+        session.status = "expired" if expired else "error"
+        session.error_message = (
+            LOGIN_EXPIRED_MESSAGE if expired else AUTHENTICATION_FAILED_MESSAGE
+        )
         return
-    except Exception as e:  # noqa: BLE001
-        logger.error("[HF Auth] Device-code polling error: %s", e)
+    except Exception as error:  # noqa: BLE001
+        logger.error("[HF Auth] Device-code polling error (%s)", type(error).__name__)
         session.status = "error"
-        session.error_message = f"{type(e).__name__}: {e}"
+        session.error_message = AUTHENTICATION_UNAVAILABLE_MESSAGE
         return
 
     try:
         _, username = await asyncio.to_thread(_persist_device_oauth_token, response)
-    except Exception as e:  # noqa: BLE001
-        logger.error("[HF Auth] Failed to persist device-code token: %s", e)
+    except Exception as error:  # noqa: BLE001
+        logger.error(
+            "[HF Auth] Failed to persist device-code token (%s)",
+            type(error).__name__,
+        )
         session.status = "error"
-        session.error_message = f"Failed to save token: {type(e).__name__}: {e}"
+        session.error_message = CREDENTIAL_SAVE_FAILED_MESSAGE
         return
 
     session.username = username or ""

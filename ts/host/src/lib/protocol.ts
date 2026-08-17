@@ -442,8 +442,7 @@ export function decodeCredsFromHash(hash: string | null): CredsBundle | null {
       const b64 = decodeURIComponent(segment.slice('creds='.length));
       const json = decodeBase64Utf8(b64);
       return JSON.parse(json) as CredsBundle;
-    } catch (err) {
-      console.warn('[reachy-mini-sdk/host] failed to decode creds hash', err);
+    } catch {
       return null;
     }
   }
