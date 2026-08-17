@@ -213,6 +213,29 @@ def test_central_robot_status_no_token(monkeypatch, router_app):
     }
 
 
+def test_central_status_refuses_an_untrusted_central_before_sending_the_bearer(
+    monkeypatch, router_app
+):
+    """An untrusted central URL fails closed without any HTTP call."""
+    monkeypatch.setattr(src, "get_hf_token", lambda: "hf_tok")
+    monkeypatch.setattr(hf_auth, "CENTRAL_SIGNALING_SERVER", "http://central.example")
+
+    def unexpected(*_args, **_kwargs):
+        raise AssertionError("must not open a session for an untrusted central")
+
+    monkeypatch.setattr(hf_auth.aiohttp, "ClientSession", unexpected)
+    client = router_app(hf_auth.router)
+
+    resp = client.get("/hf-auth/central-robot-status")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "available": False,
+        "robots": [],
+        "reason": "invalid_configuration",
+    }
+
+
 def test_oauth_callback_error_param(monkeypatch, router_app):
     """Callback with an OAuth error renders the failure page (no network)."""
     monkeypatch.setattr(src, "get_session_by_state", lambda state: None)

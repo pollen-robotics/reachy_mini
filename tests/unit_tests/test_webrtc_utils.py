@@ -157,6 +157,20 @@ def test_turn_credentials_uris_empty_before_any_fetch() -> None:
     assert webrtc_utils.TurnCredentials().turn_uris() == []
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://turn.example/credentials",
+        "https://secret@turn.example/credentials",
+        "https://turn.example/credentials?target=elsewhere",
+    ],
+)
+def test_turn_credentials_reject_unsafe_bearer_destinations(url: str) -> None:
+    """TURN never sends the daemon bearer to an unsafe configured endpoint."""
+    with pytest.raises(ValueError, match="REACHY_TURN_URL"):
+        webrtc_utils.TurnCredentials(url=url)
+
+
 def test_turn_credentials_refresh_once_populates_cache(monkeypatch) -> None:
     """A successful fetch is converted to URIs and cached for readers."""
     creds = webrtc_utils.TurnCredentials(

@@ -11,6 +11,8 @@ from urllib.parse import quote
 import requests
 from websockets.sync.client import connect
 
+from reachy_mini.utils.network import validate_secure_http_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -109,7 +111,7 @@ class TurnCredentials:
                 refresh period is half this.
 
         """
-        self._url = url
+        self._url = validate_secure_http_url(url, "REACHY_TURN_URL")
         self._ttl = ttl
         # Written only by the refresher thread, read by the GStreamer
         # thread. Rebound as a whole list, never mutated in place, so a
@@ -168,6 +170,7 @@ class TurnCredentials:
                 headers={"Authorization": f"Bearer {token}"},
                 params={"ttl": self._ttl},
                 timeout=_TURN_HTTP_TIMEOUT_S,
+                allow_redirects=False,
             )
             resp.raise_for_status()
             uris = ice_servers_to_turn_uris(resp.json().get("iceServers") or [])
