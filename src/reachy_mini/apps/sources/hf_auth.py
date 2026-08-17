@@ -512,11 +512,13 @@ async def start_device_code_login() -> dict[str, Any]:
         from huggingface_hub.utils._oauth_device import request_device_code
 
         device_info = await asyncio.to_thread(request_device_code)
-    except Exception as e:  # noqa: BLE001 — surface any failure to the caller
-        logger.error("[HF Auth] Failed to request device code: %s", e)
+    except Exception as error:  # noqa: BLE001
+        logger.error(
+            "[HF Auth] Failed to request device code (%s)", type(error).__name__
+        )
         return {
             "status": "error",
-            "message": f"Could not start login: {type(e).__name__}: {e}",
+            "message": AUTHENTICATION_UNAVAILABLE_MESSAGE,
         }
 
     session_id = secrets.token_urlsafe(16)
