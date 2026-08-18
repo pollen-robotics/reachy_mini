@@ -6,8 +6,8 @@
 > shell, `sdk: static` deploy,
 > `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host
 > ↔ embed contract. **Pin the SDK to
-> `@pollen-robotics/reachy-mini-sdk@1.8.0`** (the stable release
-> validated against the host shell + daemon).
+> `@pollen-robotics/reachy-mini-sdk@1.10.0-rc.5`** (the current release
+> candidate validated against the host shell + daemon).
 >
 > **This file** is the runtime API surface of the `ReachyMini` class
 > you receive from `handle.reachy` once `connectToHost()` resolves:
@@ -396,8 +396,8 @@ await robot.signOut();
 
 The three reference apps maintained alongside the SDK are the canonical worked examples. They all use the host shell pattern and the current SDK pin:
 
-- [`pollen-robotics/reachy_mini_minimal_conversation`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation) — vanilla TS + Vite.
-- [`pollen-robotics/reachy_mini_emotions`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions) — React 19 + MUI 7 + Vite.
-- [`pollen-robotics/reachy_mini_telepresence`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence) — React 19 + MUI 7 + Vite with camera + media streams.
+- [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) — vanilla TS + Vite.
+- [`tfrere/emotions`](https://huggingface.co/spaces/tfrere/emotions) — React 19 + MUI 7 + Vite.
+- [`tfrere/telepresence`](https://huggingface.co/spaces/tfrere/telepresence) — React 19 + MUI 7 + Vite with camera + media streams.
 
 Clone the closest one and trim. See [`ts/APP_CREATION_GUIDE.md`](../../../ts/APP_CREATION_GUIDE.md) for the step-by-step.
