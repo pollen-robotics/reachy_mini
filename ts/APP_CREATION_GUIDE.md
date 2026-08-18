@@ -1890,4 +1890,8 @@ Two companion rules make this robust:
 
 Remember to `worker.terminate()` in your `onLeave` cleanup. A complete
 reference implementation lives in the `reachy_mini_radio_js` app
-(`src/embed.ts` + `src/pose-heartbeat.worker.ts`).
+(`src/embed.ts` + `src/pose-heartbeat.worker.ts`), and the
+[`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app)
+Space both applies the pattern to its pose editor and demos the throttling
+live: its **Background resilience** panel meters rAF vs `setInterval` vs a
+worker clock, with a recap of what each delivered while the tab was hidden.

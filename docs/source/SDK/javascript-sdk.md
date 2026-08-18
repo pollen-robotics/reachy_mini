@@ -305,6 +305,57 @@ arrive out of order are dropped (the channel is unordered). Against an older
 daemon that has no pose channel this is a no-op; fall back to `requestState()`
 polling there.
 
+## Handling backgrounded tabs
+
+When the tab is hidden (tab switch, phone lock), the browser pauses
+`requestAnimationFrame` entirely and clamps `setInterval`/`setTimeout` to
+~1 tick per second. Any robot-critical loop clocked by them - pose
+streaming via `setTarget()`, audio gain ramps, stream-health watchdogs,
+reconnect logic - freezes mid-motion until the tab comes back.
+
+Split your loop in two:
+
+- **Logic** (pose computation + `setTarget`, audio, health checks,
+  reconnects): clock it from a **Web Worker**. Worker timers are *not*
+  visibility-throttled, and the `message` events they post are delivered
+  on the main thread even while the tab is hidden.
+- **Visuals** (DOM updates, canvas, meters): keep them on
+  `requestAnimationFrame`. Pausing invisible paints is exactly what you
+  want, and it resumes on its own.
+
+```js
+// pose-heartbeat.worker.js - the whole file:
+setInterval(() => postMessage(0), 25); // ~40 Hz; the main thread down-samples
+```
+
+```js
+// app side
+let worker = null;
+try {
+    worker = new Worker(new URL("./pose-heartbeat.worker.js", import.meta.url), { type: "module" });
+    worker.onmessage = () => stepLogic(performance.now());
+} catch {
+    // Workers unavailable (rare): degrade to a throttled interval.
+    setInterval(() => stepLogic(performance.now()), 25);
+}
+```
+
+Two companion rules make this robust:
+
+- **Clamp your `dt`.** After a long hidden stretch the first tick sees a
+  huge time delta; clamp it (e.g. `Math.min(dt, 100)`) so filters and
+  interpolators don't jump.
+- **Resync on `visibilitychange`.** When the tab returns, call
+  `robot.requestState()` and run one logic step immediately instead of
+  waiting for the next scheduled tick, so the UI repaints from fresh state.
+
+Remember to `worker.terminate()` in your teardown. Full rationale and the
+host-shell variant live in
+[`ts/APP_CREATION_GUIDE.md`](../../../ts/APP_CREATION_GUIDE.md) §14.7; the
+[`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app)
+Space meters the throttling live (Background resilience panel) and clocks
+its own pose editor off a worker.
+
 ## Robot onboarding & management
 
 These daemon-side commands power first-run setup and remote administration.
