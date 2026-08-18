@@ -234,6 +234,37 @@ def test_get_pypi_version_prerelease(monkeypatch):
     assert (v.major, v.minor, v.patch) == (2, 1, 0)
 
 
+def test_get_pypi_version_prerelease_lexicographic_order(monkeypatch):
+    """Regression: the newest RC must win even when it isn't the LAST entry.
+
+    PyPI serializes the releases dict in lexicographic key order, so once a
+    two-digit minor exists the trailing entry is an OLD version ("1.9.0rc1"
+    sorts after "1.10.0rc5"). The old `releases[-1]` lookup then compared
+    1.9.0rc1 < 1.9.0 and fell back to stable - hiding every 1.10.0 RC from
+    the pre-release channel (BLE UPDATE_CHECK and /update/available alike).
+    """
+    payload = {
+        "info": {"version": "1.9.0"},
+        # Real pypi.org key order for these versions.
+        "releases": {"1.10.0rc5": [], "1.8.4": [], "1.9.0": [], "1.9.0rc1": []},
+    }
+    monkeypatch.setattr(update_available.requests, "get", lambda *a, **k: _FakeResponse(payload))
+    v = update_available.get_pypi_version("reachy-mini", pre_release=True)
+    assert (v.major, v.minor, v.patch) == (1, 10, 0)
+    assert v.prerelease == "rc.5"
+
+
+def test_get_pypi_version_prerelease_skips_unparseable(monkeypatch):
+    """Legacy tags that don't parse are skipped, not fatal."""
+    payload = {
+        "info": {"version": "1.9.0"},
+        "releases": {"0.1": [], "1.10.0rc5": [], "1.9.0": []},
+    }
+    monkeypatch.setattr(update_available.requests, "get", lambda *a, **k: _FakeResponse(payload))
+    v = update_available.get_pypi_version("reachy-mini", pre_release=True)
+    assert (v.major, v.minor, v.patch) == (1, 10, 0)
+
+
 def test_get_pypi_version_prerelease_pep440_info_version(monkeypatch):
     """Regression: pre-release compare must not crash on a PEP 440 info.version.
 

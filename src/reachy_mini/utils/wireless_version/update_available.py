@@ -55,10 +55,17 @@ def get_pypi_version(package_name: str, pre_release: bool) -> semver.Version:
     version = _semver_version(data["info"]["version"])
 
     if pre_release:
-        releases = list(data["releases"].keys())
-        pre_version = _semver_version(releases[-1])
-        if pre_version > version:
-            return pre_version
+        # PyPI serializes the releases dict in lexicographic key order, so
+        # its LAST entry is not the newest version: "1.9.0rc1" sorts after
+        # "1.10.0rc5". Scan the whole list for the highest parseable
+        # version instead of trusting the trailing entry.
+        for release in data["releases"]:
+            try:
+                candidate = _semver_version(release)
+            except ValueError:
+                continue  # legacy tag formats: not installable targets
+            if candidate > version:
+                version = candidate
 
     return version
 
