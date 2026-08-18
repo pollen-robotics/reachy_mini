@@ -924,15 +924,23 @@ class BluetoothCommandService:
         # terminal DONE — it tails off into "Daemon unreachable" / "Unknown
         # job". Clients infer success by reconnecting and re-running
         # UPDATE_CHECK (current_version == latest), not by polling to the end.
-        elif upper == "UPDATE_CHECK":
+        # Both commands take an optional "PRE" argument (e.g. "UPDATE_CHECK
+        # PRE") that opts into pre-release builds — the BLE mirror of the
+        # `pre_release` flag the WebRTC `start_update` message already
+        # carries, so dev clients can track the RC channel over BLE too.
+        # Daemons that predate this argument ECHO the command back, which
+        # clients treat as "retry without PRE".
+        elif upper in ("UPDATE_CHECK", "UPDATE_CHECK PRE"):
             if not self._is_authed():
                 return "ERROR: Not connected. Please authenticate first."
-            self._run_async(_update_check)
+            pre_release = upper.endswith(" PRE")
+            self._run_async(lambda: _update_check(pre_release))
             return "OK: working"
-        elif upper == "UPDATE_START":
+        elif upper in ("UPDATE_START", "UPDATE_START PRE"):
             if not self._is_authed():
                 return "ERROR: Not connected. Please authenticate first."
-            self._run_async(_update_start)
+            pre_release = upper.endswith(" PRE")
+            self._run_async(lambda: _update_start(pre_release))
             return "OK: working"
         elif upper.startswith("UPDATE_INFO "):
             if not self._is_authed():
@@ -1312,13 +1320,17 @@ _UPDATE_HTTP_TIMEOUT_S = 30.0
 _UPDATE_MTU_BUDGET = 180
 
 
-def _update_check() -> str:
-    """Report whether a daemon update is available (compact JSON for BLE)."""
+def _update_check(pre_release: bool = False) -> str:
+    """Report whether a daemon update is available (compact JSON for BLE).
+
+    `pre_release` widens the reference to pre-release builds (RC channel);
+    set by the optional "PRE" argument of the UPDATE_CHECK command.
+    """
     try:
         data = _daemon_request(
             "GET",
             "/update/available",
-            {"pre_release": "false"},
+            {"pre_release": "true" if pre_release else "false"},
             timeout=_UPDATE_HTTP_TIMEOUT_S,
         )
         rm = (data or {}).get("update", {}).get("reachy_mini", {})
@@ -1383,13 +1395,17 @@ def _wifi_keyex() -> str:
         return f"ERROR: {e}"
 
 
-def _update_start() -> str:
-    """Trigger the daemon update (latest published release). Returns the job id."""
+def _update_start(pre_release: bool = False) -> str:
+    """Trigger the daemon update (latest published release). Returns the job id.
+
+    `pre_release` opts the install into pre-release builds (RC channel);
+    set by the optional "PRE" argument of the UPDATE_START command.
+    """
     try:
         data = _daemon_request(
             "POST",
             "/update/start",
-            {"pre_release": "false"},
+            {"pre_release": "true" if pre_release else "false"},
             timeout=_UPDATE_HTTP_TIMEOUT_S,
         )
         job_id = (data or {}).get("job_id") if isinstance(data, dict) else None
