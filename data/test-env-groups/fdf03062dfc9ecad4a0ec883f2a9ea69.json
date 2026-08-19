@@ -1,1 +1,1 @@
-{"id":"fdf03062dfc9ecad4a0ec883f2a9ea69","fullName":"tests.unit_tests.test_device_detection.TestFindVideoDevice#test_linux_pulseaudio_reachy_camera","name":"test_linux_pulseaudio_reachy_camera","status":"passed","testResultsByEnv":{"default":"94af00112ad1d5c4cd4f9363a0dc28b9"}}
+{"id":"fdf03062dfc9ecad4a0ec883f2a9ea69","fullName":"tests.unit_tests.test_device_detection.TestFindVideoDevice#test_linux_pulseaudio_reachy_camera","name":"test_linux_pulseaudio_reachy_camera","status":"passed","testResultsByEnv":{"default":"a7037334ae7795973d5398b8e154d92e"}}
