@@ -13,6 +13,7 @@ import sys
 import time
 import types
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -140,9 +141,12 @@ def test_poll_success_persists_token_and_notifies_relay(
 
     persisted: dict[str, Any] = {}
 
-    def _fake_persist(response: dict[str, Any], generation: int) -> str:
+    def _fake_persist(
+        response: dict[str, Any], session: hf_auth.DeviceCodeSession
+    ) -> str:
         persisted["response"] = response
-        persisted["generation"] = generation
+        persisted["generation"] = session.lifecycle_generation
+        session.status = "authorized"
         return "alice"
 
     monkeypatch.setattr(hf_auth, "_persist_device_oauth_token", _fake_persist)
@@ -324,6 +328,41 @@ def test_poll_aborts_when_cancel_event_set(monkeypatch: pytest.MonkeyPatch) -> N
     assert session.status == "cancelled"
 
 
+def test_cancel_after_device_poll_refuses_the_returned_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _return_token_after_cancel(
+        device_info: Any, *, on_pending: Any = None
+    ) -> dict[str, Any]:
+        (session_id,) = hf_auth._device_code_sessions
+        assert hf_auth.cancel_device_code_session(session_id) is True
+        return {"access_token": "late-token"}
+
+    _install_fake_oauth_device(
+        monkeypatch,
+        request_device_code=lambda: dict(_DEVICE_INFO),
+        poll_device_token=_return_token_after_cancel,
+    )
+    monkeypatch.setattr(hf_auth, "whoami", lambda **_kwargs: {"name": "alice"})
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    relay_notify = AsyncMock()
+    monkeypatch.setattr(relay_module, "notify_token_change", relay_notify)
+
+    async def scenario() -> hf_auth.DeviceCodeSession:
+        start = await hf_auth.start_device_code_login()
+        session = hf_auth._device_code_sessions[start["session_id"]]
+        assert session.task is not None
+        await session.task
+        return session
+
+    session = asyncio.run(scenario())
+
+    assert session.status == "cancelled"
+    assert hf_auth.get_hf_token() is None
+    relay_notify.assert_not_awaited()
+
+
 def test_authorized_session_gets_bounded_ttl(
     monkeypatch: pytest.MonkeyPatch, device_code_error: type[Exception]
 ) -> None:
@@ -332,9 +371,7 @@ def test_authorized_session_gets_bounded_ttl(
     _install_fake_oauth_device(
         monkeypatch, poll_device_token=lambda info, **kw: token_response
     )
-    monkeypatch.setattr(
-        hf_auth, "_persist_device_oauth_token", lambda resp, generation: "user"
-    )
+    monkeypatch.setattr(hf_auth, "whoami", lambda **_kwargs: {"name": "user"})
 
     session = hf_auth.DeviceCodeSession(
         session_id="s10",
@@ -343,6 +380,7 @@ def test_authorized_session_gets_bounded_ttl(
         verification_uri_complete="https://hf.co/oauth/device",
         expires_at=time.time() + 900,  # original device-code expiry
     )
+    hf_auth._device_code_sessions[session.session_id] = session
 
     before = time.time()
     asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
@@ -391,7 +429,10 @@ def test_wireless_first_run_links_the_robot_with_a_refreshable_token(
             "expires_in": 3600,
         },
     )
-    monkeypatch.setattr(hf_auth, "whoami", lambda **_kwargs: {"name": "alice"})
+    def _fail_username_lookup(**_kwargs: Any) -> None:
+        raise RuntimeError
+
+    monkeypatch.setattr(hf_auth, "whoami", _fail_username_lookup)
     monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *_a: None)
 
     assert hf_auth.check_token_status() == {"is_logged_in": False, "username": None}
@@ -403,6 +444,6 @@ def test_wireless_first_run_links_the_robot_with_a_refreshable_token(
         await task
         return hf_auth.get_device_code_session_status(start["session_id"])
 
-    assert asyncio.run(scenario()) == {"status": "authorized", "username": "alice"}
+    assert asyncio.run(scenario()) == {"status": "authorized", "username": ""}
     assert hf_auth.get_hf_token() == "device-token"
     assert hf_auth._read_store().refresh_token == "r1"

@@ -367,6 +367,7 @@ async def exchange_code_for_token(
             session.status = "error"
             session.error_message = AUTHENTICATION_FAILED_MESSAGE
             return {"status": "error", "message": session.error_message}
+        token_data["access_token"] = access_token
 
     except Exception as error:
         logger.warning(
@@ -377,9 +378,13 @@ async def exchange_code_for_token(
         return {"status": "error", "message": session.error_message}
 
     try:
-        landed = _persist_login(
-            _token_fields(token_data, None), session.lifecycle_generation
-        )
+        with _store_lock:
+            if _oauth_sessions.get(session.session_id) is not session:
+                landed = False
+            else:
+                landed = _persist_login(
+                    _token_fields(token_data, None), session.lifecycle_generation
+                )
     except OSError as error:
         logger.warning(
             "[HF Auth] Could not save OAuth credentials (%s)", type(error).__name__
@@ -451,10 +456,8 @@ def get_oauth_session_status(session_id: str) -> dict[str, Any]:
 
 def cancel_oauth_session(session_id: str) -> bool:
     """Cancel an OAuth session."""
-    if session_id in _oauth_sessions:
-        del _oauth_sessions[session_id]
-        return True
-    return False
+    with _store_lock:
+        return _oauth_sessions.pop(session_id, None) is not None
 
 
 def is_oauth_configured() -> bool:
@@ -525,11 +528,27 @@ def _cleanup_expired_device_sessions() -> None:
         _device_code_sessions.pop(sid, None)
 
 
-def _persist_device_oauth_token(response: Any, expected_generation: int) -> str:
-    """Store a device-code token in the daemon's own record and return the username."""
-    if not _persist_login(_token_fields(response, None), expected_generation):
-        raise _LoginSuperseded
-    user_info = whoami(token=response["access_token"])
+def _persist_device_oauth_token(
+    response: Any, session: DeviceCodeSession
+) -> str:
+    """Commit a device-code login and return its optional username."""
+    with _store_lock:
+        if (
+            session.cancel_event.is_set()
+            or _device_code_sessions.get(session.session_id) is not session
+            or not _persist_login(
+                _token_fields(response, None), session.lifecycle_generation
+            )
+        ):
+            raise _LoginSuperseded
+        session.status = "authorized"
+        session.username = ""
+        session.expires_at = time.time() + _AUTHORIZED_SESSION_TTL_S
+
+    try:
+        user_info = whoami(token=response["access_token"])
+    except Exception:  # noqa: BLE001 - username is optional
+        return ""
     if not isinstance(user_info, dict):
         return ""
     return str(user_info.get("name") or "")
@@ -608,9 +627,7 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
         return
 
     try:
-        username = await asyncio.to_thread(
-            _persist_device_oauth_token, response, session.lifecycle_generation
-        )
+        username = await asyncio.to_thread(_persist_device_oauth_token, response, session)
     except _LoginSuperseded:
         logger.info("[HF Auth] Device-code login superseded: %s", session.session_id)
         session.status = "cancelled"
@@ -625,10 +642,6 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
         return
 
     session.username = username or ""
-    session.status = "authorized"
-    # Bound the authorized session's lifetime so _cleanup reclaims it after the
-    # frontend has read the result (rather than leaking until daemon restart).
-    session.expires_at = time.time() + _AUTHORIZED_SESSION_TTL_S
 
     # Notify a *running* central relay so it reconnects with the new token. A
     # token-less boot has no relay instance yet, so the status route starts one.
@@ -683,11 +696,14 @@ def cancel_device_code_session(session_id: str) -> bool:
     While awaiting the thread the task stays referenced by the executor, so it
     is safe to drop the session here and let the poll unwind cooperatively.
     """
-    session = _device_code_sessions.pop(session_id, None)
-    if session is None:
-        return False
-    session.cancel_event.set()
-    return True
+    with _store_lock:
+        session = _device_code_sessions.get(session_id)
+        if session is None or session.status != "pending":
+            return False
+        _device_code_sessions.pop(session_id)
+        session.cancel_event.set()
+        session.status = "cancelled"
+        return True
 
 
 def _notify_relay_of_token_change(new_token: Optional[str] = None) -> None:

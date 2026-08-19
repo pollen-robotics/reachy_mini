@@ -20,7 +20,7 @@ class _TokenResponse:
         pass
 
     async def text(self) -> str:
-        return '{"access_token": "oauth-token"}'
+        return '{"accessToken": "oauth-token"}'
 
 
 class _ClientSession:
@@ -63,6 +63,41 @@ async def test_oauth_token_is_stored_in_the_daemon_record(
     assert hf_auth.get_hf_token() == "oauth-token"
     assert not token_path.exists()
     assert hf_auth._store_path().stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.asyncio
+async def test_cancelling_redirect_oauth_while_exchanging_refuses_the_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def cancel_then_return_token(_response: _TokenResponse) -> str:
+        assert hf_auth.cancel_oauth_session("session") is True
+        return '{"access_token": "late-token"}'
+
+    session = hf_auth.OAuthSession(
+        session_id="session",
+        user_code="",
+        state="state",
+        code_verifier="verifier",
+        wireless_version=False,
+    )
+    hf_auth._oauth_sessions[session.session_id] = session
+    monkeypatch.setattr(_TokenResponse, "text", cancel_then_return_token)
+    monkeypatch.setattr(hf_auth.aiohttp, "ClientSession", _ClientSession)
+    monkeypatch.setattr(hf_auth, "whoami", lambda **_kwargs: {"name": "tester"})
+    relay_notify = AsyncMock()
+    monkeypatch.setattr(central_signaling_relay, "notify_token_change", relay_notify)
+
+    try:
+        result = await hf_auth.exchange_code_for_token("code", "state", False)
+    finally:
+        hf_auth._oauth_sessions.clear()
+
+    assert result == {
+        "status": "error",
+        "message": hf_auth._CANCELLED_SESSION_MESSAGE,
+    }
+    assert hf_auth.get_hf_token() is None
+    relay_notify.assert_not_awaited()
 
 
 @pytest.mark.asyncio
