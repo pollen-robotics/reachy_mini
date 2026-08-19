@@ -272,16 +272,25 @@ def test_save_hf_token_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result == {"status": "error", "message": "Invalid token or network error"}
 
 
-def test_save_hf_token_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Other exceptions surface their string in the error message."""
+def test_save_hf_token_unexpected_error_is_redacted(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Unexpected provider text stays out of the response and log."""
     api = MagicMock()
-    api.whoami.side_effect = RuntimeError("kaboom")
+    api.whoami.side_effect = RuntimeError("provider-secret-marker")
     monkeypatch.setattr(hf_auth, "HfApi", MagicMock(return_value=api))
     monkeypatch.setattr(hf_auth, "login", MagicMock())
     monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *a: None)
 
-    result = hf_auth.save_hf_token("tok")
-    assert result == {"status": "error", "message": "kaboom"}
+    with caplog.at_level("WARNING", logger=hf_auth.__name__):
+        result = hf_auth.save_hf_token("tok")
+
+    assert result == {
+        "status": "error",
+        "message": hf_auth.CREDENTIAL_SAVE_FAILED_MESSAGE,
+    }
+    assert "provider-secret-marker" not in caplog.text
+    assert "RuntimeError" in caplog.text
 
 
 def test_save_hf_token_hfhub_error(monkeypatch: pytest.MonkeyPatch) -> None:

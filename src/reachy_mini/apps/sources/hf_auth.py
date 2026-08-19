@@ -720,10 +720,13 @@ def save_hf_token(token: str) -> dict[str, Any]:
             "status": "error",
             "message": "Invalid token or network error",
         }
-    except Exception as e:
+    except Exception as error:  # noqa: BLE001 - provider text must not reach callers
+        logger.warning(
+            "[HF Auth] Could not save credentials (%s)", type(error).__name__
+        )
         return {
             "status": "error",
-            "message": str(e),
+            "message": CREDENTIAL_SAVE_FAILED_MESSAGE,
         }
 
 
