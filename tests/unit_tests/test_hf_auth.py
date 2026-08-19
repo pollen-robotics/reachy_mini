@@ -41,11 +41,9 @@ async def test_oauth_token_is_stored_in_the_daemon_record(
     """Redirect OAuth persists to the daemon's own store, not the shared token file."""
     token_path = tmp_path / "private-hf-home" / "token"
     session = hf_auth.OAuthSession(
-        session_id="session",
-        user_code="",
-        state="state",
+        session_id="state",
         code_verifier="verifier",
-        wireless_version=False,
+        redirect_uri=hf_auth.OAUTH_REDIRECT_URI_LITE,
     )
     hf_auth._oauth_sessions[session.session_id] = session
     monkeypatch.setattr(hf_auth, "HF_TOKEN_PATH", str(token_path))
@@ -55,14 +53,15 @@ async def test_oauth_token_is_stored_in_the_daemon_record(
     monkeypatch.setattr(central_signaling_relay, "notify_token_change", AsyncMock())
 
     try:
-        result = await hf_auth.exchange_code_for_token("code", "state", False)
+        result = await hf_auth.exchange_code_for_token("code", "state")
     finally:
         hf_auth._oauth_sessions.clear()
 
     assert result == {"status": "success", "username": "tester"}
     assert hf_auth.get_hf_token() == "oauth-token"
     assert not token_path.exists()
-    assert hf_auth._store_path().stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert hf_auth._store_path().stat().st_mode & 0o777 == 0o600
 
 
 @pytest.mark.asyncio
@@ -70,15 +69,13 @@ async def test_cancelling_redirect_oauth_while_exchanging_refuses_the_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def cancel_then_return_token(_response: _TokenResponse) -> str:
-        assert hf_auth.cancel_oauth_session("session") is True
+        assert hf_auth.cancel_oauth_session("state") is True
         return '{"access_token": "late-token"}'
 
     session = hf_auth.OAuthSession(
-        session_id="session",
-        user_code="",
-        state="state",
+        session_id="state",
         code_verifier="verifier",
-        wireless_version=False,
+        redirect_uri=hf_auth.OAUTH_REDIRECT_URI_LITE,
     )
     hf_auth._oauth_sessions[session.session_id] = session
     monkeypatch.setattr(_TokenResponse, "text", cancel_then_return_token)
@@ -88,7 +85,7 @@ async def test_cancelling_redirect_oauth_while_exchanging_refuses_the_token(
     monkeypatch.setattr(central_signaling_relay, "notify_token_change", relay_notify)
 
     try:
-        result = await hf_auth.exchange_code_for_token("code", "state", False)
+        result = await hf_auth.exchange_code_for_token("code", "state")
     finally:
         hf_auth._oauth_sessions.clear()
 
@@ -118,9 +115,7 @@ async def test_lite_first_run_ignores_credentials_on_the_same_machine(
 
     start = hf_auth.create_oauth_session(wireless_version=False, use_localhost=True)
     try:
-        result = await hf_auth.exchange_code_for_token(
-            "code", start["session_id"], False
-        )
+        result = await hf_auth.exchange_code_for_token("code", start["session_id"])
     finally:
         hf_auth._oauth_sessions.clear()
 

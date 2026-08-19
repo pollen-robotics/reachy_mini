@@ -1,10 +1,4 @@
-"""Tests for the HuggingFace auth source module (in-memory, no network).
-
-Covers the OAuth-session lifecycle on the module-global `_oauth_sessions`
-dict, the pure helpers, and the token functions with `huggingface_hub`
-symbols monkeypatched. The real aiohttp token POST in
-`exchange_code_for_token` is not exercised; only its early error branches.
-"""
+"""Tests for Hugging Face authentication."""
 
 import time
 from dataclasses import replace
@@ -30,36 +24,6 @@ def _clear_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(hf_auth, "_oauth_sessions", {})
 
 
-# ---- Pure helpers
-
-
-def test_generate_user_code_format() -> None:
-    """User code is 4 letters, dash, 4 digits, no ambiguous letters."""
-    code = hf_auth._generate_user_code()
-    letters, numbers = code.split("-")
-    assert len(letters) == 4 and letters.isalpha()
-    assert len(numbers) == 4 and numbers.isdigit()
-    assert not set(letters) & set("IO")
-
-
-def test_generate_pkce_pair_distinct_urlsafe() -> None:
-    """PKCE pair is two distinct URL-safe strings (no padding on challenge)."""
-    verifier, challenge = hf_auth._generate_pkce_pair()
-    assert verifier != challenge
-    assert len(verifier) >= 43
-    assert not challenge.endswith("=")
-
-
-def test_get_oauth_redirect_uri_variants() -> None:
-    """Redirect URI honours wireless flag and localhost override."""
-    assert hf_auth.get_oauth_redirect_uri(True) == hf_auth.OAUTH_REDIRECT_URI_WIRELESS
-    assert hf_auth.get_oauth_redirect_uri(False) == hf_auth.OAUTH_REDIRECT_URI_LITE
-    assert (
-        hf_auth.get_oauth_redirect_uri(True, use_localhost=True)
-        == hf_auth.OAUTH_REDIRECT_URI_LITE
-    )
-
-
 def test_is_oauth_configured_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
     """is_oauth_configured reflects the client-id constant."""
     monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "some-id")
@@ -68,18 +32,28 @@ def test_is_oauth_configured_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
     assert hf_auth.is_oauth_configured() is False
 
 
-# ---- OAuth-session lifecycle
-
-
-def test_create_oauth_session_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A configured session yields an auth URL and registers the session."""
+@pytest.mark.parametrize(
+    ("wireless_version", "use_localhost", "expected_redirect"),
+    [
+        (False, False, hf_auth.OAUTH_REDIRECT_URI_LITE),
+        (True, False, hf_auth.OAUTH_REDIRECT_URI_WIRELESS),
+        (True, True, hf_auth.OAUTH_REDIRECT_URI_LITE),
+    ],
+)
+def test_create_oauth_session_selects_redirect(
+    monkeypatch: pytest.MonkeyPatch,
+    wireless_version: bool,
+    use_localhost: bool,
+    expected_redirect: str,
+) -> None:
+    """Lite, Wireless, and desktop-proxied Wireless use the registered URI."""
     monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "cid")
-    result = hf_auth.create_oauth_session(wireless_version=True)
+    result = hf_auth.create_oauth_session(wireless_version, use_localhost)
     assert result["status"] == "success"
     assert result["auth_url"].startswith("https://huggingface.co/oauth/authorize?")
-    assert result["redirect_uri"] == hf_auth.OAUTH_REDIRECT_URI_WIRELESS
+    assert result["redirect_uri"] == expected_redirect
     assert result["expires_in"] == 600
-    assert result["session_id"] in hf_auth._oauth_sessions
+    assert hf_auth._oauth_sessions[result["session_id"]].redirect_uri == expected_redirect
 
 
 def test_create_oauth_session_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -91,15 +65,12 @@ def test_create_oauth_session_not_configured(monkeypatch: pytest.MonkeyPatch) ->
     assert hf_auth._oauth_sessions == {}
 
 
-def test_get_oauth_session_and_by_state(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Sessions are retrievable by id and by state."""
+def test_get_oauth_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sessions are retrievable by their state-backed ID."""
     monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "cid")
     sid = hf_auth.create_oauth_session(wireless_version=True)["session_id"]
-    session = hf_auth.get_oauth_session(sid)
-    assert session is not None
-    assert hf_auth.get_session_by_state(session.state) is session
+    assert hf_auth.get_oauth_session(sid) is not None
     assert hf_auth.get_oauth_session("nope") is None
-    assert hf_auth.get_session_by_state("nope") is None
 
 
 def test_get_oauth_session_status_states(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -137,18 +108,6 @@ def test_cancel_oauth_session(monkeypatch: pytest.MonkeyPatch) -> None:
     assert hf_auth.cancel_oauth_session(sid) is False
 
 
-def test_cleanup_expired_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Expired sessions are pruned; live ones remain."""
-    monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "cid")
-    live = hf_auth.create_oauth_session(wireless_version=True)["session_id"]
-    stale = hf_auth.create_oauth_session(wireless_version=True)["session_id"]
-    hf_auth._oauth_sessions[stale].expires_at = time.time() - 1
-
-    hf_auth._cleanup_expired_sessions()
-    assert live in hf_auth._oauth_sessions
-    assert stale not in hf_auth._oauth_sessions
-
-
 def test_expired_session_not_returned(monkeypatch: pytest.MonkeyPatch) -> None:
     """Getters trigger cleanup, so an expired session reads as gone."""
     monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "cid")
@@ -158,13 +117,10 @@ def test_expired_session_not_returned(monkeypatch: pytest.MonkeyPatch) -> None:
     assert hf_auth.get_oauth_session_status(sid)["status"] == "expired"
 
 
-# ---- exchange_code_for_token early error branches (no aiohttp)
-
-
 @pytest.mark.asyncio
 async def test_exchange_code_invalid_session() -> None:
     """Unknown state returns an invalid-session error before any network."""
-    result = await hf_auth.exchange_code_for_token("code", "unknown-state", True)
+    result = await hf_auth.exchange_code_for_token("code", "unknown-state")
     assert result["status"] == "error"
     assert "Invalid or expired session" in result["message"]
 
@@ -178,12 +134,9 @@ async def test_exchange_code_not_configured(monkeypatch: pytest.MonkeyPatch) -> 
     assert session is not None
 
     monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "")
-    result = await hf_auth.exchange_code_for_token("code", session.state, True)
+    result = await hf_auth.exchange_code_for_token("code", session.session_id)
     assert result == {"status": "error", "message": "OAuth not configured"}
     assert session.status == "error"
-
-
-# ---- Token functions (against the daemon's own store)
 
 
 def _validating_api(monkeypatch: pytest.MonkeyPatch, name: str = "alice") -> MagicMock:
@@ -201,7 +154,7 @@ def test_save_then_read_round_trips_through_the_owned_store(
 
     assert hf_auth.save_hf_token("tok") == {"status": "success", "username": "alice"}
     assert hf_auth.get_hf_token() == "tok"
-    assert hf_auth.current_lifecycle_generation() == 1
+    assert hf_auth.get_hf_credential().lifecycle_generation == 1
 
 
 def test_save_rejects_an_invalid_token_without_storing_it(
@@ -251,7 +204,7 @@ def test_sign_out_leaves_credentials_the_daemon_does_not_own(
 
     assert hf_auth.get_hf_token() is None
     assert cli_token.read_text(encoding="utf-8") == "cli-token"
-    assert hf_auth.current_lifecycle_generation() == 2
+    assert hf_auth.get_hf_credential().lifecycle_generation == 2
 
 
 def test_sign_out_reports_a_write_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -260,14 +213,22 @@ def test_sign_out_reports_a_write_failure(monkeypatch: pytest.MonkeyPatch) -> No
     assert hf_auth.delete_hf_token() is False
 
 
-def test_a_login_completing_after_sign_out_is_refused(
+def test_manual_login_completing_after_sign_out_is_refused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A login that lost its race with sign-out must not authorize the robot."""
-    generation = hf_auth.current_lifecycle_generation()
-    assert hf_auth.delete_hf_token() is True
+    api = _validating_api(monkeypatch)
 
-    assert hf_auth._persist_login({"access_token": "late-token"}, generation) is False
+    def _sign_out_during_validation() -> dict[str, str]:
+        assert hf_auth.delete_hf_token() is True
+        return {"name": "alice"}
+
+    api.whoami.side_effect = _sign_out_during_validation
+
+    assert hf_auth.save_hf_token("late-token") == {
+        "status": "error",
+        "message": hf_auth.AUTHENTICATION_FAILED_MESSAGE,
+    }
     assert hf_auth.get_hf_token() is None
 
 
