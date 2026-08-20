@@ -1,9 +1,9 @@
 # App Creation Guide
 
-> ### Use `@pollen-robotics/reachy-mini-sdk@1.8.0` today
+> ### Use `@pollen-robotics/reachy-mini-sdk@1.10.0-rc.5` today
 >
-> Every reference app pins the same SDK release: **`1.8.0`** (the
-> stable npm release; npm versions are immutable, so this is fully
+> Every reference app pins the same SDK release: **`1.10.0-rc.5`** (the
+> current npm `rc` release; npm versions are immutable, so this is fully
 > reproducible — no commit suffix needed). The host shell, the embed
 > adapter, the SDK runtime, and the daemon on the robot are validated
 > end-to-end against that release. Mixing versions across these
@@ -13,7 +13,7 @@
 > Add this to your `package.json`:
 >
 > ```json
-> { "dependencies": { "@pollen-robotics/reachy-mini-sdk": "1.8.0" } }
+> { "dependencies": { "@pollen-robotics/reachy-mini-sdk": "1.10.0-rc.5" } }
 > ```
 
 **This is the single source of truth for building a Reachy Mini JS
@@ -111,13 +111,13 @@ Pick the reference closest to your needs and clone its repo from Hugging Face:
 
 | Reference app                       | Stack                       | Use it for                                  |
 |-------------------------------------|-----------------------------|---------------------------------------------|
-| [`pollen-robotics/reachy_mini_minimal_conversation`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation) | **Vanilla TS + Vite**       | Smallest bundled runtime, no framework      |
-| [`pollen-robotics/reachy_mini_emotions`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions)                         | React 19 + MUI 7 + Vite     | UI-rich app with rich components / theming  |
-| [`pollen-robotics/reachy_mini_telepresence`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence)                 | React 19 + MUI 7 + Vite     | App with camera / media streams             |
+| [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | **Vanilla TS + Vite**       | Smallest bundled runtime, no framework      |
+| [`tfrere/emotions`](https://huggingface.co/spaces/tfrere/emotions)                         | React 19 + MUI 7 + Vite     | UI-rich app with rich components / theming  |
+| [`tfrere/telepresence`](https://huggingface.co/spaces/tfrere/telepresence)                 | React 19 + MUI 7 + Vite     | App with camera / media streams             |
 
 ```bash
 # Example: start from the vanilla TS template
-git clone https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation my_new_app
+git clone https://huggingface.co/spaces/tfrere/minimal-conversation my_new_app
 cd my_new_app
 # Edit package.json `name`, README frontmatter (`title`, `emoji`,
 # `short_description`), public/icon.svg, and src/embed.ts to your app.
@@ -650,25 +650,25 @@ The current pinned version across all three reference apps:
 ```json
 {
   "dependencies": {
-    "@pollen-robotics/reachy-mini-sdk": "1.8.0"
+    "@pollen-robotics/reachy-mini-sdk": "1.10.0-rc.5"
   }
 }
 ```
 
-This is the stable `1.8.0` npm release, validated end-to-end against
-the host shell + daemon. npm versions are immutable, so pinning the
-exact version is fully reproducible — no commit suffix needed. **Use
-the same string in your `package.json`** unless you're explicitly
-tracking a newer release.
+This is the current `1.10.0-rc.5` npm release candidate, validated
+end-to-end against the host shell + daemon. npm versions are immutable,
+so pinning the exact version is fully reproducible — no commit suffix
+needed. **Use the same string in your `package.json`** unless you're
+explicitly tracking a newer release.
 
 > When a newer release is published, the source of truth is whichever
-> string is currently shared by [`reachy_mini_minimal_conversation`'s
-> `package.json`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation/blob/main/package.json),
-> [`reachy_mini_emotions`'s `package.json`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions/blob/main/package.json),
-> and [`reachy_mini_telepresence`'s `package.json`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence/blob/main/package.json).
+> string is currently shared by [`minimal-conversation`'s
+> `package.json`](https://huggingface.co/spaces/tfrere/minimal-conversation/blob/main/package.json),
+> [`emotions`'s `package.json`](https://huggingface.co/spaces/tfrere/emotions/blob/main/package.json),
+> and [`telepresence`'s `package.json`](https://huggingface.co/spaces/tfrere/telepresence/blob/main/package.json).
 > If those three diverge, fall back to whatever this guide says.
 
-### Why pin a specific build (not `^1.8.0` or a major like `@1`)?
+### Why pin a specific build (not `^1.10.0` or a major like `@1`)?
 
 The host shell, the embed adapter (`connectToHost`), the SDK, and the
 robot daemon negotiate over a versioned WebRTC data-channel protocol.
@@ -927,9 +927,9 @@ the edge:
 
 ```html
 <script type="module">
-  import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/+esm";
-  import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/host/dist/entry/auto.js";
-  import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/host/dist/entry/embed.js";
+  import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.10.0-rc.5/+esm";
+  import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.10.0-rc.5/host/dist/entry/auto.js";
+  import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.10.0-rc.5/host/dist/entry/embed.js";
 
   window.ReachyMini = ReachyMini;
   window.dispatchEvent(new Event("reachymini:ready"));
@@ -993,9 +993,9 @@ shell without touching your motion code. The four-step recipe:
    import { ReachyMini } from "https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@v1.7.2/js/reachy-mini.js";
 
    // AFTER (modern host shell, same SDK runtime API)
-   import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/+esm";
-   import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/host/dist/entry/auto.js";
-   import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/host/dist/entry/embed.js";
+   import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.10.0-rc.5/+esm";
+   import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.10.0-rc.5/host/dist/entry/auto.js";
+   import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.10.0-rc.5/host/dist/entry/embed.js";
    ```
 
 2. **Branch on `?embedded=1`.** Wrap your existing app boot in:
@@ -1467,7 +1467,7 @@ rolled out by the SDK team, not by every app team.
 - App bundles (`index-<hash>.js`): hashed by Vite, cache-busted
   on deploy.
 - `@pollen-robotics/reachy-mini-sdk` in `package.json`: pinned to
-  an **exact version** (today: `1.8.0`), not a range. See
+  an **exact version** (today: `1.10.0-rc.5`), not a range. See
   [§10 SDK version pinning](#10-sdk-version-pinning).
 - `@pollen-robotics/reachy-mini-sdk/host` subpath imports: same
   pin, same package.
