@@ -1,1 +1,1 @@
-{"id":"f553cee77a4f2f628423b622a548c4d8","fullName":"tests.unit_tests.test_daemon_logging_config#test_configure_sends_info_to_stderr","name":"test_configure_sends_info_to_stderr","status":"passed","testResultsByEnv":{"default":"61a4edaf22d19fe7812e77179bd7edc9"}}
+{"id":"f553cee77a4f2f628423b622a548c4d8","fullName":"tests.unit_tests.test_daemon_logging_config#test_configure_sends_info_to_stderr","name":"test_configure_sends_info_to_stderr","status":"passed","testResultsByEnv":{"default":"2fa5a0a9a76eab3b5809d9a4ea099543"}}
