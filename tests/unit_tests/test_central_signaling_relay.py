@@ -186,6 +186,12 @@ def _make_relay(
     return CentralSignalingRelay(robot_name=robot_name, transport=transport)
 
 
+def test_relay_rejects_plaintext_remote_central() -> None:
+    """The relay must not send its bearer token over remote HTTP."""
+    with pytest.raises(ValueError):
+        CentralSignalingRelay(central_uri="http://central.example")
+
+
 def test_meta_carries_robot_name() -> None:
     """The relay carries ``robot_name`` into ``meta.name`` verbatim."""
     relay = _make_relay(robot_name="Sparky")
@@ -927,11 +933,17 @@ class _FakeHTTPSession:
 
     def __init__(self, status: int = 200) -> None:
         self._status = status
-        self.posts: list[tuple[str, Any, Any]] = []
+        self.posts: list[tuple[str, Any, Any, bool]] = []
         self.closed = False
 
-    def post(self, url: str, json: Any = None, headers: Any = None) -> _FakeResponse:
-        self.posts.append((url, json, headers))
+    def post(
+        self,
+        url: str,
+        json: Any = None,
+        headers: Any = None,
+        allow_redirects: bool = True,
+    ) -> _FakeResponse:
+        self.posts.append((url, json, headers, allow_redirects))
         return _FakeResponse(self._status)
 
     async def close(self) -> None:
@@ -974,10 +986,12 @@ def test_send_to_central_posts_with_bearer_token() -> None:
     relay._http_session = _FakeHTTPSession(status=200)  # type: ignore[assignment]
     relay.hf_token = "tok"
     asyncio.run(relay._send_to_central({"type": "peer"}))
-    url, body, headers = relay._http_session.posts[0]
+    url, body, headers, allow_redirects = relay._http_session.posts[0]
     assert url == f"{relay.central_uri}/send"
     assert body == {"type": "peer"}
     assert headers == {"Authorization": "Bearer tok"}
+    # A redirect must not carry the bearer to another origin.
+    assert allow_redirects is False
 
 
 def test_send_to_central_non_200_does_not_raise() -> None:
