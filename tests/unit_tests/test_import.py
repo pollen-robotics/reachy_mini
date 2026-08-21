@@ -1,6 +1,22 @@
+"""Import isolation tests."""
+
+import subprocess
+import sys
+import textwrap
 
 
-def test_import():  # noqa: D100, D103
-    from reachy_mini import ReachyMini  # noqa: F401
-    from reachy_mini import ReachyMiniApp  # noqa: F401
-    
+def test_import_defers_daemon_backend() -> None:
+    """The public SDK import excludes the daemon backend module."""
+    script = textwrap.dedent(
+        """
+        import sys
+
+        import reachy_mini
+        from reachy_mini import ReachyMini, ReachyMiniApp
+        from reachy_mini.io import WSServer
+
+        assert "reachy_mini.daemon.backend.abstract" not in sys.modules
+        """
+    )
+
+    subprocess.run([sys.executable, "-c", script], check=True)

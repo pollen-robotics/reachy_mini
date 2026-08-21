@@ -1,16 +1,4 @@
-"""Tests for WSServer._broadcast scheduling behavior.
-
-The backend's control loop calls _broadcast() 2-3 times per tick through the
-publishers. Each call used to unconditionally schedule a callback on the
-uvicorn event loop via call_soon_threadsafe once self._loop had been captured
-(i.e. after the first client ever connected). With zero connected clients that
-meant 100-150 pointless cross-thread wakeups per second (backend thread pays
-the loop lock + self-pipe write, the uvicorn loop pays the wakeup + callback),
-forever after the first app run.
-
-These tests pin the contract: no clients -> no scheduling; a connected client
-still receives broadcast messages.
-"""
+"""Tests for the SDK WebSocket server."""
 
 import asyncio
 from typing import cast
@@ -19,85 +7,160 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import WebSocket, WebSocketDisconnect
 
+from reachy_mini.io.protocol import DaemonState, DaemonStatus
 from reachy_mini.io.ws_server import WSServer
 
 
-class FakeWebSocket:
-    """Minimal stand-in for fastapi.WebSocket driven by the test."""
-
+class _FakeWebSocket:
     def __init__(self) -> None:
-        """Create a connected-looking fake with no messages sent yet."""
         self.sent: list[str] = []
+        self.accepted = asyncio.Event()
+        self.message_sent = asyncio.Event()
         self._disconnected = asyncio.Event()
 
     async def accept(self) -> None:
-        """Accept the connection (no-op)."""
+        self.accepted.set()
 
-    async def send_text(self, msg: str) -> None:
-        """Record an outbound message."""
-        self.sent.append(msg)
+    async def send_text(self, message: str) -> None:
+        self.sent.append(message)
+        self.message_sent.set()
 
     async def receive_text(self) -> str:
-        """Block until the test disconnects, then raise like a closed socket."""
         await self._disconnected.wait()
         raise WebSocketDisconnect(1000)
 
     def disconnect(self) -> None:
-        """Make receive_text raise WebSocketDisconnect."""
         self._disconnected.set()
 
 
 @pytest.mark.asyncio
-async def test_broadcast_schedules_nothing_after_last_client_disconnects() -> None:
-    """Once every client is gone, _broadcast must not touch the event loop.
+async def test_new_client_receives_current_status_immediately() -> None:
+    """Check that a new client immediately receives the current status."""
+    status = DaemonStatus(
+        robot_name="test",
+        state=DaemonState.RUNNING,
+        wireless_version=False,
+        desktop_app_daemon=False,
+        simulation_enabled=False,
+        mockup_sim_enabled=False,
+        backend_status=None,
+    )
+    server = WSServer(
+        backend=MagicMock(),
+        status_provider=lambda: status,
+    )
+    websocket = _FakeWebSocket()
+    client_task = asyncio.create_task(server.handle_client(cast(WebSocket, websocket)))
 
-    This is the idle-daemon spin bug: _loop stays captured after the first
-    connection, and each _broadcast call paid a call_soon_threadsafe (loop
-    lock + self-pipe write) just to iterate an empty client set.
-    """
+    async with asyncio.timeout(1):
+        await websocket.message_sent.wait()
+
+    websocket.disconnect()
+    await client_task
+
+    assert len(websocket.sent) == 1
+    assert DaemonStatus.model_validate_json(websocket.sent[0]) == status
+
+
+@pytest.mark.asyncio
+async def test_new_client_ignores_pre_registration_status() -> None:
+    """Check that a fresh status is not followed by an older broadcast."""
+    current_status = DaemonStatus(
+        robot_name="test",
+        state=DaemonState.RUNNING,
+        wireless_version=False,
+        desktop_app_daemon=False,
+        simulation_enabled=False,
+        mockup_sim_enabled=False,
+        backend_status=None,
+    )
+    previous_status = current_status.model_copy(update={"state": DaemonState.STARTING})
+    server = WSServer(
+        backend=MagicMock(),
+        status_provider=lambda: current_status,
+    )
+    existing_websocket = _FakeWebSocket()
+    existing_task = asyncio.create_task(
+        server.handle_client(cast(WebSocket, existing_websocket))
+    )
+
+    async with asyncio.timeout(1):
+        await existing_websocket.message_sent.wait()
+    existing_websocket.message_sent.clear()
+
+    new_websocket = _FakeWebSocket()
+    with patch.object(
+        new_websocket,
+        "accept",
+        side_effect=lambda: server.publish_status(previous_status.model_dump_json()),
+    ):
+        new_task = asyncio.create_task(
+            server.handle_client(cast(WebSocket, new_websocket))
+        )
+
+        async with asyncio.timeout(1):
+            await existing_websocket.message_sent.wait()
+            await new_websocket.message_sent.wait()
+        await asyncio.sleep(0)
+
+    existing_websocket.disconnect()
+    new_websocket.disconnect()
+    await asyncio.gather(existing_task, new_task)
+
+    assert existing_websocket.sent == [
+        current_status.model_dump_json(),
+        previous_status.model_dump_json(),
+    ]
+    assert new_websocket.sent == [current_status.model_dump_json()]
+
+
+@pytest.mark.asyncio
+async def test_status_publish_schedules_nothing_after_last_client_disconnects() -> None:
+    """Check that publishing schedules nothing after the last disconnect."""
     server = WSServer(backend=MagicMock())
-
-    ws = FakeWebSocket()
-    ws.disconnect()  # receive_text raises immediately: connect then disconnect
-    await server.handle_client(cast(WebSocket, ws))
-    await asyncio.sleep(0)  # let the cancelled send task finish
-
-    assert not server._clients
+    websocket = _FakeWebSocket()
+    websocket.disconnect()
+    await server.handle_client(cast(WebSocket, websocket))
+    await asyncio.sleep(0)
 
     loop = asyncio.get_running_loop()
     with patch.object(
         loop, "call_soon_threadsafe", wraps=loop.call_soon_threadsafe
-    ) as spy:
+    ) as call_soon:
         for _ in range(50):
-            server._broadcast('{"type": "joint_positions"}')
+            server.publish_status('{"type": "daemon_status"}')
 
-    assert spy.call_count == 0
+    assert call_soon.call_count == 0
 
 
 @pytest.mark.asyncio
-async def test_broadcast_delivers_to_connected_client() -> None:
-    """A connected client still receives broadcast messages."""
+async def test_status_publish_delivers_to_connected_client() -> None:
+    """Check that publishing delivers status to a connected client."""
+    message = '{"type": "daemon_status"}'
     server = WSServer(backend=MagicMock())
+    websocket = _FakeWebSocket()
+    client_task = asyncio.create_task(server.handle_client(cast(WebSocket, websocket)))
 
-    ws = FakeWebSocket()
-    client_task = asyncio.create_task(server.handle_client(cast(WebSocket, ws)))
+    async with asyncio.timeout(1):
+        await websocket.accepted.wait()
+        server.publish_status(message)
+        await websocket.message_sent.wait()
 
-    async with asyncio.timeout(2):
-        while not server._clients:
-            await asyncio.sleep(0.01)
-
-        server._broadcast('{"type": "status"}')
-        while not ws.sent:
-            await asyncio.sleep(0.01)
-
-    assert ws.sent == ['{"type": "status"}']
-
-    ws.disconnect()
+    websocket.disconnect()
     await client_task
 
+    assert websocket.sent == [message]
+
 
 @pytest.mark.asyncio
-async def test_broadcast_before_any_client_is_noop() -> None:
-    """Before the first connection there is no loop, so _broadcast returns."""
+async def test_status_publish_before_any_client_schedules_nothing() -> None:
+    """Check that publishing before the first connection schedules nothing."""
     server = WSServer(backend=MagicMock())
-    server._broadcast('{"type": "status"}')  # must not raise
+    loop = asyncio.get_running_loop()
+
+    with patch.object(
+        loop, "call_soon_threadsafe", wraps=loop.call_soon_threadsafe
+    ) as call_soon:
+        server.publish_status('{"type": "daemon_status"}')
+
+    assert call_soon.call_count == 0
