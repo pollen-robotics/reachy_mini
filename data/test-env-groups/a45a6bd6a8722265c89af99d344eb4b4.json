@@ -1,1 +1,1 @@
-{"id":"a45a6bd6a8722265c89af99d344eb4b4","fullName":"tests.unit_tests.test_robot_app_lock#test_became_free_handler_reports_handoff_intent","name":"test_became_free_handler_reports_handoff_intent","status":"passed","testResultsByEnv":{"default":"7e99821d41e7c33156ed5e5240cfca55"}}
+{"id":"a45a6bd6a8722265c89af99d344eb4b4","fullName":"tests.unit_tests.test_robot_app_lock#test_became_free_handler_reports_handoff_intent","name":"test_became_free_handler_reports_handoff_intent","status":"passed","testResultsByEnv":{"default":"34a114cd85b508f0824f1186c52285e6"}}
