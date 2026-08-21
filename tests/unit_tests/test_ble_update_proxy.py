@@ -126,6 +126,30 @@ def test_update_check_available(monkeypatch):
     assert out == {"available": True, "current": "1.8.1", "latest": "1.9.0"}
 
 
+def test_update_check_forwards_pre_release_flag(monkeypatch):
+    """The optional PRE argument must reach /update/available as pre_release=true."""
+    seen = {}
+
+    def fake(method, path, params=None, **k):
+        seen["params"] = params
+        return {
+            "update": {
+                "reachy_mini": {
+                    "is_available": True,
+                    "current_version": "1.9.0",
+                    "available_version": "1.10.0rc5",
+                }
+            }
+        }
+
+    monkeypatch.setattr(bt, "_daemon_request", fake)
+    bt._update_check(True)
+    assert seen["params"] == {"pre_release": "true"}
+    # Default stays pinned to the stable channel.
+    bt._update_check()
+    assert seen["params"] == {"pre_release": "false"}
+
+
 def test_update_check_busy_maps_to_in_progress(monkeypatch):
     _patch_daemon(monkeypatch, _http_error(400))
     assert bt._update_check() == "ERROR: Update in progress"
@@ -142,6 +166,21 @@ def test_update_check_daemon_unreachable(monkeypatch):
 def test_update_start_returns_job_id(monkeypatch):
     _patch_daemon(monkeypatch, {"job_id": "abc-123"})
     assert bt._update_start() == "OK: Update started abc-123"
+
+
+def test_update_start_forwards_pre_release_flag(monkeypatch):
+    """The optional PRE argument must reach /update/start as pre_release=true."""
+    seen = {}
+
+    def fake(method, path, params=None, **k):
+        seen["params"] = params
+        return {"job_id": "abc-123"}
+
+    monkeypatch.setattr(bt, "_daemon_request", fake)
+    assert bt._update_start(True) == "OK: Update started abc-123"
+    assert seen["params"] == {"pre_release": "true"}
+    bt._update_start()
+    assert seen["params"] == {"pre_release": "false"}
 
 
 def test_update_start_missing_job_id(monkeypatch):
