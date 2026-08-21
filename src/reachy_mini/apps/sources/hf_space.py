@@ -111,7 +111,7 @@ def _build_app_info(item: SpaceData | None) -> AppInfo | None:
     )
 
 
-def _list_all_spaces_with_hf_api(token: str | None) -> list[SpaceData]:
+def _list_all_spaces_with_hf_api(token: str | bool | None) -> list[SpaceData]:
     """List spaces with Hugging Face Hub API using an optional token."""
     api = HfApi()
     spaces = api.list_spaces(
@@ -181,7 +181,7 @@ async def list_available_apps() -> list[AppInfo]:
 
 async def list_all_apps() -> list[AppInfo]:
     """List all apps available on Hugging Face Spaces (including private ones when authenticated)."""
-    token = hf_auth.get_hf_token()
+    token = hf_auth.get_hf_token() or False
     try:
         data = await asyncio.to_thread(_list_all_spaces_with_hf_api, token)
     except Exception as exc:

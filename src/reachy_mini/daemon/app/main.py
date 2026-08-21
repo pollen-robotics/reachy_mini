@@ -144,7 +144,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         def preload_with_logging() -> None:
             """Download datasets with logging."""
             try:
-                preload_default_datasets()
+                preload_default_datasets(token=False)
                 logger.info("Recorded move datasets pre-loaded successfully")
             except Exception as e:
                 logger.warning(f"Failed to pre-load some datasets: {e}")

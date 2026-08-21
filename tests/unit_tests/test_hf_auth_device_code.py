@@ -1,20 +1,14 @@
-"""Unit tests for the device-code OAuth flow in ``apps.sources.hf_auth``.
-
-These cover only our orchestration (session lifecycle, status polling, relay
-notification, error mapping); the Hugging Face device-code protocol itself lives
-in ``huggingface_hub`` and is stubbed here so the tests are deterministic and run
-regardless of the installed ``huggingface_hub`` version.
-"""
-
-from __future__ import annotations
+"""Tests for the device-code OAuth flow."""
 
 import asyncio
 import sys
 import time
 import types
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
+from huggingface_hub.errors import DeviceCodeError
 
 from reachy_mini.apps.sources import hf_auth
 
@@ -25,26 +19,6 @@ def _clear_sessions() -> Any:
     hf_auth._device_code_sessions.clear()
     yield
     hf_auth._device_code_sessions.clear()
-
-
-@pytest.fixture
-def device_code_error() -> type[Exception]:
-    """Return ``huggingface_hub``'s ``DeviceCodeError``, creating a stand-in on
-    older hub versions and wiring it where ``hf_auth`` imports it from."""
-    try:
-        from huggingface_hub.errors import DeviceCodeError  # type: ignore
-
-        return DeviceCodeError
-    except ImportError:
-        import huggingface_hub.errors as hub_errors  # type: ignore
-
-        class DeviceCodeError(Exception):  # noqa: N818 — mirror hub naming
-            def __init__(self, message: str, error_code: str | None = None) -> None:
-                super().__init__(message)
-                self.error_code = error_code
-
-        hub_errors.DeviceCodeError = DeviceCodeError  # type: ignore[attr-defined]
-        return DeviceCodeError
 
 
 def _install_fake_oauth_device(
@@ -72,11 +46,6 @@ _DEVICE_INFO = {
 }
 
 
-# --------------------------------------------------------------------------- #
-# start_device_code_login
-# --------------------------------------------------------------------------- #
-
-
 def test_start_returns_user_code_and_registers_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -84,11 +53,7 @@ def test_start_returns_user_code_and_registers_session(
         monkeypatch, request_device_code=lambda: dict(_DEVICE_INFO)
     )
 
-    # Stub the background poll so the test does not depend on its timing.
-    async def _noop_poll(session: Any, device_info: Any) -> None:
-        return None
-
-    monkeypatch.setattr(hf_auth, "_run_device_code_poll", _noop_poll)
+    monkeypatch.setattr(hf_auth, "_run_device_code_poll", AsyncMock())
 
     async def scenario() -> dict[str, Any]:
         result = await hf_auth.start_device_code_login()
@@ -116,17 +81,13 @@ def test_start_returns_error_when_request_fails(
     result = asyncio.run(hf_auth.start_device_code_login())
 
     assert result["status"] == "error"
-    assert "network down" in result["message"]
+    assert result["message"] == hf_auth.AUTHENTICATION_UNAVAILABLE_MESSAGE
+    assert "network down" not in result["message"]
     assert hf_auth._device_code_sessions == {}
 
 
-# --------------------------------------------------------------------------- #
-# _run_device_code_poll
-# --------------------------------------------------------------------------- #
-
-
 def test_poll_success_persists_token_and_notifies_relay(
-    monkeypatch: pytest.MonkeyPatch, device_code_error: type[Exception]
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     token_response = {
         "access_token": "hf_new_token",
@@ -137,13 +98,7 @@ def test_poll_success_persists_token_and_notifies_relay(
         monkeypatch, poll_device_token=lambda info, **kw: token_response
     )
 
-    persisted: dict[str, Any] = {}
-
-    def _fake_persist(response: dict[str, Any]) -> tuple[str, str]:
-        persisted["response"] = response
-        return ("oauth-alice", "alice")
-
-    monkeypatch.setattr(hf_auth, "_persist_device_oauth_token", _fake_persist)
+    monkeypatch.setattr(hf_auth, "whoami", lambda **_kwargs: {"name": "alice"})
 
     notified: dict[str, Any] = {}
 
@@ -154,36 +109,26 @@ def test_poll_success_persists_token_and_notifies_relay(
 
     monkeypatch.setattr(relay_module, "notify_token_change", _fake_notify)
 
-    session = hf_auth.DeviceCodeSession(
-        session_id="s1",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
-    )
+    session = hf_auth.DeviceCodeSession(session_id="s1")
     hf_auth._device_code_sessions["s1"] = session
 
     asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
 
     assert session.status == "authorized"
     assert session.username == "alice"
-    assert persisted["response"] is token_response
+    assert hf_auth.get_hf_token() == "hf_new_token"
     assert notified["token"] == "hf_new_token"
 
 
 def test_poll_expired_maps_to_expired_status(
-    monkeypatch: pytest.MonkeyPatch, device_code_error: type[Exception]
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _expire(info: Any, **kw: Any) -> dict[str, Any]:
-        raise device_code_error("Device code expired. Please try again.")
+        raise DeviceCodeError("Device code expired. Please try again.")
 
     _install_fake_oauth_device(monkeypatch, poll_device_token=_expire)
 
-    session = hf_auth.DeviceCodeSession(
-        session_id="s2",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
-    )
+    session = hf_auth.DeviceCodeSession(session_id="s2")
 
     asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
 
@@ -192,28 +137,18 @@ def test_poll_expired_maps_to_expired_status(
 
 
 def test_poll_denied_maps_to_error_status(
-    monkeypatch: pytest.MonkeyPatch, device_code_error: type[Exception]
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _deny(info: Any, **kw: Any) -> dict[str, Any]:
-        raise device_code_error("Authorization was denied. Please try again.")
+        raise DeviceCodeError("Authorization was denied. Please try again.")
 
     _install_fake_oauth_device(monkeypatch, poll_device_token=_deny)
 
-    session = hf_auth.DeviceCodeSession(
-        session_id="s3",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
-    )
+    session = hf_auth.DeviceCodeSession(session_id="s3")
 
     asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
 
     assert session.status == "error"
-
-
-# --------------------------------------------------------------------------- #
-# get_device_code_session_status / consume_device_session_relay_pending
-# --------------------------------------------------------------------------- #
 
 
 def test_status_unknown_session_is_expired() -> None:
@@ -223,9 +158,6 @@ def test_status_unknown_session_is_expired() -> None:
 def test_status_authorized_includes_username() -> None:
     session = hf_auth.DeviceCodeSession(
         session_id="s4",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
         status="authorized",
         username="bob",
     )
@@ -238,9 +170,6 @@ def test_status_authorized_includes_username() -> None:
 def test_consume_relay_pending_fires_once() -> None:
     session = hf_auth.DeviceCodeSession(
         session_id="s5",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
         status="authorized",
     )
     hf_auth._device_code_sessions["s5"] = session
@@ -252,9 +181,6 @@ def test_consume_relay_pending_fires_once() -> None:
 def test_consume_relay_pending_false_while_pending() -> None:
     session = hf_auth.DeviceCodeSession(
         session_id="s6",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
         status="pending",
     )
     hf_auth._device_code_sessions["s6"] = session
@@ -263,12 +189,7 @@ def test_consume_relay_pending_false_while_pending() -> None:
 
 
 def test_cancel_session_removes_it() -> None:
-    session = hf_auth.DeviceCodeSession(
-        session_id="s7",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
-    )
+    session = hf_auth.DeviceCodeSession(session_id="s7")
     hf_auth._device_code_sessions["s7"] = session
 
     assert hf_auth.cancel_device_code_session("s7") is True
@@ -278,17 +199,11 @@ def test_cancel_session_removes_it() -> None:
 
 def test_cancel_signals_the_polling_thread() -> None:
     """Cancel must set the event the polling thread observes, not just drop it."""
-    session = hf_auth.DeviceCodeSession(
-        session_id="s8",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
-    )
+    session = hf_auth.DeviceCodeSession(session_id="s8")
     hf_auth._device_code_sessions["s8"] = session
 
     assert session.cancel_event.is_set() is False
     assert hf_auth.cancel_device_code_session("s8") is True
-    # We keep the local reference, so we can assert the thread would stop.
     assert session.cancel_event.is_set() is True
 
 
@@ -297,9 +212,6 @@ def test_poll_aborts_when_cancel_event_set(monkeypatch: pytest.MonkeyPatch) -> N
     calls = {"on_pending": 0}
 
     def _fake_poll(device_info: Any, *, on_pending: Any = None) -> dict[str, Any]:
-        # Mimic the hub: invoke on_pending each pending cycle. With the event
-        # already set it raises _DeviceCodeCancelled on the first call, so the
-        # (real) blocking loop never runs.
         for _ in range(1000):
             if on_pending is not None:
                 calls["on_pending"] += 1
@@ -308,12 +220,7 @@ def test_poll_aborts_when_cancel_event_set(monkeypatch: pytest.MonkeyPatch) -> N
 
     _install_fake_oauth_device(monkeypatch, poll_device_token=_fake_poll)
 
-    session = hf_auth.DeviceCodeSession(
-        session_id="s9",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
-    )
+    session = hf_auth.DeviceCodeSession(session_id="s9")
     session.cancel_event.set()
 
     asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
@@ -322,25 +229,56 @@ def test_poll_aborts_when_cancel_event_set(monkeypatch: pytest.MonkeyPatch) -> N
     assert session.status == "cancelled"
 
 
+def test_cancel_after_device_poll_refuses_the_returned_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _return_token_after_cancel(
+        device_info: Any, *, on_pending: Any = None
+    ) -> dict[str, Any]:
+        (session_id,) = hf_auth._device_code_sessions
+        assert hf_auth.cancel_device_code_session(session_id) is True
+        return {"access_token": "late-token"}
+
+    _install_fake_oauth_device(
+        monkeypatch,
+        request_device_code=lambda: dict(_DEVICE_INFO),
+        poll_device_token=_return_token_after_cancel,
+    )
+    monkeypatch.setattr(hf_auth, "whoami", lambda **_kwargs: {"name": "alice"})
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    relay_notify = AsyncMock()
+    monkeypatch.setattr(relay_module, "notify_token_change", relay_notify)
+
+    async def scenario() -> hf_auth.DeviceCodeSession:
+        start = await hf_auth.start_device_code_login()
+        session = hf_auth._device_code_sessions[start["session_id"]]
+        assert session.task is not None
+        await session.task
+        return session
+
+    session = asyncio.run(scenario())
+
+    assert session.status == "cancelled"
+    assert hf_auth.get_hf_token() is None
+    relay_notify.assert_not_awaited()
+
+
 def test_authorized_session_gets_bounded_ttl(
-    monkeypatch: pytest.MonkeyPatch, device_code_error: type[Exception]
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """On success the session's expires_at is shortened to the authorized TTL."""
     token_response = {"access_token": "hf_x", "refresh_token": "r", "expires_in": 10}
     _install_fake_oauth_device(
         monkeypatch, poll_device_token=lambda info, **kw: token_response
     )
-    monkeypatch.setattr(
-        hf_auth, "_persist_device_oauth_token", lambda resp: ("name", "user")
-    )
+    monkeypatch.setattr(hf_auth, "whoami", lambda **_kwargs: {"name": "user"})
 
     session = hf_auth.DeviceCodeSession(
         session_id="s10",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
-        expires_at=time.time() + 900,  # original device-code expiry
+        expires_at=time.time() + 900,
     )
+    hf_auth._device_code_sessions[session.session_id] = session
 
     before = time.time()
     asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
@@ -353,17 +291,11 @@ def test_cleanup_prunes_authorized_after_expiry() -> None:
     """Authorized sessions are reclaimed once past expires_at (no leak)."""
     live = hf_auth.DeviceCodeSession(
         session_id="live",
-        user_code="A",
-        verification_uri="u",
-        verification_uri_complete="u",
         status="authorized",
         expires_at=time.time() + 300,
     )
     stale = hf_auth.DeviceCodeSession(
         session_id="stale",
-        user_code="B",
-        verification_uri="u",
-        verification_uri_complete="u",
         status="authorized",
         expires_at=time.time() - 1,
     )
@@ -374,3 +306,37 @@ def test_cleanup_prunes_authorized_after_expiry() -> None:
 
     assert "live" in hf_auth._device_code_sessions
     assert "stale" not in hf_auth._device_code_sessions
+
+
+def test_wireless_first_run_links_the_robot_with_a_refreshable_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fresh robot finishes the mobile device-code flow holding its own token."""
+    _install_fake_oauth_device(
+        monkeypatch,
+        request_device_code=lambda: dict(_DEVICE_INFO),
+        poll_device_token=lambda info, **kw: {
+            "access_token": "device-token",
+            "refresh_token": "r1",
+            "expires_in": 3600,
+        },
+    )
+
+    def _fail_username_lookup(**_kwargs: Any) -> None:
+        raise RuntimeError
+
+    monkeypatch.setattr(hf_auth, "whoami", _fail_username_lookup)
+    monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *_a: None)
+
+    assert hf_auth.check_token_status() == {"is_logged_in": False, "username": None}
+
+    async def scenario() -> dict[str, Any]:
+        start = await hf_auth.start_device_code_login()
+        task = hf_auth._device_code_sessions[start["session_id"]].task
+        assert task is not None
+        await task
+        return hf_auth.get_device_code_session_status(start["session_id"])
+
+    assert asyncio.run(scenario()) == {"status": "authorized", "username": ""}
+    assert hf_auth.get_hf_token() == "device-token"
+    assert hf_auth._read_store().refresh_token == "r1"

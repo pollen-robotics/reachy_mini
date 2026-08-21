@@ -359,7 +359,7 @@ async def oauth_callback(
     """
     if error:
         # OAuth error from HF
-        session = hf_auth.get_session_by_state(state) if state else None
+        session = hf_auth.get_oauth_session(state) if state else None
         if session:
             session.status = "error"
             session.error_message = error_description or error
@@ -380,15 +380,9 @@ async def oauth_callback(
             status_code=400,
         )
 
-    # Determine if wireless based on the callback URL
-    host = request.headers.get("host", "")
-    wireless_version = "reachy-mini.local" in host
-
-    # Exchange code for token
     result = await hf_auth.exchange_code_for_token(
         code=code,
         state=state,
-        wireless_version=wireless_version,
     )
 
     if result["status"] == "success":

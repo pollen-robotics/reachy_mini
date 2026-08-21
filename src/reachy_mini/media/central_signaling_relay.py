@@ -560,17 +560,12 @@ class CentralSignalingRelay:
         else:
             self._token_updated.set()
 
-    def _refresh_token(self) -> Optional[str]:
-        """Refresh the HF token from huggingface_hub.
+    def _refresh_token(self, force_refresh: bool = False) -> Optional[str]:
+        """Re-read the daemon-owned credentials, refreshing them when asked."""
+        from reachy_mini.apps.sources.hf_auth import get_hf_credential
 
-        Returns:
-            The current HF token, or None if not available
-
-        """
         try:
-            from huggingface_hub import get_token
-
-            token = get_token()
+            token = get_hf_credential(force_refresh).token
             if token != self.hf_token:
                 if token:
                     logger.info("[Central Relay] HF token detected (user logged in)")
@@ -578,9 +573,20 @@ class CentralSignalingRelay:
                     logger.debug("[Central Relay] No HF token available")
                 self.hf_token = token
             return token
-        except Exception as e:
-            logger.debug(f"[Central Relay] Could not get HF token: {e}")
+        except Exception as error:
+            logger.debug(
+                "[Central Relay] Could not get HF token (%s)", type(error).__name__
+            )
             return self.hf_token
+
+    async def _recover_from_unauthorized(self, failed_token: Optional[str]) -> bool:
+        """Refresh after a 401 and report whether a retry is worth attempting."""
+        token = await asyncio.to_thread(self._refresh_token, True)
+        if token and token != failed_token:
+            logger.info("[Central Relay] Refreshed credentials after a 401")
+            return True
+        self._set_state(RelayState.ERROR, "Authentication failed")
+        return False
 
     async def _close_connections(self) -> None:
         """Close all connections.
@@ -1173,9 +1179,8 @@ class CentralSignalingRelay:
                 events_url, headers=headers, timeout=timeout
             ) as response:
                 if response.status == 401:
-                    self._set_state(
-                        RelayState.ERROR, "Authentication failed - token may be invalid"
-                    )
+                    if await self._recover_from_unauthorized(self.hf_token):
+                        self._token_updated.set()
                     return
                 elif response.status != 200:
                     self._set_state(
@@ -1625,6 +1630,20 @@ class CentralSignalingRelay:
 _relay_instance: Optional[CentralSignalingRelay] = None
 
 
+def _daemon_token() -> Optional[str]:
+    """Return the daemon-owned token, or None when the robot is signed out."""
+    from reachy_mini.apps.sources.hf_auth import get_hf_token
+
+    try:
+        return get_hf_token()
+    except Exception as error:  # noqa: BLE001 - the relay degrades without a token
+        logger.debug(
+            "[Central Relay] Could not read daemon credentials (%s)",
+            type(error).__name__,
+        )
+        return None
+
+
 def get_relay() -> Optional[CentralSignalingRelay]:
     """Get the global relay instance.
 
@@ -1684,14 +1703,8 @@ async def start_central_relay(
     if _relay_instance is not None:
         return _relay_instance
 
-    # Try to get HF token if not provided
     if hf_token is None:
-        try:
-            from huggingface_hub import get_token
-
-            hf_token = get_token()
-        except Exception:
-            pass
+        hf_token = _daemon_token()
 
     _relay_instance = CentralSignalingRelay(
         central_uri=central_uri,
@@ -1730,12 +1743,7 @@ async def notify_token_change(new_token: Optional[str] = None) -> None:
         return
 
     if new_token is None:
-        try:
-            from huggingface_hub import get_token
-
-            new_token = get_token()
-        except Exception:
-            pass
+        new_token = _daemon_token()
 
     await _relay_instance.update_token(new_token)
 
