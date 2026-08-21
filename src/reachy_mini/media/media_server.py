@@ -43,7 +43,7 @@ from reachy_mini.media.audio_base import (
     AEC_CHANNELS,
     AEC_PROBE_NAME,
     AEC_RATE,
-    make_speaker_eq,
+    make_audiosink_tee_bin,
 )
 from reachy_mini.media.audio_control_utils import init_respeaker_usb
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
@@ -588,70 +588,24 @@ class GstMediaServer:
             return
         audiosink.set_property("sync", True)
 
-        # Per-branch audioconvert+audioresample so the wobbler appsink's
-        # F32LE/2/16000 caps don't drag the audiosink branch into a rate
-        # the device can't accept (e.g. wireless XMOS PCM falls back to
-        # IEC958 at non-native rates).
-        tee = Gst.ElementFactory.make("tee")
-        queue_speaker = Gst.ElementFactory.make("queue")
-        ac_speaker = Gst.ElementFactory.make("audioconvert")
-        ar_speaker = Gst.ElementFactory.make("audioresample")
-        eq_speaker = make_speaker_eq(self._logger)
-        queue_wobbler = Gst.ElementFactory.make("queue")
-        ac_wobbler = Gst.ElementFactory.make("audioconvert")
-        ar_wobbler = Gst.ElementFactory.make("audioresample")
-
-        appsink_wobbler = self._make_wobbler_appsink()
-
-        # Software AEC far-end reference: tap the speaker branch (what is
-        # physically played) with the shared echo probe. opusdec emits S16LE@48k,
-        # which the probe accepts, so no convert/resample is needed. The probe
-        # is reused across peers, so detach it from any previous pipeline first.
-        # Caveat: there is one probe (webrtcdsp binds a single far-end), so with
-        # several peers streaming at once AEC only references the most recently
-        # connected one. Fine for the usual single-conversation case.
+        # opusdec emits S16LE@48k, which the probe accepts as-is. Only one probe
+        # exists, so with several peers streaming at once the software AEC
+        # references the most recently connected one.
         webrtcechoprobe = self._webrtcechoprobe if self._aec_enabled else None
         if webrtcechoprobe is not None:
             old_parent = webrtcechoprobe.get_parent()
             if old_parent is not None:
                 old_parent.remove(webrtcechoprobe)
 
-        for elem in [
-            appsrc,
-            rtpopusdepay,
-            opusdec,
-            tee,
-            queue_speaker,
-            *([webrtcechoprobe] if webrtcechoprobe is not None else []),
-            ac_speaker,
-            ar_speaker,
-            *([eq_speaker] if eq_speaker is not None else []),
-            audiosink,
-            queue_wobbler,
-            ac_wobbler,
-            ar_wobbler,
-            appsink_wobbler,
-        ]:
+        audio_bin = make_audiosink_tee_bin(
+            self._logger, audiosink, self._make_wobbler_appsink(), webrtcechoprobe
+        )
+
+        for elem in (appsrc, rtpopusdepay, opusdec, audio_bin):
             self._pipeline_playback.add(elem)
         appsrc.link(rtpopusdepay)
         rtpopusdepay.link(opusdec)
-        opusdec.link(tee)
-        tee.link(queue_speaker)
-        if webrtcechoprobe is not None:
-            queue_speaker.link(webrtcechoprobe)
-            webrtcechoprobe.link(ac_speaker)
-        else:
-            queue_speaker.link(ac_speaker)
-        ac_speaker.link(ar_speaker)
-        if eq_speaker is not None:
-            ar_speaker.link(eq_speaker)
-            eq_speaker.link(audiosink)
-        else:
-            ar_speaker.link(audiosink)
-        tee.link(queue_wobbler)
-        queue_wobbler.link(ac_wobbler)
-        ac_wobbler.link(ar_wobbler)
-        ar_wobbler.link(appsink_wobbler)
+        opusdec.link(audio_bin)
 
         play_bus = self._pipeline_playback.get_bus()
         play_bus.add_watch(
@@ -1354,7 +1308,14 @@ class GstMediaServer:
             uri = f"file://{file_path}"
 
         playbin.set_property("uri", uri)
-        playbin.set_property("audio-sink", self._build_audiosink_tee_bin())
+        playbin.set_property(
+            "audio-sink",
+            make_audiosink_tee_bin(
+                self._logger,
+                self._build_audiosink_element(),
+                self._make_wobbler_appsink(),
+            ),
+        )
 
         if self._head_wobbler is not None:
             self._head_wobbler.reset()
@@ -1446,66 +1407,6 @@ class GstMediaServer:
         pcm = np.frombuffer(data, dtype=np.float32)
         self._head_wobbler.feed(pcm, time.monotonic_ns())
         return Gst.FlowReturn.OK
-
-    def _build_audiosink_tee_bin(self) -> Gst.Bin:
-        """Build a Gst.Bin splitting audio to speaker and wobbler appsink.
-
-        Per-branch audioconvert+audioresample isolate each leaf's caps
-        from the other (the wobbler appsink demands F32LE/2/16000; the
-        audiosink wants whatever the device prefers — e.g. on the
-        wireless XMOS PCM, anything but its native rate triggers an
-        IEC958 fallback that fails to open).
-
-        The bin exposes a single ghost sink pad for use as a playbin audio-sink::
-
-            ghost_sink → tee ─┬→ queue → audioconvert → audioresample → audiosink
-                               └→ queue → audioconvert → audioresample → appsink
-        """
-        audio_bin = Gst.Bin.new("audio_tee_bin")
-
-        tee = Gst.ElementFactory.make("tee")
-        queue_speaker = Gst.ElementFactory.make("queue")
-        ac_speaker = Gst.ElementFactory.make("audioconvert")
-        ar_speaker = Gst.ElementFactory.make("audioresample")
-        eq_speaker = make_speaker_eq(self._logger)
-        audiosink = self._build_audiosink_element()
-        queue_wobbler = Gst.ElementFactory.make("queue")
-        ac_wobbler = Gst.ElementFactory.make("audioconvert")
-        ar_wobbler = Gst.ElementFactory.make("audioresample")
-        appsink_wobbler = self._make_wobbler_appsink()
-
-        for el in (
-            tee,
-            queue_speaker,
-            ac_speaker,
-            ar_speaker,
-            audiosink,
-            queue_wobbler,
-            ac_wobbler,
-            ar_wobbler,
-            appsink_wobbler,
-        ):
-            audio_bin.add(el)
-
-        tee.link(queue_speaker)
-        queue_speaker.link(ac_speaker)
-        ac_speaker.link(ar_speaker)
-        if eq_speaker is not None:
-            audio_bin.add(eq_speaker)
-            ar_speaker.link(eq_speaker)
-            eq_speaker.link(audiosink)
-        else:
-            ar_speaker.link(audiosink)
-
-        tee.link(queue_wobbler)
-        queue_wobbler.link(ac_wobbler)
-        ac_wobbler.link(ar_wobbler)
-        ar_wobbler.link(appsink_wobbler)
-
-        ghost_pad = Gst.GhostPad.new("sink", tee.get_static_pad("sink"))
-        audio_bin.add_pad(ghost_pad)
-
-        return audio_bin
 
     def enable_wobbling(self, callback: Callable[[SpeechOffsets], None]) -> None:
         """Enable head wobbling driven by audio playback.
