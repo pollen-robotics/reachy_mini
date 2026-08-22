@@ -98,26 +98,19 @@ def test_full_state_without_flag(router_app, with_imu) -> None:
 # --------------------------------------------------------------------
 
 
-def test_get_imu_returns_reading(router_app, with_imu) -> None:
-    """GET /state/imu -> the four fields, and no legacy ``type`` key."""
+def test_imu_reading_on_both_routes(router_app, with_imu) -> None:
+    """``/state/imu`` and ``/state/full?with_imu=true`` serve the same object.
+
+    Only the four ``ImuData`` fields: the legacy ``type`` discriminator
+    (``ImuDataMsg``) never reaches the client on either route.
+    """
     client = router_app(state.router, backend=with_imu)
 
-    resp = client.get("/state/imu")
+    direct = client.get("/state/imu")
+    full = client.get("/state/full", params={"with_imu": True})
 
-    assert resp.status_code == 200
-    assert resp.json() == EXPECTED
-    assert "type" not in resp.json()
-
-
-def test_full_state_carries_imu(router_app, with_imu) -> None:
-    """/state/full?with_imu=true -> the same object, also without ``type``."""
-    client = router_app(state.router, backend=with_imu)
-
-    resp = client.get("/state/full", params={"with_imu": True})
-
-    assert resp.status_code == 200
-    assert resp.json()["imu"] == EXPECTED
-    assert "type" not in resp.json()["imu"]
+    assert direct.status_code == full.status_code == 200
+    assert direct.json() == full.json()["imu"] == EXPECTED
 
 
 # --------------------------------------------------------------------
