@@ -108,6 +108,20 @@ class DoaSnapshot(BaseModel):
     speech_detected: bool
 
 
+class ImuData(BaseModel):
+    """IMU sensor reading (BMI088, wireless version only).
+
+    The payload half of :class:`ImuDataMsg`, reused wherever the reading
+    is carried without the legacy WS discriminator (state snapshots,
+    REST replies).
+    """
+
+    accelerometer: list[float]
+    gyroscope: list[float]
+    quaternion: list[float]
+    temperature: float
+
+
 class StateSnapshot(BaseModel):
     """Present-state snapshot sent to WebRTC clients.
 
@@ -131,6 +145,9 @@ class StateSnapshot(BaseModel):
     is_move_running: bool
     face_target: FaceTarget
     doa: Optional[DoaSnapshot] = None
+    # IMU reading (wireless version), or None on Lite/sim or when the
+    # backend cache has gone stale.
+    imu: Optional[ImuData] = None
 
 
 class PoseFrame(BaseModel):
@@ -990,14 +1007,10 @@ class HeadPoseMsg(BaseModel):
     head_pose: list[list[float]]
 
 
-class ImuDataMsg(BaseModel):
+class ImuDataMsg(ImuData):
     """IMU sensor data (published at 50 Hz on wireless version)."""
 
     type: Literal["imu_data"] = "imu_data"
-    accelerometer: list[float]
-    gyroscope: list[float]
-    quaternion: list[float]
-    temperature: float
 
 
 class RecordedDataMsg(BaseModel):
