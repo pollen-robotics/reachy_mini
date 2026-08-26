@@ -150,7 +150,11 @@ async def get_space_latest_sha(
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
+    # trust_env=True honours HTTP_PROXY/HTTPS_PROXY/NO_PROXY; aiohttp ignores
+    # them otherwise.
+    async with aiohttp.ClientSession(
+        timeout=REQUEST_TIMEOUT, trust_env=True
+    ) as session:
         try:
             async with session.get(url, headers=headers) as response:
                 if response.status == 200:

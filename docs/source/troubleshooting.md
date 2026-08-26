@@ -374,6 +374,54 @@ Note that you may also need to use mirrors to reach services like PyPI and GitHu
 </details>
 
 <details>
+<summary><strong>How to use Reachy Mini behind an HTTP proxy?</strong></summary>
+
+Reachy Mini honours the standard proxy environment variables for all of its
+outgoing HTTP(S) traffic — Hugging Face authentication, the app store listing,
+app installs and updates, and the WebRTC signaling server:
+
+```bash
+export HTTP_PROXY=http://proxy.example.com:3128
+export HTTPS_PROXY=http://proxy.example.com:3128
+export NO_PROXY=localhost,127.0.0.1,reachy-mini.local
+```
+
+Keep local addresses in `NO_PROXY` so the daemon, mDNS discovery and the
+dashboard stay reachable without going through the proxy.
+
+For the Wireless version the variables must be visible to the daemon service,
+not just to your shell. Add them to the unit and restart it:
+
+```bash
+sudo systemctl edit reachy-mini-daemon
+```
+
+Add the following, then save:
+
+```
+[Service]
+Environment="HTTP_PROXY=http://proxy.example.com:3128"
+Environment="HTTPS_PROXY=http://proxy.example.com:3128"
+Environment="NO_PROXY=localhost,127.0.0.1,reachy-mini.local"
+```
+
+```bash
+sudo systemctl restart reachy-mini-daemon
+```
+
+Known limitations:
+
+- Only unauthenticated HTTP proxies are covered by our tests. A proxy needing
+  credentials (`http://user:password@host:port`) is passed straight through to
+  the underlying client and is not exercised in CI.
+- SOCKS proxies are not supported.
+- Apps run in their own processes and inherit the daemon environment, but an
+  app making its own network calls is responsible for honouring the proxy
+  itself.
+
+</details>
+
+<details>
 <summary><strong>How to make the conversation app work in China?</strong></summary>
 
 Reachy Mini conversation app relies on OpenAI gpt-realtime API, which might be inaccessible from China.

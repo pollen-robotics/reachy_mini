@@ -397,7 +397,9 @@ class ReachyCentralConsumer:
         if self._task is not None and not self._task.done():
             return
         self._stopping = False
-        self._http = aiohttp.ClientSession()
+        # trust_env=True honours HTTP_PROXY/HTTPS_PROXY/NO_PROXY; aiohttp ignores
+        # them otherwise.
+        self._http = aiohttp.ClientSession(trust_env=True)
         self._task = asyncio.create_task(self._run_forever(), name="reachy-consumer")
 
     async def stop(self) -> None:

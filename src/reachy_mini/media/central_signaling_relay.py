@@ -759,7 +759,9 @@ class CentralSignalingRelay:
             return
 
         # Create HTTP session for central server
-        self._http_session = aiohttp.ClientSession()
+        # trust_env=True honours HTTP_PROXY/HTTPS_PROXY/NO_PROXY; aiohttp ignores
+        # them otherwise.
+        self._http_session = aiohttp.ClientSession(trust_env=True)
 
         # Connect to local GStreamer signaling (WebSocket) with timeout
         self._set_state(RelayState.CONNECTING, "Connecting to local WebRTC...")

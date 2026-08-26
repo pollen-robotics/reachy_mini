@@ -264,7 +264,9 @@ async def exchange_code_for_token(
     }
 
     try:
-        async with aiohttp.ClientSession() as http_session:
+        # trust_env=True honours HTTP_PROXY/HTTPS_PROXY/NO_PROXY; aiohttp ignores
+        # them otherwise.
+        async with aiohttp.ClientSession(trust_env=True) as http_session:
             async with http_session.post(token_url, data=data) as response:
                 response_text = await response.text()
                 if response.status != 200:

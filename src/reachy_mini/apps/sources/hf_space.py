@@ -147,7 +147,11 @@ async def _fetch_space_data(
 
 async def list_available_apps() -> list[AppInfo]:
     """List apps available on Hugging Face Spaces."""
-    async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
+    # trust_env=True honours HTTP_PROXY/HTTPS_PROXY/NO_PROXY; aiohttp ignores
+    # them otherwise.
+    async with aiohttp.ClientSession(
+        timeout=REQUEST_TIMEOUT, trust_env=True
+    ) as session:
         # Fetch the list of authorized app IDs
         try:
             async with session.get(AUTHORIZED_APP_LIST_URL) as response:

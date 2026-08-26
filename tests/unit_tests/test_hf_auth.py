@@ -24,6 +24,13 @@ class _TokenResponse:
 
 
 class _ClientSession:
+    """Stub aiohttp session recording the kwargs it was constructed with."""
+
+    last_kwargs: dict[str, object] = {}
+
+    def __init__(self, **kwargs: object) -> None:
+        _ClientSession.last_kwargs = kwargs
+
     async def __aenter__(self) -> "_ClientSession":
         return self
 
@@ -67,6 +74,7 @@ async def test_oauth_token_uses_huggingface_configured_path(
         hf_auth._oauth_sessions.clear()
 
     assert result == {"status": "success", "username": "tester"}
+    assert _ClientSession.last_kwargs.get("trust_env") is True
     assert replacement_observation == {"mode": 0o600}
     assert token_path.read_text() == "oauth-token"
     assert token_path.stat().st_mode & 0o777 == 0o600

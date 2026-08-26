@@ -166,8 +166,10 @@ async def get_central_robot_status() -> dict[str, Any]:
         return {"available": False, "robots": [], "reason": "not_authenticated"}
 
     try:
+        # trust_env=True honours HTTP_PROXY/HTTPS_PROXY/NO_PROXY; aiohttp ignores
+        # them otherwise.
         async with aiohttp.ClientSession(
-            timeout=CENTRAL_ROBOT_STATUS_TIMEOUT
+            timeout=CENTRAL_ROBOT_STATUS_TIMEOUT, trust_env=True
         ) as session:
             # Token goes in the Authorization header, not the URL —
             # otherwise it leaks into central's access logs and any
