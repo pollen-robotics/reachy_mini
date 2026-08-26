@@ -6,7 +6,8 @@ from typing import Annotated
 import numpy as np
 import numpy.typing as npt
 import onnxruntime
-from scipy.spatial.transform import Rotation as R
+
+from reachy_mini.utils.rotation import Rotation as R
 
 
 class NNKinematics:

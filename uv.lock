@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.11"
 
 [options]
-exclude-newer = "2026-08-04T08:50:02.277943339Z"
+exclude-newer = "2026-08-04T16:07:08.454537Z"
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
@@ -3182,7 +3182,6 @@ dependencies = [
     { name = "requests" },
     { name = "rich" },
     { name = "rustypot" },
-    { name = "scipy" },
     { name = "starlette" },
     { name = "toml" },
     { name = "uvicorn", extra = ["standard"] },
@@ -3252,6 +3251,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
+    { name = "scipy" },
     { name = "types-pyyaml" },
     { name = "types-requests" },
     { name = "types-toml" },
@@ -3309,7 +3309,6 @@ requires-dist = [
     { name = "rerun-sdk", marker = "extra == 'rerun'", specifier = ">=0.29.0,<=0.31.3" },
     { name = "rich" },
     { name = "rustypot", specifier = ">=1.4.2" },
-    { name = "scipy", specifier = ">=1.15.3,<2.0.0" },
     { name = "semver", marker = "extra == 'wireless-version'", specifier = ">=3,<4" },
     { name = "soundfile", marker = "extra == 'examples'" },
     { name = "starlette", specifier = "<1.0.0" },
@@ -3329,6 +3328,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio" },
     { name = "ruff", specifier = "==0.12.0" },
+    { name = "scipy", specifier = ">=1.15.3,<2.0.0" },
     { name = "types-pyyaml" },
     { name = "types-requests" },
     { name = "types-toml" },
