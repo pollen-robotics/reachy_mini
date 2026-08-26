@@ -52,6 +52,7 @@ class JsonRpcRelay:
         app_manager: AppManager,
         broadcast: Callable[[str], None],
         logger: Optional[logging.Logger] = None,
+        on_app_notification: Optional[Callable[[str, dict[str, Any]], None]] = None,
     ) -> None:
         """Create the relay.
 
@@ -61,10 +62,17 @@ class JsonRpcRelay:
                 backend's ``broadcast_to_all_clients``). Used to fan app
                 notifications out.
             logger: optional logger.
+            on_app_notification: optional observer called with
+                ``(method, params)`` for every notification the app pushes
+                (they are still fanned out to clients verbatim), and with
+                ``("app.disconnected", {})`` when the app's ``/rpc`` link
+                drops. Lets the daemon react to app state such as
+                ``conversation.turn`` without owning the protocol.
 
         """
         self._apps = app_manager
         self._broadcast = broadcast
+        self._on_app_notification = on_app_notification
         self.logger = logger or logging.getLogger("reachy_mini.jsonrpc_relay")
 
         self._app_ws: Optional[ClientConnection] = None
@@ -243,10 +251,22 @@ class JsonRpcRelay:
             # A notification/event (or an uncorrelated response) — fan it out to
             # every client verbatim.
             self._broadcast(text)
+            if isinstance(msg, RpcRequest) and msg.is_notification:
+                self._notify_observer(msg.method, msg.params or {})
+
+    def _notify_observer(self, method: str, params: dict[str, Any]) -> None:
+        if self._on_app_notification is None:
+            return
+        try:
+            self._on_app_notification(method, params)
+        except Exception as e:
+            self.logger.warning("app notification observer failed on %s: %s", method, e)
 
     async def _drop_app_ws(self) -> None:
         ws, self._app_ws = self._app_ws, None
         task, self._reader_task = self._reader_task, None
+        if ws is not None:
+            self._notify_observer("app.disconnected", {})
         if ws is not None:
             try:
                 await ws.close()
