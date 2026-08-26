@@ -7,7 +7,7 @@ Run with:
 python head_tracking.py
 ```
 
-`start_head_tracking(weight=...)` accepts a blend factor: `1.0` lets tracking own the head, `0.0` pauses detection (freeing the head and CPU) without stopping the tracker — useful to hand the head back to an application between conversation turns.
+`start_head_tracking(weight=...)` accepts a blend factor: `1.0` lets tracking own the head, `0.0` pauses detection (freeing the head and CPU) without stopping the tracker — useful to hand the head back to an application between conversation turns. `mode=` chooses when the robot re-aims: `"continuous"` (default), `"periodic"` (a glance every `glance_interval_s=(min, max)` seconds, holding in between), or `"speaking"` (follows the face only while the robot is speaking, detected daemon-side from audio playback and speech offsets, with `speaking_hold_s` of hold after speech ends).
 
 <literalinclude>
 {"path": "../../../examples/head_tracking.py",

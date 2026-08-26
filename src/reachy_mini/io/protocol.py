@@ -30,7 +30,7 @@ from enum import Enum
 from typing import Annotated, Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
 from reachy_mini.utils.interpolation import InterpolationTechnique
 from reachy_mini.utils.robot_name import MAX_ROBOT_NAME_LENGTH
@@ -454,12 +454,39 @@ class SetWobblingCmd(BaseModel):
     enabled: bool
 
 
+HeadTrackingMode = Literal["continuous", "periodic", "speaking"]
+
+
 class SetHeadTrackingCmd(BaseModel):
-    """Enable or disable daemon-side visual head tracking."""
+    """Enable or disable daemon-side visual head tracking.
+
+    ``mode`` selects when the daemon re-aims at the detected face. The detector
+    runs the same way in every mode; the mode only decides when its latest
+    target is adopted:
+
+    - ``continuous``: follow the face all the time (default).
+    - ``periodic``: glance at the face once every ``glance_interval_s`` (a
+      random delay drawn from the ``[min, max]`` range), hold in between.
+    - ``speaking``: follow the face while the robot is speaking (audio leaving
+      the speaker or speech offsets moving within the last
+      ``speaking_hold_s``), hold otherwise.
+
+    Sending the command again while enabled changes the mode and tunables live.
+    """
 
     type: Literal["set_head_tracking"] = "set_head_tracking"
     enabled: bool
     weight: float = Field(default=1.0, ge=0.0, le=1.0)
+    mode: HeadTrackingMode = "continuous"
+    glance_interval_s: tuple[float, float] = (5.0, 30.0)
+    speaking_hold_s: float = Field(default=1.0, ge=0.0)
+
+    @model_validator(mode="after")
+    def _check_glance_interval(self) -> "SetHeadTrackingCmd":
+        low, high = self.glance_interval_s
+        if low <= 0.0 or high < low:
+            raise ValueError("glance_interval_s must satisfy 0 < min <= max")
+        return self
 
 
 class GetTrackedFaceCmd(BaseModel):

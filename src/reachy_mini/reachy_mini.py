@@ -24,6 +24,7 @@ from reachy_mini.io.protocol import (
     DaemonStatus,
     FaceTarget,
     GotoTaskRequest,
+    HeadTrackingMode,
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
     SetBodyYawCmd,
@@ -64,7 +65,10 @@ SLEEP_HEAD_JOINT_POSITIONS = [
 ]
 
 
-INIT_ANTENNAS_JOINT_POSITIONS = [-0.1745, 0.1745]  # ~10° offset to reduce shaking at vertical
+INIT_ANTENNAS_JOINT_POSITIONS = [
+    -0.1745,
+    0.1745,
+]  # ~10° offset to reduce shaking at vertical
 SLEEP_ANTENNAS_JOINT_POSITIONS = [-3.05, 3.05]
 SLEEP_HEAD_POSE = np.array(
     [
@@ -235,7 +239,9 @@ class ReachyMini:
             return
 
         self.media_manager.close()
-        self.media_manager = self._configure_mediamanager(self._media_backend, self._log_level)
+        self.media_manager = self._configure_mediamanager(
+            self._media_backend, self._log_level
+        )
         self._media_released = False
         self.logger.info("Media re-acquired by daemon.")
 
@@ -253,7 +259,10 @@ class ReachyMini:
         incoming WebRTC audio also produce head movement.
 
         """
-        def _send_offsets(offsets: tuple[float, float, float, float, float, float]) -> None:
+
+        def _send_offsets(
+            offsets: tuple[float, float, float, float, float, float],
+        ) -> None:
             try:
                 self.client.send_command(SetSpeechOffsetsCmd(offsets=list(offsets)))
             except ConnectionError:
@@ -272,7 +281,13 @@ class ReachyMini:
         self.client.send_command(SetWobblingCmd(enabled=False))
         self.logger.info("Head wobbling disabled")
 
-    def start_head_tracking(self, weight: float = 1.0) -> None:
+    def start_head_tracking(
+        self,
+        weight: float = 1.0,
+        mode: HeadTrackingMode = "continuous",
+        glance_interval_s: tuple[float, float] = (5.0, 30.0),
+        speaking_hold_s: float = 1.0,
+    ) -> None:
         """Enable daemon-side visual head tracking.
 
         Args:
@@ -280,10 +295,30 @@ class ReachyMini:
                 head orientation; intermediate values let app motion show through
                 while biasing toward the face; ``0`` pauses detection (freeing the
                 head and CPU) without tearing the tracker down, for cheap on/off.
+            mode: When the daemon re-aims at the face. ``"continuous"`` follows
+                it all the time. ``"periodic"`` glances at it once every
+                ``glance_interval_s`` (a random delay in the ``(min, max)``
+                range) and holds in between. ``"speaking"`` follows it only
+                while the robot is speaking (audio playing or speech offsets
+                moving within the last ``speaking_hold_s``) and holds otherwise.
+                The daemon decides on its own; call again to change the mode or
+                its tunables live.
+            glance_interval_s: ``(min, max)`` seconds between glances in
+                ``"periodic"`` mode.
+            speaking_hold_s: Seconds after the last audio or speech activity
+                during which the robot still counts as speaking.
 
         """
-        self.client.send_command(SetHeadTrackingCmd(enabled=True, weight=weight))
-        self.logger.debug("Head tracking enabled (weight=%.1f)", weight)
+        self.client.send_command(
+            SetHeadTrackingCmd(
+                enabled=True,
+                weight=weight,
+                mode=mode,
+                glance_interval_s=glance_interval_s,
+                speaking_hold_s=speaking_hold_s,
+            )
+        )
+        self.logger.debug("Head tracking enabled (weight=%.1f, mode=%s)", weight, mode)
 
     def stop_head_tracking(self) -> None:
         """Disable daemon-side visual head tracking."""
@@ -723,7 +758,9 @@ class ReachyMini:
 
     def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
-        self.goto_target(INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=2)
+        self.goto_target(
+            INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=2
+        )
         time.sleep(0.1)
 
         # Toudoum
@@ -755,7 +792,9 @@ class ReachyMini:
         ]
         dist = np.linalg.norm(np.array(current_positions) - np.array(init_positions))
         if dist > 0.2:
-            self.goto_target(INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=1)
+            self.goto_target(
+                INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=1
+            )
             time.sleep(0.2)
 
         # Pfiou

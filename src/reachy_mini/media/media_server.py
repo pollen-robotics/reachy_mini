@@ -148,6 +148,10 @@ class GstMediaServer:
     # converts whatever the source produces down to this rate before delivery.
     WOBBLER_SAMPLE_RATE = 16_000
 
+    # RMS (float32 full scale) above which an output audio buffer counts as
+    # "the robot is speaking", for speech-aware head tracking in the daemon.
+    AUDIO_ACTIVITY_RMS = 0.01
+
     # Receive-side jitter buffer depth (ms) for the consumer `webrtcbin`,
     # i.e. the phone->robot voice leg. Default webrtcbin latency (200ms)
     # underruns on a jittery Wi-Fi link and the speaker stutters. We trade
@@ -280,6 +284,8 @@ class GstMediaServer:
         self._incoming_audio: Dict[str, Dict[str, Any]] = {}
         self._playbin: Optional[Gst.Element] = None
         self._head_wobbler: Optional[HeadWobbler] = None
+        # Monotonic ns of the last output audio buffer above AUDIO_ACTIVITY_RMS.
+        self._last_audio_output_ns: Optional[int] = None
         self._pipeline_playback: Optional[Gst.Pipeline] = None
         # Software AEC: set in _configure_audio; the probe is created there and
         # reused across per-peer playback pipelines (see _on_consumer_pad_added).
@@ -1439,12 +1445,19 @@ class GstMediaServer:
         PTS on the pipeline clock — audio is playing NOW.
         """
         sample = appsink.pull_sample()
-        if sample is None or self._head_wobbler is None:
+        if sample is None:
             return Gst.FlowReturn.OK
         buf = sample.get_buffer()
         data = buf.extract_dup(0, buf.get_size())
         pcm = np.frombuffer(data, dtype=np.float32)
-        self._head_wobbler.feed(pcm, time.monotonic_ns())
+        now_ns = time.monotonic_ns()
+        if (
+            pcm.size
+            and float(np.sqrt(np.mean(np.square(pcm)))) > self.AUDIO_ACTIVITY_RMS
+        ):
+            self._last_audio_output_ns = now_ns
+        if self._head_wobbler is not None:
+            self._head_wobbler.feed(pcm, now_ns)
         return Gst.FlowReturn.OK
 
     def _build_audiosink_tee_bin(self) -> Gst.Bin:
@@ -1526,6 +1539,12 @@ class GstMediaServer:
             self._head_wobbler.stop()
             self._head_wobbler = None
             self._logger.info("Head wobbler disabled (daemon-side)")
+
+    def last_audio_output_time(self) -> Optional[float]:
+        """Monotonic time (s) audio above the activity threshold last reached the speaker."""
+        if self._last_audio_output_ns is None:
+            return None
+        return self._last_audio_output_ns / 1e9
 
     def set_message_handler(
         self,

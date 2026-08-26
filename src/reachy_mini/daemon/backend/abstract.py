@@ -13,6 +13,7 @@ import json
 import logging
 import math
 import os
+import random
 import tempfile
 import threading
 import time
@@ -48,6 +49,7 @@ from reachy_mini.io.protocol import (
     GetVolumeCmd,
     GotoSleepCmd,
     GotoTargetCmd,
+    HeadTrackingMode,
     ImuDataMsg,
     LogLineMsg,
     LogStreamErrorMsg,
@@ -359,6 +361,15 @@ class Backend:
         self._tracking_aim_rpy: tuple[float, float, float] | None = None
         self._tracking_target_rpy: tuple[float, float, float] | None = None
         self._tracking_seq = 0
+        # Re-aim policy (see SetHeadTrackingCmd.mode). The detector keeps its
+        # target mailbox fresh in every mode; the mode only decides when the
+        # daemon latches a fresh target as its aim.
+        self._tracking_mode: HeadTrackingMode = "continuous"
+        self._tracking_glance_interval_s: tuple[float, float] = (5.0, 30.0)
+        self._tracking_speaking_hold_s = 1.0
+        self._tracking_next_glance_at: float | None = None
+        self._tracking_last_speech_ts: float | None = None
+        self._tracking_rng = random.Random()
         self._last_face_seen: float | None = None
         self._tracker: FaceTracker | None = None
         self._tracking_lock = threading.Lock()
@@ -678,12 +689,34 @@ class Backend:
 
         """
         self._speech_offsets = offsets
+        if any(o != 0.0 for o in offsets):
+            # Non-zero offsets mean the head wobbler is reacting to speech.
+            self._tracking_last_speech_ts = time.monotonic()
         self.ik_required = True
 
-    def enable_head_tracking(self, weight: float = 1.0) -> bool:
-        """Enable head tracking; ``weight`` 0 pauses the worker without stopping it."""
+    def enable_head_tracking(
+        self,
+        weight: float = 1.0,
+        mode: HeadTrackingMode = "continuous",
+        glance_interval_s: tuple[float, float] = (5.0, 30.0),
+        speaking_hold_s: float = 1.0,
+    ) -> bool:
+        """Enable head tracking; ``weight`` 0 pauses the worker without stopping it.
+
+        ``mode`` and its tunables select when the aim follows the face (see
+        ``SetHeadTrackingCmd``); calling again while enabled changes them live.
+        """
         with self._tracking_lock:
             self._tracking_requested_weight = min(max(float(weight), 0.0), 1.0)
+            if mode != self._tracking_mode:
+                # A mode change re-aims once right away, then applies the new policy.
+                self._tracking_next_glance_at = None
+            self._tracking_mode = mode
+            self._tracking_glance_interval_s = (
+                float(glance_interval_s[0]),
+                float(glance_interval_s[1]),
+            )
+            self._tracking_speaking_hold_s = max(0.0, float(speaking_hold_s))
             if self._media_server is None:
                 self.logger.warning("Cannot enable head tracking: no camera available")
                 return False
@@ -715,6 +748,7 @@ class Backend:
         self._tracking_aim_rpy = None
         self._tracking_target_rpy = None
         self._tracking_seq = 0
+        self._tracking_next_glance_at = None
         self._tracking_weight = 0.0
         self._last_face_seen = None
         self._face_target = FaceTarget()
@@ -728,6 +762,49 @@ class Backend:
         roll, pitch, yaw = R.from_matrix(pose[:3, :3]).as_euler("xyz")
         return (float(roll), float(pitch), float(yaw))
 
+    def _robot_is_speaking(self, now: float) -> bool:
+        """Whether audio reached the speaker or speech offsets moved recently.
+
+        Two daemon-side signals, no app cooperation needed: the media server
+        stamps every output audio buffer above a small energy threshold, and
+        ``set_speech_offsets`` stamps non-zero wobbler offsets (covers apps
+        that play audio elsewhere but drive the wobbler).
+        """
+        last = self._tracking_last_speech_ts
+        media_server = self._media_server
+        audio_ts = (
+            media_server.last_audio_output_time()
+            if media_server is not None
+            and hasattr(media_server, "last_audio_output_time")
+            else None
+        )
+        if audio_ts is not None and (last is None or audio_ts > last):
+            last = audio_ts
+        return last is not None and now - last <= self._tracking_speaking_hold_s
+
+    def _schedule_next_glance(self, now: float) -> None:
+        low, high = self._tracking_glance_interval_s
+        self._tracking_next_glance_at = now + self._tracking_rng.uniform(low, high)
+
+    def _should_latch_target(self, now: float) -> bool:
+        """Apply the re-aim policy to a fresh detected target."""
+        if self._tracking_target_rpy is None:
+            # The first target after (re)enabling always aims, in every mode.
+            if self._tracking_mode == "periodic":
+                self._schedule_next_glance(now)
+            return True
+        if self._tracking_mode == "continuous":
+            return True
+        if self._tracking_mode == "speaking":
+            return self._robot_is_speaking(now)
+        if (
+            self._tracking_next_glance_at is None
+            or now >= self._tracking_next_glance_at
+        ):
+            self._schedule_next_glance(now)
+            return True
+        return False
+
     def step_head_tracking(self) -> None:
         """Servo the aim one bounded step toward the latest target angles.
 
@@ -738,7 +815,8 @@ class Backend:
         target converges and stops, so no timestamps are needed. A brief
         detection gap holds the last target; a sustained loss retargets the
         neutral pose so the robot recenters instead of freezing where the
-        person left the frame.
+        person left the frame. The tracking mode (continuous, periodic,
+        speaking) decides which fresh targets are adopted as the aim.
         """
         with self._tracking_lock:
             if not self._tracking_enabled or self._tracking_requested_weight <= 0.0:
@@ -754,11 +832,12 @@ class Backend:
                 if target is not None and target.seq != self._tracking_seq:
                     self._tracking_seq = target.seq
                     if target.detected:
-                        self._tracking_target_rpy = (
-                            target.roll,
-                            target.pitch,
-                            target.yaw,
-                        )
+                        if self._should_latch_target(now):
+                            self._tracking_target_rpy = (
+                                target.roll,
+                                target.pitch,
+                                target.yaw,
+                            )
                         self._tracking_weight = self._tracking_requested_weight
                         self._last_face_seen = now
                         self._face_target = FaceTarget(
@@ -1746,7 +1825,12 @@ class Backend:
 
         elif isinstance(cmd, SetHeadTrackingCmd):
             if cmd.enabled:
-                enabled = self.enable_head_tracking(weight=cmd.weight)
+                enabled = self.enable_head_tracking(
+                    weight=cmd.weight,
+                    mode=cmd.mode,
+                    glance_interval_s=cmd.glance_interval_s,
+                    speaking_hold_s=cmd.speaking_hold_s,
+                )
                 send_response(
                     {
                         "status": "ok" if enabled else "unavailable",
