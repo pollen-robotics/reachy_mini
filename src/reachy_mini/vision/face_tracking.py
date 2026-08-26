@@ -264,13 +264,20 @@ class _DetectionWorker:
         height: int,
         camera_matrix: NDArray[np.float64],
         distortion: NDArray[np.float64],
+        head_pose: NDArray[np.float64] | None = None,
     ) -> None:
-        """Select a face and publish the absolute head angles that aim at it."""
+        """Select a face and publish the absolute head angles that aim at it.
+
+        ``head_pose`` is the daemon's head orientation sampled when the frame
+        arrived (before inference), the closest we get to capture time without
+        timestamps; it defaults to the latest published pose.
+        """
         face = self._selector.select(faces, width, height)
         if face is None:
             self._publish(detected=False)
             return
-        head_pose = self._current_head_pose()
+        if head_pose is None:
+            head_pose = self._current_head_pose()
         if head_pose is None:
             # The daemon has not published its head pose yet; without it a
             # pixel cannot become an absolute angle, so report a miss.
@@ -416,12 +423,15 @@ class _DetectionWorker:
                     camera_matrix = intrinsics_for_size(
                         self._camera_specs.K, crop_scale, (frame_width, frame_height)
                     )
+                # Sample the head pose now, not after the ~35 ms inference.
+                head_pose = self._current_head_pose()
                 self._process_detections(
                     detector.detect(frame),
                     frame_width,
                     frame_height,
                     camera_matrix,
                     self._camera_specs.D,
+                    head_pose,
                 )
         except Exception:
             # Logged in the detector process (stderr -> journal); the parent

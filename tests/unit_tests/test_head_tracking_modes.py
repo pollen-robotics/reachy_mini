@@ -70,6 +70,9 @@ def _make(
     backend.current_head_pose = np.eye(4, dtype=np.float64)
     backend._tracking_enabled = True
     backend._tracking_mode = mode  # type: ignore[assignment]
+    backend._tracking_settle_rad = float(
+        "inf"
+    )  # mode policy only; settling is tested separately
     for name, value in fields.items():
         setattr(backend, name, value)
     tracker = _SpyTracker()
