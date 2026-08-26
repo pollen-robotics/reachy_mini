@@ -76,6 +76,7 @@ class EnableTrackingRequest(BaseModel):
     weight: float = Field(default=1.0, ge=0.0, le=1.0)
     mode: HeadTrackingMode | None = None
     glance_interval_s: tuple[float, float] | None = None
+    glance_duration_s: float | None = Field(default=None, gt=0.0)
     speaking_hold_s: float | None = Field(default=None, ge=0.0)
 
 
@@ -185,6 +186,7 @@ async def enable_tracking(
         weight=body.weight,
         mode=body.mode,
         glance_interval_s=body.glance_interval_s,
+        glance_duration_s=body.glance_duration_s,
         speaking_hold_s=body.speaking_hold_s,
     )
     return {"status": "ok" if enabled else "unavailable", "enabled": enabled}
