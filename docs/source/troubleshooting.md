@@ -414,7 +414,15 @@ Known limitations:
 - Only unauthenticated HTTP proxies are covered by our tests. A proxy needing
   credentials (`http://user:password@host:port`) is passed straight through to
   the underlying client and is not exercised in CI.
-- SOCKS proxies are not supported.
+- SOCKS proxies are not supported, and proxy URLs must be plain
+  `http://` (HTTPS is tunnelled through them); an `https://` proxy URL is
+  ignored with a warning.
+- `ALL_PROXY` is not honoured — set `HTTP_PROXY` and `HTTPS_PROXY`
+  explicitly. (`requests`-based calls would fall back to `ALL_PROXY`, the
+  daemon's aiohttp calls never have.)
+- `~/.netrc` is never consulted for these calls: the proxy is resolved
+  explicitly per request, so a developer netrc cannot break or alter the
+  daemon's authenticated Hugging Face / central requests.
 - Apps run in their own processes and inherit the daemon environment, but an
   app making its own network calls is responsible for honouring the proxy
   itself.
