@@ -163,6 +163,36 @@ def test_speaking_mode_uses_media_server_audio_activity(
     )  # audio 2.2 s ago
 
 
+def test_speaking_mode_uses_the_app_declared_turn_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A relayed conversation.turn "speaking" counts as speaking until it changes."""
+    backend, tracker, clock = _make(
+        monkeypatch, "speaking", _tracking_speaking_hold_s=1.0
+    )
+    assert _publish_and_step(backend, tracker, clock, 0.0, 1, 0.2) == 0.2
+    assert _publish_and_step(backend, tracker, clock, 5.0, 2, 0.4) == 0.2  # silent
+
+    backend.note_app_notification("conversation.turn", {"state": "speaking"})
+    assert _publish_and_step(backend, tracker, clock, 10.0, 3, 0.6) == 0.6
+    assert (
+        _publish_and_step(backend, tracker, clock, 40.0, 4, 0.7) == 0.7
+    )  # no hold limit while declared
+
+    clock.t = 41.0
+    backend.note_app_notification("conversation.turn", {"state": "ready"})
+    assert (
+        _publish_and_step(backend, tracker, clock, 41.5, 5, 0.8) == 0.8
+    )  # within hold
+    assert (
+        _publish_and_step(backend, tracker, clock, 43.0, 6, 0.9) == 0.8
+    )  # hold expired
+
+    backend.note_app_notification("conversation.turn", {"state": "speaking"})
+    backend.note_app_notification("app.disconnected", {})
+    assert _publish_and_step(backend, tracker, clock, 50.0, 7, 1.0) == 0.8  # cleared
+
+
 def test_periodic_mode_still_recenters_when_the_face_is_gone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

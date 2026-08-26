@@ -28,7 +28,6 @@ from reachy_mini.io.jsonrpc import (
     parse_request,
 )
 
-
 # ---------------------------------------------------------------- envelope
 
 
@@ -299,7 +298,9 @@ async def test_apps_install(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_original_id_recorded_before_send(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_original_id_recorded_before_send(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The caller's id must be recorded before the frame leaves the relay.
 
     Regression: the reader task runs on this loop and can deliver the app's
@@ -329,3 +330,36 @@ async def test_original_id_recorded_before_send(monkeypatch: pytest.MonkeyPatch)
     )
     assert snapshot["present"] is True
     await relay.aclose()
+
+
+def test_app_notifications_reach_the_observer_and_clients() -> None:
+    """App notifications are fanned out verbatim and also handed to the observer."""
+    sent: list[str] = []
+    seen: list[tuple[str, dict[str, Any]]] = []
+    relay = JsonRpcRelay(
+        SimpleNamespace(),
+        sent.append,
+        on_app_notification=lambda m, p: seen.append((m, p)),
+    )
+    frame = json.dumps(make_notification("conversation.turn", {"state": "speaking"}))
+    relay._on_app_frame(frame)
+    assert sent == [frame]
+    assert seen == [("conversation.turn", {"state": "speaking"})]
+
+    relay._on_app_frame(
+        json.dumps(make_notification("conversation.level", {"rms": 0.2}))
+    )
+    assert seen[-1] == ("conversation.level", {"rms": 0.2})
+
+
+def test_observer_errors_do_not_break_the_relay() -> None:
+    """A failing observer is logged, not propagated."""
+
+    def boom(method: str, params: dict[str, Any]) -> None:
+        raise RuntimeError("observer bug")
+
+    sent: list[str] = []
+    relay = JsonRpcRelay(SimpleNamespace(), sent.append, on_app_notification=boom)
+    frame = json.dumps(make_notification("conversation.turn", {"state": "speaking"}))
+    relay._on_app_frame(frame)
+    assert sent == [frame]
