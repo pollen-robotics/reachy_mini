@@ -1,1 +1,1 @@
-{"id":"3f10920fdf596c37848dfe2557ac75bd","fullName":"tests.unit_tests.test_robot_app_lock#test_became_free_handler_exception_is_swallowed","name":"test_became_free_handler_exception_is_swallowed","status":"passed","testResultsByEnv":{"default":"f5485318a8ec2f17ed8f0525fa270e99"}}
+{"id":"3f10920fdf596c37848dfe2557ac75bd","fullName":"tests.unit_tests.test_robot_app_lock#test_became_free_handler_exception_is_swallowed","name":"test_became_free_handler_exception_is_swallowed","status":"passed","testResultsByEnv":{"default":"3a910fd13ec3cec2ee3d04a39214dad5"}}

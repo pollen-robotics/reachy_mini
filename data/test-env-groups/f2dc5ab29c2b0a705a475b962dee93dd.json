@@ -1,1 +1,1 @@
-{"id":"f2dc5ab29c2b0a705a475b962dee93dd","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_info_small_payload_preserves_last","name":"test_update_info_small_payload_preserves_last","status":"passed","testResultsByEnv":{"default":"390d9a0f8d6f5e5dba0cd182071d2476"}}
+{"id":"f2dc5ab29c2b0a705a475b962dee93dd","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_info_small_payload_preserves_last","name":"test_update_info_small_payload_preserves_last","status":"passed","testResultsByEnv":{"default":"19df9686bfefbee75db7c9ebf820558d"}}
