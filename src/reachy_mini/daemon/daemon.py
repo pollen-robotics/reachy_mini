@@ -179,7 +179,11 @@ class Daemon:
         frames onto it with ``run_coroutine_threadsafe``.
         """
         loop = asyncio.get_running_loop()
-        relay = JsonRpcRelay(app_manager, backend.broadcast_to_all_clients)
+        relay = JsonRpcRelay(
+            app_manager,
+            backend.broadcast_to_all_clients,
+            on_app_notification=backend.note_app_notification,
+        )
         self._jsonrpc_relay = relay
 
         def handler(raw: str, reply: Callable[[dict[str, Any]], None]) -> None:

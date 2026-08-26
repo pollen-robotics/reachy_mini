@@ -369,6 +369,10 @@ class Backend:
         self._tracking_speaking_hold_s = 1.0
         self._tracking_next_glance_at: float | None = None
         self._tracking_last_speech_ts: float | None = None
+        # Turn state the running app declares over its JSON-RPC server
+        # ("conversation.turn": listening / thinking / speaking / ready), seen by
+        # the daemon relay. "speaking" counts as speaking for tracking.
+        self._tracking_app_turn_state: str | None = None
         self._tracking_rng = random.Random()
         self._last_face_seen: float | None = None
         self._tracker: FaceTracker | None = None
@@ -762,14 +766,37 @@ class Backend:
         roll, pitch, yaw = R.from_matrix(pose[:3, :3]).as_euler("xyz")
         return (float(roll), float(pitch), float(yaw))
 
-    def _robot_is_speaking(self, now: float) -> bool:
-        """Whether audio reached the speaker or speech offsets moved recently.
+    def note_app_notification(self, method: str, params: dict[str, Any]) -> None:
+        """Observe notifications the running app pushes through the JSON-RPC relay.
 
-        Two daemon-side signals, no app cooperation needed: the media server
-        stamps every output audio buffer above a small energy threshold, and
-        ``set_speech_offsets`` stamps non-zero wobbler offsets (covers apps
-        that play audio elsewhere but drive the wobbler).
+        Only ``conversation.turn`` is used (its ``state`` feeds the speaking
+        detector); an ``app.disconnected`` marker clears it so a dead app can't
+        leave the robot "speaking" forever.
         """
+        if method == "app.disconnected":
+            state: str | None = None
+        elif method == "conversation.turn":
+            raw = params.get("state")
+            state = raw if isinstance(raw, str) else None
+        else:
+            return
+        with self._tracking_lock:
+            if self._tracking_app_turn_state == "speaking" and state != "speaking":
+                # Start the hold window when the app stops speaking.
+                self._tracking_last_speech_ts = time.monotonic()
+            self._tracking_app_turn_state = state
+
+    def _robot_is_speaking(self, now: float) -> bool:
+        """Whether the robot is speaking, from daemon-observable signals only.
+
+        Three signals, no app cooperation needed beyond what apps already do:
+        the app's declared ``conversation.turn`` state (relayed notifications),
+        the media server's stamp on every output audio buffer above a small
+        energy threshold, and ``set_speech_offsets`` stamping non-zero wobbler
+        offsets (covers apps that play audio elsewhere but drive the wobbler).
+        """
+        if self._tracking_app_turn_state == "speaking":
+            return True
         last = self._tracking_last_speech_ts
         media_server = self._media_server
         audio_ts = (
