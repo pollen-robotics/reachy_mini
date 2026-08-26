@@ -16,6 +16,8 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
+from reachy_mini.io.protocol import HeadTrackingMode
+
 from ....media.gstreamer_utils import is_valid_audio_file
 from ...daemon import Daemon
 from ..dependencies import get_daemon
@@ -69,9 +71,12 @@ class PlaySoundRequest(BaseModel):
 
 
 class EnableTrackingRequest(BaseModel):
-    """Request body for enabling daemon-side head tracking."""
+    """Request body for enabling daemon-side head tracking (see SetHeadTrackingCmd)."""
 
     weight: float = Field(default=1.0, ge=0.0, le=1.0)
+    mode: HeadTrackingMode = "continuous"
+    glance_interval_s: tuple[float, float] = (5.0, 30.0)
+    speaking_hold_s: float = Field(default=1.0, ge=0.0)
 
 
 @router.post("/play_sound")
@@ -174,8 +179,14 @@ async def enable_tracking(
     if backend is None or not backend.ready.is_set():
         raise HTTPException(status_code=503, detail="Backend not running")
 
-    weight = body.weight if body is not None else 1.0
-    enabled = backend.enable_head_tracking(weight=weight)
+    if body is None:
+        body = EnableTrackingRequest()
+    enabled = backend.enable_head_tracking(
+        weight=body.weight,
+        mode=body.mode,
+        glance_interval_s=body.glance_interval_s,
+        speaking_hold_s=body.speaking_hold_s,
+    )
     return {"status": "ok" if enabled else "unavailable", "enabled": enabled}
 
 

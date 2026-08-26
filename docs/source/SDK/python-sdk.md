@@ -59,7 +59,7 @@ with ReachyMini() as mini:
     mini.stop_head_tracking()
 ```
 
-`start_head_tracking(weight=...)` blends tracking with application motion: `1.0` lets tracking own the head, `0.0` pauses detection (freeing the head and CPU) without stopping the tracker, so applications can toggle it cheaply per turn. See the [Head Tracking example](../examples/head_tracking.md).
+`start_head_tracking(weight=...)` blends tracking with application motion: `1.0` lets tracking own the head, `0.0` pauses detection (freeing the head and CPU) without stopping the tracker, so applications can toggle it cheaply per turn. `mode=` selects when the robot re-aims: `"continuous"` (default) follows the face all the time, `"periodic"` glances at it every `glance_interval_s=(min, max)` seconds and holds in between, `"speaking"` follows it only while the robot is speaking (the daemon detects audio playback and speech offsets itself; `speaking_hold_s` tunes the hold after speech ends). Call it again to change the mode live. See the [Head Tracking example](../examples/head_tracking.md).
 
 ### IMU 🧭
 
