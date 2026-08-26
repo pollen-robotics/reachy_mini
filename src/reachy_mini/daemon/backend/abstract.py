@@ -358,7 +358,14 @@ class Backend:
         # angles published by the detector process. p sets responsiveness;
         # max_step is a hard per-tick velocity limit (~90 deg/s at 50 Hz).
         self._tracking_p = 0.15
-        self._tracking_max_step_rad = float(np.radians(1.8))
+        self._tracking_max_step_rad = float(np.radians(1.2))  # ~60 deg/s at 50 Hz
+        # Fresh targets are only adopted once the aim has (nearly) reached the
+        # previous one. A target is "head angles now + face offset in a frame
+        # ~150 ms old", so while the head is still swinging the offset is stale
+        # and the target lands past the face (overshoot). The first target of a
+        # move is computed with a static head and is accurate; later ones are
+        # accepted again once the head has settled.
+        self._tracking_settle_rad = float(np.radians(1.5))
         self._tracking_lost_timeout = 2.0
         self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
         self._tracking_aim_rpy: tuple[float, float, float] | None = None
@@ -733,6 +740,15 @@ class Backend:
         roll, pitch, yaw = R.from_matrix(pose[:3, :3]).as_euler("xyz")
         return (float(roll), float(pitch), float(yaw))
 
+    def _aim_settled(self) -> bool:
+        """Whether the aim has reached the current target (or there is none yet)."""
+        if self._tracking_aim_rpy is None or self._tracking_target_rpy is None:
+            return True
+        return all(
+            abs(math.remainder(target - aim, math.tau)) < self._tracking_settle_rad
+            for aim, target in zip(self._tracking_aim_rpy, self._tracking_target_rpy)
+        )
+
     def step_head_tracking(self) -> None:
         """Servo the aim one bounded step toward the latest target angles.
 
@@ -758,12 +774,13 @@ class Backend:
                 if target is not None and target.seq != self._tracking_seq:
                     self._tracking_seq = target.seq
                     if target.detected:
-                        roll, pitch, yaw = R.from_matrix(target.rotation).as_euler("xyz")
-                        self._tracking_target_rpy = (
-                            float(roll),
-                            float(pitch) + _TRACKING_PITCH_TRIM_RAD,
-                            float(yaw),
-                        )
+                        if self._aim_settled():
+                            roll, pitch, yaw = R.from_matrix(target.rotation).as_euler("xyz")
+                            self._tracking_target_rpy = (
+                                float(roll),
+                                float(pitch) + _TRACKING_PITCH_TRIM_RAD,
+                                float(yaw),
+                            )
                         self._tracking_weight = self._tracking_requested_weight
                         self._last_face_seen = now
                         self._face_target = FaceTarget(

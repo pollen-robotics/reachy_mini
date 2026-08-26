@@ -4,6 +4,7 @@ import time
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackend
@@ -289,3 +290,25 @@ def test_tracking_aim_pitches_down_by_the_trim() -> None:
     assert abs(roll) < 1e-9
     assert abs(pitch - np.radians(15.0)) < 1e-9
     assert abs(yaw - 0.2) < 1e-9
+
+
+def test_fresh_targets_wait_until_the_aim_has_settled() -> None:
+    """While the head is still swinging, stale-geometry targets are ignored."""
+    backend = _make_backend()
+    backend._tracking_enabled = True
+    tracker = DummyTracker(target=_detected_target(seq=1, yaw=0.4))
+    backend._tracker = tracker
+
+    backend.step_head_tracking()  # first target latched, aim starts moving
+    assert backend._tracking_target_rpy is not None
+    assert backend._tracking_target_rpy[2] == pytest.approx(0.4)
+
+    tracker.target = _detected_target(seq=2, yaw=0.6)
+    backend.step_head_tracking()  # aim far from 0.4: ignore the fresh target
+    assert backend._tracking_target_rpy[2] == pytest.approx(0.4)
+
+    for _ in range(200):  # let the servo converge
+        backend.step_head_tracking()
+    tracker.target = _detected_target(seq=3, yaw=0.6)
+    backend.step_head_tracking()  # settled: accept
+    assert backend._tracking_target_rpy[2] == pytest.approx(0.6)
