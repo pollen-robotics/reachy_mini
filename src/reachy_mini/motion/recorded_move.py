@@ -35,22 +35,22 @@ DEFAULT_DATASETS = [
 ]
 
 
-def preload_dataset(dataset_name: str) -> str | None:
-    """Pre-download a HuggingFace dataset to local cache.
+def dataset_token(dataset_name: str) -> str | bool | None:
+    """Return the credentials a dataset needs, sending none for public defaults."""
+    if dataset_name in DEFAULT_DATASETS:
+        return False
+    from reachy_mini.apps.sources.hf_auth import get_hf_token
 
-    This function downloads the dataset with network access, so it should be
-    called during daemon startup (not during playback) to avoid blocking.
+    return get_hf_token() or False
 
-    Args:
-        dataset_name: The HuggingFace dataset name (e.g., "pollen-robotics/reachy-mini-emotions-library")
 
-    Returns:
-        The local path to the cached dataset, or None if download failed.
-
-    """
+def preload_dataset(dataset_name: str, token: str | bool | None = None) -> str | None:
+    """Download a dataset into the local cache and return its path."""
     try:
         logger.info(f"Pre-downloading dataset: {dataset_name}")
-        local_path: str = snapshot_download(dataset_name, repo_type="dataset")
+        local_path: str = snapshot_download(
+            dataset_name, repo_type="dataset", token=token
+        )
         logger.info(f"Dataset {dataset_name} cached at: {local_path}")
         return local_path
     except Exception as e:
@@ -58,19 +58,13 @@ def preload_dataset(dataset_name: str) -> str | None:
         return None
 
 
-def preload_default_datasets() -> dict[str, str | None]:
-    """Pre-download all default recorded move datasets.
-
-    Should be called during daemon startup to ensure datasets are cached
-    before any playback requests.
-
-    Returns:
-        A dict mapping dataset names to their local paths (or None if failed).
-
-    """
+def preload_default_datasets(
+    token: str | bool | None = None,
+) -> dict[str, str | None]:
+    """Download the default recorded-move datasets into the local cache."""
     results = {}
     for dataset in DEFAULT_DATASETS:
-        results[dataset] = preload_dataset(dataset)
+        results[dataset] = preload_dataset(dataset, token=token)
     return results
 
 
@@ -173,7 +167,7 @@ class RecordedMoves:
     If not cached, falls back to network download (which may cause delays).
     """
 
-    def __init__(self, hf_dataset_name: str):
+    def __init__(self, hf_dataset_name: str, token: str | bool | None = None) -> None:
         """Initialize RecordedMoves."""
         self.hf_dataset_name = hf_dataset_name
         # Try local cache first (instant, no network)
@@ -182,6 +176,7 @@ class RecordedMoves:
                 self.hf_dataset_name,
                 repo_type="dataset",
                 local_files_only=True,
+                token=token,
             )
         except LocalEntryNotFoundError:
             # Fallback: download from network (slow, but ensures it works)
@@ -192,6 +187,7 @@ class RecordedMoves:
             self.local_path = snapshot_download(
                 self.hf_dataset_name,
                 repo_type="dataset",
+                token=token,
             )
         self.moves: Dict[str, Any] = {}
         self.sounds: Dict[str, Optional[Path]] = {}
