@@ -1,1 +1,1 @@
-{"id":"81f14c7f271de858af93b8b4c3135908","fullName":"tests.unit_tests.test_backend_process_command#test_delete_hf_token_ok","name":"test_delete_hf_token_ok","status":"passed","testResultsByEnv":{"default":"f1d92b92debaed67f30dc57995721325"}}
+{"id":"81f14c7f271de858af93b8b4c3135908","fullName":"tests.unit_tests.test_backend_process_command#test_delete_hf_token_ok","name":"test_delete_hf_token_ok","status":"passed","testResultsByEnv":{"default":"6b81df574d5a5568c34e945a45b3b7bc"}}

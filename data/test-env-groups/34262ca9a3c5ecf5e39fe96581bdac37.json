@@ -1,1 +1,1 @@
-{"id":"34262ca9a3c5ecf5e39fe96581bdac37","fullName":"tests.unit_tests.test_device_detection.TestFindVideoDevice#test_windows_reachy_camera","name":"test_windows_reachy_camera","status":"passed","testResultsByEnv":{"default":"e8a108e528d044f072e2034e7330d570"}}
+{"id":"34262ca9a3c5ecf5e39fe96581bdac37","fullName":"tests.unit_tests.test_device_detection.TestFindVideoDevice#test_windows_reachy_camera","name":"test_windows_reachy_camera","status":"passed","testResultsByEnv":{"default":"1a9ef9a01c36ea7b5021c34d24e325a2"}}

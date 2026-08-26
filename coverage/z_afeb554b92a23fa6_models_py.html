@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/reachy_mini/daemon/app/models.py: 74%</title>
+    <title>Coverage for src/reachy_mini/daemon/app/models.py: 84%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src<span class="sep">/</span>reachy_mini<span class="sep">/</span>daemon<span class="sep">/</span>app<span class="sep">/</span>models.py</b>:
-            <span class="pc_cov">74%</span>
+            <span class="pc_cov">84%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -54,9 +54,9 @@
             </div>
         </aside>
         <h2>
-            <span class="text">54 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">40<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">14<span class="text"> missing</span></button>
+            <span class="text">55 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">46<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">9<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_5f5ce02ad5e36bc1___init___py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-26 13:59 +0000
+            created at 2026-08-26 14:53 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -90,7 +90,7 @@
     <p class="run"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t"><span class="key">from</span> <span class="nam">pydantic</span> <span class="key">import</span> <span class="nam">BaseModel</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="key">from</span> <span class="nam">scipy</span><span class="op">.</span><span class="nam">spatial</span><span class="op">.</span><span class="nam">transform</span> <span class="key">import</span> <span class="nam">Rotation</span> <span class="key">as</span> <span class="nam">R</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t10" href="#t10">10</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t11" href="#t11">11</a></span><span class="t"><span class="key">from</span> <span class="nam">reachy_mini</span><span class="op">.</span><span class="nam">io</span><span class="op">.</span><span class="nam">protocol</span> <span class="key">import</span> <span class="nam">DoaSnapshot</span><span class="op">,</span> <span class="nam">MotorControlMode</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t11" href="#t11">11</a></span><span class="t"><span class="key">from</span> <span class="nam">reachy_mini</span><span class="op">.</span><span class="nam">io</span><span class="op">.</span><span class="nam">protocol</span> <span class="key">import</span> <span class="nam">DoaSnapshot</span><span class="op">,</span> <span class="nam">ImuData</span><span class="op">,</span> <span class="nam">MotorControlMode</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t12" href="#t12">12</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t13" href="#t13">13</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t"><span class="key">class</span> <span class="nam">Matrix4x4Pose</span><span class="op">(</span><span class="nam">BaseModel</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -160,19 +160,19 @@
     <p class="run"><span class="n"><a id="t78" href="#t78">78</a></span><span class="t">    <span class="op">@</span><span class="nam">classmethod</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t79" href="#t79">79</a></span><span class="t">    <span class="key">def</span> <span class="nam">from_pose_array</span><span class="op">(</span><span class="nam">cls</span><span class="op">,</span> <span class="nam">arr</span><span class="op">:</span> <span class="nam">NDArray</span><span class="op">[</span><span class="nam">np</span><span class="op">.</span><span class="nam">float64</span><span class="op">]</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="str">&quot;XYZRPYPose&quot;</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t80" href="#t80">80</a></span><span class="t">        <span class="str">&quot;&quot;&quot;Create an XYZRPYPose representation from a 4x4 pose array.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t81" href="#t81">81</a></span><span class="t">        <span class="key">assert</span> <span class="nam">arr</span><span class="op">.</span><span class="nam">shape</span> <span class="op">==</span> <span class="op">(</span><span class="num">4</span><span class="op">,</span> <span class="num">4</span><span class="op">)</span><span class="op">,</span> <span class="str">&quot;Array must be of shape (4, 4)&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t81" href="#t81">81</a></span><span class="t">        <span class="key">assert</span> <span class="nam">arr</span><span class="op">.</span><span class="nam">shape</span> <span class="op">==</span> <span class="op">(</span><span class="num">4</span><span class="op">,</span> <span class="num">4</span><span class="op">)</span><span class="op">,</span> <span class="str">&quot;Array must be of shape (4, 4)&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t82" href="#t82">82</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t83" href="#t83">83</a></span><span class="t">        <span class="nam">x</span><span class="op">,</span> <span class="nam">y</span><span class="op">,</span> <span class="nam">z</span> <span class="op">=</span> <span class="nam">arr</span><span class="op">[</span><span class="num">0</span><span class="op">,</span> <span class="num">3</span><span class="op">]</span><span class="op">,</span> <span class="nam">arr</span><span class="op">[</span><span class="num">1</span><span class="op">,</span> <span class="num">3</span><span class="op">]</span><span class="op">,</span> <span class="nam">arr</span><span class="op">[</span><span class="num">2</span><span class="op">,</span> <span class="num">3</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t84" href="#t84">84</a></span><span class="t">        <span class="nam">roll</span><span class="op">,</span> <span class="nam">pitch</span><span class="op">,</span> <span class="nam">yaw</span> <span class="op">=</span> <span class="nam">R</span><span class="op">.</span><span class="nam">from_matrix</span><span class="op">(</span><span class="nam">arr</span><span class="op">[</span><span class="op">:</span><span class="num">3</span><span class="op">,</span> <span class="op">:</span><span class="num">3</span><span class="op">]</span><span class="op">)</span><span class="op">.</span><span class="nam">as_euler</span><span class="op">(</span><span class="str">&quot;xyz&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t83" href="#t83">83</a></span><span class="t">        <span class="nam">x</span><span class="op">,</span> <span class="nam">y</span><span class="op">,</span> <span class="nam">z</span> <span class="op">=</span> <span class="nam">arr</span><span class="op">[</span><span class="num">0</span><span class="op">,</span> <span class="num">3</span><span class="op">]</span><span class="op">,</span> <span class="nam">arr</span><span class="op">[</span><span class="num">1</span><span class="op">,</span> <span class="num">3</span><span class="op">]</span><span class="op">,</span> <span class="nam">arr</span><span class="op">[</span><span class="num">2</span><span class="op">,</span> <span class="num">3</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t84" href="#t84">84</a></span><span class="t">        <span class="nam">roll</span><span class="op">,</span> <span class="nam">pitch</span><span class="op">,</span> <span class="nam">yaw</span> <span class="op">=</span> <span class="nam">R</span><span class="op">.</span><span class="nam">from_matrix</span><span class="op">(</span><span class="nam">arr</span><span class="op">[</span><span class="op">:</span><span class="num">3</span><span class="op">,</span> <span class="op">:</span><span class="num">3</span><span class="op">]</span><span class="op">)</span><span class="op">.</span><span class="nam">as_euler</span><span class="op">(</span><span class="str">&quot;xyz&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t85" href="#t85">85</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t86" href="#t86">86</a></span><span class="t">        <span class="key">return</span> <span class="nam">cls</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t87" href="#t87">87</a></span><span class="t">            <span class="nam">x</span><span class="op">=</span><span class="nam">x</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t88" href="#t88">88</a></span><span class="t">            <span class="nam">y</span><span class="op">=</span><span class="nam">y</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t89" href="#t89">89</a></span><span class="t">            <span class="nam">z</span><span class="op">=</span><span class="nam">z</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t90" href="#t90">90</a></span><span class="t">            <span class="nam">roll</span><span class="op">=</span><span class="nam">roll</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t91" href="#t91">91</a></span><span class="t">            <span class="nam">pitch</span><span class="op">=</span><span class="nam">pitch</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t92" href="#t92">92</a></span><span class="t">            <span class="nam">yaw</span><span class="op">=</span><span class="nam">yaw</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t93" href="#t93">93</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t86" href="#t86">86</a></span><span class="t">        <span class="key">return</span> <span class="nam">cls</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t87" href="#t87">87</a></span><span class="t">            <span class="nam">x</span><span class="op">=</span><span class="nam">x</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t88" href="#t88">88</a></span><span class="t">            <span class="nam">y</span><span class="op">=</span><span class="nam">y</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t89" href="#t89">89</a></span><span class="t">            <span class="nam">z</span><span class="op">=</span><span class="nam">z</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t90" href="#t90">90</a></span><span class="t">            <span class="nam">roll</span><span class="op">=</span><span class="nam">roll</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t91" href="#t91">91</a></span><span class="t">            <span class="nam">pitch</span><span class="op">=</span><span class="nam">pitch</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t92" href="#t92">92</a></span><span class="t">            <span class="nam">yaw</span><span class="op">=</span><span class="nam">yaw</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t93" href="#t93">93</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t94" href="#t94">94</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t95" href="#t95">95</a></span><span class="t">    <span class="key">def</span> <span class="nam">to_pose_array</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">NDArray</span><span class="op">[</span><span class="nam">np</span><span class="op">.</span><span class="nam">float64</span><span class="op">]</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t96" href="#t96">96</a></span><span class="t">        <span class="str">&quot;&quot;&quot;Convert the XYZRPYPose to a 4x4 numpy array.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
@@ -188,11 +188,11 @@
     <p class="pln"><span class="n"><a id="t106" href="#t106">106</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t107" href="#t107">107</a></span><span class="t"><span class="key">def</span> <span class="nam">as_any_pose</span><span class="op">(</span><span class="nam">pose</span><span class="op">:</span> <span class="nam">NDArray</span><span class="op">[</span><span class="nam">np</span><span class="op">.</span><span class="nam">float64</span><span class="op">]</span><span class="op">,</span> <span class="nam">use_matrix</span><span class="op">:</span> <span class="nam">bool</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">AnyPose</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t108" href="#t108">108</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Convert a numpy array to an AnyPose representation.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t109" href="#t109">109</a></span><span class="t">    <span class="key">return</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t110" href="#t110">110</a></span><span class="t">        <span class="nam">Matrix4x4Pose</span><span class="op">.</span><span class="nam">from_pose_array</span><span class="op">(</span><span class="nam">pose</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t111" href="#t111">111</a></span><span class="t">        <span class="key">if</span> <span class="nam">use_matrix</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t112" href="#t112">112</a></span><span class="t">        <span class="key">else</span> <span class="nam">XYZRPYPose</span><span class="op">.</span><span class="nam">from_pose_array</span><span class="op">(</span><span class="nam">pose</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t113" href="#t113">113</a></span><span class="t">    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t109" href="#t109">109</a></span><span class="t">    <span class="key">return</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t110" href="#t110">110</a></span><span class="t">        <span class="nam">Matrix4x4Pose</span><span class="op">.</span><span class="nam">from_pose_array</span><span class="op">(</span><span class="nam">pose</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t111" href="#t111">111</a></span><span class="t">        <span class="key">if</span> <span class="nam">use_matrix</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t112" href="#t112">112</a></span><span class="t">        <span class="key">else</span> <span class="nam">XYZRPYPose</span><span class="op">.</span><span class="nam">from_pose_array</span><span class="op">(</span><span class="nam">pose</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t113" href="#t113">113</a></span><span class="t">    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t114" href="#t114">114</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t115" href="#t115">115</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t116" href="#t116">116</a></span><span class="t"><span class="key">class</span> <span class="nam">FullBodyTarget</span><span class="op">(</span><span class="nam">BaseModel</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -239,6 +239,7 @@
     <p class="run"><span class="n"><a id="t157" href="#t157">157</a></span><span class="t">    <span class="nam">timestamp</span><span class="op">:</span> <span class="nam">datetime</span> <span class="op">|</span> <span class="key">None</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t158" href="#t158">158</a></span><span class="t">    <span class="nam">passive_joints</span><span class="op">:</span> <span class="nam">list</span><span class="op">[</span><span class="nam">float</span><span class="op">]</span> <span class="op">|</span> <span class="key">None</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t159" href="#t159">159</a></span><span class="t">    <span class="nam">doa</span><span class="op">:</span> <span class="nam">DoAInfo</span> <span class="op">|</span> <span class="key">None</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t160" href="#t160">160</a></span><span class="t">    <span class="nam">imu</span><span class="op">:</span> <span class="nam">ImuData</span> <span class="op">|</span> <span class="key">None</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -248,7 +249,7 @@
             <a class="nav" href="z_5f5ce02ad5e36bc1___init___py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-26 13:59 +0000
+            created at 2026-08-26 14:53 +0000
         </p>
     </div>
 </footer>

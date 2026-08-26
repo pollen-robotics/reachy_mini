@@ -1,1 +1,1 @@
-{"id":"9dde56d440b244543fd69e3f68ceb48c","fullName":"tests.unit_tests.test_app_metadata#test_get_card_data_returns_dict","name":"test_get_card_data_returns_dict","status":"passed","testResultsByEnv":{"default":"e772096e4b060602b82009f3e07d2217"}}
+{"id":"9dde56d440b244543fd69e3f68ceb48c","fullName":"tests.unit_tests.test_app_metadata#test_get_card_data_returns_dict","name":"test_get_card_data_returns_dict","status":"passed","testResultsByEnv":{"default":"1509f0fb3f64255a43a93d9901ffeb14"}}

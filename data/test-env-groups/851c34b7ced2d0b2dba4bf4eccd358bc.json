@@ -1,1 +1,1 @@
-{"id":"851c34b7ced2d0b2dba4bf4eccd358bc","fullName":"tests.unit_tests.test_autostart_app#test_remove_other_app_keeps_startup_app","name":"test_remove_other_app_keeps_startup_app","status":"passed","testResultsByEnv":{"default":"33679f431412aeba1fb46db330a14053"}}
+{"id":"851c34b7ced2d0b2dba4bf4eccd358bc","fullName":"tests.unit_tests.test_autostart_app#test_remove_other_app_keeps_startup_app","name":"test_remove_other_app_keeps_startup_app","status":"passed","testResultsByEnv":{"default":"18e1e0dcde6cca2b72489ec3f8c3186f"}}
