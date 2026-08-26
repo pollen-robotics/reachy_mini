@@ -112,6 +112,7 @@ from aiortc.sdp import candidate_from_sdp
 from pydantic import BaseModel
 
 from reachy_mini.io.protocol import AnyCommand
+from reachy_mini.utils.proxy import proxy_for
 
 logger = logging.getLogger(__name__)
 
@@ -397,9 +398,11 @@ class ReachyCentralConsumer:
         if self._task is not None and not self._task.done():
             return
         self._stopping = False
-        # trust_env=True honours HTTP_PROXY/HTTPS_PROXY/NO_PROXY; aiohttp ignores
-        # them otherwise.
-        self._http = aiohttp.ClientSession(trust_env=True)
+        # Explicit proxy resolution (HTTP_PROXY/HTTPS_PROXY/NO_PROXY) is done
+        # per request via utils.proxy.proxy_for — deliberately NOT
+        # trust_env=True, which would also read ~/.netrc and break the
+        # Authorization-header requests below (see utils/proxy.py).
+        self._http = aiohttp.ClientSession()
         self._task = asyncio.create_task(self._run_forever(), name="reachy-consumer")
 
     async def stop(self) -> None:
@@ -454,7 +457,9 @@ class ReachyCentralConsumer:
         # No total timeout (long-lived); sock_read covers stalls.
         timeout = aiohttp.ClientTimeout(total=None, sock_read=60.0)
         assert self._http is not None
-        async with self._http.get(url, headers=headers, timeout=timeout) as resp:
+        async with self._http.get(
+            url, headers=headers, timeout=timeout, proxy=proxy_for(url)
+        ) as resp:
             if resp.status != 200:
                 txt = (await resp.text())[:200]
                 raise RuntimeError(f"SSE /events HTTP {resp.status}: {txt!r}")
@@ -693,6 +698,7 @@ class ReachyCentralConsumer:
             url,
             headers=headers,
             timeout=aiohttp.ClientTimeout(total=10.0),
+            proxy=proxy_for(url),
         ) as resp:
             resp.raise_for_status()
             payload = await resp.json()
@@ -768,6 +774,7 @@ class ReachyCentralConsumer:
                 headers=headers,
                 json=body,
                 timeout=timeout,
+                proxy=proxy_for(url),
             ) as resp:
                 if resp.status != 200:
                     txt = (await resp.text())[:200]
