@@ -231,10 +231,7 @@ def test_set_head_tracking_enabled_available(sim_backend: Any) -> None:
     sim_backend.enable_head_tracking = Mock(return_value=True)
     responses = _dispatch(sim_backend, SetHeadTrackingCmd(enabled=True, weight=0.5))
     sim_backend.enable_head_tracking.assert_called_once_with(
-        weight=0.5,
-        mode="continuous",
-        glance_interval_s=(5.0, 30.0),
-        speaking_hold_s=1.0,
+        weight=0.5, mode=None, glance_interval_s=None, speaking_hold_s=None
     )
     assert responses == [
         {"status": "ok", "command": "set_head_tracking", "enabled": True}
@@ -448,9 +445,7 @@ def test_get_imu_data_cache_freshness() -> None:
 # ------------------------------------------------------------------
 
 
-def test_delete_hf_token_ok(
-    sim_backend: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_delete_hf_token_ok(sim_backend: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """A successful delete_hf_token acks status ok."""
     import reachy_mini.apps.sources.hf_auth as hf_auth
 
@@ -614,7 +609,9 @@ def test_apply_audio_config_ok(
         config=[AudioParamPair(name="AGCGAIN", values=[1.0])], verify=False
     )
     responses = _dispatch(sim_backend, cmd)
-    respeaker.apply_audio_config.assert_called_once_with([("AGCGAIN", [1.0])], verify=False)
+    respeaker.apply_audio_config.assert_called_once_with(
+        [("AGCGAIN", [1.0])], verify=False
+    )
     respeaker.close.assert_called_once()
     assert responses == [
         {"status": "ok", "command": "apply_audio_config", "applied": True}

@@ -701,26 +701,30 @@ class Backend:
     def enable_head_tracking(
         self,
         weight: float = 1.0,
-        mode: HeadTrackingMode = "continuous",
-        glance_interval_s: tuple[float, float] = (5.0, 30.0),
-        speaking_hold_s: float = 1.0,
+        mode: HeadTrackingMode | None = None,
+        glance_interval_s: tuple[float, float] | None = None,
+        speaking_hold_s: float | None = None,
     ) -> bool:
         """Enable head tracking; ``weight`` 0 pauses the worker without stopping it.
 
         ``mode`` and its tunables select when the aim follows the face (see
         ``SetHeadTrackingCmd``); calling again while enabled changes them live.
+        ``None`` keeps the current setting, so weight-only calls (an app pausing
+        tracking between turns) never reset the policy.
         """
         with self._tracking_lock:
             self._tracking_requested_weight = min(max(float(weight), 0.0), 1.0)
-            if mode != self._tracking_mode:
+            if mode is not None and mode != self._tracking_mode:
                 # A mode change re-aims once right away, then applies the new policy.
                 self._tracking_next_glance_at = None
-            self._tracking_mode = mode
-            self._tracking_glance_interval_s = (
-                float(glance_interval_s[0]),
-                float(glance_interval_s[1]),
-            )
-            self._tracking_speaking_hold_s = max(0.0, float(speaking_hold_s))
+                self._tracking_mode = mode
+            if glance_interval_s is not None:
+                self._tracking_glance_interval_s = (
+                    float(glance_interval_s[0]),
+                    float(glance_interval_s[1]),
+                )
+            if speaking_hold_s is not None:
+                self._tracking_speaking_hold_s = max(0.0, float(speaking_hold_s))
             if self._media_server is None:
                 self.logger.warning("Cannot enable head tracking: no camera available")
                 return False

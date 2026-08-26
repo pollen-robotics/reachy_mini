@@ -472,20 +472,23 @@ class SetHeadTrackingCmd(BaseModel):
       ``speaking_hold_s``), hold otherwise.
 
     Sending the command again while enabled changes the mode and tunables live.
+    Fields left at ``None`` keep the daemon's current setting, so an app that
+    only toggles ``weight`` never resets the policy someone else configured.
     """
 
     type: Literal["set_head_tracking"] = "set_head_tracking"
     enabled: bool
     weight: float = Field(default=1.0, ge=0.0, le=1.0)
-    mode: HeadTrackingMode = "continuous"
-    glance_interval_s: tuple[float, float] = (5.0, 30.0)
-    speaking_hold_s: float = Field(default=1.0, ge=0.0)
+    mode: HeadTrackingMode | None = None
+    glance_interval_s: tuple[float, float] | None = None
+    speaking_hold_s: float | None = Field(default=None, ge=0.0)
 
     @model_validator(mode="after")
     def _check_glance_interval(self) -> "SetHeadTrackingCmd":
-        low, high = self.glance_interval_s
-        if low <= 0.0 or high < low:
-            raise ValueError("glance_interval_s must satisfy 0 < min <= max")
+        if self.glance_interval_s is not None:
+            low, high = self.glance_interval_s
+            if low <= 0.0 or high < low:
+                raise ValueError("glance_interval_s must satisfy 0 < min <= max")
         return self
 
 

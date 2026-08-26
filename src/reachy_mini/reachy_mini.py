@@ -284,9 +284,9 @@ class ReachyMini:
     def start_head_tracking(
         self,
         weight: float = 1.0,
-        mode: HeadTrackingMode = "continuous",
-        glance_interval_s: tuple[float, float] = (5.0, 30.0),
-        speaking_hold_s: float = 1.0,
+        mode: HeadTrackingMode | None = None,
+        glance_interval_s: tuple[float, float] | None = None,
+        speaking_hold_s: float | None = None,
     ) -> None:
         """Enable daemon-side visual head tracking.
 
@@ -302,11 +302,13 @@ class ReachyMini:
                 while the robot is speaking (audio playing or speech offsets
                 moving within the last ``speaking_hold_s``) and holds otherwise.
                 The daemon decides on its own; call again to change the mode or
-                its tunables live.
+                its tunables live. ``None`` (default) keeps the daemon's current
+                mode, so calls that only change ``weight`` never reset it.
             glance_interval_s: ``(min, max)`` seconds between glances in
-                ``"periodic"`` mode.
+                ``"periodic"`` mode (daemon default 5-30 s); ``None`` keeps it.
             speaking_hold_s: Seconds after the last audio or speech activity
-                during which the robot still counts as speaking.
+                during which the robot still counts as speaking (daemon default
+                1 s); ``None`` keeps it.
 
         """
         self.client.send_command(

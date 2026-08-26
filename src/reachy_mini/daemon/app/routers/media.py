@@ -74,9 +74,9 @@ class EnableTrackingRequest(BaseModel):
     """Request body for enabling daemon-side head tracking (see SetHeadTrackingCmd)."""
 
     weight: float = Field(default=1.0, ge=0.0, le=1.0)
-    mode: HeadTrackingMode = "continuous"
-    glance_interval_s: tuple[float, float] = (5.0, 30.0)
-    speaking_hold_s: float = Field(default=1.0, ge=0.0)
+    mode: HeadTrackingMode | None = None
+    glance_interval_s: tuple[float, float] | None = None
+    speaking_hold_s: float | None = Field(default=None, ge=0.0)
 
 
 @router.post("/play_sound")
