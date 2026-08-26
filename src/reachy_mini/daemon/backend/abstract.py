@@ -365,13 +365,22 @@ class Backend:
         # target mailbox fresh in every mode; the mode only decides when the
         # daemon latches a fresh target as its aim.
         self._tracking_mode: HeadTrackingMode = "continuous"
-        # A glance = follow the face for glance_duration_s, then pause for a
-        # random delay in the mode's [min, max] range before the next one.
+        # A glance = follow the face for the mode's glance duration, then pause
+        # (look away / hold) for a random delay in the mode's [min, max] range.
+        # Speaking defaults follow the human speaker-gaze model of Andrist et
+        # al. (HRI 2014): gaze aversions of ~2 s every ~4.75 s, i.e. on the
+        # listener's face ~60% of the time. Periodic is the idle "glance now
+        # and then" mode. Nothing moves while the robot listens: motor noise
+        # degrades the microphones, which outweighs the (well documented)
+        # human tendency to look most while listening.
         self._tracking_glance_interval_s: dict[str, tuple[float, float]] = {
             "periodic": (5.0, 30.0),
-            "speaking": (3.0, 10.0),
+            "speaking": (1.5, 2.5),
         }
-        self._tracking_glance_duration_s = 1.0
+        self._tracking_glance_duration_s: dict[str, float] = {
+            "periodic": 1.0,
+            "speaking": 2.8,
+        }
         self._tracking_speaking_hold_s = 1.0
         self._tracking_next_glance_at: float | None = None
         self._tracking_glance_until: float | None = None
@@ -732,8 +741,10 @@ class Backend:
                     float(glance_interval_s[0]),
                     float(glance_interval_s[1]),
                 )
-            if glance_duration_s is not None:
-                self._tracking_glance_duration_s = max(0.0, float(glance_duration_s))
+            if glance_duration_s is not None and self._tracking_mode != "continuous":
+                self._tracking_glance_duration_s[self._tracking_mode] = max(
+                    0.0, float(glance_duration_s)
+                )
             if speaking_hold_s is not None:
                 self._tracking_speaking_hold_s = max(0.0, float(speaking_hold_s))
             if self._media_server is None:
@@ -830,7 +841,8 @@ class Backend:
         low, high = self._tracking_glance_interval_s.get(
             self._tracking_mode, (5.0, 30.0)
         )
-        self._tracking_glance_until = now + self._tracking_glance_duration_s
+        duration = self._tracking_glance_duration_s.get(self._tracking_mode, 1.0)
+        self._tracking_glance_until = now + duration
         self._tracking_next_glance_at = (
             self._tracking_glance_until + self._tracking_rng.uniform(low, high)
         )

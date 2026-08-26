@@ -465,16 +465,20 @@ class SetHeadTrackingCmd(BaseModel):
     target is adopted:
 
     - ``continuous``: follow the face all the time (default).
-    - ``periodic``: glance at the face (follow it for ``glance_duration_s``)
-      once every ``glance_interval_s`` (a random pause drawn from the
-      ``[min, max]`` range, default 5-30 s), hold in between.
+    - ``periodic``: glance at the face (follow it for ``glance_duration_s``,
+      default 1 s) once every ``glance_interval_s`` (a random pause drawn from
+      the ``[min, max]`` range, default 5-30 s), hold in between.
     - ``speaking``: while the robot is speaking (audio leaving the speaker,
       speech offsets moving, or the app's declared turn state, within the last
-      ``speaking_hold_s``), glance at the face for ``glance_duration_s`` then
-      pause for a random ``glance_interval_s`` (default 3-10 s) and repeat,
-      opening each utterance with a glance; hold whenever silent.
+      ``speaking_hold_s``), follow the face for ``glance_duration_s`` (default
+      2.8 s) then look away for a random ``glance_interval_s`` (default
+      1.5-2.5 s) and repeat, opening each utterance on the face; hold
+      whenever silent. The defaults follow the human speaker-gaze model of
+      Andrist et al. (HRI 2014). The head deliberately stays still while the
+      robot listens: motor noise degrades its microphones.
 
-    ``glance_interval_s`` applies to the mode being set (or the current mode).
+    ``glance_interval_s`` and ``glance_duration_s`` apply to the mode being
+    set (or the current mode).
 
     Sending the command again while enabled changes the mode and tunables live.
     Fields left at ``None`` keep the daemon's current setting, so an app that

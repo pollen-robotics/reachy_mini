@@ -298,20 +298,24 @@ class ReachyMini:
                 head and CPU) without tearing the tracker down, for cheap on/off.
             mode: When the daemon re-aims at the face. ``"continuous"`` follows
                 it all the time. ``"periodic"`` glances at it (follows for
-                ``glance_duration_s``) once every ``glance_interval_s`` (a random
-                pause in the ``(min, max)`` range, default 5-30 s) and holds in
-                between. ``"speaking"`` does the same glance cycle only while the
-                robot is speaking (audio playing, speech offsets moving, or the
-                app's declared turn state, within the last ``speaking_hold_s``;
-                default pause 3-10 s), opening each utterance with a glance, and
-                holds whenever silent. The daemon decides on its own; call again
+                ``glance_duration_s``, default 1 s) once every ``glance_interval_s``
+                (a random pause in the ``(min, max)`` range, default 5-30 s) and
+                holds in between. ``"speaking"`` follows the face for
+                ``glance_duration_s`` (default 2.8 s), looks away for a random
+                ``glance_interval_s`` (default 1.5-2.5 s) and repeats, only while
+                the robot is speaking (audio playing, speech offsets moving, or
+                the app's declared turn state, within the last ``speaking_hold_s``),
+                opening each utterance on the face; it holds still whenever
+                silent so motor noise never degrades the microphones while the
+                robot listens. The daemon decides on its own; call again
                 to change the mode or its tunables live. ``None`` (default) keeps
                 the daemon's current mode, so calls that only change ``weight``
                 never reset it.
             glance_interval_s: ``(min, max)`` seconds of pause between glances
                 for the mode being set; ``None`` keeps it.
-            glance_duration_s: How long a glance follows the face (daemon
-                default 1 s); ``None`` keeps it.
+            glance_duration_s: How long a glance follows the face, for the mode
+                being set (daemon defaults 1 s periodic, 2.8 s speaking);
+                ``None`` keeps it.
             speaking_hold_s: Seconds after the last audio or speech activity
                 during which the robot still counts as speaking (daemon default
                 1 s); ``None`` keeps it.

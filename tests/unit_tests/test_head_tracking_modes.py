@@ -137,6 +137,7 @@ def _speaking_backend(monkeypatch: pytest.MonkeyPatch, **fields: object) -> tupl
         "speaking",
         _tracking_speaking_hold_s=1.0,
         _tracking_glance_interval_s={"periodic": (5.0, 30.0), "speaking": (5.0, 5.0)},
+        _tracking_glance_duration_s={"periodic": 1.0, "speaking": 1.0},
         **fields,
     )
 
@@ -269,8 +270,9 @@ def test_enable_head_tracking_applies_mode_and_resets_the_glance_schedule() -> N
 
     assert backend._tracking_mode == "periodic"
     assert backend._tracking_glance_interval_s["periodic"] == (3.0, 4.0)
-    assert backend._tracking_glance_interval_s["speaking"] == (3.0, 10.0)  # untouched
-    assert backend._tracking_glance_duration_s == 0.5
+    assert backend._tracking_glance_interval_s["speaking"] == (1.5, 2.5)  # untouched
+    assert backend._tracking_glance_duration_s["periodic"] == 0.5
+    assert backend._tracking_glance_duration_s["speaking"] == 2.8  # untouched
     assert backend._tracking_speaking_hold_s == 2.0
     assert backend._tracking_next_glance_at is None
 
@@ -324,3 +326,12 @@ def test_set_head_tracking_cmd_defaults_and_validation() -> None:
         SetHeadTrackingCmd(enabled=True, glance_interval_s=(0.0, 5.0))
     with pytest.raises(ValidationError):
         SetHeadTrackingCmd(enabled=True, glance_duration_s=0.0)
+
+
+def test_speaking_defaults_follow_the_literature() -> None:
+    """Speaking mode defaults: ~2.8 s on the face, 1.5-2.5 s away (Andrist 2014)."""
+    backend = MockupSimBackend(use_audio=False)
+    assert backend._tracking_glance_duration_s["speaking"] == 2.8
+    assert backend._tracking_glance_interval_s["speaking"] == (1.5, 2.5)
+    assert backend._tracking_glance_duration_s["periodic"] == 1.0
+    assert backend._tracking_glance_interval_s["periodic"] == (5.0, 30.0)
