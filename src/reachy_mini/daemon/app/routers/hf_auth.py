@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from reachy_mini.apps.sources import hf_auth
 from reachy_mini.media.central_signaling_relay import CENTRAL_SIGNALING_SERVER
+from reachy_mini.utils.proxy import proxy_for
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +167,9 @@ async def get_central_robot_status() -> dict[str, Any]:
         return {"available": False, "robots": [], "reason": "not_authenticated"}
 
     try:
+        # Explicit proxy resolution (HTTP_PROXY/HTTPS_PROXY/NO_PROXY) —
+        # deliberately NOT trust_env=True, which would also read ~/.netrc
+        # and break Authorization-header requests (see utils/proxy.py).
         async with aiohttp.ClientSession(
             timeout=CENTRAL_ROBOT_STATUS_TIMEOUT
         ) as session:
@@ -178,6 +182,7 @@ async def get_central_robot_status() -> dict[str, Any]:
             async with session.get(
                 CENTRAL_ROBOT_STATUS_URL,
                 headers={"Authorization": f"Bearer {token}"},
+                proxy=proxy_for(CENTRAL_ROBOT_STATUS_URL),
             ) as response:
                 if response.status == 200:
                     data = await response.json()

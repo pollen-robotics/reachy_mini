@@ -8,6 +8,8 @@ from pathlib import Path
 
 import aiohttp
 
+from reachy_mini.utils.proxy import proxy_for
+
 from .. import AppInfo
 
 HF_SPACES_API_URL = "https://huggingface.co/api/spaces"
@@ -150,9 +152,14 @@ async def get_space_latest_sha(
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
+    # Explicit proxy resolution (HTTP_PROXY/HTTPS_PROXY/NO_PROXY) —
+    # deliberately NOT trust_env=True, which would also read ~/.netrc
+    # and break Authorization-header requests (see utils/proxy.py).
     async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
         try:
-            async with session.get(url, headers=headers) as response:
+            async with session.get(
+                url, headers=headers, proxy=proxy_for(url)
+            ) as response:
                 if response.status == 200:
                     data = await response.json()
                     return data.get("sha"), data.get("lastModified")
