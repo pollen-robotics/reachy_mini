@@ -1,1 +1,1 @@
-{"id":"45955d07e513acce184d6bbdd292f114","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_start_forwards_pre_release_flag","name":"test_update_start_forwards_pre_release_flag","status":"passed","testResultsByEnv":{"default":"d9e91674e52b4fc408f0688a45fd0a88"}}
+{"id":"45955d07e513acce184d6bbdd292f114","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_start_forwards_pre_release_flag","name":"test_update_start_forwards_pre_release_flag","status":"passed","testResultsByEnv":{"default":"3bf77a8e35d9abfd91ab806188c7a4bb"}}

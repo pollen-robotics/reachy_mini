@@ -1,1 +1,1 @@
-{"id":"776fd24a483ed63721401e39caaf45b5","fullName":"tests.unit_tests.test_app_metadata#test_get_string_returns_string_values","name":"test_get_string_returns_string_values","status":"passed","testResultsByEnv":{"default":"6f783399ef738afc09e475c5fcc0ab03"}}
+{"id":"776fd24a483ed63721401e39caaf45b5","fullName":"tests.unit_tests.test_app_metadata#test_get_string_returns_string_values","name":"test_get_string_returns_string_values","status":"passed","testResultsByEnv":{"default":"52ebf8144bde69c387520192e380592c"}}
