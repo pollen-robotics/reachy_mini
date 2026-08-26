@@ -12,6 +12,7 @@ from reachy_mini.io.protocol import (
     SetHeadTrackingCmd,
     command_adapter,
 )
+from reachy_mini.vision.face_tracking import TrackingTarget
 
 
 class DummyKinematics:
@@ -30,11 +31,13 @@ class DummyKinematics:
 class DummyTracker:
     """Spy standing in for the face tracker."""
 
-    def __init__(self) -> None:
-        """Initialize spy state."""
+    def __init__(self, target: TrackingTarget | None = None) -> None:
+        """Initialize spy state, optionally with a canned target."""
         self.started = False
         self.stopped = False
         self.active_calls: list[bool] = []
+        self.published_poses: list[tuple[float, float, float]] = []
+        self.target = target
 
     def start(self, camera_specs: object) -> None:
         """Record that the tracker was started."""
@@ -44,9 +47,13 @@ class DummyTracker:
         """Record pause/resume toggles."""
         self.active_calls.append(active)
 
-    def latest(self) -> None:
-        """Report no observation."""
-        return None
+    def publish_head_pose(self, roll: float, pitch: float, yaw: float) -> None:
+        """Record the head pose shared with the detector."""
+        self.published_poses.append((roll, pitch, yaw))
+
+    def latest(self) -> TrackingTarget | None:
+        """Report the canned target."""
+        return self.target
 
     def stop(self) -> None:
         """Record that the tracker was stopped."""
@@ -57,6 +64,19 @@ def _make_backend() -> MockupSimBackend:
     backend = MockupSimBackend(use_audio=False)
     backend.current_head_pose = np.eye(4, dtype=np.float64)
     return backend
+
+
+def _detected_target(seq: int = 1, yaw: float = 0.0) -> TrackingTarget:
+    return TrackingTarget(
+        seq=seq,
+        detected=True,
+        roll=0.0,
+        pitch=0.0,
+        yaw=yaw,
+        x=0.25,
+        y=-0.5,
+        face_roll=0.1,
+    )
 
 
 def test_set_head_tracking_command_toggles_tracking() -> None:
@@ -97,57 +117,67 @@ def test_set_head_tracking_command_toggles_tracking() -> None:
 
 
 def test_get_tracked_face_command_returns_latest_face() -> None:
-    """The query command returns the latest normalized face target."""
+    """The query command returns the latest normalized face telemetry."""
     backend = _make_backend()
     backend._tracking_enabled = True
-    backend.set_tracking_face(
-        center=(0.25, -0.5),
-        roll=0.1,
-        width=640,
-        height=480,
-        camera_matrix=np.array(
-            [[640.0, 0.0, 320.0], [0.0, 640.0, 240.0], [0.0, 0.0, 1.0]],
-            dtype=np.float64,
-        ),
-        distortion=np.zeros(5, dtype=np.float64),
-        timestamp=123.0,
-    )
+    backend._tracker = DummyTracker(target=_detected_target())
+
+    backend.step_head_tracking()
 
     responses: list[dict[str, object]] = []
     backend.process_command(GetTrackedFaceCmd(), send_response=responses.append)
 
-    assert responses == [
-        {
-            "command": "get_tracked_face",
-            "face_target": {
-                "detected": True,
-                "x": 0.25,
-                "y": -0.5,
-                "roll": 0.1,
-                "ts": 123.0,
-            },
-        }
-    ]
+    face_target = responses[0]["face_target"]
+    assert isinstance(face_target, dict)
+    assert face_target["detected"] is True
+    assert face_target["x"] == 0.25
+    assert face_target["y"] == -0.5
+    assert face_target["roll"] == 0.1
+    assert face_target["ts"] is not None
 
 
-def test_step_head_tracking_eases_toward_target() -> None:
-    """The commanded aim glides toward the latched target rather than snapping."""
+def test_step_head_tracking_publishes_head_pose_to_detector() -> None:
+    """Each tracking step shares the current head angles with the detector."""
     backend = _make_backend()
     backend._tracking_enabled = True
-    target = np.eye(4, dtype=np.float64)
-    target[:3, :3] = R.from_euler("z", 0.5).as_matrix()
-    backend._tracking_target_pose = target
-    full = np.linalg.norm(R.from_matrix(target[:3, :3]).as_rotvec())
+    tracker = DummyTracker()
+    backend._tracker = tracker
 
     backend.step_head_tracking()
-    assert backend._tracking_aim is not None
-    angle1 = np.linalg.norm(R.from_matrix(backend._tracking_aim[:3, :3]).as_rotvec())
-    assert 0.0 < angle1 < full
+
+    assert tracker.published_poses == [(0.0, 0.0, 0.0)]
+
+
+def test_step_head_tracking_servos_toward_target_angles() -> None:
+    """The aim converges toward the target with a proportional step per tick."""
+    backend = _make_backend()
+    backend._tracking_enabled = True
+    backend._tracking_target_rpy = (0.0, 0.0, 0.05)
 
     backend.step_head_tracking()
-    angle2 = np.linalg.norm(R.from_matrix(backend._tracking_aim[:3, :3]).as_rotvec())
-    assert angle1 < angle2 < full
+    assert backend._tracking_aim_rpy is not None
+    first_yaw = backend._tracking_aim_rpy[2]
+    assert first_yaw == backend._tracking_p * 0.05  # unclamped proportional step
+
+    backend.step_head_tracking()
+    second_yaw = backend._tracking_aim_rpy[2]
+    assert first_yaw < second_yaw < 0.05
     assert backend.ik_required is True
+    assert backend._tracking_aim is not None
+    aim_yaw = float(R.from_matrix(backend._tracking_aim[:3, :3]).as_euler("xyz")[2])
+    assert aim_yaw == second_yaw
+
+
+def test_step_head_tracking_trims_large_jumps() -> None:
+    """A distant target moves the aim at most max_step per tick (velocity limit)."""
+    backend = _make_backend()
+    backend._tracking_enabled = True
+    backend._tracking_target_rpy = (0.0, 0.0, 1.0)
+
+    backend.step_head_tracking()
+
+    assert backend._tracking_aim_rpy is not None
+    assert backend._tracking_aim_rpy[2] == backend._tracking_max_step_rad
 
 
 def test_tracking_blend_respects_zero_and_full_weight() -> None:
@@ -200,36 +230,37 @@ def test_tracking_face_loss_holds_last_target() -> None:
     """A transient face loss holds the target so the head doesn't lurch to neutral."""
     backend = _make_backend()
     backend._tracking_enabled = True
-    target = np.eye(4, dtype=np.float64)
-    backend._tracking_target_pose = target
-
-    backend.set_tracking_face(
-        center=None,
-        roll=None,
-        width=640,
-        height=480,
-        camera_matrix=np.eye(3, dtype=np.float64),
-        distortion=np.zeros(5, dtype=np.float64),
-        timestamp=10.0,
+    backend._tracking_target_rpy = (0.0, 0.0, 0.4)
+    backend._last_face_seen = time.monotonic()
+    backend._tracker = DummyTracker(
+        target=TrackingTarget(
+            seq=5,
+            detected=False,
+            roll=0.0,
+            pitch=0.0,
+            yaw=0.0,
+            x=None,
+            y=None,
+            face_roll=None,
+        )
     )
 
+    backend.step_head_tracking()
+
     assert backend.get_tracked_face().detected is False
-    assert backend._tracking_target_pose is target
+    assert backend._tracking_target_rpy == (0.0, 0.0, 0.4)
 
 
 def test_tracking_sustained_loss_recenters_to_neutral() -> None:
-    """After the lost timeout the aim target returns to the neutral head pose."""
+    """After the lost timeout the aim target returns to the neutral angles."""
     backend = _make_backend()
     backend._tracking_enabled = True
-    target = np.eye(4, dtype=np.float64)
-    target[:3, :3] = R.from_euler("z", 0.5).as_matrix()
-    backend._tracking_target_pose = target
-    backend._tracking_aim = target.copy()
+    backend._tracking_target_rpy = (0.0, 0.0, 0.5)
     backend._last_face_seen = time.monotonic() - (backend._tracking_lost_timeout + 1.0)
 
     backend.step_head_tracking()
 
-    np.testing.assert_allclose(backend._tracking_target_pose, np.eye(4), atol=1e-9)
+    assert backend._tracking_target_rpy == (0.0, 0.0, 0.0)
 
 
 def test_enable_head_tracking_weight_zero_pauses_without_stopping() -> None:

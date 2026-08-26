@@ -11,6 +11,7 @@ each type of backend.
 import asyncio
 import json
 import logging
+import math
 import os
 import tempfile
 import threading
@@ -115,10 +116,7 @@ from reachy_mini.utils.interpolation import (
     time_trajectory,
 )
 from reachy_mini.vision.face_tracking import FaceTracker
-from reachy_mini.vision.look_at import (
-    default_head_to_camera_transform,
-    look_at_image_pose,
-)
+from reachy_mini.vision.look_at import default_head_to_camera_transform
 
 
 class _PlaybackCancelToken:
@@ -350,10 +348,17 @@ class Backend:
         self._tracking_enabled = False
         self._tracking_requested_weight = 1.0
         self._tracking_weight = 0.0
-        self._tracking_alpha = 0.15
+        # Aim servo: each control tick moves the aim angles by
+        # clip(p * error, +/-max_step) toward the latest absolute target
+        # angles published by the detector process. p sets responsiveness;
+        # max_step is a hard per-tick velocity limit (~90 deg/s at 50 Hz).
+        self._tracking_p = 0.15
+        self._tracking_max_step_rad = float(np.radians(1.8))
         self._tracking_lost_timeout = 2.0
         self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
-        self._tracking_target_pose: Annotated[NDArray[np.float64], (4, 4)] | None = None
+        self._tracking_aim_rpy: tuple[float, float, float] | None = None
+        self._tracking_target_rpy: tuple[float, float, float] | None = None
+        self._tracking_seq = 0
         self._last_face_seen: float | None = None
         self._tracker: FaceTracker | None = None
         self._tracking_lock = threading.Lock()
@@ -707,94 +712,94 @@ class Backend:
     def clear_tracking_aim(self) -> None:
         """Clear the tracking aim, latched target, and latest detected face."""
         self._tracking_aim = None
-        self._tracking_target_pose = None
+        self._tracking_aim_rpy = None
+        self._tracking_target_rpy = None
+        self._tracking_seq = 0
         self._tracking_weight = 0.0
         self._last_face_seen = None
         self._face_target = FaceTarget()
         self.ik_required = True
 
-    def step_head_tracking(self) -> None:
-        """Ease the aim toward the latest target, holding then recentering on loss.
+    @staticmethod
+    def _pose_rpy(
+        pose: Annotated[NDArray[np.float64], (4, 4)],
+    ) -> tuple[float, float, float]:
+        """Extract (roll, pitch, yaw), extrinsic x-y-z radians, from a pose."""
+        roll, pitch, yaw = R.from_matrix(pose[:3, :3]).as_euler("xyz")
+        return (float(roll), float(pitch), float(yaw))
 
-        A brief detection gap holds the last aim; a sustained loss returns the aim
-        to the neutral head pose so the robot recenters instead of freezing where
-        the person left the frame.
+    def step_head_tracking(self) -> None:
+        """Servo the aim one bounded step toward the latest target angles.
+
+        The detector process publishes absolute head angles ("the face is at
+        these angles in the robot frame"); this method treats the latest
+        publication as where the person is now and moves the aim by
+        ``clip(p * error, +/-max_step)`` per tick. Re-applying a stale absolute
+        target converges and stops, so no timestamps are needed. A brief
+        detection gap holds the last target; a sustained loss retargets the
+        neutral pose so the robot recenters instead of freezing where the
+        person left the frame.
         """
         with self._tracking_lock:
             if not self._tracking_enabled or self._tracking_requested_weight <= 0.0:
                 return
             now = time.monotonic()
             if self._tracker is not None:
-                obs = self._tracker.latest()
-                if obs is not None:
-                    self.set_tracking_face(
-                        obs.center,
-                        obs.roll,
-                        obs.width,
-                        obs.height,
-                        obs.camera_matrix,
-                        obs.distortion,
-                        obs.timestamp,
-                    )
-                    if obs.center is not None:
+                # Share the current head orientation so the detector can turn
+                # a face pixel into absolute angles.
+                self._tracker.publish_head_pose(
+                    *self._pose_rpy(self.get_current_head_pose())
+                )
+                target = self._tracker.latest()
+                if target is not None and target.seq != self._tracking_seq:
+                    self._tracking_seq = target.seq
+                    if target.detected:
+                        self._tracking_target_rpy = (
+                            target.roll,
+                            target.pitch,
+                            target.yaw,
+                        )
+                        self._tracking_weight = self._tracking_requested_weight
                         self._last_face_seen = now
+                        self._face_target = FaceTarget(
+                            detected=True,
+                            x=target.x,
+                            y=target.y,
+                            roll=target.face_roll,
+                            ts=now,
+                        )
+                    else:
+                        # Hold the last target on a transient loss so the head
+                        # doesn't lurch to neutral.
+                        self._face_target = FaceTarget(detected=False, ts=now)
             if (
                 self._last_face_seen is not None
                 and now - self._last_face_seen >= self._tracking_lost_timeout
             ):
-                self._tracking_target_pose = self.INIT_HEAD_POSE.copy()
-            if self._tracking_target_pose is None:
+                self._tracking_target_rpy = (0.0, 0.0, 0.0)
+            if self._tracking_target_rpy is None:
                 return
-            if self._tracking_aim is None:
-                self._tracking_aim = self.get_current_head_pose()
-            self._tracking_aim = linear_pose_interpolation(
-                self._tracking_aim, self._tracking_target_pose, self._tracking_alpha
+            if self._tracking_aim_rpy is None:
+                self._tracking_aim_rpy = self._pose_rpy(self.get_current_head_pose())
+            max_step = self._tracking_max_step_rad
+            roll, pitch, yaw = (
+                current
+                + min(
+                    max(
+                        self._tracking_p * math.remainder(target - current, math.tau),
+                        -max_step,
+                    ),
+                    max_step,
+                )
+                for current, target in zip(
+                    self._tracking_aim_rpy, self._tracking_target_rpy
+                )
+            )
+            self._tracking_aim_rpy = (roll, pitch, yaw)
+            self._tracking_aim = create_head_pose(
+                roll=roll, pitch=pitch, yaw=yaw, degrees=False
             )
             self.ik_required = True
-
-    def set_tracking_face(
-        self,
-        center: tuple[float, float] | None,
-        roll: float | None,
-        width: int,
-        height: int,
-        camera_matrix: NDArray[np.float64],
-        distortion: NDArray[np.float64],
-        timestamp: float,
-    ) -> None:
-        """Latch the tracking target from a face observation in tracker-frame pixels."""
-        if not self._tracking_enabled:
-            return
-
-        if center is None:
-            # Hold the last target on a transient loss so the head doesn't lurch to neutral.
-            self._face_target = FaceTarget(detected=False, ts=timestamp)
-            return
-
-        x_norm = float(center[0])
-        y_norm = float(center[1])
-        self._tracking_weight = self._tracking_requested_weight
-        self._face_target = FaceTarget(
-            detected=True,
-            x=x_norm,
-            y=y_norm,
-            roll=roll,
-            ts=timestamp,
-        )
-
-        u = (x_norm + 1.0) * 0.5 * max(width - 1, 1)
-        v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)
-        try:
-            self._tracking_target_pose = look_at_image_pose(
-                u=u,
-                v=v,
-                K=camera_matrix,
-                D=distortion,
-                T_world_head=self.get_current_head_pose(),
-                T_head_cam=self.T_head_cam,
-            )
-        except Exception as e:
-            self.logger.warning("Head-tracking aim update failed: %s", e)
 
     def get_tracked_face(self) -> FaceTarget:
         """Return the latest face target observed by daemon-side tracking."""
