@@ -224,6 +224,21 @@ def test_enable_head_tracking_applies_mode_and_resets_the_glance_schedule() -> N
     assert backend._tracking_next_glance_at is None
 
 
+def test_weight_only_enable_keeps_the_configured_mode() -> None:
+    """An app toggling weight between turns must not reset the policy."""
+    backend = MockupSimBackend(use_audio=False)
+    backend.current_head_pose = np.eye(4, dtype=np.float64)
+    backend._media_server = SimpleNamespace(camera_specs=object())  # type: ignore[assignment]
+    backend._tracker = _SpyTracker()  # type: ignore[assignment]
+    assert backend.enable_head_tracking(mode="periodic", glance_interval_s=(3, 4))
+
+    assert backend.enable_head_tracking(weight=0.0)
+    assert backend.enable_head_tracking(weight=1.0)
+
+    assert backend._tracking_mode == "periodic"
+    assert backend._tracking_glance_interval_s == (3.0, 4.0)
+
+
 def test_set_head_tracking_command_forwards_the_mode() -> None:
     """The protocol command carries the mode; the response shape is unchanged."""
     backend = MockupSimBackend(use_audio=False)
@@ -247,9 +262,9 @@ def test_set_head_tracking_command_forwards_the_mode() -> None:
 def test_set_head_tracking_cmd_defaults_and_validation() -> None:
     """Defaults keep today's behavior; nonsensical glance ranges are rejected."""
     cmd = SetHeadTrackingCmd(enabled=True)
-    assert cmd.mode == "continuous"
-    assert cmd.glance_interval_s == (5.0, 30.0)
-    assert cmd.speaking_hold_s == 1.0
+    assert cmd.mode is None  # None = keep the daemon's current setting
+    assert cmd.glance_interval_s is None
+    assert cmd.speaking_hold_s is None
 
     with pytest.raises(ValidationError):
         SetHeadTrackingCmd(enabled=True, glance_interval_s=(10.0, 5.0))
