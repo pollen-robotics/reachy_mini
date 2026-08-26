@@ -231,7 +231,11 @@ def test_set_head_tracking_enabled_available(sim_backend: Any) -> None:
     sim_backend.enable_head_tracking = Mock(return_value=True)
     responses = _dispatch(sim_backend, SetHeadTrackingCmd(enabled=True, weight=0.5))
     sim_backend.enable_head_tracking.assert_called_once_with(
-        weight=0.5, mode=None, glance_interval_s=None, speaking_hold_s=None
+        weight=0.5,
+        mode=None,
+        glance_interval_s=None,
+        glance_duration_s=None,
+        speaking_hold_s=None,
     )
     assert responses == [
         {"status": "ok", "command": "set_head_tracking", "enabled": True}

@@ -44,7 +44,10 @@ def test_start_head_tracking_sends_mode_and_tunables() -> None:
     """Mode and tunables ride along in the enable command."""
     robot = _make_robot()
     robot.start_head_tracking(
-        mode="speaking", glance_interval_s=(3.0, 4.0), speaking_hold_s=2.0
+        mode="speaking",
+        glance_interval_s=(3.0, 4.0),
+        glance_duration_s=0.8,
+        speaking_hold_s=2.0,
     )
     assert robot.client.commands == [
         SetHeadTrackingCmd(
@@ -52,6 +55,7 @@ def test_start_head_tracking_sends_mode_and_tunables() -> None:
             weight=1.0,
             mode="speaking",
             glance_interval_s=(3.0, 4.0),
+            glance_duration_s=0.8,
             speaking_hold_s=2.0,
         )
     ]
