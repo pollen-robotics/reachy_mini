@@ -286,6 +286,7 @@ class ReachyMini:
         weight: float = 1.0,
         mode: HeadTrackingMode | None = None,
         glance_interval_s: tuple[float, float] | None = None,
+        glance_duration_s: float | None = None,
         speaking_hold_s: float | None = None,
     ) -> None:
         """Enable daemon-side visual head tracking.
@@ -296,16 +297,21 @@ class ReachyMini:
                 while biasing toward the face; ``0`` pauses detection (freeing the
                 head and CPU) without tearing the tracker down, for cheap on/off.
             mode: When the daemon re-aims at the face. ``"continuous"`` follows
-                it all the time. ``"periodic"`` glances at it once every
-                ``glance_interval_s`` (a random delay in the ``(min, max)``
-                range) and holds in between. ``"speaking"`` follows it only
-                while the robot is speaking (audio playing or speech offsets
-                moving within the last ``speaking_hold_s``) and holds otherwise.
-                The daemon decides on its own; call again to change the mode or
-                its tunables live. ``None`` (default) keeps the daemon's current
-                mode, so calls that only change ``weight`` never reset it.
-            glance_interval_s: ``(min, max)`` seconds between glances in
-                ``"periodic"`` mode (daemon default 5-30 s); ``None`` keeps it.
+                it all the time. ``"periodic"`` glances at it (follows for
+                ``glance_duration_s``) once every ``glance_interval_s`` (a random
+                pause in the ``(min, max)`` range, default 5-30 s) and holds in
+                between. ``"speaking"`` does the same glance cycle only while the
+                robot is speaking (audio playing, speech offsets moving, or the
+                app's declared turn state, within the last ``speaking_hold_s``;
+                default pause 3-10 s), opening each utterance with a glance, and
+                holds whenever silent. The daemon decides on its own; call again
+                to change the mode or its tunables live. ``None`` (default) keeps
+                the daemon's current mode, so calls that only change ``weight``
+                never reset it.
+            glance_interval_s: ``(min, max)`` seconds of pause between glances
+                for the mode being set; ``None`` keeps it.
+            glance_duration_s: How long a glance follows the face (daemon
+                default 1 s); ``None`` keeps it.
             speaking_hold_s: Seconds after the last audio or speech activity
                 during which the robot still counts as speaking (daemon default
                 1 s); ``None`` keeps it.
@@ -317,6 +323,7 @@ class ReachyMini:
                 weight=weight,
                 mode=mode,
                 glance_interval_s=glance_interval_s,
+                glance_duration_s=glance_duration_s,
                 speaking_hold_s=speaking_hold_s,
             )
         )

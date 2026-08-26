@@ -101,44 +101,90 @@ def test_continuous_mode_adopts_every_fresh_target(
     assert _publish_and_step(backend, tracker, clock, 0.1, 2, 0.4) == 0.4
 
 
-def test_periodic_mode_aims_once_then_waits_for_the_next_glance(
+def test_periodic_mode_glances_for_a_window_then_pauses(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Periodic mode adopts the first target, then only one target per interval."""
+    """Periodic mode follows for glance_duration_s, then holds for the pause."""
     backend, tracker, clock = _make(
-        monkeypatch, "periodic", _tracking_glance_interval_s=(10.0, 10.0)
+        monkeypatch,
+        "periodic",
+        _tracking_glance_interval_s={"periodic": (10.0, 10.0), "speaking": (3.0, 10.0)},
     )
-    assert _publish_and_step(backend, tracker, clock, 0.0, 1, 0.2) == 0.2  # first aim
-    assert _publish_and_step(backend, tracker, clock, 1.0, 2, 0.4) == 0.2  # holding
     assert (
-        _publish_and_step(backend, tracker, clock, 9.0, 3, 0.5) == 0.2
+        _publish_and_step(backend, tracker, clock, 0.0, 1, 0.2) == 0.2
+    )  # glance opens
+    assert (
+        _publish_and_step(backend, tracker, clock, 0.5, 2, 0.3) == 0.3
+    )  # inside the 1 s window
+    assert (
+        _publish_and_step(backend, tracker, clock, 1.0, 3, 0.4) == 0.3
+    )  # window closed: hold
+    assert (
+        _publish_and_step(backend, tracker, clock, 9.0, 4, 0.5) == 0.3
     )  # still holding
-    assert _publish_and_step(backend, tracker, clock, 10.0, 4, 0.6) == 0.6  # glance
     assert (
-        _publish_and_step(backend, tracker, clock, 15.0, 5, 0.8) == 0.6
+        _publish_and_step(backend, tracker, clock, 11.0, 5, 0.6) == 0.6
+    )  # 1 s + 10 s pause: glance
+    assert (
+        _publish_and_step(backend, tracker, clock, 15.0, 6, 0.8) == 0.6
     )  # holding again
-    assert backend._tracking_next_glance_at == 20.0
+    assert backend._tracking_next_glance_at == 22.0
 
 
-def test_speaking_mode_follows_only_while_speech_offsets_move(
+def _speaking_backend(monkeypatch: pytest.MonkeyPatch, **fields: object) -> tuple:
+    return _make(
+        monkeypatch,
+        "speaking",
+        _tracking_speaking_hold_s=1.0,
+        _tracking_glance_interval_s={"periodic": (5.0, 30.0), "speaking": (5.0, 5.0)},
+        **fields,
+    )
+
+
+def test_speaking_mode_holds_when_silent_and_glances_while_speaking(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Speaking mode holds when silent and follows within the hold window after speech."""
-    backend, tracker, clock = _make(
-        monkeypatch, "speaking", _tracking_speaking_hold_s=1.0
-    )
+    """Silent: hold. Speaking: 1 s glance, 5 s pause, glance again; silence resets."""
+    backend, tracker, clock = _speaking_backend(monkeypatch)
     assert _publish_and_step(backend, tracker, clock, 0.0, 1, 0.2) == 0.2  # first aim
     assert (
-        _publish_and_step(backend, tracker, clock, 1.0, 2, 0.4) == 0.2
+        _publish_and_step(backend, tracker, clock, 2.0, 2, 0.4) == 0.2
     )  # silent: hold
 
-    clock.t = 2.0
-    backend.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.01))  # wobbler moving
-    assert _publish_and_step(backend, tracker, clock, 2.5, 3, 0.6) == 0.6  # speaking
-    assert _publish_and_step(backend, tracker, clock, 2.9, 4, 0.7) == 0.7  # within hold
+    def speak(t: float) -> None:
+        clock.t = t
+        backend.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.02))
+
+    speak(10.0)
     assert (
-        _publish_and_step(backend, tracker, clock, 4.0, 5, 0.9) == 0.7
-    )  # hold expired
+        _publish_and_step(backend, tracker, clock, 10.0, 3, 0.5) == 0.5
+    )  # utterance opens with a glance
+    assert (
+        _publish_and_step(backend, tracker, clock, 10.5, 4, 0.55) == 0.55
+    )  # inside the glance
+    speak(11.0)
+    assert (
+        _publish_and_step(backend, tracker, clock, 11.5, 5, 0.6) == 0.55
+    )  # glance over: pause
+    speak(15.0)
+    assert (
+        _publish_and_step(backend, tracker, clock, 15.5, 6, 0.7) == 0.55
+    )  # still pausing
+    speak(16.0)
+    assert (
+        _publish_and_step(backend, tracker, clock, 16.0, 7, 0.8) == 0.8
+    )  # 1 s + 5 s: glance again
+    # Speech stopped at 16.0; hold window 1 s, then silence resets the cycle.
+    assert (
+        _publish_and_step(backend, tracker, clock, 16.9, 8, 0.85) == 0.85
+    )  # still in glance + hold
+    assert (
+        _publish_and_step(backend, tracker, clock, 20.0, 9, 0.9) == 0.85
+    )  # silent: hold
+    speak(30.0)
+    assert (
+        _publish_and_step(backend, tracker, clock, 30.0, 10, 1.0) == 1.0
+    )  # new utterance: glance
 
 
 def test_speaking_mode_uses_media_server_audio_activity(
@@ -146,10 +192,8 @@ def test_speaking_mode_uses_media_server_audio_activity(
 ) -> None:
     """Audio leaving the speaker counts as speaking even without speech offsets."""
     audio = {"ts": None}
-    backend, tracker, clock = _make(
+    backend, tracker, clock = _speaking_backend(
         monkeypatch,
-        "speaking",
-        _tracking_speaking_hold_s=1.0,
         _media_server=SimpleNamespace(last_audio_output_time=lambda: audio["ts"]),
     )
     assert _publish_and_step(backend, tracker, clock, 0.0, 1, 0.2) == 0.2
@@ -157,40 +201,39 @@ def test_speaking_mode_uses_media_server_audio_activity(
     audio["ts"] = 9.8
     assert (
         _publish_and_step(backend, tracker, clock, 10.0, 3, 0.6) == 0.6
-    )  # audio 0.2 s ago
+    )  # audio 0.2 s ago: glance
+    audio["ts"] = 8.0
     assert (
         _publish_and_step(backend, tracker, clock, 12.0, 4, 0.8) == 0.6
-    )  # audio 2.2 s ago
+    )  # audio 4 s ago: silent
 
 
 def test_speaking_mode_uses_the_app_declared_turn_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A relayed conversation.turn "speaking" counts as speaking until it changes."""
-    backend, tracker, clock = _make(
-        monkeypatch, "speaking", _tracking_speaking_hold_s=1.0
-    )
+    backend, tracker, clock = _speaking_backend(monkeypatch)
     assert _publish_and_step(backend, tracker, clock, 0.0, 1, 0.2) == 0.2
     assert _publish_and_step(backend, tracker, clock, 5.0, 2, 0.4) == 0.2  # silent
 
     backend.note_app_notification("conversation.turn", {"state": "speaking"})
-    assert _publish_and_step(backend, tracker, clock, 10.0, 3, 0.6) == 0.6
     assert (
-        _publish_and_step(backend, tracker, clock, 40.0, 4, 0.7) == 0.7
-    )  # no hold limit while declared
-
-    clock.t = 41.0
+        _publish_and_step(backend, tracker, clock, 10.0, 3, 0.6) == 0.6
+    )  # glance opens
+    assert _publish_and_step(backend, tracker, clock, 12.0, 4, 0.65) == 0.6  # pause
+    assert (
+        _publish_and_step(backend, tracker, clock, 16.0, 5, 0.7) == 0.7
+    )  # next glance (1 s + 5 s)
+    clock.t = 16.5
     backend.note_app_notification("conversation.turn", {"state": "ready"})
     assert (
-        _publish_and_step(backend, tracker, clock, 41.5, 5, 0.8) == 0.8
-    )  # within hold
-    assert (
-        _publish_and_step(backend, tracker, clock, 43.0, 6, 0.9) == 0.8
-    )  # hold expired
+        _publish_and_step(backend, tracker, clock, 16.9, 6, 0.75) == 0.75
+    )  # glance + hold window
+    assert _publish_and_step(backend, tracker, clock, 20.0, 7, 0.9) == 0.75  # silent
 
     backend.note_app_notification("conversation.turn", {"state": "speaking"})
     backend.note_app_notification("app.disconnected", {})
-    assert _publish_and_step(backend, tracker, clock, 50.0, 7, 1.0) == 0.8  # cleared
+    assert _publish_and_step(backend, tracker, clock, 50.0, 8, 1.0) == 0.75  # cleared
 
 
 def test_periodic_mode_still_recenters_when_the_face_is_gone(
@@ -198,7 +241,9 @@ def test_periodic_mode_still_recenters_when_the_face_is_gone(
 ) -> None:
     """Face loss handling is independent of the re-aim policy."""
     backend, tracker, clock = _make(
-        monkeypatch, "periodic", _tracking_glance_interval_s=(30.0, 30.0)
+        monkeypatch,
+        "periodic",
+        _tracking_glance_interval_s={"periodic": (30.0, 30.0), "speaking": (3.0, 10.0)},
     )
     assert _publish_and_step(backend, tracker, clock, 0.0, 1, 0.5) == 0.5
     clock.t = backend._tracking_lost_timeout + 0.5  # no fresh publication since
@@ -215,11 +260,17 @@ def test_enable_head_tracking_applies_mode_and_resets_the_glance_schedule() -> N
     backend._tracking_next_glance_at = 123.0
 
     assert backend.enable_head_tracking(
-        weight=0.8, mode="periodic", glance_interval_s=(3, 4), speaking_hold_s=2.0
+        weight=0.8,
+        mode="periodic",
+        glance_interval_s=(3, 4),
+        glance_duration_s=0.5,
+        speaking_hold_s=2.0,
     )
 
     assert backend._tracking_mode == "periodic"
-    assert backend._tracking_glance_interval_s == (3.0, 4.0)
+    assert backend._tracking_glance_interval_s["periodic"] == (3.0, 4.0)
+    assert backend._tracking_glance_interval_s["speaking"] == (3.0, 10.0)  # untouched
+    assert backend._tracking_glance_duration_s == 0.5
     assert backend._tracking_speaking_hold_s == 2.0
     assert backend._tracking_next_glance_at is None
 
@@ -236,7 +287,7 @@ def test_weight_only_enable_keeps_the_configured_mode() -> None:
     assert backend.enable_head_tracking(weight=1.0)
 
     assert backend._tracking_mode == "periodic"
-    assert backend._tracking_glance_interval_s == (3.0, 4.0)
+    assert backend._tracking_glance_interval_s["periodic"] == (3.0, 4.0)
 
 
 def test_set_head_tracking_command_forwards_the_mode() -> None:
@@ -264,9 +315,12 @@ def test_set_head_tracking_cmd_defaults_and_validation() -> None:
     cmd = SetHeadTrackingCmd(enabled=True)
     assert cmd.mode is None  # None = keep the daemon's current setting
     assert cmd.glance_interval_s is None
+    assert cmd.glance_duration_s is None
     assert cmd.speaking_hold_s is None
 
     with pytest.raises(ValidationError):
         SetHeadTrackingCmd(enabled=True, glance_interval_s=(10.0, 5.0))
     with pytest.raises(ValidationError):
         SetHeadTrackingCmd(enabled=True, glance_interval_s=(0.0, 5.0))
+    with pytest.raises(ValidationError):
+        SetHeadTrackingCmd(enabled=True, glance_duration_s=0.0)

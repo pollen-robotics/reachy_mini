@@ -465,11 +465,16 @@ class SetHeadTrackingCmd(BaseModel):
     target is adopted:
 
     - ``continuous``: follow the face all the time (default).
-    - ``periodic``: glance at the face once every ``glance_interval_s`` (a
-      random delay drawn from the ``[min, max]`` range), hold in between.
-    - ``speaking``: follow the face while the robot is speaking (audio leaving
-      the speaker or speech offsets moving within the last
-      ``speaking_hold_s``), hold otherwise.
+    - ``periodic``: glance at the face (follow it for ``glance_duration_s``)
+      once every ``glance_interval_s`` (a random pause drawn from the
+      ``[min, max]`` range, default 5-30 s), hold in between.
+    - ``speaking``: while the robot is speaking (audio leaving the speaker,
+      speech offsets moving, or the app's declared turn state, within the last
+      ``speaking_hold_s``), glance at the face for ``glance_duration_s`` then
+      pause for a random ``glance_interval_s`` (default 3-10 s) and repeat,
+      opening each utterance with a glance; hold whenever silent.
+
+    ``glance_interval_s`` applies to the mode being set (or the current mode).
 
     Sending the command again while enabled changes the mode and tunables live.
     Fields left at ``None`` keep the daemon's current setting, so an app that
@@ -481,6 +486,7 @@ class SetHeadTrackingCmd(BaseModel):
     weight: float = Field(default=1.0, ge=0.0, le=1.0)
     mode: HeadTrackingMode | None = None
     glance_interval_s: tuple[float, float] | None = None
+    glance_duration_s: float | None = Field(default=None, gt=0.0)
     speaking_hold_s: float | None = Field(default=None, ge=0.0)
 
     @model_validator(mode="after")

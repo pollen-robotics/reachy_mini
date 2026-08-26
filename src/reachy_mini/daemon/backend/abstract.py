@@ -365,9 +365,16 @@ class Backend:
         # target mailbox fresh in every mode; the mode only decides when the
         # daemon latches a fresh target as its aim.
         self._tracking_mode: HeadTrackingMode = "continuous"
-        self._tracking_glance_interval_s: tuple[float, float] = (5.0, 30.0)
+        # A glance = follow the face for glance_duration_s, then pause for a
+        # random delay in the mode's [min, max] range before the next one.
+        self._tracking_glance_interval_s: dict[str, tuple[float, float]] = {
+            "periodic": (5.0, 30.0),
+            "speaking": (3.0, 10.0),
+        }
+        self._tracking_glance_duration_s = 1.0
         self._tracking_speaking_hold_s = 1.0
         self._tracking_next_glance_at: float | None = None
+        self._tracking_glance_until: float | None = None
         self._tracking_last_speech_ts: float | None = None
         # Turn state the running app declares over its JSON-RPC server
         # ("conversation.turn": listening / thinking / speaking / ready), seen by
@@ -703,6 +710,7 @@ class Backend:
         weight: float = 1.0,
         mode: HeadTrackingMode | None = None,
         glance_interval_s: tuple[float, float] | None = None,
+        glance_duration_s: float | None = None,
         speaking_hold_s: float | None = None,
     ) -> bool:
         """Enable head tracking; ``weight`` 0 pauses the worker without stopping it.
@@ -717,12 +725,15 @@ class Backend:
             if mode is not None and mode != self._tracking_mode:
                 # A mode change re-aims once right away, then applies the new policy.
                 self._tracking_next_glance_at = None
+                self._tracking_glance_until = None
                 self._tracking_mode = mode
-            if glance_interval_s is not None:
-                self._tracking_glance_interval_s = (
+            if glance_interval_s is not None and self._tracking_mode != "continuous":
+                self._tracking_glance_interval_s[self._tracking_mode] = (
                     float(glance_interval_s[0]),
                     float(glance_interval_s[1]),
                 )
+            if glance_duration_s is not None:
+                self._tracking_glance_duration_s = max(0.0, float(glance_duration_s))
             if speaking_hold_s is not None:
                 self._tracking_speaking_hold_s = max(0.0, float(speaking_hold_s))
             if self._media_server is None:
@@ -757,6 +768,7 @@ class Backend:
         self._tracking_target_rpy = None
         self._tracking_seq = 0
         self._tracking_next_glance_at = None
+        self._tracking_glance_until = None
         self._tracking_weight = 0.0
         self._last_face_seen = None
         self._face_target = FaceTarget()
@@ -813,28 +825,49 @@ class Backend:
             last = audio_ts
         return last is not None and now - last <= self._tracking_speaking_hold_s
 
-    def _schedule_next_glance(self, now: float) -> None:
-        low, high = self._tracking_glance_interval_s
-        self._tracking_next_glance_at = now + self._tracking_rng.uniform(low, high)
+    def _start_glance(self, now: float) -> None:
+        """Open a glance window now and draw the pause before the next one."""
+        low, high = self._tracking_glance_interval_s.get(
+            self._tracking_mode, (5.0, 30.0)
+        )
+        self._tracking_glance_until = now + self._tracking_glance_duration_s
+        self._tracking_next_glance_at = (
+            self._tracking_glance_until + self._tracking_rng.uniform(low, high)
+        )
+
+    def _glance_gate(self, now: float) -> bool:
+        """Follow inside the current glance window; open a new one when due."""
+        if (
+            self._tracking_glance_until is not None
+            and now < self._tracking_glance_until
+        ):
+            return True
+        if (
+            self._tracking_next_glance_at is None
+            or now >= self._tracking_next_glance_at
+        ):
+            self._start_glance(now)
+            return True
+        return False
 
     def _should_latch_target(self, now: float) -> bool:
         """Apply the re-aim policy to a fresh detected target."""
         if self._tracking_target_rpy is None:
             # The first target after (re)enabling always aims, in every mode.
-            if self._tracking_mode == "periodic":
-                self._schedule_next_glance(now)
+            if self._tracking_mode != "continuous":
+                self._start_glance(now)
             return True
         if self._tracking_mode == "continuous":
             return True
         if self._tracking_mode == "speaking":
-            return self._robot_is_speaking(now)
-        if (
-            self._tracking_next_glance_at is None
-            or now >= self._tracking_next_glance_at
-        ):
-            self._schedule_next_glance(now)
-            return True
-        return False
+            if not self._robot_is_speaking(now):
+                # Silence ends the glance cycle; the next utterance opens
+                # with a glance.
+                self._tracking_next_glance_at = None
+                self._tracking_glance_until = None
+                return False
+            return self._glance_gate(now)
+        return self._glance_gate(now)
 
     def step_head_tracking(self) -> None:
         """Servo the aim one bounded step toward the latest target angles.
@@ -1860,6 +1893,7 @@ class Backend:
                     weight=cmd.weight,
                     mode=cmd.mode,
                     glance_interval_s=cmd.glance_interval_s,
+                    glance_duration_s=cmd.glance_duration_s,
                     speaking_hold_s=cmd.speaking_hold_s,
                 )
                 send_response(
