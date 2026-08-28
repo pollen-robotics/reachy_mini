@@ -361,3 +361,205 @@ def save_audio_to_wav(
         raise RuntimeError(
             f"save_audio_to_wav: GStreamer pipeline error: {err} — {debug}"
         )
+
+
+def load_audio_mono(
+    filepath: str, samplerate: int | None = None
+) -> tuple[npt.NDArray[np.float64], int]:
+    """Decode an audio file to mono float64 using GStreamer, optionally resampled.
+
+    The counterpart of :func:`save_audio_to_wav`: it decodes anything
+    ``decodebin`` handles (PCM WAV of any bit depth, IEEE-float WAV, OGG, MP3,
+    FLAC, ...), so it reads back what that function writes.  Multi-channel input
+    is downmixed to mono by ``audioconvert``.
+
+    Decoding through GStreamer rather than by hand matters when the result is
+    compared against audio the robot played: ``play_sound`` uses the same
+    decoders, so any decoder quirk cancels out instead of showing up as a
+    spurious mismatch.
+
+    The pipeline used internally::
+
+        filesrc → decodebin → audioconvert → audioresample → capsfilter → appsink
+
+    Args:
+        filepath: Path to any audio file GStreamer can decode.
+        samplerate: Target rate in Hz.  ``None`` keeps the file's own rate.
+
+    Returns:
+        ``(samples, rate)`` — mono samples in ``[-1, 1]`` of shape ``(N,)``, and
+        the rate they are at (the file's own when ``samplerate`` is ``None``).
+
+    Raises:
+        ImportError: If the ``gi`` / GStreamer Python bindings are not installed.
+        RuntimeError: If the pipeline errors out or stalls.
+        ValueError: If the file decodes to no audio at all.
+
+    Example::
+
+        from reachy_mini.media.audio_utils import load_audio_mono
+
+        reference, rate = load_audio_mono("wake_up.wav", samplerate=16000)
+
+    """
+    try:
+        import gi
+
+        gi.require_version("Gst", "1.0")
+        from gi.repository import Gst
+    except ImportError as e:
+        raise ImportError(
+            "The 'gi' module is required for load_audio_mono but could not be "
+            "imported. Please check the GStreamer installation."
+        ) from e
+
+    Gst.init([])
+
+    caps = "audio/x-raw,format=F32LE,channels=1,layout=interleaved"
+    if samplerate is not None:
+        caps += f",rate={samplerate}"
+
+    # parse_launch rather than hand-built elements: decodebin exposes its audio
+    # pad only once it has sniffed the format, and parse_launch does that
+    # delayed linking for us.
+    pipeline = Gst.parse_launch(
+        "filesrc name=src ! decodebin ! audioconvert ! audioresample "
+        f'! capsfilter caps="{caps}" ! appsink name=sink sync=false max-buffers=0'
+    )
+    pipeline.get_by_name("src").set_property("location", filepath)
+    sink = pipeline.get_by_name("sink")
+    pipeline.set_state(Gst.State.PLAYING)
+
+    chunks: list[npt.NDArray[np.float32]] = []
+    rate = samplerate or 0
+    try:
+        while True:
+            sample = sink.emit("try-pull-sample", 5 * Gst.SECOND)
+            if sample is None:
+                if sink.get_property("eos"):
+                    break
+                # Not EOS, so this is a stall or a failure to decode. Surface
+                # the bus error when there is one — it names the actual cause
+                # (missing file, unknown format, missing plugin).
+                msg = pipeline.get_bus().pop_filtered(Gst.MessageType.ERROR)
+                if msg is not None:
+                    err, debug = msg.parse_error()
+                    raise RuntimeError(
+                        f"load_audio_mono: GStreamer error on {filepath}: "
+                        f"{err} — {debug}"
+                    )
+                raise RuntimeError(f"load_audio_mono: timed out decoding {filepath}")
+
+            if not rate:
+                rate = sample.get_caps().get_structure(0).get_value("rate")
+            buffer = sample.get_buffer()
+            ok, info = buffer.map(Gst.MapFlags.READ)
+            if ok:
+                # Copy: the mapped memory is only valid until unmap.
+                chunks.append(np.frombuffer(info.data, dtype=np.float32).copy())
+                buffer.unmap(info)
+    finally:
+        pipeline.set_state(Gst.State.NULL)
+
+    if not chunks:
+        raise ValueError(f"No audio decoded from {filepath}")
+
+    return np.concatenate(chunks).astype(np.float64), int(rate)
+
+
+def correlation_peak(
+    capture: npt.NDArray[np.floating],
+    reference: npt.NDArray[np.floating],
+    samplerate: int,
+) -> tuple[float, float]:
+    """Locate ``reference`` inside ``capture`` by normalized cross-correlation.
+
+    A matched filter: the peak height says how much of the reference's
+    *waveform* is present, the peak position says when it starts.  Robust to
+    level and delay, and — unlike :func:`spectral_cosine` — to heavy spectral
+    coloration, which makes it the right presence detector for an *acoustic*
+    path (small speaker, EQ, room, mic DSP).  Measured on a real robot
+    speaker→mic loopback: ~0.28 with the sound present vs ~0.02-0.04 for echo
+    cancellation eating it or unrelated noise.
+
+    Both signals must be at ``samplerate`` and ``capture`` must be at least as
+    long as ``reference``.
+
+    Args:
+        capture: The recording to search in, shape ``(N,)``.
+        reference: The signal to look for, shape ``(M,)``, ``M <= N``.
+        samplerate: Common sample rate in Hz (used only for the lag).
+
+    Returns:
+        ``(peak, lag_s)`` — peak of the normalized cross-correlation in
+        ``[0, 1]``, and the reference's start offset within the capture in
+        seconds.
+
+    """
+    from scipy.signal import fftconvolve
+
+    c = np.asarray(capture, dtype=np.float64)
+    r = np.asarray(reference, dtype=np.float64)
+    c = c - c.mean()
+    r = r - r.mean()
+
+    corr = fftconvolve(c, r[::-1], mode="valid")
+    # Per-position energy of the capture window, so the normalization is local:
+    # a loud noise burst elsewhere in the capture can't deflate the peak.
+    window_energy = fftconvolve(c**2, np.ones(len(r)), mode="valid")
+    ncc = corr / (np.linalg.norm(r) * np.sqrt(np.clip(window_energy, 1e-12, None)))
+
+    k = int(np.argmax(np.abs(ncc)))
+    return float(np.abs(ncc[k])), k / samplerate
+
+
+def spectral_cosine(
+    a: npt.NDArray[np.floating],
+    b: npt.NDArray[np.floating],
+    n: int | None = None,
+) -> float:
+    """Cosine similarity of the Hann-windowed magnitude spectra of two signals.
+
+    Frequency-domain so it's timing-invariant — a partial capture or a start
+    offset doesn't matter, only whether the same sound is present.
+
+    Best suited to digitally clean paths (measured 0.75-0.84 on the virtual
+    audio loopback vs ~0.10 for noise).  On a real *acoustic* path the
+    speaker/EQ/room coloration compresses the separation to the point of
+    uselessness (~0.18 present vs ~0.12 for white noise, measured on-robot) —
+    use :func:`correlation_peak` there instead.
+
+    Both signals must be at the **same sample rate**.  The FFT size is shared,
+    so a given frequency lands in a different bin at a different rate:
+    identical audio compared across 16 kHz and 44.1 kHz scores near zero.
+    Resample one to the other's rate first
+    (``load_audio_mono(..., samplerate=)``).
+
+    The reference also needs spectral *structure* for the score to
+    discriminate.  Speech and music do; a sweep or noise does not — two
+    unrelated broadband signals score ~0.5, so this is the wrong metric for
+    those.
+
+    Args:
+        a: First signal, shape ``(N,)``.
+        b: Second signal, shape ``(M,)``.  Need not match ``a`` in length, but
+            must match in sample rate.
+        n: FFT size.  Defaults to the next power of two covering the longer
+            signal, so neither is truncated — an ``n`` shorter than a signal
+            silently crops it to its first ``n`` samples, making the score
+            depend on *when* the sound occurs, exactly what this metric is
+            meant to be invariant to.
+
+    Returns:
+        Similarity in ``[0, 1]``.
+
+    """
+    if n is None:
+        n = 1 << (max(len(a), len(b)) - 1).bit_length()
+
+    def spectrum(x: npt.NDArray[np.floating]) -> npt.NDArray[np.float64]:
+        xf = np.asarray(x, dtype=np.float64)
+        mag = np.abs(np.fft.rfft(xf * np.hanning(len(xf)), n))
+        return np.asarray(mag / (np.linalg.norm(mag) + 1e-9), dtype=np.float64)
+
+    return float(np.dot(spectrum(a), spectrum(b)))
