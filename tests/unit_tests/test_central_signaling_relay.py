@@ -942,6 +942,7 @@ class _FakeHTTPSession:
         json: Any = None,
         headers: Any = None,
         allow_redirects: bool = True,
+        proxy: Any = None,
     ) -> _FakeResponse:
         self.posts.append((url, json, headers, allow_redirects))
         return _FakeResponse(self._status)

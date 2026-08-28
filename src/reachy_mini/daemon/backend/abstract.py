@@ -1594,6 +1594,8 @@ class Backend:
             # Sound Direction of Arrival (ReSpeaker mic array), or None when
             # unavailable. Cached, never blocks (see _doa_poll_loop).
             doa=self.read_doa(),
+            # IMU (wireless only), or None on Lite/sim or when the cache is stale.
+            imu=self.get_imu_data(),
         )
 
     def build_state_dict(self) -> dict[str, Any]:

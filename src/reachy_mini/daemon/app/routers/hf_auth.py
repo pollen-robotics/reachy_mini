@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from reachy_mini.apps.sources import hf_auth
 from reachy_mini.media.central_signaling_relay import CENTRAL_SIGNALING_SERVER
 from reachy_mini.utils.network import validate_secure_http_url
+from reachy_mini.utils.proxy import proxy_for
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +171,11 @@ async def get_central_robot_status() -> dict[str, Any]:
         logger.warning("[central-robot-status] refusing an untrusted central URL")
         return {"available": False, "robots": [], "reason": "invalid_configuration"}
 
+    central_robot_status_url = f"{central_url}/api/robot-status"
     try:
+        # Explicit proxy resolution (HTTP_PROXY/HTTPS_PROXY/NO_PROXY) —
+        # deliberately NOT trust_env=True, which would also read ~/.netrc
+        # and break Authorization-header requests (see utils/proxy.py).
         async with aiohttp.ClientSession(
             timeout=CENTRAL_ROBOT_STATUS_TIMEOUT
         ) as session:
@@ -181,9 +186,10 @@ async def get_central_robot_status() -> dict[str, Any]:
             # hf_auth.get_hf_token); header use keeps it off the
             # wire-visible URL as well.
             async with session.get(
-                f"{central_url}/api/robot-status",
+                central_robot_status_url,
                 headers={"Authorization": f"Bearer {token}"},
                 allow_redirects=False,
+                proxy=proxy_for(central_robot_status_url),
             ) as response:
                 if response.status == 200:
                     data = await response.json()
