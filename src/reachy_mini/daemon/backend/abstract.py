@@ -2698,16 +2698,16 @@ class Backend:
         """
         from reachy_mini.motion.recorded_move import (
             DEFAULT_EMOTIONS_DATASET,
-            RecordedMoves,
+            get_recorded_moves,
         )
 
         dataset = cmd.dataset_name or DEFAULT_EMOTIONS_DATASET
         try:
-            # On a cold cache RecordedMoves() triggers a blocking
+            # On a cold cache building the library triggers a blocking
             # snapshot_download: run it in a worker thread so it cannot stall
             # the daemon's event loop (and its pose stream) mid-session.
             move = await asyncio.to_thread(
-                lambda: RecordedMoves(dataset).get(cmd.move_name)
+                lambda: get_recorded_moves(dataset).get(cmd.move_name)
             )
         except Exception as e:
             self.logger.warning(
