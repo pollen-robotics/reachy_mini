@@ -3,6 +3,7 @@
 import logging
 from pathlib import Path
 
+from . import startup_check
 from .utils import build_install_command, call_logger_wrapper
 
 
@@ -23,6 +24,22 @@ async def update_reachy_mini(
             fails. An apps_venv failure is deliberately non-fatal.
 
     """
+    # Invalidate the startup-check stamp before touching any venv, so a crash
+    # mid-update always triggers the full startup checks on the next boot.
+    # (The stamp's dist-info signature would catch this anyway; this makes it
+    # double-covered.)
+    try:
+        startup_check.clear_startup_stamp()
+    except OSError:
+        logger.error(
+            "Could not clear the startup-check stamp at %s. Continuing: the "
+            "install signature will invalidate it on the next boot anyway. "
+            "A stamp that cannot be deleted points at a filesystem or "
+            "ownership problem worth investigating.",
+            startup_check.STAMP_PATH,
+            exc_info=True,
+        )
+
     # Update daemon venv. Fatal: abort before the restart. On the PyPI path
     # the venv is left on the previous version, so a retry works.
     logger.info("Updating daemon venv...")
