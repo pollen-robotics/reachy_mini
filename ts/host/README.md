@@ -32,7 +32,7 @@ The same app code works in both modes; only the entry point differs.
 
 | Document | Audience | Read it when… |
 |----------|----------|----------------|
-| **[`../APP_CREATION_GUIDE.md`](../APP_CREATION_GUIDE.md)** | app authors **and** host maintainers | Single source of truth: scaffold, `sdk: static` deploy, host ↔ embed contract, invariants, protocol v1. Today's SDK pin: `1.8.0`. |
+| **[`../APP_CREATION_GUIDE.md`](../APP_CREATION_GUIDE.md)** | app authors **and** host maintainers | Single source of truth: scaffold, `sdk: static` deploy, host ↔ embed contract, invariants, protocol v1. Today's SDK pin: `1.10.0-rc.5`. |
 
 App authors and library maintainers both start with the
 **[App Creation Guide](../APP_CREATION_GUIDE.md)**: §1-§12 are the
@@ -130,9 +130,9 @@ with every release:
 
 | App | Stack | What it shows |
 |-----|-------|---------------|
-| [`pollen-robotics/reachy_mini_minimal_conversation`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation) | Vanilla TypeScript | Smallest possible app. Tech-freedom proof. |
-| [`pollen-robotics/reachy_mini_emotions`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions) | React + MUI | Plutchik emotion wheel + dance triggers. |
-| [`pollen-robotics/reachy_mini_telepresence`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence) | React + MUI | Live video + head / body teleop. |
+| [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | Vanilla TypeScript | Smallest possible app. Tech-freedom proof. |
+| [`tfrere/emotions`](https://huggingface.co/spaces/tfrere/emotions) | React + MUI | Plutchik emotion wheel + dance triggers. |
+| [`tfrere/telepresence`](https://huggingface.co/spaces/tfrere/telepresence) | React + MUI | Live video + head / body teleop. |
 
 App authors are free to use any UI framework they want inside the iframe; the
 host doesn't care. This is a hard design rule, not an accident
@@ -149,7 +149,7 @@ incompatible postMessage changes
 (see [`APP_CREATION_GUIDE.md` §13.6](../APP_CREATION_GUIDE.md#136-protocol-v1-messages)).
 
 App authors should **pin to the exact version that the reference
-apps use** - today `1.8.0`, see
+apps use** - today `1.10.0-rc.5`, see
 [`APP_CREATION_GUIDE.md` §10](../APP_CREATION_GUIDE.md#10-sdk-version-pinning).
 
 ## License
