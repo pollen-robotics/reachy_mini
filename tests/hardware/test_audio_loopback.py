@@ -69,14 +69,14 @@ SWEEP_AMPLITUDE = 0.7  # mic clips before the sweep does at full scale
 USABLE_BANDS = slice(2, 8)
 
 # Shared reference curve for the USABLE_BANDS, dB relative to the bands'
-# median. Measured on robot "Michel" (Wireless, isolated room, median of 3
+# median. Measured on a Reachy Mini Wireless (isolated room, median of 3
 # sweeps, 2026-08-31). All Reachy Minis share the same speaker/shell/mic, so
 # one baseline serves them all — the first run on a *different* robot is the
 # test of that assumption; if a known-good robot fails the curve gate, widen
 # CURVE_TOL_DB or re-baseline from the printed curve.
 BASELINE_DB = (19.9, 4.1, -1.3, -4.6, -8.6, 1.3)
 
-# Pass/fail knobs, measured on a real Wireless (robot "Michel"), speaker
+# Pass/fail knobs, measured on a Reachy Mini Wireless, speaker
 # pinned to 100 / mic to 70, isolated room.
 #
 # PEAK_MIN: absolute silence floor. Dead mic / dead speaker.
