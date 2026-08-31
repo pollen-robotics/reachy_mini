@@ -73,6 +73,24 @@ def test_correlation_peak_rejects_unrelated_noise() -> None:
     assert peak < 0.1
 
 
+def test_correlation_peak_is_scale_invariant() -> None:
+    """A 50x quieter copy scores the same — why a level gate is also needed.
+
+    This is the property that let an echo-cancelled capture score 0.122 on real
+    hardware while being 46x too quiet: cross-correlation answers "is the right
+    sound there", never "is it loud enough". tests/hardware pairs this with a
+    loudest-block level gate for exactly this reason.
+    """
+    reference = _reference()
+    capture = np.concatenate([np.zeros(2000), reference, np.zeros(2000)])
+
+    loud, loud_lag = correlation_peak(capture, reference, RATE)
+    quiet, quiet_lag = correlation_peak(capture / 50.0, reference, RATE)
+
+    assert loud == pytest.approx(quiet, abs=1e-9)
+    assert loud_lag == quiet_lag
+
+
 def test_spectral_cosine_identical_is_one() -> None:
     """A signal against itself scores 1."""
     signal = _reference()

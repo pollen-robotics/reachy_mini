@@ -1,4 +1,4 @@
-"""Speaker -> microphone acoustic loopback, on real hardware.
+r"""Speaker -> microphone acoustic loopback, on real hardware.
 
 Plays a known asset on the robot's speaker while recording its own microphone
 with board-side echo cancellation disabled, then checks the recording actually
@@ -27,16 +27,19 @@ running this **on a Wireless** robot::
       "cd /tmp/ht && VIRTUAL_ENV=/venvs/mini_daemon /opt/uv/uv run --with pytest \\
        pytest -v -m 'audio and respeaker'"
 
-Bring-up notes (verified on robot "Michel", Wireless, 2026-08-28):
+Bring-up notes (verified on robot "Michel", Wireless):
 
-- ``PP_ECHOONOFF=0`` demonstrably disables the echo cancellation: with AEC left
-  on (``REACHY_TEST_AEC_OFF=""``) the played sound all but vanishes from the
-  capture (peak 0.02, snr 0.7, xcorr 0.02 — every gate red).
-- ``lag`` in the output is dominated by playbin startup (~450 ms on the CM4);
-  TAIL_S exists to keep the sound inside the capture window despite it.
+- ``PP_ECHOONOFF=0`` disables the echo cancellation. The negative control
+  (``REACHY_TEST_AEC_OFF=""``) is what proves this test can fail at all — run
+  it after touching the fixtures, and expect burst ~1 and xcorr < 0.13.
+- **A quiet room matters.** Ambient noise raises the noise floor, which deflates
+  both gates. In a normally noisy office one healthy run in six dipped below
+  the xcorr gate; isolated, healthy runs scored 3-10x clear of it.
+- ``lag`` is dominated by playbin startup (~270-460 ms on the CM4); TAIL_S
+  exists to keep the sound inside the capture window despite it.
 - To re-tune on new hardware: ``REACHY_TEST_DUMP=/tmp/dump.npz`` saves the raw
   windows for offline analysis, ``REACHY_TEST_MIC_VOL`` overrides the pinned
-  mic level.
+  mic level (100 clips; 70 is the default for that reason).
 """
 
 from __future__ import annotations
@@ -60,23 +63,46 @@ from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 # (0.66 s vs 0.41 s) and nothing else plays it.
 REFERENCE = "count.wav"
 
-# Pass/fail knobs. Deliberately coarse: these catch "no signal" and "wrong
-# signal", not small acoustic drift. Values measured on a real Wireless
-# (robot "Michel", 2026-08-28), speaker pinned to 100 / mic to 70:
+# Pass/fail knobs, measured on a real Wireless (robot "Michel") with the
+# speaker pinned to 100 / mic to 70, in both a noisy office and an isolated
+# quiet room. Three gates, because no single one is sufficient:
 #
 # PEAK_MIN: absolute silence floor, the same value the virtual-loopback test
-#   uses. Catches a dead speaker or mic outright.
-# SNR_MIN: capture RMS over the pre-playback noise RMS — relative, so it
-#   survives gain changes. Measured 5.9-12.7 with AEC off vs 0.3-0.7 with AEC
-#   on (the AEC cancels the robot's own playback almost completely).
-# XCORR_MIN: normalized cross-correlation peak of the reference inside the
-#   capture (matched filter). Measured ~0.28 present vs 0.02-0.04 for AEC-on
-#   or unrelated noise — an 11x separation. Spectral cosine was tried first
-#   and rejected: the acoustic path's coloration left present (0.18) below
-#   white noise (0.12) territory.
+#   uses. Catches a dead mic or dead speaker outright. Ambient noise alone
+#   clears it, so it discriminates nothing subtler.
+# BURST_MIN: RMS of the loudest 50 ms block over the room's noise floor — "did
+#   the speaker actually get loud". This is the decisive gate. Measured across
+#   8 healthy runs: 19.3-214. With echo cancellation on, 10 runs: 1.0-2.5.
+#   Gate 5.0 sits 3.9x under the healthy minimum and 2.0x over the broken
+#   maximum.
+# XCORR_MIN: matched-filter peak — "was the loud thing the reference".
+#   Healthy: 0.228-0.817. Echo-cancelled: 0.024-0.122. Gate 0.15 is roughly the
+#   geometric midpoint (1.5x under healthy min, 1.2x over broken max); it was
+#   0.2 initially, which sat only 14% under the healthy minimum while leaving
+#   64% of headroom over the broken maximum — badly centred, and the wrong way
+#   round given BURST_MIN already rejects every broken case seen.
+#
+# Both of the last two are needed, and this was learned the hard way:
+#   - xcorr alone lets a false PASS through. Cross-correlation is scale
+#     invariant, and the AEC leaves a faint but perfectly coherent remnant of
+#     the playback: one negative control scored 0.122 with its signal 46x too
+#     quiet (peak 0.0021) and rms *below* its own noise floor.
+#   - a level check alone cannot tell the reference from any other loud noise.
+#
+# Rejected along the way, both for lack of separation:
+#   - spectral_cosine: the acoustic path's coloration put "present" (0.18)
+#     below white noise (0.12). Fine on the virtual loopback, useless here.
+#   - whole-capture RMS over noise-window RMS: healthy 0.6-5.0 vs broken
+#     1.0-9.7, overlapping. The sound is a 0.66 s burst in a ~1.7 s capture, so
+#     whole-capture RMS dilutes it ~2.6x and ambient noise dominates. That is
+#     exactly what BURST_MIN fixes by isolating the loudest block.
 PEAK_MIN = 1e-3
-SNR_MIN = 4.0
-XCORR_MIN = 0.1
+BURST_MIN = 5.0
+XCORR_MIN = 0.15
+
+# 50 ms at 16 kHz: long enough for a stable RMS, short enough that a 0.66 s
+# burst lands well inside one block.
+BLOCK_SAMPLES = 800
 
 MIC_READY_TIMEOUT_S = 2.0
 NOISE_WINDOW_S = 0.3
@@ -101,6 +127,34 @@ def _capture(media: MediaManager, seconds: float) -> npt.NDArray[np.float64]:
     if not samples:
         return np.empty((0, 0), dtype=np.float64)
     return np.concatenate(samples, axis=0).astype(np.float64)
+
+
+def _noise_floor(noise: npt.NDArray[np.float64]) -> float:
+    """Transient-resistant noise level, as a Gaussian-equivalent RMS.
+
+    Plain RMS over the short noise window is dominated by whatever transient
+    happened to land in it — a chair, a voice, a fan spinning up. Measured on a
+    real robot in an office, RMS swung 7x run to run (0.0017-0.0134) and sank
+    2 of 6 healthy runs. The median of |x| ignores brief spikes; the 1.2533
+    factor (sqrt(pi/2)) converts it back to the RMS of an equivalent Gaussian
+    so the ratio against a signal level stays meaningful.
+    """
+    return float(np.median(np.abs(noise)) * 1.2533)
+
+
+def _loudest_block_rms(track: npt.NDArray[np.float64], block: int) -> float:
+    """RMS of the loudest ``block``-sample window of ``track``.
+
+    The reference is a short burst inside a longer capture, so whole-capture
+    RMS dilutes it by the silence around it (~2.6x here) and is dominated by
+    ambient noise. Taking the loudest block isolates the sound itself, which is
+    what "did the speaker actually produce this" needs to measure.
+    """
+    usable = len(track) // block * block
+    if usable == 0:
+        return float(np.sqrt(np.mean(track**2))) if len(track) else 0.0
+    blocks = track[:usable].reshape(-1, block)
+    return float(np.sqrt((blocks**2).mean(axis=1)).max())
 
 
 @pytest.mark.audio
@@ -153,14 +207,14 @@ def test_speaker_reaches_microphone(
     for channel in range(played.shape[1]):
         track = played[:, channel]
         peak = float(np.abs(track).max())
-        rms = float(np.sqrt(np.mean(track**2)))
-        noise_rms = float(np.sqrt(np.mean(noise[:, channel] ** 2)))
-        snr = rms / (noise_rms + 1e-12)
+        noise_floor = _noise_floor(noise[:, channel])
+        burst_rms = _loudest_block_rms(track, BLOCK_SAMPLES)
+        burst = burst_rms / (noise_floor + 1e-12)
         xcorr, lag_s = correlation_peak(track, reference, rate)
 
         print(
-            f"ch{channel}: peak={peak:.4f} rms={rms:.5f} noise_rms={noise_rms:.5f} "
-            f"snr={snr:.1f} xcorr={xcorr:.3f} lag={lag_s * 1000:.0f}ms"
+            f"ch{channel}: peak={peak:.4f} noise_floor={noise_floor:.5f} "
+            f"burst={burst:.1f} xcorr={xcorr:.3f} lag={lag_s * 1000:.0f}ms"
         )
 
         if peak <= PEAK_MIN:
@@ -168,17 +222,17 @@ def test_speaker_reaches_microphone(
                 f"ch{channel} is silent (peak={peak:.2e} <= {PEAK_MIN:.0e}): "
                 "playback never reached the speaker, or the mic is dead."
             )
-        if snr <= SNR_MIN:
+        if burst <= BURST_MIN:
             failures.append(
-                f"ch{channel} barely rose above its own noise floor "
-                f"(snr={snr:.1f} <= {SNR_MIN}): speaker output too quiet, "
-                "or echo cancellation is still active."
+                f"ch{channel} never got loud (burst={burst:.1f} <= {BURST_MIN}): "
+                "the loudest moment barely rose above the room's noise floor, so "
+                "the speaker is too quiet or its output is being cancelled."
             )
         if xcorr <= XCORR_MIN:
             failures.append(
                 f"ch{channel} does not contain {REFERENCE} "
-                f"(xcorr={xcorr:.3f} <= {XCORR_MIN}): something was recorded, "
-                "but not what was played."
+                f"(xcorr={xcorr:.3f} <= {XCORR_MIN}): something loud happened, "
+                "but it was not what was played."
             )
 
     assert not failures, "\n".join(failures)
