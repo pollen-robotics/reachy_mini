@@ -48,13 +48,14 @@ import numpy.typing as npt
 import pytest
 
 from reachy_mini.media.audio_control_utils import AudioConfig
-from reachy_mini.media.audio_utils import correlation_peak, save_audio_to_wav
+from reachy_mini.media.audio_utils import save_audio_to_wav
 from reachy_mini.media.media_manager import MediaManager
 from reachy_mini.reachy_mini import ReachyMini
 from reachy_mini.tools.speaker_eq_calibration.calibrate import (
     BAND_CENTERS,
     bin_to_bands,
 )
+from tests.audio_helpers import correlation_peak
 
 # The excitation: a log sweep. Ideal for the matched filter (sharp, unambiguous
 # correlation peak) and covers every band the 16 kHz voice path can carry.
@@ -76,15 +77,14 @@ USABLE_BANDS = slice(2, 8)
 BASELINE_DB = (19.9, 4.1, -1.3, -4.6, -8.6, 1.3)
 
 # Pass/fail knobs, measured on a real Wireless (robot "Michel"), speaker
-# pinned to 100 / mic to 70, isolated room. See the module docstring for the
-# measurement campaign behind each number.
+# pinned to 100 / mic to 70, isolated room.
 #
 # PEAK_MIN: absolute silence floor. Dead mic / dead speaker.
 # BURST_MIN: RMS of the loudest 50 ms block over a transient-resistant noise
 #   floor — a pure level gate (dead/muted speaker). Healthy sweeps measured
 #   137-267. Note the adaptive AEC cancels a sweep far less well than speech
-#   (burst 53 with AEC on), so unlike the earlier count.wav version this gate
-#   does NOT catch AEC-still-on — the curve gate does, at 4-17 dB of drift.
+#   (burst 53 with AEC on), so this gate does NOT catch AEC-still-on — the
+#   curve gate does, at 4-17 dB of drift.
 # CURVE_TOL_DB: per-band |median measured - baseline|. Single sweeps swing up
 #   to ~5 dB at 947 Hz; the median of N_SWEEPS tames that, and a real tuning
 #   change (EQ zeroed) reliably blows out several bands by 9-16 dB.

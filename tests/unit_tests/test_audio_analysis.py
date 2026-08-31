@@ -10,12 +10,11 @@ import numpy as np
 import pytest
 
 from reachy_mini.media.audio_utils import (
-    correlation_peak,
     load_audio_mono,
     save_audio_to_wav,
-    spectral_cosine,
 )
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
+from tests.audio_helpers import correlation_peak, spectral_cosine
 
 RATE = 16000
 SRC_RATE = 44100  # every shipped asset

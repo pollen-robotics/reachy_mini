@@ -9,10 +9,10 @@ from reachy_mini.media.audio_utils import (
     _process_card_number_output,
     load_audio_mono,
     save_audio_to_wav,
-    spectral_cosine,
 )
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
+from tests.audio_helpers import spectral_cosine
 
 SIGNALING_HOST = "reachy-mini.local"
 
