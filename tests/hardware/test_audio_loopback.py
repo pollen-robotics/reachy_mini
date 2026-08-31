@@ -1,70 +1,39 @@
 r"""Speaker -> microphone acoustic check, on real hardware.
 
-One test, one sweep: play a generated log sweep on the robot's speaker while
-recording its own microphone with board-side echo cancellation disabled, then
-gate on three things —
+Plays a generated log sweep on the robot's speaker while recording its own
+microphone with board-side echo cancellation disabled, then gates on three
+things:
 
 - **peak**: anything was recorded at all (dead mic / dead speaker),
 - **burst**: the loudest moment rose well above the room's noise floor
-  (speaker actually produced sound; echo cancellation not eating it),
-- **curve**: the per-band frequency response matches a stored baseline
+  (the speaker actually produced sound),
+- **curve**: the per-band frequency response matches the reference curve
   (the speaker tuning — driver, shell, EQ config — hasn't drifted).
 
-The sweep is generated (nothing committed, nothing another feature also plays),
-and its capture yields the response curve for free, so the previous separate
-count.wav presence test is folded into this one.
+Requirements:
 
-The head must be **up**: in the sleep pose it sits over the speaker and muffles
-it. The ``head_raised`` fixture enforces that (silently — ``wake_up()`` would
-play a chime through the device under test), so this test **moves the robot**
-and needs a running daemon.
+- the XVF3800 audio board reachable over USB from the machine running pytest:
+  a Lite, or run directly on a Wireless robot,
+- the daemon running — the test raises the head (silently) off the speaker,
+  so the robot moves,
+- a quiet room: ambient noise pollutes the curve and can fail a healthy robot.
 
-Requires the XVF3800 audio board on USB from the machine running pytest:
-either a **Lite** (board on your laptop) or running **on a Wireless** robot.
-Both run from a repo checkout (CI git-clones the repo on the robot), so the
-markers come from pyproject.toml as usual::
+Run it from a repo checkout. On a Lite::
 
-    # Lite: from the repo checkout
     uv run pytest tests/hardware -v -m "audio and respeaker"
 
-    # Wireless: clone on the robot, then layer pytest over the daemon venv.
-    # --no-project stops uv from resolving the cloned pyproject into a fresh
-    # env on the CM4; uv is preinstalled at /opt/uv on the robot image.
-    ssh pollen@reachy-mini.local "
-      git clone --depth 1 -b <branch> \\
-          https://github.com/pollen-robotics/reachy_mini.git /tmp/rm &&
-      cd /tmp/rm && VIRTUAL_ENV=/venvs/mini_daemon /opt/uv/uv run --no-project \\
-          --with pytest pytest tests/hardware -v -m 'audio and respeaker'"
+On a Wireless robot, from a clone on the robot::
 
-The curve baseline is shared: all Reachy Minis have the same speaker, shell and
-mic, so one measured reference (robot "Michel", Wireless, isolated room,
-median of 3 sweeps) is baked in as ``BASELINE_DB``. Every run prints the
-measured curve — to re-baseline (new hardware revision, or the assumption
-proves too tight), copy the printed numbers into the constant.
+    VIRTUAL_ENV=/venvs/mini_daemon /opt/uv/uv run --no-project --with pytest \
+        pytest tests/hardware -v -m "audio and respeaker"
 
-Bring-up notes (verified on robot "Michel", Wireless):
+The reference curve (``BASELINE_DB``) is shared by all robots (same speaker,
+shell and mic). Every run prints the measured curve — to re-baseline after a
+hardware revision, copy the printed numbers into the constant.
 
-- ``PP_ECHOONOFF=0`` disables the echo cancellation. The negative control
-  (``REACHY_TEST_AEC_OFF=""``) is what proves this test can fail at all — run
-  it after touching the fixtures. With a sweep it fails on the CURVE gate
-  (4-17 dB of drift), not the burst gate: the adaptive AEC cancels a sweep far
-  less well than speech.
-- **A quiet room matters.** Ambient noise raises the noise floor and pollutes
-  the curve; the figures here are from an isolated room.
-- Single sweeps swing up to ~5 dB at 947 Hz (room reflections + the post-EQ
-  limiter on a boosted band) — one healthy run in four tripped a single-sweep
-  gate. Hence the median of N_SWEEPS and the per-band CURVE_TOL_DB.
-- The measured curve does NOT equal the nominal EQ gains: the original EQ was
-  calibrated with an external mic, and this path adds the robot's own mic DSP
-  and the post-EQ limiter. That is why the baseline is measured, not computed.
-- ``lag`` is dominated by playbin startup (~270-460 ms on the CM4); TAIL_S
-  keeps the sweep inside the capture window despite it.
-- ``REACHY_TEST_ARTIFACTS=<dir>`` writes report artifacts: the full session
-  audio (``audio.wav``), every gate's numbers (``curve.json``), and the raw
-  windows (``raw.npz``). Render figures offline with
-  ``tests/hardware/plot_audio_report.py`` (matplotlib is not on the robot).
-- ``REACHY_TEST_MIC_VOL`` overrides the pinned mic level (100 clips;
-  70 is the default for that reason).
+``REACHY_TEST_ARTIFACTS=<dir>`` writes report artifacts: the recorded session
+(``audio.wav``) and every gate's numbers (``curve.json``), rendered into
+figures by ``tests/hardware/plot_audio_report.py``.
 """
 
 from __future__ import annotations
