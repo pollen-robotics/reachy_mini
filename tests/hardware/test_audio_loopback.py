@@ -33,11 +33,11 @@ either a **Lite** (board on your laptop) or running **on a Wireless** robot::
       "cd /tmp/ht && VIRTUAL_ENV=/venvs/mini_daemon /opt/uv/uv run --with pytest \\
        pytest -v -m 'audio and respeaker'"
 
-The curve baseline is **per robot** (speaker, shell, mic and room all fold in)
-and lives on the robot at ``~/.config/reachy_mini/speaker_baseline.json``.
-Seed it once, deliberately, on a known-good robot in its CI location::
-
-    REACHY_TEST_SEED_BASELINE=1 pytest ... -m 'audio and respeaker'
+The curve baseline is shared: all Reachy Minis have the same speaker, shell and
+mic, so one measured reference (robot "Michel", Wireless, isolated room,
+median of 3 sweeps) is baked in as ``BASELINE_DB``. Every run prints the
+measured curve — to re-baseline (new hardware revision, or the assumption
+proves too tight), copy the printed numbers into the constant.
 
 Bring-up notes (verified on robot "Michel", Wireless):
 
@@ -50,14 +50,17 @@ Bring-up notes (verified on robot "Michel", Wireless):
   the curve; the figures here are from an isolated room.
 - Single sweeps swing up to ~5 dB at 947 Hz (room reflections + the post-EQ
   limiter on a boosted band) — one healthy run in four tripped a single-sweep
-  gate. Hence the median of N_SWEEPS and CURVE_TOL_DB = 4.0.
+  gate. Hence the median of N_SWEEPS and the per-band CURVE_TOL_DB.
 - The measured curve does NOT equal the nominal EQ gains: the original EQ was
   calibrated with an external mic, and this path adds the robot's own mic DSP
   and the post-EQ limiter. That is why the baseline is measured, not computed.
 - ``lag`` is dominated by playbin startup (~270-460 ms on the CM4); TAIL_S
   keeps the sweep inside the capture window despite it.
-- ``REACHY_TEST_DUMP=/tmp/dump.npz`` saves the raw windows for offline
-  analysis; ``REACHY_TEST_MIC_VOL`` overrides the pinned mic level (100 clips;
+- ``REACHY_TEST_ARTIFACTS=<dir>`` writes report artifacts: the full session
+  audio (``audio.wav``), every gate's numbers (``curve.json``), and the raw
+  windows (``raw.npz``). Render figures offline with
+  ``tests/hardware/plot_audio_report.py`` (matplotlib is not on the robot).
+- ``REACHY_TEST_MIC_VOL`` overrides the pinned mic level (100 clips;
   70 is the default for that reason).
 """
 
@@ -92,7 +95,13 @@ SWEEP_AMPLITUDE = 0.7  # mic clips before the sweep does at full scale
 # Below, the driver produces nothing; above, the top band exceeds Nyquist.
 USABLE_BANDS = slice(2, 8)
 
-BASELINE_PATH = Path.home() / ".config/reachy_mini/speaker_baseline.json"
+# Shared reference curve for the USABLE_BANDS, dB relative to the bands'
+# median. Measured on robot "Michel" (Wireless, isolated room, median of 3
+# sweeps, 2026-08-31). All Reachy Minis share the same speaker/shell/mic, so
+# one baseline serves them all — the first run on a *different* robot is the
+# test of that assumption; if a known-good robot fails the curve gate, widen
+# CURVE_TOL_DB or re-baseline from the printed curve.
+BASELINE_DB = (19.9, 4.1, -1.3, -4.6, -8.6, 1.3)
 
 # Pass/fail knobs, measured on a real Wireless (robot "Michel"), speaker
 # pinned to 100 / mic to 70, isolated room. See the module docstring for the
@@ -106,10 +115,18 @@ BASELINE_PATH = Path.home() / ".config/reachy_mini/speaker_baseline.json"
 #   does NOT catch AEC-still-on — the curve gate does, at 4-17 dB of drift.
 # CURVE_TOL_DB: per-band |median measured - baseline|. Single sweeps swing up
 #   to ~5 dB at 947 Hz; the median of N_SWEEPS tames that, and a real tuning
-#   change (EQ zeroed) moves several bands by 4-17 dB.
+#   change (EQ zeroed) reliably blows out several bands by 9-16 dB.
+#   Two bands are NOT gated at 4 dB:
+#   - 119 Hz (inf = report-only): bass is room-mode dominated — measured
+#     drifting monotonically to -7.4 dB over ~an hour as the room changed,
+#     while every other band stayed within 3.3 dB. It cannot hold a fixed
+#     baseline across rooms or robots.
+#   - 3770 Hz (8 dB): spiked +5.8 dB once on a healthy run (intermittent,
+#     suspected head-servo whine in that range).
+#   Excluding them, measured separation: healthy <= 3.3 dB vs broken >= 9.1 dB.
 PEAK_MIN = 1e-3
 BURST_MIN = 5.0
-CURVE_TOL_DB = 4.0
+CURVE_TOL_DB = (float("inf"), 4.0, 4.0, 4.0, 4.0, 8.0)
 N_SWEEPS = 3
 
 # 50 ms at 16 kHz: long enough for a stable RMS, short enough to isolate the
@@ -237,12 +254,6 @@ def test_speaker_mic_acoustic_path(
     assert all(len(s) for s in sweeps), "No audio captured while playing."
     played = sweeps[0]
 
-    # Bring-up/debug: dump the raw windows for offline metric analysis.
-    dump = os.environ.get("REACHY_TEST_DUMP")
-    if dump:
-        np.savez(dump, noise=noise, played=played, reference=SWEEP, rate=rate)
-        print(f"\ndumped capture to {dump}")
-
     print(
         f"\nAEC config applied: {list(aec_disabled) or '(none — AEC left enabled)'}"
         f"\ncapture: {len(played)} frames @ {rate} Hz, {played.shape[1]} channels"
@@ -252,12 +263,16 @@ def test_speaker_mic_acoustic_path(
     # other. (The XVF3800's USB stream is 2 *processed* channels, not the 4 raw
     # mics — this catches a dead path, not one dead mic in the array.)
     failures: list[str] = []
+    peaks: list[float] = []
+    bursts: list[float] = []
     for channel in range(played.shape[1]):
         track = played[:, channel]
         peak = float(np.abs(track).max())
         burst = _loudest_block_rms(track, BLOCK_SAMPLES) / (
             _noise_floor(noise[:, channel]) + 1e-12
         )
+        peaks.append(peak)
+        bursts.append(burst)
         print(f"ch{channel}: peak={peak:.4f} burst={burst:.1f}")
 
         if peak <= PEAK_MIN:
@@ -276,6 +291,8 @@ def test_speaker_mic_acoustic_path(
     # processed beam). Locate each sweep with the matched filter, compute its
     # band response, then gate the per-band MEDIAN against the baseline.
     curves = []
+    xcorrs: list[float] = []
+    lags_ms: list[float] = []
     for captured in sweeps:
         track = captured[:, 0]
         xcorr, lag_s = correlation_peak(track, SWEEP, rate)
@@ -284,34 +301,62 @@ def test_speaker_mic_acoustic_path(
         if len(segment) < len(SWEEP):
             segment = np.pad(segment, (0, len(SWEEP) - len(segment)))
         curves.append(_band_response(segment)[USABLE_BANDS])
+        xcorrs.append(xcorr)
+        lags_ms.append(lag_s * 1000)
         print(f"sweep: xcorr={xcorr:.3f} lag={lag_s * 1000:.0f}ms")
 
     centers = [int(c) for c in np.asarray(BAND_CENTERS)[USABLE_BANDS]]
     curve = np.median(np.asarray(curves), axis=0)
+    drift = curve - np.asarray(BASELINE_DB)
     print("band centers Hz:", " ".join(f"{c:5d}" for c in centers))
     print("curve dB       :", " ".join(f"{v:+5.1f}" for v in curve))
+    print("drift vs base  :", " ".join(f"{v:+5.1f}" for v in drift))
 
-    if os.environ.get("REACHY_TEST_SEED_BASELINE"):
-        BASELINE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        BASELINE_PATH.write_text(
-            json.dumps({"band_centers_hz": centers, "curve_db": list(curve)})
+    for center, value, tolerance in zip(centers, drift, CURVE_TOL_DB):
+        if abs(value) > tolerance:
+            failures.append(
+                f"speaker response drifted {value:+.1f} dB at {center} Hz "
+                f"(tolerance ±{tolerance}): the speaker tuning changed "
+                "(driver, shell, EQ config), or this robot/room deviates from "
+                "the shared baseline."
+            )
+
+    # Report artifacts (REACHY_TEST_ARTIFACTS=<dir>): everything a CI report
+    # needs — the full session audio, the numbers behind every gate, and the
+    # raw windows. Written before the assert so failures keep their evidence.
+    # Plot offline with tests/hardware/plot_audio_report.py (matplotlib is not
+    # installed on the robot).
+    artifacts = os.environ.get("REACHY_TEST_ARTIFACTS")
+    if artifacts:
+        out = Path(artifacts)
+        out.mkdir(parents=True, exist_ok=True)
+        session = np.concatenate([noise, *sweeps], axis=0).astype(np.float32)
+        save_audio_to_wav(session, rate, str(out / "audio.wav"))
+        (out / "curve.json").write_text(
+            json.dumps(
+                {
+                    "band_centers_hz": centers,
+                    "curve_db": [float(v) for v in curve],
+                    "baseline_db": list(BASELINE_DB),
+                    "drift_db": [float(v) for v in drift],
+                    "tolerance_db": [
+                        t if np.isfinite(t) else None for t in CURVE_TOL_DB
+                    ],
+                    "sweep_curves_db": [[float(v) for v in c] for c in curves],
+                    "xcorr": xcorrs,
+                    "lag_ms": lags_ms,
+                    "peak": peaks,
+                    "burst": bursts,
+                    "gates": {"peak_min": PEAK_MIN, "burst_min": BURST_MIN},
+                    "rate_hz": rate,
+                    "failures": failures,
+                },
+                indent=1,
+            )
         )
-        print(f"baseline seeded at {BASELINE_PATH}")
-    elif not BASELINE_PATH.exists():
-        failures.append(
-            f"No speaker baseline at {BASELINE_PATH}. On a known-good robot, "
-            "seed it once with REACHY_TEST_SEED_BASELINE=1 and re-run."
+        np.savez(
+            out / "raw.npz", noise=noise, played=played, reference=SWEEP, rate=rate
         )
-    else:
-        baseline = np.asarray(json.loads(BASELINE_PATH.read_text())["curve_db"])
-        drift = curve - baseline
-        print("drift vs base  :", " ".join(f"{v:+5.1f}" for v in drift))
-        for center, value in zip(centers, drift):
-            if abs(value) > CURVE_TOL_DB:
-                failures.append(
-                    f"speaker response drifted {value:+.1f} dB at {center} Hz "
-                    f"(tolerance ±{CURVE_TOL_DB}): the speaker tuning changed "
-                    "(driver, shell, EQ config), or the room/baseline is stale."
-                )
+        print(f"artifacts written to {out}")
 
     assert not failures, "\n".join(failures)

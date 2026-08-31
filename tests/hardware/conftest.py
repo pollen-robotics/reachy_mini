@@ -85,7 +85,9 @@ def aec_disabled(respeaker: ReSpeaker) -> Iterator[AudioConfig]:
     for name, _ in wanted:
         current = respeaker.read_values(name)
         if current is None:
-            pytest.fail(f"Could not read {name} back from the board; refusing to write.")
+            pytest.fail(
+                f"Could not read {name} back from the board; refusing to write."
+            )
         originals.append((name, [int(v) for v in current]))
 
     assert respeaker.apply_audio_config(wanted), (
