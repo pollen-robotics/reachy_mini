@@ -43,7 +43,7 @@ dependencies = [
     "rich",
     "rustypot>=1.4.2",
     "scipy>=1.15.3, <2.0.0",
-    "starlette<1.0.0", # TODO: update TemplateResponse(request, name, context) before allowing Starlette 1.x
+    "starlette>=1.1.0",
     "toml",
     "uvicorn[standard]",
     "websockets>=12,<16",
