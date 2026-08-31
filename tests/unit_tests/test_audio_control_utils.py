@@ -38,6 +38,27 @@ def test_simulated_apply_audio_config_round_trip(fake_respeaker: ReSpeaker) -> N
         assert fake_respeaker.read_values(name) == pytest.approx(expected)
 
 
+def test_simulated_write_accepts_floats_for_int_parameters(
+    fake_respeaker: ReSpeaker,
+) -> None:
+    """Float values write cleanly to int-typed registers.
+
+    Values arriving through JSON (the REST apply endpoint, the JS SDK's
+    applyAudioConfig over the data channel) are floats after pydantic's
+    list[float] coercion. struct.pack("i", 0.0) raises, so before the explicit
+    int cast every int-typed parameter was unwritable through those paths —
+    the endpoint answered {"applied": false} for e.g. PP_ECHOONOFF=0.
+    """
+    config = (
+        ("PP_ECHOONOFF", (0.0,)),  # int32
+        ("AEC_FIXEDBEAMSGATING", (1.0,)),  # uint8
+        ("GPO_PIN_ACTIVE_LEVEL", (1.0,)),  # uint32
+    )
+    for name, values in config:
+        fake_respeaker.write(name, values)
+        assert fake_respeaker.read_values(name) == pytest.approx(values)
+
+
 @pytest.mark.audio
 @pytest.mark.respeaker
 def test_respeaker_read_values_reads_board_parameters() -> None:
