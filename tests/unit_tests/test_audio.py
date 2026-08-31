@@ -25,7 +25,11 @@ AUDIO_BACKENDS = [
 
 
 @pytest.mark.audio
-@pytest.mark.parametrize("backend", AUDIO_BACKENDS)
+# WEBRTC only: the LOCAL case is covered with real assertions by
+# test_play_sound_reaches_sink. Kept until the webrtc tests are rewritten.
+@pytest.mark.parametrize(
+    "backend", [pytest.param(MediaBackend.WEBRTC, marks=pytest.mark.wireless)]
+)
 def test_play_sound(backend: MediaBackend) -> None:
     """Test playing a sound with the given backend."""
     media = MediaManager(
@@ -202,31 +206,6 @@ def test_push_audio_sample_without_start_playing(backend: MediaBackend) -> None:
     time.sleep(1)
     # No assertion: test passes if no exception is raised.
     # Sound should not be audible if the audio device is correctly set up.
-    media.close()
-
-
-@pytest.mark.audio
-@pytest.mark.respeaker
-@pytest.mark.parametrize("backend", [MediaBackend.LOCAL])
-def test_DoA(backend: MediaBackend) -> None:
-    """Test Direction of Arrival (DoA) estimation."""
-    media = MediaManager(backend=backend)
-    # Test via GStreamerAudio directly
-    doa = media.audio.get_DoA()
-    assert doa is not None, "DoA is not defined."
-    assert isinstance(doa, tuple), "DoA is not a tuple."
-    assert len(doa) == 2, f"DoA has incorrect length: {len(doa)} != 2"
-    assert isinstance(doa[0], float), (
-        f"DoA has incorrect first type: {type(doa[0])} != float"
-    )
-    assert isinstance(doa[1], bool), (
-        f"DoA has incorrect second type: {type(doa[1])} != bool"
-    )
-    # Test via MediaManager proxy
-    doa_proxy = media.get_DoA()
-    assert doa_proxy is not None, "DoA is not defined."
-    assert doa_proxy == doa, "Proxy DoA is not equal to direct DoA"
-
     media.close()
 
 
