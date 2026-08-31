@@ -20,18 +20,21 @@ play a chime through the device under test), so this test **moves the robot**
 and needs a running daemon.
 
 Requires the XVF3800 audio board on USB from the machine running pytest:
-either a **Lite** (board on your laptop) or running **on a Wireless** robot::
+either a **Lite** (board on your laptop) or running **on a Wireless** robot.
+Both run from a repo checkout (CI git-clones the repo on the robot), so the
+markers come from pyproject.toml as usual::
 
     # Lite: from the repo checkout
     uv run pytest tests/hardware -v -m "audio and respeaker"
 
-    # Wireless: tests/hardware/ is self-contained, so copy it over.
-    # uv is preinstalled at /opt/uv on the robot image, and `--with pytest`
-    # layers pytest over the daemon venv without installing anything.
-    scp -r tests/hardware pollen@reachy-mini.local:/tmp/ht
-    ssh pollen@reachy-mini.local \\
-      "cd /tmp/ht && VIRTUAL_ENV=/venvs/mini_daemon /opt/uv/uv run --with pytest \\
-       pytest -v -m 'audio and respeaker'"
+    # Wireless: clone on the robot, then layer pytest over the daemon venv.
+    # --no-project stops uv from resolving the cloned pyproject into a fresh
+    # env on the CM4; uv is preinstalled at /opt/uv on the robot image.
+    ssh pollen@reachy-mini.local "
+      git clone --depth 1 -b <branch> \\
+          https://github.com/pollen-robotics/reachy_mini.git /tmp/rm &&
+      cd /tmp/rm && VIRTUAL_ENV=/venvs/mini_daemon /opt/uv/uv run --no-project \\
+          --with pytest pytest tests/hardware -v -m 'audio and respeaker'"
 
 The curve baseline is shared: all Reachy Minis have the same speaker, shell and
 mic, so one measured reference (robot "Michel", Wireless, isolated room,
