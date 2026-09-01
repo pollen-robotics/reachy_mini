@@ -179,7 +179,7 @@ Use `robot.addEventListener(name, handler)` — the SDK extends `EventTarget`.
 | `streaming` | `{ sessionId, robotId }` | WebRTC session active |
 | `sessionStopped` | `{ reason }` | Session ended |
 | `state` | Same shape as the `robotState` property (see above) | Robot state update (~500 ms polled, or ~30 Hz when subscribed via `subscribePose()`; wire shape) |
-| `videoTrack` | `{ track, stream }` | Video track available |
+| `videoTrack` | `{ track, stream }` | Video track available. `stream` also carries the robot's **mic audio track** (`stream.getAudioTracks()`) — usable for Web Audio metering or in-browser speech recognition (`SpeechRecognition.start(track)`, Chrome 135+) |
 | `micSupported` | `{ supported }` | Bidirectional audio availability |
 | `error` | `{ source, error }` | Error from `signaling`, `webrtc`, or `robot` |
 | `sessionRejected` | `{ reason, activeApp }` | The robot refused the session (e.g. busy with another app) |

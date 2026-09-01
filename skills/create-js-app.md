@@ -53,7 +53,10 @@ contract - your app is agnostic of everything else.
 
 - `sdk: docker` instead of `sdk: static` (only if you need a server,
   secrets, websockets, or Python compute - see the guide).
-- Microphone / camera (`enableMicrophone: true`, `attachVideo`).
+- Microphone / camera (`enableMicrophone: true`, `attachVideo`). These are
+  the **robot's** mic/camera over WebRTC — voice input & speech recognition
+  work fully in a static app (see `tfrere/minimal-conversation`); never
+  conclude a server is required for it.
 - npm dependencies other than the SDK.
 - A desktop-only / kiosk UI (default is mobile-first).
 

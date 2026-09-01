@@ -111,7 +111,7 @@ Pick the reference closest to your needs and clone its repo from Hugging Face:
 
 | Reference app                       | Stack                       | Use it for                                  |
 |-------------------------------------|-----------------------------|---------------------------------------------|
-| [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | **Vanilla TS + Vite**       | Smallest bundled runtime, no framework      |
+| [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | **Vanilla TS + Vite**       | Smallest bundled runtime, no framework. **Voice apps**: live speech with the robot's mic via the HF realtime backend, no server |
 | [`tfrere/emotions`](https://huggingface.co/spaces/tfrere/emotions)                         | React 19 + MUI 7 + Vite     | UI-rich app with rich components / theming  |
 | [`tfrere/telepresence`](https://huggingface.co/spaces/tfrere/telepresence)                 | React 19 + MUI 7 + Vite     | App with camera / media streams             |
 
