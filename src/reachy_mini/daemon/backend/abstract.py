@@ -17,6 +17,7 @@ import threading
 import time
 import typing
 from abc import abstractmethod
+from collections import deque
 from pathlib import Path
 from typing import Annotated, Any, Callable, Dict, Optional
 
@@ -354,6 +355,10 @@ class Backend:
         self._tracking_lost_timeout = 2.0
         self._tracking_aim: Annotated[NDArray[np.float64], (4, 4)] | None = None
         self._tracking_target_pose: Annotated[NDArray[np.float64], (4, 4)] | None = None
+        self._tracking_pose_history: deque[
+            tuple[float, Annotated[NDArray[np.float64], (4, 4)]]
+        ] = deque()
+        self._tracking_pose_history_s = 3.0
         self._last_face_seen: float | None = None
         self._tracker: FaceTracker | None = None
         self._tracking_lock = threading.Lock()
@@ -684,7 +689,9 @@ class Backend:
                 return False
             if self._tracking_requested_weight > 0.0:
                 if self._tracker is None:
-                    self._tracker = FaceTracker()
+                    self._tracker = FaceTracker(
+                        self._media_server.pop_camera_frame_timestamp
+                    )
                 self._tracker.start(self._media_server.camera_specs)
                 self._tracker.set_active(True)
             else:
@@ -710,8 +717,54 @@ class Backend:
         self._tracking_target_pose = None
         self._tracking_weight = 0.0
         self._last_face_seen = None
+        self._tracking_pose_history.clear()
         self._face_target = FaceTarget()
         self.ik_required = True
+
+    def _record_tracking_pose(self, timestamp: float) -> None:
+        """Append the latest measured world-head pose to the bounded history."""
+        self._tracking_pose_history.append(
+            (float(timestamp), self.get_current_head_pose().copy())
+        )
+        oldest = float(timestamp) - self._tracking_pose_history_s
+        while (
+            len(self._tracking_pose_history) > 1
+            and self._tracking_pose_history[1][0] < oldest
+        ):
+            self._tracking_pose_history.popleft()
+
+    def _tracking_pose_at(
+        self, timestamp: float
+    ) -> Annotated[NDArray[np.float64], (4, 4)] | None:
+        """Interpolate the measured head pose at a camera-frame timestamp."""
+        if not self._tracking_pose_history:
+            return None
+
+        first_ts, first_pose = self._tracking_pose_history[0]
+        last_ts, last_pose = self._tracking_pose_history[-1]
+        # A frame can precede the first control tick by a small fraction of one
+        # 50 Hz period when tracking is enabled. Accept that boundary only.
+        boundary_tolerance_s = 0.05
+        if timestamp <= first_ts:
+            return (
+                first_pose.copy()
+                if first_ts - timestamp <= boundary_tolerance_s
+                else None
+            )
+        if timestamp >= last_ts:
+            return (
+                last_pose.copy()
+                if timestamp - last_ts <= boundary_tolerance_s
+                else None
+            )
+
+        previous_ts, previous_pose = self._tracking_pose_history[0]
+        for next_ts, next_pose in list(self._tracking_pose_history)[1:]:
+            if timestamp <= next_ts:
+                alpha = (timestamp - previous_ts) / (next_ts - previous_ts)
+                return linear_pose_interpolation(previous_pose, next_pose, alpha)
+            previous_ts, previous_pose = next_ts, next_pose
+        return None
 
     def step_head_tracking(self) -> None:
         """Ease the aim toward the latest target, holding then recentering on loss.
@@ -724,19 +777,23 @@ class Backend:
             if not self._tracking_enabled or self._tracking_requested_weight <= 0.0:
                 return
             now = time.monotonic()
+            self._record_tracking_pose(now)
             if self._tracker is not None:
                 obs = self._tracker.latest()
                 if obs is not None:
-                    self.set_tracking_face(
-                        obs.center,
-                        obs.roll,
-                        obs.width,
-                        obs.height,
-                        obs.camera_matrix,
-                        obs.distortion,
-                        obs.timestamp,
-                    )
-                    if obs.center is not None:
+                    frame_head_pose = self._tracking_pose_at(obs.timestamp)
+                    if obs.center is None or frame_head_pose is not None:
+                        self.set_tracking_face(
+                            obs.center,
+                            obs.roll,
+                            obs.width,
+                            obs.height,
+                            obs.camera_matrix,
+                            obs.distortion,
+                            obs.timestamp,
+                            T_world_head=frame_head_pose,
+                        )
+                    if obs.center is not None and frame_head_pose is not None:
                         self._last_face_seen = now
             if (
                 self._last_face_seen is not None
@@ -761,6 +818,7 @@ class Backend:
         camera_matrix: NDArray[np.float64],
         distortion: NDArray[np.float64],
         timestamp: float,
+        T_world_head: Annotated[NDArray[np.float64], (4, 4)] | None = None,
     ) -> None:
         """Latch the tracking target from a face observation in tracker-frame pixels."""
         if not self._tracking_enabled:
@@ -785,12 +843,14 @@ class Backend:
         u = (x_norm + 1.0) * 0.5 * max(width - 1, 1)
         v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)
         try:
+            if T_world_head is None:
+                T_world_head = self.get_current_head_pose()
             self._tracking_target_pose = look_at_image_pose(
                 u=u,
                 v=v,
                 K=camera_matrix,
                 D=distortion,
-                T_world_head=self.get_current_head_pose(),
+                T_world_head=T_world_head,
                 T_head_cam=self.T_head_cam,
             )
         except Exception as e:

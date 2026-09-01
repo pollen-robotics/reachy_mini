@@ -4,8 +4,10 @@ import time
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from scipy.spatial.transform import Rotation as R
 
+from reachy_mini.daemon.backend import abstract as backend_module
 from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackend
 from reachy_mini.io.protocol import (
     GetTrackedFaceCmd,
@@ -246,3 +248,89 @@ def test_enable_head_tracking_weight_zero_pauses_without_stopping() -> None:
     assert tracker.active_calls[-1] is False
     assert backend._tracking_weight == 0.0
     assert tracker.stopped is False
+
+
+def test_tracking_pose_history_interpolates_capture_time() -> None:
+    """A frame between control ticks gets the measured pose from that instant."""
+    backend = _make_backend()
+    start = np.eye(4, dtype=np.float64)
+    end = np.eye(4, dtype=np.float64)
+    end[:3, :3] = R.from_euler("z", 0.4).as_matrix()
+    backend._tracking_pose_history.extend([(10.0, start), (11.0, end)])
+
+    pose = backend._tracking_pose_at(10.5)
+
+    assert pose is not None
+    assert R.from_matrix(pose[:3, :3]).as_euler("xyz")[2] == pytest.approx(0.2)
+
+
+def test_tracking_uses_head_pose_from_frame_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A delayed face observation is projected from capture pose, not current pose."""
+    backend = _make_backend()
+    backend._tracking_enabled = True
+    capture_pose = np.eye(4, dtype=np.float64)
+    current_pose = np.eye(4, dtype=np.float64)
+    current_pose[:3, :3] = R.from_euler("z", 0.5).as_matrix()
+    backend.current_head_pose = current_pose
+    backend._tracking_pose_history.append((10.0, capture_pose))
+    backend._tracker = SimpleNamespace(
+        latest=lambda: SimpleNamespace(
+            center=(0.25, 0.0),
+            roll=0.0,
+            width=640,
+            height=480,
+            camera_matrix=np.eye(3, dtype=np.float64),
+            distortion=np.zeros(5, dtype=np.float64),
+            timestamp=10.0,
+        )
+    )
+    projected_from: list[np.ndarray] = []
+
+    def fake_look_at_image_pose(**kwargs: object) -> np.ndarray:
+        pose = kwargs["T_world_head"]
+        assert isinstance(pose, np.ndarray)
+        projected_from.append(pose.copy())
+        return pose.copy()
+
+    monkeypatch.setattr(backend_module, "look_at_image_pose", fake_look_at_image_pose)
+    monkeypatch.setattr(backend_module.time, "monotonic", lambda: 10.1)
+
+    backend.step_head_tracking()
+
+    assert len(projected_from) == 1
+    np.testing.assert_allclose(projected_from[0], capture_pose)
+
+
+def test_tracking_drops_detected_observation_without_capture_pose(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Never silently project a detected face from the processing-time pose."""
+    backend = _make_backend()
+    backend._tracking_enabled = True
+    backend._tracker = SimpleNamespace(
+        latest=lambda: SimpleNamespace(
+            center=(0.25, 0.0),
+            roll=0.0,
+            width=640,
+            height=480,
+            camera_matrix=np.eye(3, dtype=np.float64),
+            distortion=np.zeros(5, dtype=np.float64),
+            timestamp=1.0,
+        )
+    )
+    projected = False
+
+    def fake_look_at_image_pose(**_kwargs: object) -> np.ndarray:
+        nonlocal projected
+        projected = True
+        return np.eye(4, dtype=np.float64)
+
+    monkeypatch.setattr(backend_module, "look_at_image_pose", fake_look_at_image_pose)
+    monkeypatch.setattr(backend_module.time, "monotonic", lambda: 10.0)
+
+    backend.step_head_tracking()
+
+    assert projected is False
+    assert backend.get_tracked_face().detected is False
