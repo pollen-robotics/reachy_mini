@@ -105,6 +105,39 @@ def test_face_tracker_resets_filter_after_target_loss() -> None:
     assert observation.center == pytest.approx((-0.8, 0.0))
 
 
+def test_face_tracker_uses_producer_timestamp_from_buffer_offset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The IPC frame offset recovers its pre-IPC timestamp before inference."""
+    buffer = SimpleNamespace(offset=42)
+    tracker = FaceTracker(lambda offset: 12.5 if offset == 42 else None)
+    monkeypatch.setattr(face_tracking.time, "monotonic", lambda: 13.0)
+
+    assert tracker._frame_timestamp(buffer) == 12.5  # type: ignore[arg-type]
+
+
+def test_face_tracker_without_producer_lookup_uses_pre_inference_arrival_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Standalone use without a producer map still timestamps before inference."""
+    buffer = SimpleNamespace(offset=43)
+    tracker = FaceTracker()
+    monkeypatch.setattr(face_tracking.time, "monotonic", lambda: 13.0)
+
+    assert tracker._frame_timestamp(buffer) == 13.0  # type: ignore[arg-type]
+
+
+def test_face_tracker_rejects_frame_when_expected_producer_mapping_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Daemon tracking never silently falls back to a later pose clock."""
+    buffer = SimpleNamespace(offset=43)
+    tracker = FaceTracker(lambda _offset: None)
+    monkeypatch.setattr(face_tracking.time, "monotonic", lambda: 13.0)
+
+    assert tracker._frame_timestamp(buffer) is None  # type: ignore[arg-type]
+
+
 def test_tracker_acquires_largest_above_min_size() -> None:
     """A fresh track picks the largest face once it clears the size gate."""
     tracker = Tracker(min_area_frac=0.0)

@@ -53,6 +53,7 @@ from reachy_mini.media.camera_constants import (
     MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
+from reachy_mini.media.camera_timestamps import CameraFrameTimestamps
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
 from reachy_mini.media.gstreamer_utils import handle_default_bus_message
 from reachy_mini.media.webrtc_utils import TurnCredentials
@@ -256,6 +257,10 @@ class GstMediaServer:
         # lock, a subscribe interleaved with a disarm could observe a stale
         # source id, skip the re-arm, and leave the stream permanently dead.
         self._pose_lock = Lock()
+        # ``unixfdsrc`` preserves the camera buffer offset but resets its PTS.
+        # Use the shared offset to hand the producer-side frame time to local
+        # consumers such as daemon face tracking.
+        self._camera_frame_timestamps = CameraFrameTimestamps()
         # Optional callback fired on the GStreamer thread when a peer
         # leaves; used by the backend to free per-peer resources such
         # as the journalctl subprocess for a `subscribe_logs` stream.
@@ -306,6 +311,7 @@ class GstMediaServer:
 
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
+        self._camera_frame_timestamps.clear()
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
         self._bus_sender = self._pipeline_sender.get_bus()
         self._bus_sender.add_watch(
@@ -1074,6 +1080,14 @@ class GstMediaServer:
                 os.remove(CAMERA_SOCKET_PATH)
             ipc_sink.set_property("socket-path", CAMERA_SOCKET_PATH)
 
+        sink_pad = ipc_sink.get_static_pad("sink")
+        if sink_pad is not None:
+            sink_pad.add_probe(
+                Gst.PadProbeType.BUFFER,
+                self._record_camera_frame_timestamp,
+                pipeline,
+            )
+
         # On RPi, libcamerasrc produces dmabuf FD-backed buffers natively,
         # so unixfdsink works directly.  On other platforms we need the
         # identity + videoconvert workaround described above.
@@ -1104,6 +1118,51 @@ class GstMediaServer:
             identity.link(videoconvert_ipc)
             videoconvert_ipc.link(capsfilter_ipc)
             capsfilter_ipc.link(ipc_sink)
+
+    def _record_camera_frame_timestamp(
+        self,
+        _pad: Gst.Pad,
+        info: Gst.PadProbeInfo,
+        pipeline: Gst.Pipeline,
+    ) -> int:
+        """Remember producer time for the exact frame handed to local IPC."""
+        buffer = info.get_buffer()
+        if buffer is None:
+            return int(Gst.PadProbeReturn.OK)
+
+        offset = int(buffer.offset)
+        if offset == int(Gst.BUFFER_OFFSET_NONE):
+            return int(Gst.PadProbeReturn.OK)
+
+        handoff_monotonic = time.monotonic()
+        frame_running_s: float | None = None
+        running_s: float | None = None
+        try:
+            pts = int(buffer.pts)
+            running = int(pipeline.get_current_running_time())
+            segment_event = _pad.get_sticky_event(Gst.EventType.SEGMENT, 0)
+            if segment_event is not None and pts != int(Gst.CLOCK_TIME_NONE):
+                segment = segment_event.parse_segment()
+                frame_running = int(segment.to_running_time(Gst.Format.TIME, pts))
+                if frame_running != int(Gst.CLOCK_TIME_NONE):
+                    frame_running_s = frame_running / float(Gst.SECOND)
+            if running != int(Gst.CLOCK_TIME_NONE):
+                running_s = running / float(Gst.SECOND)
+        except Exception:
+            # Timing metadata must never interrupt the camera path. The
+            # pre-IPC handoff instant remains a safe, slightly later fallback.
+            pass
+        self._camera_frame_timestamps.record(
+            offset,
+            handoff_monotonic,
+            frame_running_time_s=frame_running_s,
+            pipeline_running_time_s=running_s,
+        )
+        return int(Gst.PadProbeReturn.OK)
+
+    def pop_camera_frame_timestamp(self, frame_offset: int) -> float | None:
+        """Return and remove the producer-side timestamp for an IPC frame."""
+        return self._camera_frame_timestamps.pop(frame_offset)
 
     def _build_rpi_encoder_branch(
         self,

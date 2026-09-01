@@ -7,6 +7,7 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
+from typing import Callable
 
 import gi
 import numpy as np
@@ -173,7 +174,10 @@ def to_observation(
 class FaceTracker:
     """Run the face detector in a daemon thread and expose the latest observation."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        frame_timestamp_lookup: Callable[[int], float | None] | None = None,
+    ) -> None:
         """Initialize the tracker; no thread is started until ``start``."""
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -181,6 +185,20 @@ class FaceTracker:
         self._observations: queue.SimpleQueue[FaceObservation] = queue.SimpleQueue()
         self._selector = Tracker()
         self._center_filter = _AdaptiveCenterFilter()
+        self._frame_timestamp_lookup = frame_timestamp_lookup
+
+    def _frame_timestamp(self, buffer: Gst.Buffer) -> float | None:
+        """Return producer time, or reject a frame whose expected mapping is lost."""
+        arrival = time.monotonic()
+        if self._frame_timestamp_lookup is None:
+            return arrival
+        offset = int(buffer.offset)
+        if offset == int(Gst.BUFFER_OFFSET_NONE):
+            return None
+        timestamp = self._frame_timestamp_lookup(offset)
+        if timestamp is None or timestamp > arrival:
+            return None
+        return timestamp
 
     def start(self, camera_specs: CameraSpecs) -> None:
         """Start the detector thread if it is not already running."""
@@ -334,6 +352,9 @@ class FaceTracker:
                 frame_width = structure.get_value("width")
                 frame_height = structure.get_value("height")
                 buf = sample.get_buffer()
+                frame_timestamp = self._frame_timestamp(buf)
+                if frame_timestamp is None:
+                    continue
                 frame = np.frombuffer(
                     buf.extract_dup(0, buf.get_size()), dtype=np.uint8
                 ).reshape((frame_height, frame_width, 3))
@@ -347,7 +368,7 @@ class FaceTracker:
                     frame_height,
                     camera_matrix,
                     camera_specs.D,
-                    time.monotonic(),
+                    frame_timestamp,
                 )
         except Exception:
             # With no process boundary left, this is the only place a detector crash gets reported.
