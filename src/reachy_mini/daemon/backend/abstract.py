@@ -120,6 +120,11 @@ from reachy_mini.vision.look_at import (
     look_at_image_pose,
 )
 
+# Gaze trim added to lower head-tracking aim pitch. This pose feels better
+# (subjective) and also improves the orientation of the microphone when
+# speaking to it.
+_TRACKING_PITCH_TRIM_RAD = float(np.radians(15.0))
+
 
 class _PlaybackCancelToken:
     """Per-run cancellation handle for ``Backend.play_move``.
@@ -785,7 +790,7 @@ class Backend:
         u = (x_norm + 1.0) * 0.5 * max(width - 1, 1)
         v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)
         try:
-            self._tracking_target_pose = look_at_image_pose(
+            target_pose = look_at_image_pose(
                 u=u,
                 v=v,
                 K=camera_matrix,
@@ -793,6 +798,11 @@ class Backend:
                 T_world_head=self.get_current_head_pose(),
                 T_head_cam=self.T_head_cam,
             )
+            roll_a, pitch_a, yaw_a = R.from_matrix(target_pose[:3, :3]).as_euler("xyz")
+            target_pose[:3, :3] = R.from_euler(
+                "xyz", [roll_a, pitch_a + _TRACKING_PITCH_TRIM_RAD, yaw_a]
+            ).as_matrix()
+            self._tracking_target_pose = target_pose
         except Exception as e:
             self.logger.warning("Head-tracking aim update failed: %s", e)
 
