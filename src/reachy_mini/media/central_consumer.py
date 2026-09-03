@@ -112,6 +112,7 @@ from aiortc.sdp import candidate_from_sdp
 from pydantic import BaseModel
 
 from reachy_mini.io.protocol import AnyCommand
+from reachy_mini.utils.network import validate_secure_http_url
 from reachy_mini.utils.proxy import proxy_for
 
 logger = logging.getLogger(__name__)
@@ -240,7 +241,7 @@ class ReachyCentralConsumer:
         if not hf_token:
             raise ValueError("hf_token is required for ReachyCentralConsumer")
         self._hf_token = hf_token
-        self._central_url = central_url.rstrip("/")
+        self._central_url = validate_secure_http_url(central_url, "central_url")
         self._robot_name = robot_name
         self._consumer_label = consumer_label
         self._ice_servers_provider = ice_servers_provider
@@ -458,7 +459,11 @@ class ReachyCentralConsumer:
         timeout = aiohttp.ClientTimeout(total=None, sock_read=60.0)
         assert self._http is not None
         async with self._http.get(
-            url, headers=headers, timeout=timeout, proxy=proxy_for(url)
+            url,
+            headers=headers,
+            timeout=timeout,
+            allow_redirects=False,
+            proxy=proxy_for(url),
         ) as resp:
             if resp.status != 200:
                 txt = (await resp.text())[:200]
@@ -698,6 +703,7 @@ class ReachyCentralConsumer:
             url,
             headers=headers,
             timeout=aiohttp.ClientTimeout(total=10.0),
+            allow_redirects=False,
             proxy=proxy_for(url),
         ) as resp:
             resp.raise_for_status()
@@ -774,6 +780,7 @@ class ReachyCentralConsumer:
                 headers=headers,
                 json=body,
                 timeout=timeout,
+                allow_redirects=False,
                 proxy=proxy_for(url),
             ) as resp:
                 if resp.status != 200:

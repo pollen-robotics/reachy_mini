@@ -24,6 +24,7 @@ from websockets.asyncio.client import ClientConnection
 
 from reachy_mini.daemon.robot_app_lock import RobotAppLock, RobotAppLockState
 from reachy_mini.utils.hardware_id import get_hardware_id
+from reachy_mini.utils.network import validate_secure_http_url
 from reachy_mini.utils.proxy import proxy_for
 
 logger = logging.getLogger(__name__)
@@ -135,7 +136,7 @@ class CentralSignalingRelay:
                 active remote session.
 
         """
-        self.central_uri = central_uri
+        self.central_uri = validate_secure_http_url(central_uri, "central_uri")
         self.local_uri = local_uri
         self.hf_token = hf_token
         self.robot_name = robot_name
@@ -1062,7 +1063,11 @@ class CentralSignalingRelay:
         timeout = aiohttp.ClientTimeout(total=PRODUCER_HEALTH_CHECK_TIMEOUT)
         try:
             async with self._http_session.get(
-                url, headers=headers, timeout=timeout, proxy=proxy_for(url)
+                url,
+                headers=headers,
+                timeout=timeout,
+                allow_redirects=False,
+                proxy=proxy_for(url),
             ) as response:
                 if response.status != 200:
                     logger.debug(
@@ -1178,6 +1183,7 @@ class CentralSignalingRelay:
                 events_url,
                 headers=headers,
                 timeout=timeout,
+                allow_redirects=False,
                 proxy=proxy_for(events_url),
             ) as response:
                 if response.status == 401:
@@ -1287,7 +1293,11 @@ class CentralSignalingRelay:
         headers = {"Authorization": f"Bearer {self.hf_token}"}
         try:
             async with self._http_session.post(
-                send_url, json=msg, headers=headers, proxy=proxy_for(send_url)
+                send_url,
+                json=msg,
+                headers=headers,
+                allow_redirects=False,
+                proxy=proxy_for(send_url),
             ) as response:
                 if response.status != 200:
                     body = ""
