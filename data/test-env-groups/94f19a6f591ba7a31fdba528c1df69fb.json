@@ -1,1 +1,1 @@
-{"id":"94f19a6f591ba7a31fdba528c1df69fb","fullName":"tests.unit_tests.test_device_detection.TestFindAudioDevice#test_pulseaudio_sink","name":"test_pulseaudio_sink","status":"passed","testResultsByEnv":{"default":"5f90d7cc5097b025d571419a72175d30"}}
+{"id":"94f19a6f591ba7a31fdba528c1df69fb","fullName":"tests.unit_tests.test_device_detection.TestFindAudioDevice#test_pulseaudio_sink","name":"test_pulseaudio_sink","status":"passed","testResultsByEnv":{"default":"57ff58030653d415b4130cf2f3dfd5d1"}}

@@ -1,0 +1,1 @@
+{"id":"0159746f0397ec320cce89ee6a4a30bc","fullName":"tests.unit_tests.test_proxy_env_support#test_unauthenticated_request_gains_no_netrc_credentials","name":"test_unauthenticated_request_gains_no_netrc_credentials","status":"passed","testResultsByEnv":{"default":"afaa18c18caf82565c5f31e2bf41774e"}}

@@ -1,1 +1,0 @@
-ERROR    reachy_mini.apps.sources.hf_auth:hf_auth.py:496 [HF Auth] Failed to request device code: network down

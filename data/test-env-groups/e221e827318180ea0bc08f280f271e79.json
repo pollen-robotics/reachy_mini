@@ -1,1 +1,1 @@
-{"id":"e221e827318180ea0bc08f280f271e79","fullName":"tests.unit_tests.test_hf_hub_private_api_contract#test_device_code_error_is_exception","name":"test_device_code_error_is_exception","status":"passed","testResultsByEnv":{"default":"0565b4b6d0a42a114a4f74b320c1a934"}}
+{"id":"e221e827318180ea0bc08f280f271e79","fullName":"tests.unit_tests.test_hf_hub_private_api_contract#test_device_code_error_is_exception","name":"test_device_code_error_is_exception","status":"passed","testResultsByEnv":{"default":"9564a8f85c36da5924db021effebe0d5"}}

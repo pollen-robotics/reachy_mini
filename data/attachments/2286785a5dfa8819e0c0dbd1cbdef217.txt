@@ -1,0 +1,1 @@
+WARNING  reachy_mini.utils.proxy:proxy.py:92 Ignoring https proxy 'https://secure-proxy.local:3128': aiohttp only supports plain-HTTP proxies (HTTPS is tunnelled through them with CONNECT).

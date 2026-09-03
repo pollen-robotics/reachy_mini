@@ -1,1 +1,1 @@
-{"id":"621fa334732650409061e4f2003c2b5e","fullName":"tests.unit_tests.test_daemon#test_daemon_start_stop","name":"test_daemon_start_stop","status":"passed","testResultsByEnv":{"default":"d6080965df26a00526d8efa506264786"}}
+{"id":"621fa334732650409061e4f2003c2b5e","fullName":"tests.unit_tests.test_daemon#test_daemon_start_stop","name":"test_daemon_start_stop","status":"passed","testResultsByEnv":{"default":"5c92ecb1a4b78ddc771a92c792dcfd62"}}
