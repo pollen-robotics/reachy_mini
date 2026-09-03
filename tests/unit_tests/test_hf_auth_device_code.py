@@ -116,7 +116,8 @@ def test_start_returns_error_when_request_fails(
     result = asyncio.run(hf_auth.start_device_code_login())
 
     assert result["status"] == "error"
-    assert "network down" in result["message"]
+    assert result["message"] == hf_auth.AUTHENTICATION_UNAVAILABLE_MESSAGE
+    assert "network down" not in result["message"]
     assert hf_auth._device_code_sessions == {}
 
 

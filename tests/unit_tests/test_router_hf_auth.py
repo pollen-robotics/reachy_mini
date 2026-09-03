@@ -213,18 +213,33 @@ def test_central_robot_status_no_token(monkeypatch, router_app):
     }
 
 
-def test_oauth_callback_error_param(monkeypatch, router_app):
-    """Callback with an OAuth error renders the failure page (no network)."""
-    monkeypatch.setattr(src, "get_session_by_state", lambda state: None)
+def test_oauth_callback_redacts_and_escapes_provider_text(monkeypatch, router_app):
+    """A provider error never reaches the page, the session, or the status poll."""
+    session = types.SimpleNamespace(status="pending", error_message=None)
+    monkeypatch.setattr(src, "get_session_by_state", lambda state: session)
     client = router_app(hf_auth.router)
 
     resp = client.get(
         "/hf-auth/oauth/callback",
-        params={"error": "access_denied", "error_description": "user said no"},
+        params={
+            "state": "st",
+            "error": "access_denied",
+            "error_description": "<script>provider-secret-marker</script>",
+        },
     )
 
     assert resp.status_code == 200
-    assert "user said no" in resp.text
+    assert src.AUTHORIZATION_DENIED_MESSAGE in resp.text
+    assert "provider-secret-marker" not in resp.text
+    assert session.error_message == src.AUTHORIZATION_DENIED_MESSAGE
+
+
+def test_oauth_result_page_escapes_interpolated_text():
+    """Markup in a result-page message is escaped, not rendered."""
+    page = hf_auth._oauth_result_page(success=True, message="<img src=x onerror=1>")
+
+    assert "<img src=x" not in page
+    assert "&lt;img src=x" in page
 
 
 def test_oauth_callback_missing_code(router_app):

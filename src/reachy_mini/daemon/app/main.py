@@ -518,6 +518,29 @@ def configure_root_logging(log_level: str, log_file: str | None = None) -> None:
         root_logger.addHandler(file_handler)
 
 
+_POLLING_PATHS = ("/health-check", "/api/hf-auth/relay-status")
+# Hugging Face redirects here with the OAuth authorization code in the query.
+_OAUTH_CALLBACK_PATH = "/api/hf-auth/oauth/callback"
+
+
+def access_log_filter(record: logging.LogRecord) -> bool:
+    """Keep the OAuth code out of uvicorn access logs and quieten polling routes."""
+    if isinstance(record.args, tuple):
+        record.args = tuple(
+            argument.split("?", 1)[0] + "?<redacted>"
+            if isinstance(argument, str)
+            and _OAUTH_CALLBACK_PATH in argument
+            and "?" in argument
+            else argument
+            for argument in record.args
+        )
+    message = record.getMessage()
+    if any(path in message for path in _POLLING_PATHS):
+        record.levelno = logging.DEBUG
+        record.levelname = "DEBUG"
+    return True
+
+
 def run_app(args: Args) -> None:
     """Run the FastAPI app with Uvicorn."""
     # Handlers are installed by configure_root_logging() in main(), before the
@@ -540,18 +563,7 @@ def run_app(args: Args) -> None:
     apps_logger.setLevel(args.log_level)
     apps_logger.propagate = True  # Ensure it propagates to root logger
 
-    # Downgrade noisy polling routes to DEBUG in uvicorn access logs
-    class AccessLogFilter(logging.Filter):
-        _POLLING_PATHS = {"/health-check", "/api/hf-auth/relay-status"}
-
-        def filter(self, record: logging.LogRecord) -> bool:
-            msg = record.getMessage()
-            if any(path in msg for path in self._POLLING_PATHS):
-                record.levelno = logging.DEBUG
-                record.levelname = "DEBUG"
-            return True
-
-    logging.getLogger("uvicorn.access").addFilter(AccessLogFilter())
+    logging.getLogger("uvicorn.access").addFilter(access_log_filter)
 
     # Install exception hook to catch uncaught exceptions
     def exception_hook(

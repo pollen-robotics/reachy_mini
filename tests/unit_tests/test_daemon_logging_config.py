@@ -16,7 +16,7 @@ import logging
 
 import pytest
 
-from reachy_mini.daemon.app.main import configure_root_logging
+from reachy_mini.daemon.app.main import access_log_filter, configure_root_logging
 
 
 @pytest.fixture
@@ -81,3 +81,31 @@ def test_level_is_honoured(clean_root, capsys):
     err = capsys.readouterr().err
     assert "chatty" not in err
     assert "important" in err
+
+
+def _access_record(path: str) -> logging.LogRecord:
+    """Build a record shaped exactly as uvicorn.access emits one."""
+    return logging.LogRecord(
+        "uvicorn.access",
+        logging.INFO,
+        __file__,
+        0,
+        '%s - "%s %s HTTP/%s" %d',
+        ("127.0.0.1:54321", "GET", path, "1.1", 200),
+        None,
+    )
+
+
+def test_oauth_code_is_redacted_without_flattening_other_access_logs():
+    """Hugging Face redirects with a single-use authorization code in the query."""
+    callback = _access_record("/api/hf-auth/oauth/callback?code=abc123&state=xyz789")
+    ordinary = _access_record("/api/apps/list-available?source_kind=hf_space")
+    polling = _access_record("/health-check")
+    for record in (callback, ordinary, polling):
+        assert access_log_filter(record)
+
+    assert "abc123" not in callback.getMessage()
+    assert "/api/hf-auth/oauth/callback?<redacted>" in callback.getMessage()
+    assert callback.getMessage().endswith("200"), "the status must survive redaction"
+    assert "source_kind=hf_space" in ordinary.getMessage()
+    assert polling.levelname == "DEBUG"

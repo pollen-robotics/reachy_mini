@@ -7,7 +7,7 @@
  * the exact behaviour, including a legacy bundle captured from the
  * published `@pollen-robotics/reachy-mini-sdk@1.9.0` package.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   PROTOCOL_SOURCE,
@@ -66,6 +66,15 @@ describe('encodeCredsToHash / decodeCredsFromHash', () => {
   it('returns null (not throw) on malformed base64', () => {
     expect(decodeCredsFromHash('#creds=%%%not-base64%%%')).toBeNull();
     expect(decodeCredsFromHash('#creds=aGVsbG8')).toBeNull(); // "hello", not JSON
+  });
+
+  it('never echoes the bundle when decoding fails', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const truncated = window.btoa('{"hfToken":"browser-secret-marker"');
+
+    expect(decodeCredsFromHash(`#creds=${truncated}`)).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 
   it('decodes a legacy 1.9.0 bundle (no robotHardwareId)', () => {
