@@ -246,3 +246,26 @@ def test_enable_head_tracking_weight_zero_pauses_without_stopping() -> None:
     assert tracker.active_calls[-1] is False
     assert backend._tracking_weight == 0.0
     assert tracker.stopped is False
+
+
+def test_tracking_aim_pitches_down_by_the_trim() -> None:
+    """A face at the image center aims 15 degrees below the camera axis."""
+    backend = _make_backend()
+    backend._tracking_enabled = True
+    backend.set_tracking_face(
+        center=(0.0, 0.0),  # principal point for this camera matrix
+        roll=0.0,
+        width=641,
+        height=481,
+        camera_matrix=np.array(
+            [[640.0, 0.0, 320.0], [0.0, 640.0, 240.0], [0.0, 0.0, 1.0]],
+            dtype=np.float64,
+        ),
+        distortion=np.zeros(5, dtype=np.float64),
+        timestamp=1.0,
+    )
+
+    assert backend._tracking_target_pose is not None
+    _, pitch, yaw = R.from_matrix(backend._tracking_target_pose[:3, :3]).as_euler("xyz")
+    assert abs(pitch - np.radians(15.0)) < 1e-6
+    assert abs(yaw) < 1e-6
