@@ -500,8 +500,7 @@ class GStreamerAudio(AudioBase):
         self._appsrc_pts = -1
         self._pipeline.set_state(Gst.State.NULL)
         if self._playbin is not None:
-            self._playbin.set_state(Gst.State.NULL)
-            self._playbin = None
+            self._teardown_playbin(self._playbin)
 
     def clear_player(self) -> None:
         """Flush the player's appsrc to drop any queued audio immediately."""
@@ -544,7 +543,7 @@ class GStreamerAudio(AudioBase):
             file_path = sound_file
 
         if self._playbin is not None:
-            self._playbin.set_state(Gst.State.NULL)
+            self._teardown_playbin(self._playbin)
 
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
@@ -569,7 +568,46 @@ class GStreamerAudio(AudioBase):
             self._head_wobbler.start()
 
         self._playbin = playbin
+
+        # Tear the playbin down once playback finishes.  Without this it
+        # idles in PLAYING with the file loaded indefinitely: its pipeline
+        # threads are never released, and the idle pipeline can spontaneously
+        # replay the loaded file with no log trace.
+        bus = playbin.get_bus()
+        bus.add_signal_watch()
+        bus.connect("message", self._on_playbin_message, playbin)
+
         playbin.set_state(Gst.State.PLAYING)
+
+    def _on_playbin_message(
+        self, _bus: Gst.Bus, msg: Gst.Message, playbin: Gst.Element
+    ) -> None:
+        """Tear down *playbin* once it reaches EOS or fails with an error.
+
+        Args:
+            _bus: The playbin's bus (provided by the signal, unused).
+            msg: The bus message being dispatched.
+            playbin: The playbin this watch was installed for.
+
+        """
+        if msg.type not in (Gst.MessageType.EOS, Gst.MessageType.ERROR):
+            return
+        if msg.type == Gst.MessageType.ERROR:
+            err, dbg = msg.parse_error()
+            self.logger.error(f"play_sound playbin error: {err} ({dbg})")
+        self._teardown_playbin(playbin)
+
+    def _teardown_playbin(self, playbin: Gst.Element) -> None:
+        """Stop *playbin*, drop its bus watch, and release its threads.
+
+        Args:
+            playbin: The playbin to tear down.
+
+        """
+        playbin.get_bus().remove_signal_watch()
+        playbin.set_state(Gst.State.NULL)
+        if self._playbin is playbin:
+            self._playbin = None
 
     def upload_sound(self, sound_file: str) -> str:
         """No-op for the local backend — the file is already accessible.
