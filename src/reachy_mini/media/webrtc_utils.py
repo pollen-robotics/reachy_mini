@@ -172,7 +172,16 @@ class TurnCredentials:
                 timeout=_TURN_HTTP_TIMEOUT_S,
                 allow_redirects=False,
             )
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                logger.warning(
+                    "TURN proxy returned HTTP %s; expected 200", resp.status_code
+                )
+                # A redirect needs a configuration fix, not a fast retry.
+                return (
+                    period
+                    if 300 <= resp.status_code < 400
+                    else _TURN_RETRY_AFTER_FAILURE_S
+                )
             uris = ice_servers_to_turn_uris(resp.json().get("iceServers") or [])
         except Exception as e:  # noqa: BLE001 - a relay is best-effort
             logger.warning("Failed to fetch TURN credentials: %r", e)

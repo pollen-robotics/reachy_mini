@@ -136,7 +136,9 @@ class CentralSignalingRelay:
                 active remote session.
 
         """
-        self.central_uri = validate_secure_http_url(central_uri, "central_uri")
+        self.central_uri = validate_secure_http_url(central_uri, "central_uri").rstrip(
+            "/"
+        )
         self.local_uri = local_uri
         self.hf_token = hf_token
         self.robot_name = robot_name

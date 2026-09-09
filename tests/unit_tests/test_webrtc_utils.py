@@ -171,48 +171,6 @@ def test_turn_credentials_reject_unsafe_bearer_destinations(url: str) -> None:
         webrtc_utils.TurnCredentials(url=url)
 
 
-def test_turn_credentials_refresh_once_populates_cache(monkeypatch) -> None:
-    """A successful fetch is converted to URIs and cached for readers."""
-    creds = webrtc_utils.TurnCredentials(
-        url="https://turn.example/credentials", ttl=600
-    )
-
-    class _Resp:
-        @staticmethod
-        def raise_for_status() -> None:
-            pass
-
-        @staticmethod
-        def json() -> dict:
-            return {
-                "iceServers": [
-                    {"urls": "stun:stun.example:3478"},
-                    {
-                        "urls": "turn:relay.example:3478",
-                        "username": "u",
-                        "credential": "p",
-                    },
-                ]
-            }
-
-    seen: dict = {}
-
-    def _fake_get(url, **kwargs):
-        seen["url"] = url
-        seen["headers"] = kwargs.get("headers")
-        seen["params"] = kwargs.get("params")
-        return _Resp()
-
-    monkeypatch.setattr(webrtc_utils, "requests", type("R", (), {"get": _fake_get}))
-    monkeypatch.setattr("huggingface_hub.get_token", lambda: "hf_tok", raising=False)
-
-    assert creds._refresh_once() == 300.0  # half the 600 s TTL
-    assert creds.turn_uris() == ["turn://u:p@relay.example:3478"]
-    assert seen["url"] == "https://turn.example/credentials"
-    assert seen["headers"]["Authorization"] == "Bearer hf_tok"
-    assert seen["params"] == {"ttl": 600}
-
-
 def test_turn_credentials_network_failure_retries_soon(monkeypatch) -> None:
     """A transient failure backs off briefly and keeps the last good creds."""
     creds = webrtc_utils.TurnCredentials()

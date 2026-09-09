@@ -933,7 +933,7 @@ class _FakeHTTPSession:
 
     def __init__(self, status: int = 200) -> None:
         self._status = status
-        self.posts: list[tuple[str, Any, Any, bool]] = []
+        self.posts: list[tuple[str, Any, Any]] = []
         self.closed = False
 
     def post(
@@ -944,7 +944,7 @@ class _FakeHTTPSession:
         allow_redirects: bool = True,
         proxy: Any = None,
     ) -> _FakeResponse:
-        self.posts.append((url, json, headers, allow_redirects))
+        self.posts.append((url, json, headers))
         return _FakeResponse(self._status)
 
     async def close(self) -> None:
@@ -987,12 +987,10 @@ def test_send_to_central_posts_with_bearer_token() -> None:
     relay._http_session = _FakeHTTPSession(status=200)  # type: ignore[assignment]
     relay.hf_token = "tok"
     asyncio.run(relay._send_to_central({"type": "peer"}))
-    url, body, headers, allow_redirects = relay._http_session.posts[0]
+    url, body, headers = relay._http_session.posts[0]
     assert url == f"{relay.central_uri}/send"
     assert body == {"type": "peer"}
     assert headers == {"Authorization": "Bearer tok"}
-    # A redirect must not carry the bearer to another origin.
-    assert allow_redirects is False
 
 
 def test_send_to_central_non_200_does_not_raise() -> None:

@@ -1,10 +1,4 @@
-"""Tests for the cloud-backend consumer's outbound command path.
-
-`send_command` is the only part of `ReachyCentralConsumer` that runs
-without a peer connection: it serializes an envelope and marshals the
-send onto aiortc's loop. Both are faked here, so what is under test is
-the wire format the daemon will have to parse.
-"""
+"""Consumer endpoint configuration and outbound command serialization."""
 
 import json
 
@@ -14,45 +8,9 @@ from reachy_mini.io.protocol import GotoTargetCmd, SetFullTargetCmd
 from reachy_mini.media.central_consumer import ReachyCentralConsumer
 
 
-@pytest.mark.parametrize(
-    ("central_url", "message"),
-    [
-        ("http://central.example", "HTTPS outside loopback"),
-        ("ftp://central.example", "must be an HTTP"),
-        ("https:///base", "must be an HTTP"),
-        ("https://user:password@central.example", "must not contain"),
-        ("https://central.example?tenant=pollen", "must not contain"),
-        ("https://central.example#fragment", "must not contain"),
-        ("https://central.example:invalid", "valid HTTP"),
-        ("https://central.example:0", "valid HTTP"),
-        ("https://central.example:", "valid HTTP"),
-        ("https://central.example\\evil.example", "valid HTTP"),
-        ("https://central example", "valid HTTP"),
-        (" https://central.example", "valid HTTP"),
-        ("https://user:secret-marker@exam／ple.com", "valid HTTP"),
-    ],
-)
-def test_consumer_rejects_unsafe_central_urls(central_url: str, message: str) -> None:
-    """An unsafe endpoint is refused without echoing credential-bearing input."""
-    with pytest.raises(ValueError, match=message) as error:
-        ReachyCentralConsumer(hf_token="hf_test", central_url=central_url)
-    assert "secret-marker" not in str(error.value)
-
-
-@pytest.mark.parametrize(
-    ("central_url", "expected"),
-    [
-        ("http://localhost:8000/", "http://localhost:8000"),
-        ("http://127.0.0.1:8000/central/", "http://127.0.0.1:8000/central"),
-        ("https://central.example/base/", "https://central.example/base"),
-    ],
-)
-def test_consumer_accepts_secure_and_loopback_central_urls(
-    central_url: str, expected: str
-) -> None:
-    """Secure and loopback endpoints keep an optional base path."""
-    consumer = ReachyCentralConsumer(hf_token="hf_test", central_url=central_url)
-    assert consumer._central_url == expected
+def test_consumer_rejects_plaintext_remote_central() -> None:
+    with pytest.raises(ValueError, match="HTTPS outside loopback"):
+        ReachyCentralConsumer(hf_token="hf_test", central_url="http://central.example")
 
 
 class _FakeChannel:

@@ -5,7 +5,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 
 def validate_secure_http_url(url: str, setting_name: str) -> str:
-    """Validate an HTTP endpoint that may receive bearer credentials."""
+    """Validate a bearer destination without rewriting its endpoint path."""
     if "\\" in url or any(map(str.isspace, url)):
         raise ValueError(f"{setting_name} must be a valid HTTP(S) URL")
     try:
@@ -28,11 +28,11 @@ def validate_secure_http_url(url: str, setting_name: str) -> str:
             f"{setting_name} must not contain credentials, a query, or a fragment"
         )
 
-    host = parsed.hostname.rstrip(".").lower()
+    host = parsed.hostname.rstrip(".")
     try:
         is_loopback = ipaddress.ip_address(host).is_loopback
     except ValueError:
         is_loopback = host == "localhost"
     if parsed.scheme != "https" and not is_loopback:
         raise ValueError(f"{setting_name} must use HTTPS outside loopback")
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
+    return urlunsplit(parsed)

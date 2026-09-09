@@ -296,7 +296,7 @@ class GstMediaServer:
         # Refreshed off-thread so `_consumer_added` can read credentials
         # without doing I/O on the thread that builds the SDP offer.
         # None when relay candidates are disabled.
-        self._turn: Optional[TurnCredentials] = None
+        self._turn: TurnCredentials | None = None
         if enable_turn:
             try:
                 self._turn = TurnCredentials()

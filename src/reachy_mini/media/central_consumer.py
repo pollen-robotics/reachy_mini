@@ -235,13 +235,15 @@ class ReachyCentralConsumer:
                 ``on_pcm``.
 
         Raises:
-            ValueError: if ``hf_token`` is empty.
+            ValueError: if ``hf_token`` is empty or ``central_url`` is unsafe.
 
         """
         if not hf_token:
             raise ValueError("hf_token is required for ReachyCentralConsumer")
         self._hf_token = hf_token
-        self._central_url = validate_secure_http_url(central_url, "central_url")
+        self._central_url = validate_secure_http_url(central_url, "central_url").rstrip(
+            "/"
+        )
         self._robot_name = robot_name
         self._consumer_label = consumer_label
         self._ice_servers_provider = ice_servers_provider
@@ -706,7 +708,10 @@ class ReachyCentralConsumer:
             allow_redirects=False,
             proxy=proxy_for(url),
         ) as resp:
-            resp.raise_for_status()
+            if resp.status != 200:
+                raise RuntimeError(
+                    f"GET /api/robot-status HTTP {resp.status}; expected 200"
+                )
             payload = await resp.json()
         return payload.get("robots") or []
 
@@ -1189,6 +1194,7 @@ def from_env(
 
     Returns ``None`` if ``HF_TOKEN`` is not set — the caller is expected to
     surface that as a configuration error to the user.
+    Raises ``ValueError`` if ``REACHY_CENTRAL_URL`` is unsafe.
     """
     hf_token = (os.getenv("HF_TOKEN") or "").strip()
     if not hf_token:
