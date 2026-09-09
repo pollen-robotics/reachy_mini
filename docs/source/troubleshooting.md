@@ -371,6 +371,16 @@ export HF_ENDPOINT=https://hf-mirror.com/
 
 Note that you may also need to use mirrors to reach services like PyPI and GitHub.
 
+On **Reachy Mini Wireless**, Hugging Face login timeouts and an empty app store
+are often not a missing mirror. The robot itself must reach Hugging Face (fixing
+the PC is not enough), SSH may be off from the factory (some batches also have
+no host keys, so port 22 refuses), and the daemon's aiohttp `ClientSession()`
+ships with `trust_env` disabled — so `HTTP_PROXY` / `HTTPS_PROXY` alone may do
+nothing.
+
+Community walkthrough (Chinese, one-click wizard + rpiboot SSH rescue without
+reflash): [reachy-mini-cn-survival-guide](https://github.com/DrDavidDa/reachy-mini-cn-survival-guide)
+
 </details>
 
 <details>
