@@ -73,7 +73,9 @@ describe('encodeCredsToHash / decodeCredsFromHash', () => {
     const truncated = window.btoa('{"hfToken":"browser-secret-marker"');
 
     expect(decodeCredsFromHash(`#creds=${truncated}`)).toBeNull();
-    expect(warn).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      '[reachy-mini-sdk/host] failed to decode creds hash',
+    );
     vi.restoreAllMocks();
   });
 

@@ -443,6 +443,7 @@ export function decodeCredsFromHash(hash: string | null): CredsBundle | null {
       const json = decodeBase64Utf8(b64);
       return JSON.parse(json) as CredsBundle;
     } catch {
+      console.warn('[reachy-mini-sdk/host] failed to decode creds hash');
       return null;
     }
   }
