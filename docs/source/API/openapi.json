@@ -987,7 +987,7 @@
     "/api/hf-auth/central-robot-status": {
       "get": {
         "summary": "Get Central Robot Status",
-        "description": "Proxy to the central signaling server's /api/robot-status endpoint.\n\nUses the stored HF token server-side so the desktop frontend never\nsees the raw token. The frontend polls this to know whether any of\nthe user's robots is currently held by a remote JS app, and if so\nwhich one (so it can show \"In use by Hand Tracker\" in the UI).\n\nResponse shape:\n    { \"available\": bool, \"robots\": [...], \"reason\": str? }\n\n`available` is false when:\n  - no HF token stored (user not logged in)\n  - central server is unreachable / returned an error\nCallers should treat `available: false` as \"unknown, don't block\".",
+        "description": "Proxy to the central signaling server's /api/robot-status endpoint.\n\nUses the stored HF token server-side so the desktop frontend never\nsees the raw token. The frontend polls this to know whether any of\nthe user's robots is currently held by a remote JS app, and if so\nwhich one (so it can show \"In use by Hand Tracker\" in the UI).\n\nResponse shape:\n    { \"available\": bool, \"robots\": [...], \"reason\": str? }\n\n`available` is false when:\n  - no HF token stored (user not logged in)\n  - central URL configuration is invalid\n  - central server is unreachable / returned an error\nCallers should treat `available: false` as \"unknown, don't block\".",
         "operationId": "get_central_robot_status_api_hf_auth_central_robot_status_get",
         "responses": {
           "200": {

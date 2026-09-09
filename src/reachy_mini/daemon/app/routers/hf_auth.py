@@ -19,6 +19,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/hf-auth")
 
 # The relay module owns the central default and its REACHY_CENTRAL_URL override.
+CENTRAL_ROBOT_STATUS_URL: str | None = None
+try:
+    CENTRAL_ROBOT_STATUS_URL = (
+        validate_secure_http_url(CENTRAL_SIGNALING_SERVER, "REACHY_CENTRAL_URL").rstrip(
+            "/"
+        )
+        + "/api/robot-status"
+    )
+except ValueError as error:
+    logger.warning("[central-robot-status] %s", error)
 CENTRAL_ROBOT_STATUS_TIMEOUT = aiohttp.ClientTimeout(total=5)
 
 
@@ -156,6 +166,7 @@ async def get_central_robot_status() -> dict[str, Any]:
 
     `available` is false when:
       - no HF token stored (user not logged in)
+      - central URL configuration is invalid
       - central server is unreachable / returned an error
     Callers should treat `available: false` as "unknown, don't block".
     """
@@ -163,15 +174,9 @@ async def get_central_robot_status() -> dict[str, Any]:
     if not token:
         return {"available": False, "robots": [], "reason": "not_authenticated"}
 
-    try:
-        central_url = validate_secure_http_url(
-            CENTRAL_SIGNALING_SERVER, "REACHY_CENTRAL_URL"
-        )
-    except ValueError:
-        logger.warning("[central-robot-status] refusing an untrusted central URL")
+    if CENTRAL_ROBOT_STATUS_URL is None:
         return {"available": False, "robots": [], "reason": "invalid_configuration"}
 
-    central_robot_status_url = f"{central_url}/api/robot-status"
     try:
         # Explicit proxy resolution (HTTP_PROXY/HTTPS_PROXY/NO_PROXY) —
         # deliberately NOT trust_env=True, which would also read ~/.netrc
@@ -186,10 +191,10 @@ async def get_central_robot_status() -> dict[str, Any]:
             # hf_auth.get_hf_token); header use keeps it off the
             # wire-visible URL as well.
             async with session.get(
-                central_robot_status_url,
+                CENTRAL_ROBOT_STATUS_URL,
                 headers={"Authorization": f"Bearer {token}"},
                 allow_redirects=False,
-                proxy=proxy_for(central_robot_status_url),
+                proxy=proxy_for(CENTRAL_ROBOT_STATUS_URL),
             ) as response:
                 if response.status == 200:
                     data = await response.json()
