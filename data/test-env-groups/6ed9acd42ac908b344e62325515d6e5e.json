@@ -1,1 +1,1 @@
-{"id":"6ed9acd42ac908b344e62325515d6e5e","fullName":"tests.unit_tests.test_proxy_env_support#test_list_available_apps_uses_http_proxy","name":"test_list_available_apps_uses_http_proxy","status":"passed","testResultsByEnv":{"default":"d857d65af998984959b8091ec50852df"}}
+{"id":"6ed9acd42ac908b344e62325515d6e5e","fullName":"tests.unit_tests.test_proxy_env_support#test_list_available_apps_uses_http_proxy","name":"test_list_available_apps_uses_http_proxy","status":"passed","testResultsByEnv":{"default":"8c1289fde347d12c5d02b0e2915ffb8a"}}

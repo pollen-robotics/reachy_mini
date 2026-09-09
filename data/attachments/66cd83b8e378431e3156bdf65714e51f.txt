@@ -1,0 +1,1 @@
+WARNING  reachy_mini.daemon.app.routers.hf_auth:hf_auth.py:31 [central-robot-status] REACHY_CENTRAL_URL must use HTTPS outside loopback

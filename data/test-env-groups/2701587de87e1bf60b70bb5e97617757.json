@@ -1,0 +1,1 @@
+{"id":"2701587de87e1bf60b70bb5e97617757","fullName":"tests.unit_tests.test_network.test_preserves_secure_and_loopback_endpoint_paths[http://[#test_preserves_secure_and_loopback_endpoint_paths","name":"test_preserves_secure_and_loopback_endpoint_paths[http://[::1]:8000/central/]","status":"passed","testResultsByEnv":{"default":"fc483433f7c187a942fd752d193bd1ef"}}

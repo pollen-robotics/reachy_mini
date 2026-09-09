@@ -1,0 +1,1 @@
+WARNING  reachy_mini.media.central_consumer:central_consumer.py:440 connection error: RuntimeError('SSE /events HTTP 307: \'{"robots": [{"peerId": "untrusted"}], "type": "sessionStarted", "sessionId": "untrusted"}\''); reconnecting in 1.0s
