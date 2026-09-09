@@ -506,6 +506,9 @@ def configure_root_logging(log_level: str, log_file: str | None = None) -> None:
     # Drop anything a library installed at import time, then own the config.
     root_logger.handlers.clear()
 
+    logging.getLogger("uvicorn.access").addFilter(access_log_filter)
+    logging.getLogger("huggingface_hub.utils._auth").addFilter(_hub_auth_log_filter)
+
     # Handler that writes to stderr with immediate flush
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(log_level)
@@ -514,8 +517,38 @@ def configure_root_logging(log_level: str, log_file: str | None = None) -> None:
 
     if log_file:
         file_handler = logging.FileHandler(log_file, mode="a")
+        file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
+
+
+_POLLING_PATHS = ("/health-check", "/api/hf-auth/relay-status")
+# Hugging Face redirects here with the OAuth authorization code in the query.
+_OAUTH_CALLBACK_PATH = "/api/hf-auth/oauth/callback"
+
+
+def _hub_auth_log_filter(record: logging.LogRecord) -> bool:
+    # Hub refresh warnings embed provider text before returning the cached token.
+    if record.levelno >= logging.WARNING:
+        record.msg = "Hugging Face credential lookup or refresh failed"
+        record.args = ()
+        record.exc_info = record.exc_text = record.stack_info = None
+    return True
+
+
+def access_log_filter(record: logging.LogRecord) -> bool:
+    """Keep the OAuth code out of uvicorn access logs and quieten polling routes."""
+    args = record.args
+    if not isinstance(args, tuple) or len(args) < 3 or not isinstance(args[2], str):
+        return True
+    path, separator, _ = args[2].partition("?")
+    normalized_path = path.rstrip("/")
+    if normalized_path == _OAUTH_CALLBACK_PATH and separator:
+        record.args = (*args[:2], path + "?<redacted>", *args[3:])
+    if normalized_path in _POLLING_PATHS:
+        record.levelno = logging.DEBUG
+        record.levelname = "DEBUG"
+    return True
 
 
 def run_app(args: Args) -> None:
@@ -539,19 +572,6 @@ def run_app(args: Args) -> None:
     apps_logger = logging.getLogger("reachy_mini.apps.manager")
     apps_logger.setLevel(args.log_level)
     apps_logger.propagate = True  # Ensure it propagates to root logger
-
-    # Downgrade noisy polling routes to DEBUG in uvicorn access logs
-    class AccessLogFilter(logging.Filter):
-        _POLLING_PATHS = {"/health-check", "/api/hf-auth/relay-status"}
-
-        def filter(self, record: logging.LogRecord) -> bool:
-            msg = record.getMessage()
-            if any(path in msg for path in self._POLLING_PATHS):
-                record.levelno = logging.DEBUG
-                record.levelname = "DEBUG"
-            return True
-
-    logging.getLogger("uvicorn.access").addFilter(AccessLogFilter())
 
     # Install exception hook to catch uncaught exceptions
     def exception_hook(

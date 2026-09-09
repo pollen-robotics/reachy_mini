@@ -1,27 +1,21 @@
-"""Tests for the HuggingFace auth source module (in-memory, no network).
+"""Offline tests for Hugging Face authentication and OAuth session handling."""
 
-Covers the OAuth-session lifecycle on the module-global `_oauth_sessions`
-dict, the pure helpers, and the token functions with `huggingface_hub`
-symbols monkeypatched. The real aiohttp token POST in
-`exchange_code_for_token` is not exercised; only its early error branches.
-"""
-
+import asyncio
+import json
 import time
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from huggingface_hub.errors import HfHubHTTPError
 
 from reachy_mini.apps.sources import hf_auth
+from reachy_mini.media import central_signaling_relay
 
 
 @pytest.fixture(autouse=True)
 def _clear_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
     """Reset the module-global session dict before every test."""
     monkeypatch.setattr(hf_auth, "_oauth_sessions", {})
-
-
-# ---- Pure helpers
 
 
 def test_generate_user_code_format() -> None:
@@ -69,9 +63,6 @@ def test_configure_oauth_sets_globals(monkeypatch: pytest.MonkeyPatch) -> None:
     assert hf_auth.OAUTH_CLIENT_ID == "cid"
     assert hf_auth.OAUTH_CLIENT_SECRET == "secret"
     assert hf_auth.OAUTH_SCOPES == "openid"
-
-
-# ---- OAuth-session lifecycle
 
 
 def test_create_oauth_session_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -161,9 +152,6 @@ def test_expired_session_not_returned(monkeypatch: pytest.MonkeyPatch) -> None:
     assert hf_auth.get_oauth_session_status(sid)["status"] == "expired"
 
 
-# ---- exchange_code_for_token early error branches (no aiohttp)
-
-
 @pytest.mark.asyncio
 async def test_exchange_code_invalid_session() -> None:
     """Unknown state returns an invalid-session error before any network."""
@@ -186,10 +174,94 @@ async def test_exchange_code_not_configured(monkeypatch: pytest.MonkeyPatch) -> 
     assert session.status == "error"
 
 
-# ---- Token functions (huggingface_hub monkeypatched)
+@pytest.mark.parametrize(
+    ("status", "body", "message"),
+    [
+        (400, "provider-secret-marker", hf_auth.AUTHENTICATION_FAILED_MESSAGE),
+        (
+            200,
+            '{"error": "provider-secret-marker"}',
+            hf_auth.AUTHENTICATION_FAILED_MESSAGE,
+        ),
+        (200, "provider-secret-marker", hf_auth.AUTHENTICATION_UNAVAILABLE_MESSAGE),
+        (200, '["provider-secret-marker"]', hf_auth.AUTHENTICATION_UNAVAILABLE_MESSAGE),
+    ],
+)
+@pytest.mark.asyncio
+async def test_exchange_code_failure_never_surfaces_provider_text(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    status: int,
+    body: str,
+    message: str,
+) -> None:
+    """A failed exchange reports a stable message, not the provider response."""
+    response = MagicMock(status=status)
+    response.json = AsyncMock(side_effect=lambda **kwargs: json.loads(body))
+    client = MagicMock()
+    http_session = client.return_value.__aenter__.return_value
+    http_session.post = MagicMock()
+    http_session.post.return_value.__aenter__.return_value = response
+    monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "cid")
+    monkeypatch.setattr(hf_auth.aiohttp, "ClientSession", client)
+    sid = hf_auth.create_oauth_session(wireless_version=True)["session_id"]
+    session = hf_auth.get_oauth_session(sid)
+    assert session is not None
+
+    result = await hf_auth.exchange_code_for_token("code", session.state, True)
+
+    assert result == {
+        "status": "error",
+        "message": message,
+    }
+    assert session.error_message == message
+    assert (
+        "provider-secret-marker" not in hf_auth.get_oauth_session_status(sid)["message"]
+    )
+    assert "provider-secret-marker" not in caplog.text
+    if status != 200:
+        response.json.assert_not_awaited()
+    else:
+        response.json.assert_awaited_once_with(content_type=None)
 
 
-def test_save_hf_token_success(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.asyncio
+async def test_save_token_handles_background_relay_failure(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A failed notification leaves login successful without an unhandled task."""
+    api = MagicMock()
+    api.whoami.return_value = {"name": "alice"}
+    monkeypatch.setattr(hf_auth, "HfApi", MagicMock(return_value=api))
+    login = MagicMock()
+    monkeypatch.setattr(hf_auth, "login", login)
+    notify = AsyncMock(side_effect=RuntimeError("provider-secret-marker"))
+    monkeypatch.setattr(central_signaling_relay, "notify_token_change", notify)
+    loop = asyncio.get_running_loop()
+    unhandled = MagicMock()
+    original_handler = loop.get_exception_handler()
+    loop.set_exception_handler(unhandled)
+    try:
+        result = hf_auth.save_hf_token("hf_test")
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+    finally:
+        loop.set_exception_handler(original_handler)
+
+    assert result == {"status": "success", "username": "alice"}
+    login.assert_called_once_with(token="hf_test", add_to_git_credential=False)
+    notify.assert_awaited_once_with("hf_test")
+    unhandled.assert_not_called()
+    assert "RuntimeError" in caplog.text
+    assert "provider-secret-marker" not in caplog.text
+
+
+@pytest.mark.parametrize("relay_fails", [False, True])
+def test_save_hf_token_success(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    relay_fails: bool,
+) -> None:
     """Valid token validates, persists via login, and returns the username."""
     api = MagicMock()
     api.whoami.return_value = {"name": "alice"}
@@ -197,12 +269,19 @@ def test_save_hf_token_success(monkeypatch: pytest.MonkeyPatch) -> None:
     login = MagicMock()
     monkeypatch.setattr(hf_auth, "HfApi", hf_api)
     monkeypatch.setattr(hf_auth, "login", login)
-    monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *a: None)
+    notify = AsyncMock(
+        side_effect=RuntimeError("provider-secret-marker") if relay_fails else None
+    )
+    monkeypatch.setattr(central_signaling_relay, "notify_token_change", notify)
 
     result = hf_auth.save_hf_token("tok")
     assert result == {"status": "success", "username": "alice"}
     hf_api.assert_called_once_with(token="tok")
     login.assert_called_once_with(token="tok", add_to_git_credential=False)
+    notify.assert_awaited_once_with("tok")
+    assert "provider-secret-marker" not in caplog.text
+    if relay_fails:
+        assert "RuntimeError" in caplog.text
 
 
 def test_save_hf_token_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -217,16 +296,25 @@ def test_save_hf_token_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result == {"status": "error", "message": "Invalid token or network error"}
 
 
-def test_save_hf_token_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Other exceptions surface their string in the error message."""
+def test_save_hf_token_unexpected_error_is_redacted(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Unexpected provider text stays out of the response and log."""
     api = MagicMock()
-    api.whoami.side_effect = RuntimeError("kaboom")
+    api.whoami.side_effect = RuntimeError("provider-secret-marker")
     monkeypatch.setattr(hf_auth, "HfApi", MagicMock(return_value=api))
     monkeypatch.setattr(hf_auth, "login", MagicMock())
     monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *a: None)
 
-    result = hf_auth.save_hf_token("tok")
-    assert result == {"status": "error", "message": "kaboom"}
+    with caplog.at_level("WARNING", logger=hf_auth.__name__):
+        result = hf_auth.save_hf_token("tok")
+
+    assert result == {
+        "status": "error",
+        "message": hf_auth.CREDENTIAL_SAVE_FAILED_MESSAGE,
+    }
+    assert "provider-secret-marker" not in caplog.text
+    assert "RuntimeError" in caplog.text
 
 
 def test_save_hf_token_hfhub_error(monkeypatch: pytest.MonkeyPatch) -> None:
