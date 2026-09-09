@@ -14,13 +14,10 @@ interface BrowserConfig {
 function setBrowser(config: BrowserConfig): void {
   vi.stubGlobal('window', {
     location: {
-      origin: config.origin ?? 'https://app.example',
+      hostname: new URL(config.origin ?? 'https://app.example').hostname,
       search: config.search ?? '',
     },
-    huggingface:
-      'signalingUrl' in config
-        ? { variables: { SIGNALING_URL: config.signalingUrl } }
-        : undefined,
+    huggingface: { variables: { SIGNALING_URL: config.signalingUrl } },
   });
 }
 
@@ -29,18 +26,29 @@ const STAGING = '?signaling_url=https%3A%2F%2Fstaging-central.hf.space';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('resolveSignalingUrl', () => {
-  it('ignores a query override on a hosted page even when it is valid HTTPS', () => {
+  it('ignores a hosted query override and warns once without echoing it', async () => {
+    vi.resetModules();
+    const { resolveSignalingUrl } = await import('./signalingUrl');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     setBrowser({ search: STAGING });
     expect(resolveSignalingUrl()).toBe(DEFAULT_CENTRAL_SIGNALING_URL);
+    expect(resolveSignalingUrl()).toBe(DEFAULT_CENTRAL_SIGNALING_URL);
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      'Ignoring ?signaling_url= outside local development.',
+    );
   });
 
-  it('honours a query override during local development', () => {
-    setBrowser({ origin: LOOPBACK_PAGE, search: STAGING });
-    expect(resolveSignalingUrl()).toBe('https://staging-central.hf.space');
-  });
+  it.each([LOOPBACK_PAGE, 'http://LOCALHOST:5173', 'http://[::1]:5173'])(
+    'honours a query override on %s',
+    (origin) => {
+      setBrowser({ origin, search: STAGING });
+      expect(resolveSignalingUrl()).toBe('https://staging-central.hf.space');
+    },
+  );
 
   it('still validates a query override on a loopback page', () => {
     setBrowser({
@@ -86,8 +94,8 @@ describe('resolveSignalingUrl', () => {
     expect(resolveSignalingUrl()).toBe(DEFAULT_CENTRAL_SIGNALING_URL);
   });
 
-  it('never throws when the page has no usable origin', () => {
-    setBrowser({ origin: 'not-a-url', search: STAGING });
+  it('falls back when the page has no hostname', () => {
+    setBrowser({ origin: 'about:blank', search: STAGING });
     expect(resolveSignalingUrl()).toBe(DEFAULT_CENTRAL_SIGNALING_URL);
   });
 });
