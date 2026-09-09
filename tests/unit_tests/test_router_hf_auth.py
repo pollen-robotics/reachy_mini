@@ -365,7 +365,7 @@ def test_oauth_success_survives_relay_start_failure(
     )
     monkeypatch.setattr(src, "consume_device_session_relay_pending", lambda sid: True)
     start_relay = AsyncMock(side_effect=RuntimeError("provider-secret-marker"))
-    daemon = types.SimpleNamespace(_start_central_signaling_relay=start_relay)
+    daemon = types.SimpleNamespace(start_central_relay_if_running=start_relay)
 
     response = router_app(hf_auth.router, daemon=daemon).get("/hf-auth" + path)
 
