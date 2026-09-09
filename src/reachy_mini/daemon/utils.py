@@ -167,7 +167,21 @@ def find_serial_port(
     vid = vid.upper()
     pid = pid.upper()
 
-    return [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
+    candidates = [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
+
+    if len(candidates) > 1:
+        # The optional NFC reader board bridges USB with a CH343 and therefore
+        # answers to the very same vendor and product ids as the motor
+        # controller. Without this filter, plugging the reader into a Lite
+        # robot would leave two candidates here and the caller would refuse to
+        # start with "Multiple Reachy Mini serial ports found" — a working
+        # robot brought down by an accessory. Probing only happens in that
+        # ambiguous case, and only on ports already matching the shared ids.
+        from ..nfc import exclude_nfc_boards
+
+        candidates = exclude_nfc_boards(candidates)
+
+    return candidates
 
 
 def get_ip_address(ifname: str = "wlan0") -> str | None:

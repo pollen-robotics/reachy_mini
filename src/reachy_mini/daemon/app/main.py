@@ -334,8 +334,17 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     # wire the JSON-RPC app relay (apps.* + conversation.* over the DataChannel).
     app.state.daemon.app_manager = app.state.app_manager
 
+    # The reader board bridges USB with a CH343, which exposes the very same
+    # USB ids as the motor controller: auto-detection has to probe candidate
+    # ports (see reachy_mini.nfc.ports). Handing it an explicitly configured
+    # motor port spares a probe, and any chance of poking at the robot's link.
     app.state.nfc_reader = (
-        NfcReader(port=args.nfc_port) if args.nfc_enabled else None
+        NfcReader(
+            port=args.nfc_port,
+            exclude_ports=(() if args.serialport == "auto" else (args.serialport,)),
+        )
+        if args.nfc_enabled
+        else None
     )
 
     router = APIRouter(prefix="/api")
@@ -723,7 +732,7 @@ def main() -> None:
         default=default_hw_config_path,
         help=f"Path to the hardware configuration YAML file (default: {default_hw_config_path}).",
     )
-    # Optional NFC reader accessory (Arduino + PN532 over USB serial)
+    # Optional NFC reader accessory (CLRC663 board over USB serial)
     parser.add_argument(
         "--no-nfc",
         action="store_false",
@@ -734,7 +743,11 @@ def main() -> None:
         "--nfc-port",
         type=str,
         default=default_args.nfc_port,
-        help="Serial port for the NFC reader (default: auto-detect by USB id).",
+        help=(
+            "Serial port for the NFC reader (default: auto-detect by probing "
+            "candidate ports for a CLRC663; its USB ids are the same as the "
+            "motor controller's)."
+        ),
     )
     # Simulation mode
     parser.add_argument(

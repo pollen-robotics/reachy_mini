@@ -2221,6 +2221,141 @@
         }
       }
     },
+    "/api/nfc/tag": {
+      "get": {
+        "summary": "Get Tag",
+        "description": "Get the tag currently on the reader.\n\nAlways reports what is known: a tag whose content cannot be decoded still\ncarries its ``uid``, with ``readable`` false and ``error`` saying why. The\nUID is available on any ISO 14443-A tag, the NDEF ``records`` only on the\nType 2 families the driver supports.",
+        "operationId": "get_tag_api_nfc_tag_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NfcTag"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nfc/status": {
+      "get": {
+        "summary": "Get Status",
+        "description": "Get the NFC reader hardware status (link, chip detection, driver).",
+        "operationId": "get_status_api_nfc_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NfcStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nfc/dump": {
+      "get": {
+        "summary": "Dump Tag",
+        "description": "Read the whole user memory of the tag on the reader, as hex.\n\nFor tags that carry a bare code rather than an NDEF message \u2014 a badge\nprogrammed with an ASCII identifier in page 4, say. ``GET /tag`` reports\nthe first bytes of such a payload in ``raw_hex``; this returns all of it.\n\nCosts a full transfer (~130 ms on an NTAG215), hence a separate endpoint\ninstead of a field served on every poll.",
+        "operationId": "dump_tag_api_nfc_dump_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NfcDump"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nfc/erase": {
+      "post": {
+        "summary": "Erase Tag",
+        "description": "Make the next tag presented to the reader blank again.\n\nBy default one page is written: an NDEF message of length zero. The tag\nstays formatted, so it is immediately rewritable and a phone still sees it\nas an (empty) NFC tag.\n\n``full`` also zeroes the whole user memory \u2014 the only way to remove a\npayload that is not NDEF, such as a bare code written straight into\npage 4. It costs one write per page, so it takes a few seconds.\n\nNeither restores the capability container, the lock bytes or a password:\nthose pages are one-time programmable. A formatted tag stays formatted.",
+        "operationId": "erase_tag_api_nfc_erase_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NfcEraseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NfcWriteResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nfc/write": {
+      "post": {
+        "summary": "Write Tag",
+        "description": "Write text or a URI onto the next tag presented to the reader.\n\nExactly one of ``text`` or ``uri``. Blocks until the reader reports the\noutcome (or a timeout), retrying meanwhile so the tag can be presented\nafter the request is posted. Returns the result rather than raising, except\nwhen the reader itself is unavailable.\n\nThe tag's own declared capacity is authoritative: 144 bytes of NDEF on an\nNTAG213, 496 on an NTAG215, 872 on an NTAG216. A message that does not fit\ncomes back as ``TOO_LONG`` without anything having been written.",
+        "operationId": "write_tag_api_nfc_write_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NfcWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NfcWriteResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/state/present_head_pose": {
       "get": {
         "summary": "Get Head Pose",
@@ -3736,6 +3871,377 @@
         ],
         "title": "MujocoBackendStatus",
         "description": "Status of the Mujoco backend."
+      },
+      "NfcDump": {
+        "properties": {
+          "present": {
+            "type": "boolean",
+            "title": "Present"
+          },
+          "uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uid"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size",
+            "default": 0
+          },
+          "hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hex"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "present"
+        ],
+        "title": "NfcDump",
+        "description": "The raw user memory of a tag, for tags that carry no NDEF message.\n\nReading it costs a full transfer (~130 ms on an NTAG215), so it is served\non demand rather than on every poll."
+      },
+      "NfcEraseRequest": {
+        "properties": {
+          "full": {
+            "type": "boolean",
+            "title": "Full",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "NfcEraseRequest",
+        "description": "Request body to make the tag blank again.\n\n``full`` also zeroes the whole user memory, which is what it takes to\nremove a payload that is not NDEF \u2014 a bare code written straight into\npage 4. Slower: one write per page."
+      },
+      "NfcRecord": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "type_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Name"
+          },
+          "data_hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Hex"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "NfcRecord",
+        "description": "One NDEF record read from a tag.\n\n``kind`` is ``\"text\"``, ``\"uri\"``, or ``\"other\"`` for a record this driver\ndoes not decode (a vCard, a MIME payload, an Android Application Record).\nThose are reported rather than dropped: a tag carrying one would otherwise\nbe indistinguishable from a blank tag."
+      },
+      "NfcStatus": {
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "chip_detected": {
+            "type": "boolean",
+            "title": "Chip Detected"
+          },
+          "driver_available": {
+            "type": "boolean",
+            "title": "Driver Available"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "chip_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chip Version"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connected",
+          "chip_detected",
+          "driver_available"
+        ],
+        "title": "NfcStatus",
+        "description": "Snapshot of the NFC reader hardware status."
+      },
+      "NfcTag": {
+        "properties": {
+          "present": {
+            "type": "boolean",
+            "title": "Present"
+          },
+          "uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uid"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/NfcRecord"
+            },
+            "type": "array",
+            "title": "Records",
+            "default": []
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "blank": {
+            "type": "boolean",
+            "title": "Blank",
+            "default": false
+          },
+          "readable": {
+            "type": "boolean",
+            "title": "Readable",
+            "default": false
+          },
+          "writable": {
+            "type": "boolean",
+            "title": "Writable",
+            "default": false
+          },
+          "capacity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity"
+          },
+          "raw_hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Hex"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "last_read_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Read At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "present"
+        ],
+        "title": "NfcTag",
+        "description": "Snapshot of the tag currently on the reader."
+      },
+      "NfcWriteRequest": {
+        "properties": {
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uri"
+          }
+        },
+        "type": "object",
+        "title": "NfcWriteRequest",
+        "description": "Request body to write onto the next presented tag.\n\nExactly one of ``text`` or ``uri``. A URI is what a phone acts on \u2014 tapping\nthe tag offers to open it \u2014 while text is for robot-internal payloads."
+      },
+      "NfcWriteResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "title": "NfcWriteResult",
+        "description": "Result of a write attempt.\n\n``error`` is a stable code rather than a sentence: ``NO_TAG``,\n``TOO_LONG``, ``LOCKED``, ``UNKNOWN_TAG``, ``WRITE_REFUSED``,\n``WRITE_ERROR``, ``COLLISION``, ``NOT_CONNECTED``, ``LINK_LOST``,\n``TIMEOUT``, ``DRIVER_MISSING``."
       },
       "PlaySoundRequest": {
         "properties": {
