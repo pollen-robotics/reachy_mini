@@ -9,7 +9,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 from huggingface_hub import HfApi, get_token, login, logout, whoami
@@ -20,27 +20,13 @@ from reachy_mini.utils.proxy import proxy_for
 
 logger = logging.getLogger(__name__)
 
-# =============================================================================
-# OAuth Configuration
-# =============================================================================
-# Register ONE OAuth app at https://huggingface.co/settings/connected-applications
-# with TWO redirect URIs:
-#   - http://reachy-mini.local:8000/api/hf-auth/oauth/callback  (wireless)
-#   - http://localhost:8000/api/hf-auth/oauth/callback          (lite)
-#
-# Then set HF_OAUTH_CLIENT_ID on all robots (same value for all).
-#
-# Environment variables:
-#   HF_OAUTH_CLIENT_ID     - Required for OAuth login
-#   HF_OAUTH_CLIENT_SECRET - Optional (for confidential clients)
-#
-# Pollen's HuggingFace OAuth app - works for all Reachy Mini robots
+# Both redirect URIs must be registered when overriding the shared OAuth app.
 _DEFAULT_OAUTH_CLIENT_ID = "71146982-8184-45a2-b05a-d561b3cd701d"
 
-OAUTH_CLIENT_ID: Optional[str] = os.environ.get(
+OAUTH_CLIENT_ID: str | None = os.environ.get(
     "HF_OAUTH_CLIENT_ID", _DEFAULT_OAUTH_CLIENT_ID
 )
-OAUTH_CLIENT_SECRET: Optional[str] = os.environ.get("HF_OAUTH_CLIENT_SECRET")
+OAUTH_CLIENT_SECRET: str | None = os.environ.get("HF_OAUTH_CLIENT_SECRET")
 OAUTH_SCOPES = os.environ.get(
     "HF_OAUTH_SCOPES",
     "openid profile read-repos write-repos manage-repos inference-api",
@@ -74,9 +60,9 @@ class OAuthSession:
     wireless_version: bool  # To know which redirect URI to use
     use_localhost: bool = False  # Force localhost callback (desktop app proxy)
     status: str = "pending"  # pending, authorized, expired, error
-    access_token: Optional[str] = None
-    username: Optional[str] = None
-    error_message: Optional[str] = None
+    access_token: str | None = None
+    username: str | None = None
+    error_message: str | None = None
     created_at: float = field(default_factory=time.time)
     expires_at: float = field(
         default_factory=lambda: time.time() + 600
@@ -85,7 +71,7 @@ class OAuthSession:
 
 def configure_oauth(
     client_id: str,
-    client_secret: Optional[str] = None,
+    client_secret: str | None = None,
     scopes: str = "openid profile read-repos",
 ) -> None:
     """Configure OAuth credentials.
@@ -217,13 +203,13 @@ def create_oauth_session(
     }
 
 
-def get_oauth_session(session_id: str) -> Optional[OAuthSession]:
+def get_oauth_session(session_id: str) -> OAuthSession | None:
     """Get an OAuth session by ID."""
     _cleanup_expired_sessions()
     return _oauth_sessions.get(session_id)
 
 
-def get_session_by_state(state: str) -> Optional[OAuthSession]:
+def get_session_by_state(state: str) -> OAuthSession | None:
     """Get an OAuth session by its state parameter."""
     _cleanup_expired_sessions()
     for session in _oauth_sessions.values():
@@ -264,7 +250,6 @@ async def exchange_code_for_token(
         session.wireless_version, session.use_localhost
     )
 
-    # Exchange code for token using PKCE
     token_url = "https://huggingface.co/oauth/token"
     data = {
         "grant_type": "authorization_code",
@@ -275,14 +260,11 @@ async def exchange_code_for_token(
     }
 
     try:
-        # Explicit proxy resolution (HTTP_PROXY/HTTPS_PROXY/NO_PROXY) —
-        # deliberately NOT trust_env=True, which would also read ~/.netrc
-        # and break Authorization-header requests (see utils/proxy.py).
+        # Avoid trust_env: ~/.netrc credentials would conflict with Authorization.
         async with aiohttp.ClientSession() as http_session:
             async with http_session.post(
                 token_url, data=data, proxy=proxy_for(token_url)
             ) as response:
-                response_text = await response.text()
                 if response.status != 200:
                     logger.warning(
                         "[HF Auth] OAuth token exchange returned HTTP %s",
@@ -292,9 +274,7 @@ async def exchange_code_for_token(
                     session.error_message = AUTHENTICATION_FAILED_MESSAGE
                     return {"status": "error", "message": session.error_message}
 
-                import json
-
-                token_data = json.loads(response_text)
+                token_data = await response.json(content_type=None)
 
         # HuggingFace returns accessToken (camelCase)
         access_token = token_data.get("access_token") or token_data.get("accessToken")
@@ -312,9 +292,8 @@ async def exchange_code_for_token(
         session.error_message = AUTHENTICATION_UNAVAILABLE_MESSAGE
         return {"status": "error", "message": session.error_message}
 
-    # Save token directly to HuggingFace token file
-    # (login() doesn't work well with OAuth tokens)
-    temporary_path: Optional[Path] = None
+    # login() validates personal tokens and does not support this OAuth flow.
+    temporary_path: Path | None = None
     try:
         token_path = Path(HF_TOKEN_PATH)
         token_path.parent.mkdir(parents=True, exist_ok=True)
@@ -343,7 +322,6 @@ async def exchange_code_for_token(
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
 
-    # Get username
     username = ""
     try:
         user_info = whoami(token=access_token)
@@ -352,21 +330,11 @@ async def exchange_code_for_token(
     except Exception:
         pass  # Username is optional
 
-    # Update session
     session.status = "authorized"
     session.access_token = access_token
     session.username = username
 
-    # Notify central relay of new token for immediate reconnection
-    try:
-        from reachy_mini.media.central_signaling_relay import notify_token_change
-
-        await notify_token_change(access_token)
-        logger.info("[HF Auth] Notified central relay of OAuth login")
-    except ImportError:
-        pass  # Central relay not available
-    except Exception as e:
-        logger.debug(f"[HF Auth] Could not notify relay: {e}")
+    await _notify_relay(access_token)
 
     return {
         "status": "success",
@@ -413,28 +381,9 @@ def is_oauth_configured() -> bool:
     return bool(OAUTH_CLIENT_ID)
 
 
-# =============================================================================
-# Device Code OAuth (RFC 8628) — refresh-capable, redirect-free login
-# =============================================================================
-# Unlike the authorization-code flow above, the device-code flow:
-#   - needs NO redirect URI, so it does not depend on the robot being reachable
-#     at a fixed hostname (reachy-mini.local) — the phone only displays a short
-#     code + URL and the robot polls Hugging Face for the result.
-#   - yields a refresh token. huggingface_hub persists it next to the access
-#     token (HF_STORED_TOKENS_PATH) and `get_token()` transparently renews the
-#     access token when it is close to expiry, so a long-running robot never
-#     needs the user to re-authenticate by hand.
-#
-# It uses Hugging Face's first-party device-code OAuth client (shipped in
-# huggingface_hub via DEVICE_CODE_OAUTH_CLIENT_ID), not the Pollen OAuth app,
-# so it works even when HF_OAUTH_CLIENT_ID is not configured.
-
-# In-memory storage for device-code login sessions, polled by the frontend.
 _device_code_sessions: dict[str, "DeviceCodeSession"] = {}
 
-# How long an authorized session is kept so the frontend can read the result and
-# the relay can be started once, after which _cleanup removes it (a token-less
-# boot polls for a few seconds; 5 min is a generous margin).
+# Keep successful sessions briefly so the frontend can observe authorization.
 _AUTHORIZED_SESSION_TTL_S = 300
 
 
@@ -456,13 +405,13 @@ class DeviceCodeSession:
     verification_uri: str
     verification_uri_complete: str
     status: str = "pending"  # pending, authorized, error, expired, cancelled
-    username: Optional[str] = None
-    error_message: Optional[str] = None
+    username: str | None = None
+    error_message: str | None = None
     relay_started: bool = False  # set once the central relay has been brought up
     created_at: float = field(default_factory=time.time)
     expires_at: float = field(default_factory=lambda: time.time() + 900)
     # Keep a strong reference to the polling task so it is not garbage-collected.
-    task: Optional["asyncio.Task[None]"] = None
+    task: asyncio.Task[None] | None = None
     # Set to request cancellation; observed by the polling thread's on_pending hook.
     cancel_event: threading.Event = field(default_factory=threading.Event)
 
@@ -483,28 +432,6 @@ def _cleanup_expired_device_sessions() -> None:
     ]
     for sid in stale:
         _device_code_sessions.pop(sid, None)
-
-
-def _persist_device_oauth_token(response: Any) -> tuple[str, str]:
-    """Persist a device-code token response so `get_token()` can auto-refresh it.
-
-    huggingface_hub stores the access token, its `refresh_token` and `expires_at`
-    in HF_STORED_TOKENS_PATH and marks it as the active token. `get_token()` then
-    transparently exchanges the refresh token for a new access token shortly
-    before expiry — no user interaction required.
-
-    Returns:
-        Tuple of (token_name, username).
-
-    """
-    # Private but pinned exactly (see pyproject); guarded by the contract test in
-    # tests/unit_tests/test_hf_hub_private_api_contract.py. `response` is typed Any
-    # because it is an opaque huggingface_hub payload (a private OAuthTokenResponse
-    # TypedDict) that we only ever pass straight back to the hub — annotating it as
-    # dict[str, Any] would clash with the hub's TypedDict under mypy --strict.
-    from huggingface_hub._login import _save_oauth_token
-
-    return _save_oauth_token(response)
 
 
 async def start_device_code_login() -> dict[str, Any]:
@@ -556,9 +483,7 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
     from huggingface_hub.utils._oauth_device import poll_device_token
 
     def _abort_if_cancelled() -> None:
-        # poll_device_token calls this after each "authorization pending" poll,
-        # just before it sleeps; raising here unwinds it and frees the worker
-        # thread within ~one poll interval instead of blocking to expiry.
+        # Stop the blocking provider poll at its next pending callback.
         if session.cancel_event.is_set():
             raise _DeviceCodeCancelled
 
@@ -573,7 +498,7 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
         return
     except DeviceCodeError as error:
         logger.info("[HF Auth] Device-code login failed (%s)", type(error).__name__)
-        expired = "expired" in str(error).lower()
+        expired = error.error_code == "expired_token"
         session.status = "expired" if expired else "error"
         session.error_message = (
             LOGIN_EXPIRED_MESSAGE if expired else AUTHENTICATION_FAILED_MESSAGE
@@ -586,7 +511,9 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
         return
 
     try:
-        _, username = await asyncio.to_thread(_persist_device_oauth_token, response)
+        from huggingface_hub._login import _save_oauth_token
+
+        _, username = await asyncio.to_thread(_save_oauth_token, response)
     except Exception as error:  # noqa: BLE001
         logger.error(
             "[HF Auth] Failed to persist device-code token (%s)",
@@ -598,21 +525,9 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
 
     session.username = username or ""
     session.status = "authorized"
-    # Bound the authorized session's lifetime so _cleanup reclaims it after the
-    # frontend has read the result (rather than leaking until daemon restart).
     session.expires_at = time.time() + _AUTHORIZED_SESSION_TTL_S
 
-    # Notify a *running* central relay so it reconnects with the new token. A
-    # token-less boot has no relay instance yet; the status route starts one.
-    try:
-        from reachy_mini.media.central_signaling_relay import notify_token_change
-
-        await notify_token_change(response.get("access_token"))
-        logger.info("[HF Auth] Notified central relay of device-code login")
-    except ImportError:
-        pass  # Central relay not available (e.g. Lite version)
-    except Exception as e:  # noqa: BLE001
-        logger.debug("[HF Auth] Could not notify relay: %s", e)
+    await _notify_relay(response.get("access_token"))
 
 
 def get_device_code_session_status(session_id: str) -> dict[str, Any]:
@@ -662,30 +577,24 @@ def cancel_device_code_session(session_id: str) -> bool:
     return True
 
 
-def _notify_relay_of_token_change(new_token: Optional[str] = None) -> None:
-    """Notify the central signaling relay of a token change.
-
-    This is called after login/logout to trigger reconnection with the
-    new (or no) token. It handles the async call in a background task.
-    """
+async def _notify_relay(new_token: str | None) -> None:
     try:
         from reachy_mini.media.central_signaling_relay import notify_token_change
 
-        # Try to get the running event loop
-        try:
-            loop = asyncio.get_running_loop()
-            # If we're already in an async context, schedule as task
-            loop.create_task(notify_token_change(new_token))
-        except RuntimeError:
-            # No running loop - run in new loop (blocking but quick)
-            asyncio.run(notify_token_change(new_token))
-
-        logger.info("[HF Auth] Notified central relay of token change")
+        await notify_token_change(new_token)
     except ImportError:
-        # Central relay module not available (e.g., Lite version)
-        pass
-    except Exception as e:
-        logger.debug(f"[HF Auth] Could not notify relay: {e}")
+        return
+    except Exception as error:
+        logger.warning("[HF Auth] Could not notify relay (%s)", type(error).__name__)
+
+
+def _notify_relay_of_token_change(new_token: str | None = None) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(_notify_relay(new_token))
+    else:
+        loop.create_task(_notify_relay(new_token))
 
 
 def save_hf_token(token: str) -> dict[str, Any]:
@@ -714,7 +623,6 @@ def save_hf_token(token: str) -> dict[str, Any]:
         # add_to_git_credential=False keeps it from touching git credentials.
         login(token=token, add_to_git_credential=False)
 
-        # Notify central relay of new token for immediate reconnection
         _notify_relay_of_token_change(token)
 
         return {
@@ -737,7 +645,7 @@ def save_hf_token(token: str) -> dict[str, Any]:
         }
 
 
-def get_hf_token() -> Optional[str]:
+def get_hf_token() -> str | None:
     """Get stored HuggingFace token.
 
     Returns:
@@ -754,7 +662,6 @@ def delete_hf_token() -> bool:
     """
     try:
         logout()
-        # Notify central relay that user logged out
         _notify_relay_of_token_change(None)
         return True
     except Exception:

@@ -1,22 +1,17 @@
-"""Unit tests for the device-code OAuth flow in ``apps.sources.hf_auth``.
-
-These cover only our orchestration (session lifecycle, status polling, relay
-notification, error mapping); the Hugging Face device-code protocol itself lives
-in ``huggingface_hub`` and is stubbed here so the tests are deterministic and run
-regardless of the installed ``huggingface_hub`` version.
-"""
-
-from __future__ import annotations
+"""Offline tests for device-code OAuth sessions and failure handling."""
 
 import asyncio
-import sys
 import time
-import types
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from huggingface_hub import _login
+from huggingface_hub.errors import DeviceCodeError
+from huggingface_hub.utils import _oauth_device
 
 from reachy_mini.apps.sources import hf_auth
+from reachy_mini.media import central_signaling_relay
 
 
 @pytest.fixture(autouse=True)
@@ -25,41 +20,6 @@ def _clear_sessions() -> Any:
     hf_auth._device_code_sessions.clear()
     yield
     hf_auth._device_code_sessions.clear()
-
-
-@pytest.fixture
-def device_code_error() -> type[Exception]:
-    """Return ``huggingface_hub``'s ``DeviceCodeError``, creating a stand-in on
-    older hub versions and wiring it where ``hf_auth`` imports it from."""
-    try:
-        from huggingface_hub.errors import DeviceCodeError  # type: ignore
-
-        return DeviceCodeError
-    except ImportError:
-        import huggingface_hub.errors as hub_errors  # type: ignore
-
-        class DeviceCodeError(Exception):  # noqa: N818 — mirror hub naming
-            def __init__(self, message: str, error_code: str | None = None) -> None:
-                super().__init__(message)
-                self.error_code = error_code
-
-        hub_errors.DeviceCodeError = DeviceCodeError  # type: ignore[attr-defined]
-        return DeviceCodeError
-
-
-def _install_fake_oauth_device(
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    request_device_code: Any = None,
-    poll_device_token: Any = None,
-) -> None:
-    """Inject a fake ``huggingface_hub.utils._oauth_device`` module."""
-    fake = types.ModuleType("huggingface_hub.utils._oauth_device")
-    if request_device_code is not None:
-        fake.request_device_code = request_device_code  # type: ignore[attr-defined]
-    if poll_device_token is not None:
-        fake.poll_device_token = poll_device_token  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "huggingface_hub.utils._oauth_device", fake)
 
 
 _DEVICE_INFO = {
@@ -72,16 +32,11 @@ _DEVICE_INFO = {
 }
 
 
-# --------------------------------------------------------------------------- #
-# start_device_code_login
-# --------------------------------------------------------------------------- #
-
-
 def test_start_returns_user_code_and_registers_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_fake_oauth_device(
-        monkeypatch, request_device_code=lambda: dict(_DEVICE_INFO)
+    monkeypatch.setattr(
+        _oauth_device, "request_device_code", lambda: dict(_DEVICE_INFO)
     )
 
     # Stub the background poll so the test does not depend on its timing.
@@ -106,115 +61,117 @@ def test_start_returns_user_code_and_registers_session(
 
 
 def test_start_returns_error_when_request_fails(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     def _boom() -> dict[str, Any]:
-        raise RuntimeError("network down")
+        raise RuntimeError("provider-secret-marker")
 
-    _install_fake_oauth_device(monkeypatch, request_device_code=_boom)
+    monkeypatch.setattr(_oauth_device, "request_device_code", _boom)
 
     result = asyncio.run(hf_auth.start_device_code_login())
 
     assert result["status"] == "error"
     assert result["message"] == hf_auth.AUTHENTICATION_UNAVAILABLE_MESSAGE
-    assert "network down" not in result["message"]
+    assert "provider-secret-marker" not in result["message"]
     assert hf_auth._device_code_sessions == {}
+    assert "provider-secret-marker" not in caplog.text
+    assert "RuntimeError" in caplog.text
 
 
-# --------------------------------------------------------------------------- #
-# _run_device_code_poll
-# --------------------------------------------------------------------------- #
-
-
-def test_poll_success_persists_token_and_notifies_relay(
-    monkeypatch: pytest.MonkeyPatch, device_code_error: type[Exception]
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "status", "message"),
+    [
+        (
+            DeviceCodeError("provider-secret-marker", error_code="expired_token"),
+            "expired",
+            hf_auth.LOGIN_EXPIRED_MESSAGE,
+        ),
+        (
+            DeviceCodeError(
+                "expired provider-secret-marker", error_code="access_denied"
+            ),
+            "error",
+            hf_auth.AUTHENTICATION_FAILED_MESSAGE,
+        ),
+        (
+            RuntimeError("provider-secret-marker"),
+            "error",
+            hf_auth.AUTHENTICATION_UNAVAILABLE_MESSAGE,
+        ),
+    ],
+)
+async def test_device_login_classifies_errors_without_provider_text(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    error: Exception,
+    status: str,
+    message: str,
 ) -> None:
-    token_response = {
-        "access_token": "hf_new_token",
-        "refresh_token": "refresh-xyz",
-        "expires_in": 2_592_000,
-    }
-    _install_fake_oauth_device(
-        monkeypatch, poll_device_token=lambda info, **kw: token_response
+    """Poll results use structured error codes and keep provider text private."""
+    monkeypatch.setattr(
+        _oauth_device, "request_device_code", lambda: dict(_DEVICE_INFO)
     )
-
-    persisted: dict[str, Any] = {}
-
-    def _fake_persist(response: dict[str, Any]) -> tuple[str, str]:
-        persisted["response"] = response
-        return ("oauth-alice", "alice")
-
-    monkeypatch.setattr(hf_auth, "_persist_device_oauth_token", _fake_persist)
-
-    notified: dict[str, Any] = {}
-
-    async def _fake_notify(token: str | None) -> None:
-        notified["token"] = token
-
-    import reachy_mini.media.central_signaling_relay as relay_module
-
-    monkeypatch.setattr(relay_module, "notify_token_change", _fake_notify)
-
-    session = hf_auth.DeviceCodeSession(
-        session_id="s1",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
+    monkeypatch.setattr(
+        _oauth_device, "poll_device_token", MagicMock(side_effect=error)
     )
-    hf_auth._device_code_sessions["s1"] = session
+    caplog.set_level("INFO", logger=hf_auth.__name__)
 
-    asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
+    login = await hf_auth.start_device_code_login()
+    async with asyncio.timeout(2):
+        while (result := hf_auth.get_device_code_session_status(login["session_id"]))[
+            "status"
+        ] == "pending":
+            await asyncio.sleep(0.01)
 
-    assert session.status == "authorized"
-    assert session.username == "alice"
-    assert persisted["response"] is token_response
-    assert notified["token"] == "hf_new_token"
+    assert result == {"status": status, "message": message}
+    assert type(error).__name__ in caplog.text
+    assert "provider-secret-marker" not in caplog.text
 
 
-def test_poll_expired_maps_to_expired_status(
-    monkeypatch: pytest.MonkeyPatch, device_code_error: type[Exception]
+@pytest.mark.asyncio
+@pytest.mark.parametrize("save_fails", [False, True])
+async def test_device_login_persists_before_notifying_relay(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    save_fails: bool,
 ) -> None:
-    def _expire(info: Any, **kw: Any) -> dict[str, Any]:
-        raise device_code_error("Device code expired. Please try again.")
-
-    _install_fake_oauth_device(monkeypatch, poll_device_token=_expire)
-
-    session = hf_auth.DeviceCodeSession(
-        session_id="s2",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
+    """Persistence errors fail login; relay errors preserve the saved login."""
+    token_response = {"access_token": "hf_new_token", "refresh_token": "refresh-xyz"}
+    monkeypatch.setattr(
+        _oauth_device, "request_device_code", lambda: dict(_DEVICE_INFO)
     )
-
-    asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
-
-    assert session.status == "expired"
-    assert "expired" in (session.error_message or "").lower()
-
-
-def test_poll_denied_maps_to_error_status(
-    monkeypatch: pytest.MonkeyPatch, device_code_error: type[Exception]
-) -> None:
-    def _deny(info: Any, **kw: Any) -> dict[str, Any]:
-        raise device_code_error("Authorization was denied. Please try again.")
-
-    _install_fake_oauth_device(monkeypatch, poll_device_token=_deny)
-
-    session = hf_auth.DeviceCodeSession(
-        session_id="s3",
-        user_code="ABCD-1234",
-        verification_uri="https://hf.co/oauth/device",
-        verification_uri_complete="https://hf.co/oauth/device",
+    monkeypatch.setattr(
+        _oauth_device, "poll_device_token", MagicMock(return_value=token_response)
     )
+    save = MagicMock(
+        return_value=("oauth-alice", "alice"),
+        side_effect=OSError("provider-secret-marker") if save_fails else None,
+    )
+    monkeypatch.setattr(_login, "_save_oauth_token", save)
+    notify = AsyncMock(side_effect=RuntimeError("provider-secret-marker"))
+    monkeypatch.setattr(central_signaling_relay, "notify_token_change", notify)
 
-    asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
+    login = await hf_auth.start_device_code_login()
+    async with asyncio.timeout(2):
+        while (result := hf_auth.get_device_code_session_status(login["session_id"]))[
+            "status"
+        ] == "pending":
+            await asyncio.sleep(0.01)
 
-    assert session.status == "error"
-
-
-# --------------------------------------------------------------------------- #
-# get_device_code_session_status / consume_device_session_relay_pending
-# --------------------------------------------------------------------------- #
+    save.assert_called_once_with(token_response)
+    if save_fails:
+        assert result == {
+            "status": "error",
+            "message": hf_auth.CREDENTIAL_SAVE_FAILED_MESSAGE,
+        }
+        notify.assert_not_awaited()
+        assert "OSError" in caplog.text
+    else:
+        assert result == {"status": "authorized", "username": "alice"}
+        notify.assert_awaited_once_with("hf_new_token")
+        assert "RuntimeError" in caplog.text
+    assert "provider-secret-marker" not in caplog.text
 
 
 def test_status_unknown_session_is_expired() -> None:
@@ -307,7 +264,7 @@ def test_poll_aborts_when_cancel_event_set(monkeypatch: pytest.MonkeyPatch) -> N
                 on_pending()
         raise AssertionError("poll should have been cancelled before returning")
 
-    _install_fake_oauth_device(monkeypatch, poll_device_token=_fake_poll)
+    monkeypatch.setattr(_oauth_device, "poll_device_token", _fake_poll)
 
     session = hf_auth.DeviceCodeSession(
         session_id="s9",
@@ -323,17 +280,13 @@ def test_poll_aborts_when_cancel_event_set(monkeypatch: pytest.MonkeyPatch) -> N
     assert session.status == "cancelled"
 
 
-def test_authorized_session_gets_bounded_ttl(
-    monkeypatch: pytest.MonkeyPatch, device_code_error: type[Exception]
-) -> None:
+def test_authorized_session_gets_bounded_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
     """On success the session's expires_at is shortened to the authorized TTL."""
     token_response = {"access_token": "hf_x", "refresh_token": "r", "expires_in": 10}
-    _install_fake_oauth_device(
-        monkeypatch, poll_device_token=lambda info, **kw: token_response
-    )
     monkeypatch.setattr(
-        hf_auth, "_persist_device_oauth_token", lambda resp: ("name", "user")
+        _oauth_device, "poll_device_token", lambda info, **kw: token_response
     )
+    monkeypatch.setattr(_login, "_save_oauth_token", lambda resp: ("name", "user"))
 
     session = hf_auth.DeviceCodeSession(
         session_id="s10",
