@@ -334,7 +334,7 @@ async def get_device_oauth_status(session_id: str, request: Request) -> dict[str
         daemon = getattr(request.app.state, "daemon", None)
         if daemon is not None:
             try:
-                await daemon._start_central_signaling_relay()
+                await daemon.start_central_relay_if_running()
             except Exception as e:
                 logger.warning("[oauth/device] relay start failed: %r", e)
 
@@ -404,7 +404,7 @@ async def oauth_callback(
         daemon = getattr(request.app.state, "daemon", None)
         if daemon is not None:
             try:
-                await daemon._start_central_signaling_relay()
+                await daemon.start_central_relay_if_running()
             except Exception as e:
                 logger.warning("[oauth/callback] relay start failed: %r", e)
 
