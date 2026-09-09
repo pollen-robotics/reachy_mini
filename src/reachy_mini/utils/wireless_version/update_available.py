@@ -55,10 +55,17 @@ def get_pypi_version(package_name: str, pre_release: bool) -> semver.Version:
     version = _semver_version(data["info"]["version"])
 
     if pre_release:
-        releases = list(data["releases"].keys())
-        pre_version = _semver_version(releases[-1])
-        if pre_version > version:
-            return pre_version
+        # PyPI orders ``releases`` lexicographically, so the last key is not the
+        # newest version ("1.9.0rc1" sorts after "1.10.0rc5"). Take the max.
+        candidates = [version]
+        for v, files in data["releases"].items():
+            if not files or all(f.get("yanked") for f in files):
+                continue  # deleted or yanked: pip would refuse to install it
+            try:
+                candidates.append(_semver_version(v))
+            except ValueError:
+                continue  # version scheme we can't compare (e.g. ``.post1``)
+        return max(candidates)
 
     return version
 

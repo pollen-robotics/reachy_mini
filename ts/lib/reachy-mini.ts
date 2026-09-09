@@ -2155,6 +2155,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 is_move_running?: boolean;
                 face_target?: FaceTarget;
                 doa?: { angle: number; speech_detected: boolean } | null;
+                imu?: ImuData | null;
             };
             if (s.head_pose) this._robotState.head = s.head_pose.flat();
             if (s.antennas) this._robotState.antennas = [s.antennas[0], s.antennas[1]];
@@ -2166,6 +2167,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             // DoA is null when there's no mic array / no reading yet - reflect
             // that by clearing our mirror so stale angles don't linger.
             if ('doa' in s) this._robotState.doa = s.doa ?? undefined;
+            // Same for the IMU: the daemon sends null once its 0.5 s cache
+            // goes stale, so a frozen last reading must not linger either.
+            if ('imu' in s) this._robotState.imu = s.imu ?? undefined;
             this._emit('state', { ...this._robotState });
         }
         if (data.error) {

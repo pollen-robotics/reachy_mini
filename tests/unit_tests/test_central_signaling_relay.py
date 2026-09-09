@@ -930,7 +930,9 @@ class _FakeHTTPSession:
         self.posts: list[tuple[str, Any, Any]] = []
         self.closed = False
 
-    def post(self, url: str, json: Any = None, headers: Any = None) -> _FakeResponse:
+    def post(
+        self, url: str, json: Any = None, headers: Any = None, proxy: Any = None
+    ) -> _FakeResponse:
         self.posts.append((url, json, headers))
         return _FakeResponse(self._status)
 

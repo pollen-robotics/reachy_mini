@@ -2347,6 +2347,33 @@
         }
       }
     },
+    "/api/state/imu": {
+      "get": {
+        "summary": "Get Imu",
+        "description": "Get the latest IMU reading (accelerometer, gyroscope, quaternion, temperature).\n\nAccelerations are in m/s\u00b2, angular rates in rad/s, the quaternion is\nw-first and the temperature in \u00b0C.\nReturns None on versions without an IMU (Lite, simulation) or when the\ncached reading has gone stale.",
+        "operationId": "get_imu_api_state_imu_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ImuData"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Imu Api State Imu Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/state/full": {
       "get": {
         "summary": "Get Full State",
@@ -2461,6 +2488,16 @@
               "type": "boolean",
               "default": false,
               "title": "With Doa"
+            }
+          },
+          {
+            "name": "with_imu",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "With Imu"
             }
           },
           {
@@ -3342,6 +3379,16 @@
                 "type": "null"
               }
             ]
+          },
+          "imu": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImuData"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -3451,6 +3498,44 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "ImuData": {
+        "properties": {
+          "accelerometer": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Accelerometer"
+          },
+          "gyroscope": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Gyroscope"
+          },
+          "quaternion": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Quaternion"
+          },
+          "temperature": {
+            "type": "number",
+            "title": "Temperature"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accelerometer",
+          "gyroscope",
+          "quaternion",
+          "temperature"
+        ],
+        "title": "ImuData",
+        "description": "IMU sensor reading (BMI088, wireless version only).\n\nThe payload half of :class:`ImuDataMsg`, reused wherever the reading\nis carried without the legacy WS discriminator (state snapshots,\nREST replies)."
       },
       "InterpolationTechnique": {
         "type": "string",
