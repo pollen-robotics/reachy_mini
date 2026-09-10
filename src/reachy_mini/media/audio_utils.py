@@ -361,3 +361,107 @@ def save_audio_to_wav(
         raise RuntimeError(
             f"save_audio_to_wav: GStreamer pipeline error: {err} — {debug}"
         )
+
+
+def load_audio_mono(
+    filepath: str, samplerate: int | None = None
+) -> tuple[npt.NDArray[np.float64], int]:
+    """Decode an audio file to mono float64 using GStreamer, optionally resampled.
+
+    The counterpart of :func:`save_audio_to_wav`: it decodes anything
+    ``decodebin`` handles (PCM WAV of any bit depth, IEEE-float WAV, OGG, MP3,
+    FLAC, ...), so it reads back what that function writes.  Multi-channel input
+    is downmixed to mono by ``audioconvert``.
+
+    Decoding through GStreamer rather than by hand matters when the result is
+    compared against audio the robot played: ``play_sound`` uses the same
+    decoders, so any decoder quirk cancels out instead of showing up as a
+    spurious mismatch.
+
+    The pipeline used internally::
+
+        filesrc → decodebin → audioconvert → audioresample → capsfilter → appsink
+
+    Args:
+        filepath: Path to any audio file GStreamer can decode.
+        samplerate: Target rate in Hz.  ``None`` keeps the file's own rate.
+
+    Returns:
+        ``(samples, rate)`` — mono samples in ``[-1, 1]`` of shape ``(N,)``, and
+        the rate they are at (the file's own when ``samplerate`` is ``None``).
+
+    Raises:
+        ImportError: If the ``gi`` / GStreamer Python bindings are not installed.
+        RuntimeError: If the pipeline errors out or stalls.
+        ValueError: If the file decodes to no audio at all.
+
+    Example::
+
+        from reachy_mini.media.audio_utils import load_audio_mono
+
+        reference, rate = load_audio_mono("wake_up.wav", samplerate=16000)
+
+    """
+    try:
+        import gi
+
+        gi.require_version("Gst", "1.0")
+        from gi.repository import Gst
+    except ImportError as e:
+        raise ImportError(
+            "The 'gi' module is required for load_audio_mono but could not be "
+            "imported. Please check the GStreamer installation."
+        ) from e
+
+    Gst.init([])
+
+    caps = "audio/x-raw,format=F32LE,channels=1,layout=interleaved"
+    if samplerate is not None:
+        caps += f",rate={samplerate}"
+
+    # parse_launch rather than hand-built elements: decodebin exposes its audio
+    # pad only once it has sniffed the format, and parse_launch does that
+    # delayed linking for us.
+    pipeline = Gst.parse_launch(
+        "filesrc name=src ! decodebin ! audioconvert ! audioresample "
+        f'! capsfilter caps="{caps}" ! appsink name=sink sync=false max-buffers=0'
+    )
+    pipeline.get_by_name("src").set_property("location", filepath)
+    sink = pipeline.get_by_name("sink")
+    pipeline.set_state(Gst.State.PLAYING)
+
+    chunks: list[npt.NDArray[np.float32]] = []
+    rate = samplerate or 0
+    try:
+        while True:
+            sample = sink.emit("try-pull-sample", 5 * Gst.SECOND)
+            if sample is None:
+                if sink.get_property("eos"):
+                    break
+                # Not EOS, so this is a stall or a failure to decode. Surface
+                # the bus error when there is one — it names the actual cause
+                # (missing file, unknown format, missing plugin).
+                msg = pipeline.get_bus().pop_filtered(Gst.MessageType.ERROR)
+                if msg is not None:
+                    err, debug = msg.parse_error()
+                    raise RuntimeError(
+                        f"load_audio_mono: GStreamer error on {filepath}: "
+                        f"{err} — {debug}"
+                    )
+                raise RuntimeError(f"load_audio_mono: timed out decoding {filepath}")
+
+            if not rate:
+                rate = sample.get_caps().get_structure(0).get_value("rate")
+            buffer = sample.get_buffer()
+            ok, info = buffer.map(Gst.MapFlags.READ)
+            if ok:
+                # Copy: the mapped memory is only valid until unmap.
+                chunks.append(np.frombuffer(info.data, dtype=np.float32).copy())
+                buffer.unmap(info)
+    finally:
+        pipeline.set_state(Gst.State.NULL)
+
+    if not chunks:
+        raise ValueError(f"No audio decoded from {filepath}")
+
+    return np.concatenate(chunks).astype(np.float64), int(rate)
