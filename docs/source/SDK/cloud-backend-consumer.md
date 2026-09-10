@@ -122,14 +122,16 @@ candidate of its own (see `_apply_turn_servers` in
 If you need the consumer to allocate its own relay (e.g. when neither
 side can hole-punch), pass an `ice_servers_provider` returning
 `aiortc.RTCIceServer` objects with TURN credentials. The HF-hosted
-Cloudflare TURN proxy at `https://turn.fastrtc.org/credentials` is a
-reasonable default for HF Spaces:
+Cloudflare TURN proxy at `https://fastrtc-turn-service.hf.space/credentials`
+is a reasonable default for HF Spaces. Use a token the visitor owns where
+you can: the free allowance is metered per Hugging Face account, so a
+shared Space secret spends one quota for every visitor.
 
 ```python
 async def _ice():
     async with aiohttp.ClientSession() as s:
         r = await s.get(
-            "https://turn.fastrtc.org/credentials",
+            "https://fastrtc-turn-service.hf.space/credentials",
             headers={"Authorization": f"Bearer {space_secret_hf_token}"},
             params={"ttl": 600},
         )

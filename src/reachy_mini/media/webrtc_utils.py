@@ -29,8 +29,11 @@ logger = logging.getLogger(__name__)
 # STUN. So there is no central-server change and no consumer-side
 # credential to manage (which matters because aiortc's STUN client works
 # while its TURN client does not).
+#
+# turn.fastrtc.org (this default until 2026-09) has dead DNS since June 2026;
+# address the fastrtc/turn-service Space directly.
 TURN_CREDENTIALS_URL = os.getenv(
-    "REACHY_TURN_URL", "https://turn.fastrtc.org/credentials"
+    "REACHY_TURN_URL", "https://fastrtc-turn-service.hf.space/credentials"
 )
 TURN_TTL_SECONDS = int(os.getenv("REACHY_TURN_TTL", "600"))
 
