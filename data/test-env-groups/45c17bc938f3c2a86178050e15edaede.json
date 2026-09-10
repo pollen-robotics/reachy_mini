@@ -1,1 +1,1 @@
-{"id":"45c17bc938f3c2a86178050e15edaede","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_info_bounds_payload_to_mtu","name":"test_update_info_bounds_payload_to_mtu","status":"passed","testResultsByEnv":{"default":"81290033d2605d846ea7152f0db675f0"}}
+{"id":"45c17bc938f3c2a86178050e15edaede","fullName":"tests.unit_tests.test_ble_update_proxy#test_update_info_bounds_payload_to_mtu","name":"test_update_info_bounds_payload_to_mtu","status":"passed","testResultsByEnv":{"default":"38bd59953744a2b87cf8ecb8dfaf28d0"}}

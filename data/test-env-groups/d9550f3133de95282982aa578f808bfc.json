@@ -1,1 +1,1 @@
-{"id":"d9550f3133de95282982aa578f808bfc","fullName":"tests.unit_tests.test_wireless_version#test_get_pypi_version_http_error","name":"test_get_pypi_version_http_error","status":"passed","testResultsByEnv":{"default":"93276ffaa00ac49d0dfd047afae7f055"}}
+{"id":"d9550f3133de95282982aa578f808bfc","fullName":"tests.unit_tests.test_wireless_version#test_get_pypi_version_http_error","name":"test_get_pypi_version_http_error","status":"passed","testResultsByEnv":{"default":"d51271ad5774903f4a5130b033f6448a"}}
