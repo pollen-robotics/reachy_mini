@@ -1,1 +1,1 @@
-{"id":"def810dbc18a93083cc33cfd9470cd03","fullName":"tests.unit_tests.test_wireless_version#test_update_restart_failure_propagates","name":"test_update_restart_failure_propagates","status":"passed","testResultsByEnv":{"default":"6b11e56cec0c95c8bd79b805e7ab8c6a"}}
+{"id":"def810dbc18a93083cc33cfd9470cd03","fullName":"tests.unit_tests.test_wireless_version#test_update_restart_failure_propagates","name":"test_update_restart_failure_propagates","status":"passed","testResultsByEnv":{"default":"cb67c7b33d3dc3e32b1dabccd866ae2b"}}
