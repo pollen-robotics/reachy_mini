@@ -1,1 +1,1 @@
-{"id":"13f737d4cb39e620534fadc78b70a6c3","fullName":"tests.unit_tests.test_backend_process_command#test_set_torque_on_global","name":"test_set_torque_on_global","status":"passed","testResultsByEnv":{"default":"d1119e96b733ec292981c8bfbbeab2de"}}
+{"id":"13f737d4cb39e620534fadc78b70a6c3","fullName":"tests.unit_tests.test_backend_process_command#test_set_torque_on_global","name":"test_set_torque_on_global","status":"passed","testResultsByEnv":{"default":"dd3a0bad07e3d5a13377a29cf8cd2b5a"}}

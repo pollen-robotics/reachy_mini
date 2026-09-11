@@ -1,1 +1,1 @@
-{"id":"1bf75f75d994197045bbf5d8c7e7f9d1","fullName":"tests.unit_tests.test_backend_process_command#test_get_tracked_face","name":"test_get_tracked_face","status":"passed","testResultsByEnv":{"default":"f906738ef2750fc0ca455916fc9fd094"}}
+{"id":"1bf75f75d994197045bbf5d8c7e7f9d1","fullName":"tests.unit_tests.test_backend_process_command#test_get_tracked_face","name":"test_get_tracked_face","status":"passed","testResultsByEnv":{"default":"26d3a846dd5cb704b030fcc40fc262a7"}}
