@@ -1,1 +1,1 @@
-{"id":"66177488c6e955956d1bf1fe135337af","fullName":"tests.unit_tests.test_central_consumer#test_send_command_serializes_a_protocol_model","name":"test_send_command_serializes_a_protocol_model","status":"passed","testResultsByEnv":{"default":"541539fdf761865aa46bb3015d8ebb8f"}}
+{"id":"66177488c6e955956d1bf1fe135337af","fullName":"tests.unit_tests.test_central_consumer#test_send_command_serializes_a_protocol_model","name":"test_send_command_serializes_a_protocol_model","status":"passed","testResultsByEnv":{"default":"b36736de5536edf408e57fbcbe384a2c"}}

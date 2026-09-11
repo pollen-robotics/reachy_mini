@@ -1,0 +1,1 @@
+WARNING  reachy_mini.utils.wireless_version.startup_check:startup_check.py:679 Startup stamp not usable (Expecting property name enclosed in double quotes: line 1 column 2 (char 1)); running full startup checks

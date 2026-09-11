@@ -1,0 +1,4 @@
+WARNING  reachy_mini.utils.wireless_version.startup_check:startup_check.py:679 Startup stamp not usable ([Errno 2] No such file or directory: '/tmp/pytest-of-runner/pytest-0/test_editable_install_never_us0/venvs/mini_daemon/.startup_check_stamp.json'); running full startup checks
+ERROR    reachy_mini.utils.wireless_version.startup_check:startup_check.py:703 Could not write startup stamp: editable install detected, fast path disabled
+WARNING  reachy_mini.utils.wireless_version.startup_check:startup_check.py:679 Startup stamp not usable ([Errno 2] No such file or directory: '/tmp/pytest-of-runner/pytest-0/test_editable_install_never_us0/venvs/mini_daemon/.startup_check_stamp.json'); running full startup checks
+ERROR    reachy_mini.utils.wireless_version.startup_check:startup_check.py:703 Could not write startup stamp: editable install detected, fast path disabled

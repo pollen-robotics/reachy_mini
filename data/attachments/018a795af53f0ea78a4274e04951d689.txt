@@ -1,0 +1,2 @@
+WARNING  reachy_mini.utils.wireless_version.startup_check:startup_check.py:679 Startup stamp not usable ([Errno 2] No such file or directory: '/tmp/pytest-of-runner/pytest-0/test_reinstall_invalidates_sta0/venvs/mini_daemon/.startup_check_stamp.json'); running full startup checks
+WARNING  reachy_mini.utils.wireless_version.startup_check:startup_check.py:650 Startup stamp mismatch (install state changed); running full startup checks

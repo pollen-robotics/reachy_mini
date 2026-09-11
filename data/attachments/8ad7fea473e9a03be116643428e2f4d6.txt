@@ -1,0 +1,7 @@
+ERROR    reachy_mini.utils.wireless_version.startup_check:update.py:36 Could not clear the startup-check stamp
+Traceback (most recent call last):
+  File "/home/runner/work/reachy_mini/reachy_mini/src/reachy_mini/utils/wireless_version/update.py", line 32, in update_reachy_mini
+    startup_check.clear_startup_stamp()
+  File "/home/runner/work/reachy_mini/reachy_mini/tests/unit_tests/test_startup_check_stamp.py", line 262, in stuck
+    raise PermissionError(13, "Permission denied")
+PermissionError: [Errno 13] Permission denied
