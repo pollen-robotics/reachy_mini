@@ -10,7 +10,8 @@ import mujoco
 import numpy as np
 import numpy.typing as npt
 from mujoco._structs import MjData, MjModel
-from scipy.spatial.transform import Rotation as R
+
+from reachy_mini.utils.rotation import Rotation as R
 
 
 def get_homogeneous_matrix_from_euler(

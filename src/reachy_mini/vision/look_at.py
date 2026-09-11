@@ -2,9 +2,9 @@
 
 import numpy as np
 import numpy.typing as npt
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.media.camera_utils import undistort_points
+from reachy_mini.utils.rotation import Rotation as R
 
 # Camera extrinsics from the CAD: camera offset in the head frame, plus the optical→head axis rotation.
 DEFAULT_HEAD_TO_CAMERA_TRANSFORM: npt.NDArray[np.float64] = np.eye(4)
