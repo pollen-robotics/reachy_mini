@@ -29,6 +29,7 @@ import math
 import multiprocessing
 import os
 import platform
+import threading
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
@@ -439,50 +440,42 @@ def _worker_entry(
 
 
 class FaceTracker:
-    """Run the face detector in a child process and expose the latest aim target."""
+    """SCRATCH VARIANT: run the detection worker in a daemon thread (A/B benchmark)."""
 
     def __init__(self) -> None:
-        """Initialize the tracker; no process is started until ``start``."""
-        # spawn, not fork: forking the daemon would duplicate its GStreamer,
-        # asyncio, and motor-controller state into the child.
-        self._ctx = multiprocessing.get_context("spawn")
-        self._process: BaseProcess | None = None
-        self._target_mailbox: "SynchronizedArray[float]" = self._ctx.Array(
+        """Initialize the tracker; no thread is started until ``start``."""
+        self._thread: threading.Thread | None = None
+        self._target_mailbox: "SynchronizedArray[float]" = multiprocessing.Array(
             "d", _TARGET_SLOTS
         )
-        self._pose_mailbox: "SynchronizedArray[float]" = self._ctx.Array(
+        self._pose_mailbox: "SynchronizedArray[float]" = multiprocessing.Array(
             "d", _POSE_SLOTS
         )
-        self._active = self._ctx.Event()
-        self._stop = self._ctx.Event()
-        self._death_logged = False
+        self._active = threading.Event()
+        self._stop = threading.Event()
+
+    def _entry(self, camera_specs: CameraSpecs) -> None:
+        if platform.system() == "Linux":
+            os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 19)
+        _DetectionWorker(
+            camera_specs, self._target_mailbox, self._pose_mailbox, self._active, self._stop
+        ).run()
 
     def start(self, camera_specs: CameraSpecs) -> None:
-        """Start the detector process if it is not already running."""
-        if self._process is not None and self._process.is_alive():
+        """Start the detector thread if it is not already running."""
+        if self._thread is not None and self._thread.is_alive():
             return
-        self._stop = self._ctx.Event()
-        # Zero the mailboxes so stale targets from a previous run are dropped.
+        self._stop = threading.Event()
         with self._target_mailbox.get_lock():
             for i in range(_TARGET_SLOTS):
                 self._target_mailbox[i] = 0.0
         with self._pose_mailbox.get_lock():
             for i in range(_POSE_SLOTS):
                 self._pose_mailbox[i] = 0.0
-        self._death_logged = False
-        self._process = self._ctx.Process(
-            target=_worker_entry,
-            args=(
-                camera_specs,
-                self._target_mailbox,
-                self._pose_mailbox,
-                self._active,
-                self._stop,
-            ),
-            daemon=True,
-            name="face-tracker",
+        self._thread = threading.Thread(
+            target=self._entry, args=(camera_specs,), daemon=True, name="face-tracker"
         )
-        self._process.start()
+        self._thread.start()
 
     def set_active(self, active: bool) -> None:
         """Pause or resume detection; a paused tracker disconnects from the camera feed."""
@@ -501,17 +494,6 @@ class FaceTracker:
 
     def latest(self) -> TrackingTarget | None:
         """Return the latest published aim target, or None before the first one."""
-        if (
-            self._process is not None
-            and not self._process.is_alive()
-            and not self._stop.is_set()
-            and not self._death_logged
-        ):
-            self._death_logged = True
-            logger.warning(
-                "Face tracker process died (exit code %s); no more targets.",
-                self._process.exitcode,
-            )
         with self._target_mailbox.get_lock():
             values = [self._target_mailbox[i] for i in range(_TARGET_SLOTS)]
         seq = int(values[0])
@@ -528,18 +510,12 @@ class FaceTracker:
         )
 
     def stop(self) -> None:
-        """Stop the detector process."""
+        """Stop the detector thread."""
         self._stop.set()
-        process = self._process
-        if process is None:
+        if self._thread is None:
             return
-        process.join(timeout=2.0)
-        if process.is_alive():
-            # Unlike a thread, a wedged child can be reclaimed by force.
-            process.terminate()
-            process.join(timeout=1.0)
-        if process.is_alive():
-            # Keep the handle: forgetting a live process lets start() double-run.
-            logger.warning("Face tracker process did not stop in time.")
-            return
-        self._process = None
+        self._thread.join(timeout=2.0)
+        if self._thread.is_alive():
+            logger.warning("Face tracker thread did not stop in time.")
+        else:
+            self._thread = None
