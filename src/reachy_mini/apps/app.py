@@ -14,14 +14,13 @@ import threading
 import traceback
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-
 from reachy_mini.reachy_mini import ReachyMini
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
 
 
 class ReachyMiniApp(ABC):
@@ -49,8 +48,15 @@ class ReachyMiniApp(ABC):
             else "default"
         )
 
-        self.settings_app: FastAPI | None = None
+        self.settings_app: "FastAPI | None" = None
         if self.custom_app_url is not None and not self.dont_start_webserver:
+            # Imported here so that `import reachy_mini` doesn't pay for
+            # fastapi (~1.2s on the wireless robot) in apps that don't serve a
+            # settings page (custom_app_url unset or dont_start_webserver).
+            from fastapi import FastAPI, Request, Response
+            from fastapi.responses import FileResponse
+            from fastapi.staticfiles import StaticFiles
+
             self.settings_app = FastAPI()
 
             # Prevent browser from caching static files across different apps
