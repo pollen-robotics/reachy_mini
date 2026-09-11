@@ -98,6 +98,11 @@ export interface RobotState {
      * (or no reading yet). Refreshed by the daemon at ~10 Hz.
      */
     doa?: DoA;
+    /**
+     * Latest IMU reading, or absent on robots without one (Lite, simulator)
+     * and while the daemon's cached reading is stale.
+     */
+    imu?: ImuData;
 }
 
 /** SDK constructor options. */

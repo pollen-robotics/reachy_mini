@@ -21,9 +21,12 @@ jobs:
     steps:
       - name: Resolve REACHY_REF to a SHA
         id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Input ref: $REACHY_REF"
-          RESPONSE=$(curl -s "https://api.github.com/repos/pollen-robotics/reachy_mini/commits/$REACHY_REF")
+          RESPONSE=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/pollen-robotics/reachy_mini/commits/$REACHY_REF")
           SHA=$(echo "$RESPONSE" | python3 -c "import sys, json
           try:
               print(json.loads(sys.stdin.read()).get('sha', ''))

@@ -52,6 +52,7 @@ declare global {
       variables?: {
         OAUTH_CLIENT_ID?: string;
         OAUTH_SCOPES?: string;
+        SIGNALING_URL?: string;
         SPACE_HOST?: string;
         SPACE_ID?: string;
       };
