@@ -4,6 +4,11 @@ on:
   release:
     types:
       - created
+  # Dispatched by the Release workflow with --ref <tag> after the PyPI publish.
+  # A `release` event is not usable there: releases created with GITHUB_TOKEN don't
+  # trigger workflows (recursion guard), and later RCs / the final promotion only
+  # *edit* an existing release, which never emits `created`.
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -46,6 +51,12 @@ jobs:
       # ts/host/dist/, surfaced via the `./host*` subpath exports.
       - name: Install package dependencies
         run: npm ci
+
+      # Unit + wire-compat tests (vitest). Gates the publish: the
+      # golden-envelope suite is what guarantees already-published
+      # Spaces (frozen embed bundles) keep talking to a newer host.
+      - name: Run tests
+        run: npm test
 
       # Build the SDK dist/ + host bundles into host/dist/. Required
       # for the `.`, `./host`, `./host/auto`, `./host/embed`, and
@@ -120,6 +131,14 @@ jobs:
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
           npm version "$ver" --no-git-tag-version
 
+      # `prebuild:sdk` already ran gen-version.mjs during the build step
+      # above — but that was BEFORE `npm version` bumped package.json, so
+      # dist/version.js still holds the committed placeholder. Regenerate
+      # lib/version.ts from the bumped manifest and recompile the SDK so
+      # `ReachyMini.version` reports the real published version.
+      - name: Re-stamp SDK version after bump
+        run: npm run gen:version && npm run build:sdk
+
       # PR: pack to confirm the publish would succeed (tarball
       # layout, manifest validity, no missing files) without
       # actually publishing.
@@ -127,8 +146,10 @@ jobs:
         if: github.event_name == 'pull_request'
         run: npm pack --dry-run
 
+      # workflow_dispatch is the Release workflow shipping a tag (rc → `rc`, X.Y.Z →
+      # `latest`); the version-compute step above already treats it like a release.
       - name: Publish (release)
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         run: npm publish --tag "${{ steps.ver.outputs.release_tag }}"
 
       - name: Publish (main)

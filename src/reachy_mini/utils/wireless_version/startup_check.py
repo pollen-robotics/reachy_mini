@@ -7,11 +7,16 @@ Also checks and updates the bluetooth service if needed.
 
 import filecmp
 import logging
+import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 USER = "pollen"
+
+# systemd unit self-healed on every boot (see check_and_update_gpio_shutdown_service).
+GPIO_SHUTDOWN_UNIT_TARGET = Path("/etc/systemd/system/gpio-shutdown-daemon.service")
 
 
 def check_and_fix_venvs_ownership(venvs_path: str = "/venvs") -> None:
@@ -247,6 +252,137 @@ def check_and_update_wireless_launcher() -> None:
         logger.error(f"Failed to update service: {e.stderr}")
     except Exception as e:
         logger.error(f"Unexpected error while updating service: {e}")
+
+
+def _revert_gpio_unit(target: Path, previous: bytes | None) -> None:
+    """Undo a half-applied unit update so the next boot retries it.
+
+    check_and_update_gpio_shutdown_service returns early once the packaged and
+    installed units match, so a new file left behind after a failed
+    daemon-reload / restart / enable would mark the work done forever. systemd
+    would keep the old unit, or on a fresh install keep no enabled unit at all,
+    so the power switch stops triggering a graceful `shutdown -h now` (no
+    kernel gpio-shutdown overlay backs it up, this daemon is the only thing
+    listening) and every power-off becomes an abrupt cut. No later boot would
+    fix it either, since the files still match.
+    """
+    try:
+        if previous is None:
+            subprocess.run(
+                ["sudo", "rm", "-f", str(target)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            logger.warning(
+                f"Removed the half-installed {target}; the next boot will retry"
+            )
+            return
+
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp.write(previous)
+        try:
+            subprocess.run(
+                ["sudo", "cp", tmp.name, str(target)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            os.unlink(tmp.name)
+        logger.warning(f"Restored the previous {target}; the next boot will retry")
+    except Exception as e:
+        logger.error(
+            f"Could not revert {target} after a failed update: {e}. The next boot "
+            "will find a matching unit and skip the sync; recover with "
+            "`sudo systemctl daemon-reload && sudo systemctl enable --now "
+            "gpio-shutdown-daemon`."
+        )
+
+
+def check_and_update_gpio_shutdown_service() -> None:
+    """Check if the gpio-shutdown systemd unit needs updating and update if different.
+
+    Compares the packaged gpio-shutdown-daemon.service with the installed
+    version at /etc/systemd/system. Older images generated the unit at install
+    time with an ExecStart pointing at wherever the SDK lived back then, so
+    without this sync a stale unit keeps running old launcher code forever.
+    On a difference the packaged unit is copied over and the service is
+    restarted; a missing unit is installed and enabled.
+    """
+    # parents[2] is the reachy_mini package root (this file lives in
+    # utils/wireless_version/).
+    source = (
+        Path(__file__).parents[2]
+        / "daemon"
+        / "app"
+        / "services"
+        / "gpio_shutdown"
+        / "gpio-shutdown-daemon.service"
+    ).resolve()
+    target = GPIO_SHUTDOWN_UNIT_TARGET
+
+    if not source.exists():
+        logger.warning(f"Source gpio-shutdown service file not found at {source}")
+        return
+
+    target_missing = not target.exists()
+    if not target_missing:
+        try:
+            if filecmp.cmp(str(source), str(target), shallow=False):
+                logger.info("gpio-shutdown service is up to date")
+                return
+            logger.info("gpio-shutdown service has changed, updating...")
+        except Exception as e:
+            logger.error(f"Error comparing gpio-shutdown service files: {e}")
+            return
+    else:
+        logger.info(f"gpio-shutdown service not installed at {target}, installing...")
+
+    # Once the copy lands, file equality alone would tell the next boot the work
+    # is done, so nothing may stay copied unless every follow-up step succeeded.
+    previous_unit = None if target_missing else target.read_bytes()
+    copied = False
+
+    try:
+        logger.info(f"Copying {source} to {target}")
+        subprocess.run(
+            ["sudo", "cp", str(source), str(target)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        copied = True
+        subprocess.run(
+            ["sudo", "systemctl", "daemon-reload"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        if target_missing:
+            # Fresh install: enable so it also starts on subsequent boots.
+            subprocess.run(
+                ["sudo", "systemctl", "enable", "--now", "gpio-shutdown-daemon"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        else:
+            subprocess.run(
+                ["sudo", "systemctl", "restart", "gpio-shutdown-daemon"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        logger.info("Successfully updated gpio-shutdown service")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to update gpio-shutdown service: {e.stderr}")
+        if copied:
+            _revert_gpio_unit(target, previous_unit)
+    except Exception as e:
+        logger.error(f"Unexpected error while updating gpio-shutdown service: {e}")
+        if copied:
+            _revert_gpio_unit(target, previous_unit)
 
 
 def check_and_sync_apps_venv_sdk() -> None:

@@ -8,6 +8,8 @@ from datetime import date, datetime
 import aiohttp
 from huggingface_hub import HfApi
 
+from reachy_mini.utils.proxy import proxy_for
+
 from .. import AppInfo, SourceKind
 from . import hf_auth
 
@@ -136,7 +138,9 @@ async def _fetch_space_data(
     """Fetch data for a single space from Hugging Face API."""
     url = f"{HF_SPACES_API_URL}/{space_id}"
     try:
-        async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+        async with session.get(
+            url, timeout=REQUEST_TIMEOUT, proxy=proxy_for(url)
+        ) as response:
             if response.status == 200:
                 return _coerce_space_data(await response.json())
             else:
@@ -147,10 +151,15 @@ async def _fetch_space_data(
 
 async def list_available_apps() -> list[AppInfo]:
     """List apps available on Hugging Face Spaces."""
+    # Explicit proxy resolution (HTTP_PROXY/HTTPS_PROXY/NO_PROXY) —
+    # deliberately NOT trust_env=True, which would also read ~/.netrc
+    # and silently attach its credentials (see utils/proxy.py).
     async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
         # Fetch the list of authorized app IDs
         try:
-            async with session.get(AUTHORIZED_APP_LIST_URL) as response:
+            async with session.get(
+                AUTHORIZED_APP_LIST_URL, proxy=proxy_for(AUTHORIZED_APP_LIST_URL)
+            ) as response:
                 response.raise_for_status()
                 text = await response.text()
                 authorized_ids = json.loads(text)
