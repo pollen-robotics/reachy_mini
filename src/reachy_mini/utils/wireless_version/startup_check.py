@@ -6,7 +6,6 @@ Also checks and updates the bluetooth service if needed.
 """
 
 import filecmp
-import hashlib
 import json
 import logging
 import os
@@ -29,7 +28,6 @@ DAEMON_VENV = Path("/venvs/mini_daemon")
 APPS_VENV = Path("/venvs/apps_venv")
 RESTORE_VENV = Path("/restore/venvs/mini_daemon")
 STAMP_PATH = DAEMON_VENV / ".startup_check_stamp.json"
-STAMP_FORMAT = 1
 
 # systemd unit self-healed on every boot (see check_and_update_gpio_shutdown_service).
 GPIO_SHUTDOWN_UNIT_TARGET = Path("/etc/systemd/system/gpio-shutdown-daemon.service")
@@ -583,14 +581,6 @@ def clear_startup_stamp() -> None:
     STAMP_PATH.unlink(missing_ok=True)
 
 
-def _clear_startup_stamp_best_effort() -> None:
-    """Clear the stamp on the boot path, where raising would abort daemon startup."""
-    try:
-        clear_startup_stamp()
-    except OSError as e:
-        logger.error(f"Could not remove startup stamp: {e}")
-
-
 def _dist_record_sig(venv_root: Path) -> str | None:
     """Stat-based signature of the reachy_mini dist-info RECORD file(s) in a venv.
 
@@ -628,9 +618,6 @@ def _compute_stamp_signature() -> dict[str, object]:
         raise RuntimeError(f"no reachy_mini dist-info found in {DAEMON_VENV}")
 
     return {
-        "format": STAMP_FORMAT,
-        # Invalidates the stamp whenever the check logic itself changes.
-        "checks_hash": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "daemon": daemon_info,
         "daemon_record": daemon_record,
         "apps_record": _dist_record_sig(APPS_VENV),
@@ -648,7 +635,6 @@ def _quick_ownership_ok() -> bool:
         DAEMON_VENV,
         DAEMON_VENV / "bin/python",
         APPS_VENV,
-        STAMP_PATH,
     ]
     for probe in probes:
         if probe.exists() and probe.stat().st_uid != uid:
@@ -661,7 +647,9 @@ def _startup_stamp_valid() -> bool:
     """Check that the stored stamp matches the freshly computed signature."""
     stored = json.loads(STAMP_PATH.read_text())
     if stored != _compute_stamp_signature():
-        logger.warning("Startup stamp mismatch (install state changed); running full startup checks")
+        logger.warning(
+            "Startup stamp mismatch (install state changed); running full startup checks"
+        )
         return False
     return _quick_ownership_ok()
 
@@ -705,18 +693,20 @@ def run_wireless_startup_checks() -> None:
     all_ok = check_and_sync_apps_venv_sdk() and all_ok
     all_ok = check_and_fix_restore_venv() and all_ok
 
-    if not all_ok:
-        logger.warning("Some startup checks did not succeed; not writing startup stamp")
-        _clear_startup_stamp_best_effort()
-        return
-
     try:
-        _write_startup_stamp()
+        if all_ok:
+            _write_startup_stamp()
+            return
+        logger.warning("Some startup checks did not succeed; not writing startup stamp")
     except Exception as e:
         # Never fatal: worst case the full checks simply run again next boot.
-        # Drop any stale stamp so what's on disk is always fresh or absent.
         logger.error(f"Could not write startup stamp: {e}")
-        _clear_startup_stamp_best_effort()
+
+    # Nothing trustworthy to certify: what is on disk is always fresh or absent.
+    try:
+        clear_startup_stamp()
+    except OSError as e:
+        logger.error(f"Could not remove startup stamp: {e}")
 
 
 if __name__ == "__main__":

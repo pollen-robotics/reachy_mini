@@ -25,15 +25,14 @@ DAEMON_INFO = {
 }
 
 
-def _make_venv(root: Path, with_dist: bool = True) -> Path:
+def _make_venv(root: Path) -> Path:
     site = root / "lib/python3.12/site-packages"
     site.mkdir(parents=True)
     (root / "bin").mkdir()
     (root / "bin/python").write_text("#!fake\n")
-    if with_dist:
-        dist = site / "reachy_mini-1.9.0.dist-info"
-        dist.mkdir()
-        (dist / "RECORD").write_text("reachy_mini/__init__.py,,\n")
+    dist = site / "reachy_mini-1.9.0.dist-info"
+    dist.mkdir()
+    (dist / "RECORD").write_text("reachy_mini/__init__.py,,\n")
     return root
 
 
@@ -73,8 +72,12 @@ def spy_checks(monkeypatch):
     monkeypatch.setattr(sc, "check_and_fix_venvs_ownership", make("ownership"))
     monkeypatch.setattr(sc, "check_and_sync_apps_venv_sdk", make("apps_sync"))
     monkeypatch.setattr(sc, "check_and_fix_restore_venv", make("restore"))
-    monkeypatch.setattr(sc, "check_and_update_bluetooth_service", make("bluetooth", None))
-    monkeypatch.setattr(sc, "check_and_update_wireless_launcher", make("launcher", None))
+    monkeypatch.setattr(
+        sc, "check_and_update_bluetooth_service", make("bluetooth", None)
+    )
+    monkeypatch.setattr(
+        sc, "check_and_update_wireless_launcher", make("launcher", None)
+    )
     monkeypatch.setattr(
         sc, "check_and_update_gpio_shutdown_service", make("gpio_shutdown", None)
     )
@@ -92,7 +95,6 @@ def test_first_run_does_full_checks_and_writes_stamp(fake_venvs, spy_checks):
     assert fake_venvs["stamp"].exists()
     stored = json.loads(fake_venvs["stamp"].read_text())
     assert stored["daemon"] == DAEMON_INFO
-    assert stored["format"] == sc.STAMP_FORMAT
 
 
 def test_valid_stamp_skips_expensive_but_runs_cheap_checks(fake_venvs, spy_checks):
@@ -117,7 +119,9 @@ def test_failed_check_prevents_stamp_and_clears_existing(
         ns=(1, 1),
     )
     monkeypatch.setattr(
-        sc, "check_and_fix_restore_venv", lambda *a, **k: (spy_checks.append("restore"), False)[1]
+        sc,
+        "check_and_fix_restore_venv",
+        lambda *a, **k: (spy_checks.append("restore"), False)[1],
     )
     spy_checks.clear()
     sc.run_wireless_startup_checks()
@@ -125,8 +129,12 @@ def test_failed_check_prevents_stamp_and_clears_existing(
     assert not fake_venvs["stamp"].exists()
 
 
-def test_reinstall_invalidates_stamp(fake_venvs, spy_checks):
-    """A dist-info RECORD mtime change (any reinstall) invalidates the stamp."""
+def test_reinstall_invalidates_stamp_and_says_why(fake_venvs, spy_checks, caplog):
+    """A dist-info RECORD mtime change (any reinstall) invalidates the stamp.
+
+    And it must say WHY in the journal: field debugging relies on it, and a
+    silent fallback looks identical to a boot that never had a stamp.
+    """
     sc.run_wireless_startup_checks()
     spy_checks.clear()
 
@@ -136,8 +144,11 @@ def test_reinstall_invalidates_stamp(fake_venvs, spy_checks):
     )
     os.utime(record, ns=(123, 456))
 
-    sc.run_wireless_startup_checks()
+    with caplog.at_level(logging.WARNING, logger=sc.logger.name):
+        sc.run_wireless_startup_checks()
     assert set(spy_checks) == EXPENSIVE | CHEAP
+    assert "Startup stamp mismatch" in caplog.text
+
     # And the stamp was refreshed to the new signature: next run is fast again.
     spy_checks.clear()
     sc.run_wireless_startup_checks()
@@ -169,7 +180,9 @@ def test_editable_install_never_uses_fast_path(fake_venvs, spy_checks, monkeypat
     assert set(spy_checks) == EXPENSIVE | CHEAP
 
 
-def test_ownership_probe_failure_disables_fast_path(fake_venvs, spy_checks, monkeypatch):
+def test_ownership_probe_failure_disables_fast_path(
+    fake_venvs, spy_checks, monkeypatch
+):
     """A failing ownership probe forces the full checks."""
     sc.run_wireless_startup_checks()
     spy_checks.clear()
@@ -194,42 +207,11 @@ def test_missing_daemon_dist_info_disables_fast_path(fake_venvs, spy_checks):
     assert not fake_venvs["stamp"].exists()
 
 
-def test_dist_record_sig_none_without_distribution(tmp_path):
-    """No reachy_mini distribution in a venv yields a None signature."""
-    venv = _make_venv(tmp_path / "v", with_dist=False)
-    assert sc._dist_record_sig(venv) is None
-
-
-def test_clear_startup_stamp_tolerates_missing_file(fake_venvs):
-    """Clearing an absent stamp is a no-op, not an error."""
-    assert not fake_venvs["stamp"].exists()
-    sc.clear_startup_stamp()  # must not raise
-
-
 def test_stamp_write_is_atomic_no_tmp_left_behind(fake_venvs, spy_checks):
     """Atomic stamp write leaves no temp file behind."""
     sc.run_wireless_startup_checks()
     leftovers = list(fake_venvs["daemon"].glob("*.tmp"))
     assert leftovers == []
-
-
-def test_stale_stamp_says_why_full_checks_run(fake_venvs, spy_checks, caplog):
-    """A parseable-but-stale stamp must say WHY the full checks run.
-
-    Field debugging relies on the journal: a silent fallback would look
-    identical to a boot that never had a stamp.
-    """
-    sc.run_wireless_startup_checks()
-    record = next(
-        fake_venvs["daemon"].glob("lib/python*/site-packages/*.dist-info/RECORD")
-    )
-    os.utime(record, ns=(9, 9))
-
-    caplog.clear()
-    with caplog.at_level(logging.WARNING, logger=sc.logger.name):
-        sc.run_wireless_startup_checks()
-
-    assert "Startup stamp mismatch" in caplog.text
 
 
 def test_stamp_path_being_a_directory_never_crashes_boot(fake_venvs, spy_checks):

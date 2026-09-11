@@ -31,14 +31,9 @@ async def update_reachy_mini(
     try:
         startup_check.clear_startup_stamp()
     except OSError:
-        logger.error(
-            "Could not clear the startup-check stamp at %s. Continuing: the "
-            "install signature will invalidate it on the next boot anyway. "
-            "A stamp that cannot be deleted points at a filesystem or "
-            "ownership problem worth investigating.",
-            startup_check.STAMP_PATH,
-            exc_info=True,
-        )
+        # Not fatal: updating is how a robot in a bad state gets repaired, and
+        # the install signature invalidates the stamp next boot regardless.
+        logger.error("Could not clear the startup-check stamp", exc_info=True)
 
     # Update daemon venv. Fatal: abort before the restart. On the PyPI path
     # the venv is left on the previous version, so a retry works.
