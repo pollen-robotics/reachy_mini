@@ -3135,11 +3135,72 @@
             "minimum": 0.0,
             "title": "Weight",
             "default": 1.0
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "continuous",
+                  "periodic",
+                  "speaking"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "glance_interval_s": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Glance Interval S"
+          },
+          "glance_duration_s": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Glance Duration S"
+          },
+          "speaking_hold_s": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaking Hold S"
           }
         },
         "type": "object",
         "title": "EnableTrackingRequest",
-        "description": "Request body for enabling daemon-side head tracking."
+        "description": "Request body for enabling daemon-side head tracking (see SetHeadTrackingCmd)."
       },
       "FaceTarget": {
         "properties": {
