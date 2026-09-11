@@ -6,11 +6,16 @@ control loop when they share an interpreter. The exchange with the daemon is
 two fixed-size "latest value" mailboxes, deliberately without timestamps or
 queues:
 
-- daemon -> detector: the current head orientation (roll, pitch, yaw), so the
-  detector can turn a face pixel into *absolute* target angles in the robot
-  frame;
-- detector -> daemon: "a face is at these absolute head angles" (plus the
-  normalized face position as telemetry for ``get_tracked_face``).
+- daemon -> detector: the current head orientation (a 3x3 rotation), so the
+  detector can turn a face pixel into an *absolute* target orientation in the
+  robot frame;
+- detector -> daemon: "looking at the face means this absolute head
+  orientation" (plus the normalized face position as telemetry for
+  ``get_tracked_face``).
+
+Both mailboxes carry plain rotation matrices, so the detector needs no Euler
+conversion and no rotation library; the daemon converts the target to angles
+for its servo.
 
 The daemon treats the latest published target as where the person is *now* and
 servos toward it with a small bounded step per control tick. Re-applying a
@@ -31,7 +36,6 @@ from typing import TYPE_CHECKING, Protocol
 import gi
 import numpy as np
 from numpy.typing import NDArray
-from scipy.spatial.transform import Rotation
 
 from reachy_mini.daemon.utils import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
 from reachy_mini.media.camera_constants import CameraSpecs
@@ -59,18 +63,11 @@ _TRACKING_WIDTH = 320
 # this constant should read the configured rate instead of being hardcoded.
 _DETECTION_FPS = 10
 
-# Gaze trim: added to the target pitch so the robot looks at the face rather
-# than above it. The raw look-at consistently aims high (the geometry ignores
-# the camera's offset from the head center, and the nose target sits above the
-# perceived face center), so positive values pitch the gaze DOWN. Tune on
-# hardware.
-_PITCH_OFFSET_RAD = float(np.radians(15.0))
-
 # Target mailbox layout (detector -> daemon), all doubles:
-# [seq, detected, roll, pitch, yaw, x_norm, y_norm, face_roll]
-_TARGET_SLOTS = 8
-# Head-pose mailbox layout (daemon -> detector): [valid, roll, pitch, yaw]
-_POSE_SLOTS = 4
+# [seq, detected, R00 .. R22 (row-major 3x3 rotation), x_norm, y_norm, face_roll]
+_TARGET_SLOTS = 14
+# Head-pose mailbox layout (daemon -> detector): [valid, R00 .. R22]
+_POSE_SLOTS = 10
 
 
 class _RateGate:
@@ -103,20 +100,19 @@ class _RateGate:
 
 @dataclass(frozen=True)
 class TrackingTarget:
-    """One published aim target: absolute head angles plus face telemetry.
+    """One published aim target: absolute head orientation plus face telemetry.
 
     ``seq`` increments on every processed frame; the daemon uses it to tell a
-    fresh publication from the previous one. Angles are radians, extrinsic
-    x-y-z (roll, pitch, yaw) in the robot frame. ``x``/``y``/``face_roll`` are
-    telemetry for ``get_tracked_face`` (normalized face center in [-1, 1] and
-    the eye-line roll), None when no face is detected.
+    fresh publication from the previous one. ``rotation`` is the 3x3 world
+    orientation the head should take to look at the face (identity on a
+    miss). ``x``/``y``/``face_roll`` are telemetry for ``get_tracked_face``
+    (normalized face center in [-1, 1] and the eye-line roll), None when no
+    face is detected.
     """
 
     seq: int
     detected: bool
-    roll: float
-    pitch: float
-    yaw: float
+    rotation: NDArray[np.float64]
     x: float | None
     y: float | None
     face_roll: float | None
@@ -225,37 +221,32 @@ class _DetectionWorker:
     def _current_head_pose(self) -> NDArray[np.float64] | None:
         """Rebuild the daemon's last published head pose, or None if none yet."""
         with self._pose_mailbox.get_lock():
-            valid = self._pose_mailbox[0]
-            roll, pitch, yaw = (
-                self._pose_mailbox[1],
-                self._pose_mailbox[2],
-                self._pose_mailbox[3],
-            )
-        if valid == 0.0:
+            values = [self._pose_mailbox[i] for i in range(_POSE_SLOTS)]
+        if values[0] == 0.0:
             return None
         pose = np.eye(4, dtype=np.float64)
-        pose[:3, :3] = Rotation.from_euler("xyz", [roll, pitch, yaw]).as_matrix()
+        pose[:3, :3] = np.asarray(values[1:10], dtype=np.float64).reshape(3, 3)
         return pose
 
     def _publish(
         self,
         detected: bool,
-        rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
+        rotation: NDArray[np.float64] | None = None,
         x: float = math.nan,
         y: float = math.nan,
         face_roll: float = math.nan,
     ) -> None:
         """Publish one target to the mailbox (latest value wins)."""
         self._seq += 1
+        flat = (np.eye(3) if rotation is None else np.asarray(rotation)).reshape(-1)
         with self._target_mailbox.get_lock():
             self._target_mailbox[0] = float(self._seq)
             self._target_mailbox[1] = 1.0 if detected else 0.0
-            self._target_mailbox[2] = rpy[0]
-            self._target_mailbox[3] = rpy[1]
-            self._target_mailbox[4] = rpy[2]
-            self._target_mailbox[5] = x
-            self._target_mailbox[6] = y
-            self._target_mailbox[7] = face_roll
+            for i, value in enumerate(flat):
+                self._target_mailbox[2 + i] = float(value)
+            self._target_mailbox[11] = x
+            self._target_mailbox[12] = y
+            self._target_mailbox[13] = face_roll
 
     def _process_detections(
         self,
@@ -265,7 +256,7 @@ class _DetectionWorker:
         camera_matrix: NDArray[np.float64],
         distortion: NDArray[np.float64],
     ) -> None:
-        """Select a face and publish the absolute head angles that aim at it."""
+        """Select a face and publish the absolute head orientation that aims at it."""
         face = self._selector.select(faces, width, height)
         if face is None:
             self._publish(detected=False)
@@ -283,8 +274,6 @@ class _DetectionWorker:
             D=distortion,
             T_world_head=head_pose,
         )
-        rpy = Rotation.from_matrix(target_pose[:3, :3]).as_euler("xyz")
-        rpy[1] += _PITCH_OFFSET_RAD
         face_roll = float(
             np.arctan2(
                 face.left_eye[1] - face.right_eye[1],
@@ -294,7 +283,7 @@ class _DetectionWorker:
         x, y = _center(face, width, height)
         self._publish(
             detected=True,
-            rpy=(float(rpy[0]), float(rpy[1]), float(rpy[2])),
+            rotation=target_pose[:3, :3],
             x=x,
             y=y,
             face_roll=face_roll,
@@ -502,13 +491,13 @@ class FaceTracker:
         else:
             self._active.clear()
 
-    def publish_head_pose(self, roll: float, pitch: float, yaw: float) -> None:
-        """Share the daemon's current head orientation with the detector."""
+    def publish_head_pose(self, rotation: NDArray[np.float64]) -> None:
+        """Share the daemon's current head orientation (3x3) with the detector."""
+        flat = np.asarray(rotation, dtype=np.float64).reshape(-1)
         with self._pose_mailbox.get_lock():
             self._pose_mailbox[0] = 1.0
-            self._pose_mailbox[1] = roll
-            self._pose_mailbox[2] = pitch
-            self._pose_mailbox[3] = yaw
+            for i, value in enumerate(flat):
+                self._pose_mailbox[1 + i] = float(value)
 
     def latest(self) -> TrackingTarget | None:
         """Return the latest published aim target, or None before the first one."""
@@ -532,12 +521,10 @@ class FaceTracker:
         return TrackingTarget(
             seq=seq,
             detected=detected,
-            roll=values[2],
-            pitch=values[3],
-            yaw=values[4],
-            x=values[5] if detected else None,
-            y=values[6] if detected else None,
-            face_roll=values[7] if detected else None,
+            rotation=np.asarray(values[2:11], dtype=np.float64).reshape(3, 3),
+            x=values[11] if detected else None,
+            y=values[12] if detected else None,
+            face_roll=values[13] if detected else None,
         )
 
     def stop(self) -> None:

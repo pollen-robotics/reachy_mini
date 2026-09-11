@@ -36,7 +36,7 @@ class DummyTracker:
         self.started = False
         self.stopped = False
         self.active_calls: list[bool] = []
-        self.published_poses: list[tuple[float, float, float]] = []
+        self.published_poses: list[np.ndarray] = []
         self.target = target
 
     def start(self, camera_specs: object) -> None:
@@ -47,9 +47,9 @@ class DummyTracker:
         """Record pause/resume toggles."""
         self.active_calls.append(active)
 
-    def publish_head_pose(self, roll: float, pitch: float, yaw: float) -> None:
-        """Record the head pose shared with the detector."""
-        self.published_poses.append((roll, pitch, yaw))
+    def publish_head_pose(self, rotation: np.ndarray) -> None:
+        """Record the head orientation shared with the detector."""
+        self.published_poses.append(np.array(rotation))
 
     def latest(self) -> TrackingTarget | None:
         """Report the canned target."""
@@ -70,9 +70,7 @@ def _detected_target(seq: int = 1, yaw: float = 0.0) -> TrackingTarget:
     return TrackingTarget(
         seq=seq,
         detected=True,
-        roll=0.0,
-        pitch=0.0,
-        yaw=yaw,
+        rotation=R.from_euler("z", yaw).as_matrix(),
         x=0.25,
         y=-0.5,
         face_roll=0.1,
@@ -137,7 +135,7 @@ def test_get_tracked_face_command_returns_latest_face() -> None:
 
 
 def test_step_head_tracking_publishes_head_pose_to_detector() -> None:
-    """Each tracking step shares the current head angles with the detector."""
+    """Each tracking step shares the current head orientation with the detector."""
     backend = _make_backend()
     backend._tracking_enabled = True
     tracker = DummyTracker()
@@ -145,7 +143,8 @@ def test_step_head_tracking_publishes_head_pose_to_detector() -> None:
 
     backend.step_head_tracking()
 
-    assert tracker.published_poses == [(0.0, 0.0, 0.0)]
+    assert len(tracker.published_poses) == 1
+    np.testing.assert_array_equal(tracker.published_poses[0], np.eye(3))
 
 
 def test_step_head_tracking_servos_toward_target_angles() -> None:
@@ -236,9 +235,7 @@ def test_tracking_face_loss_holds_last_target() -> None:
         target=TrackingTarget(
             seq=5,
             detected=False,
-            roll=0.0,
-            pitch=0.0,
-            yaw=0.0,
+            rotation=np.eye(3),
             x=None,
             y=None,
             face_roll=None,
@@ -280,23 +277,15 @@ def test_enable_head_tracking_weight_zero_pauses_without_stopping() -> None:
 
 
 def test_tracking_aim_pitches_down_by_the_trim() -> None:
-    """A face at the image center aims 15 degrees below the camera axis."""
+    """A detector target looking straight ahead becomes a 15 degree look-down."""
     backend = _make_backend()
     backend._tracking_enabled = True
-    backend.set_tracking_face(
-        center=(0.0, 0.0),  # principal point for this camera matrix
-        roll=0.0,
-        width=641,
-        height=481,
-        camera_matrix=np.array(
-            [[640.0, 0.0, 320.0], [0.0, 640.0, 240.0], [0.0, 0.0, 1.0]],
-            dtype=np.float64,
-        ),
-        distortion=np.zeros(5, dtype=np.float64),
-        timestamp=1.0,
-    )
+    backend._tracker = DummyTracker(target=_detected_target(yaw=0.2))
 
-    assert backend._tracking_target_pose is not None
-    _, pitch, yaw = R.from_matrix(backend._tracking_target_pose[:3, :3]).as_euler("xyz")
-    assert abs(pitch - np.radians(15.0)) < 1e-6
-    assert abs(yaw) < 1e-6
+    backend.step_head_tracking()
+
+    assert backend._tracking_target_rpy is not None
+    roll, pitch, yaw = backend._tracking_target_rpy
+    assert abs(roll) < 1e-9
+    assert abs(pitch - np.radians(15.0)) < 1e-9
+    assert abs(yaw - 0.2) < 1e-9

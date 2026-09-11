@@ -62,27 +62,43 @@ _CENTERED_FACE = _face(
 )
 
 
-def test_worker_publishes_absolute_angles_with_pitch_trim() -> None:
-    """A centered face with an identity head pose yields yaw 0 and the pitch trim.
+def _set_head_pose(pose_mailbox: "SynchronizedArray[float]", rotation: np.ndarray) -> None:
+    with pose_mailbox.get_lock():
+        pose_mailbox[0] = 1.0
+        for i, value in enumerate(np.asarray(rotation).reshape(-1)):
+            pose_mailbox[1 + i] = float(value)
+
+
+def test_worker_publishes_the_absolute_look_at_orientation() -> None:
+    """A centered face with an identity head pose yields the identity target.
 
     The camera axis coincides with the head's forward axis for an identity
-    pose, so the only pitch in the published target is the deliberate
-    look-lower trim.
+    pose, so looking at a face on that axis means keeping the identity
+    orientation. The gaze trim is the daemon's business, not the detector's.
     """
     worker, target_mailbox, pose_mailbox = _make_worker()
-    with pose_mailbox.get_lock():
-        pose_mailbox[0] = 1.0  # valid, angles all zero (identity head pose)
+    _set_head_pose(pose_mailbox, np.eye(3))
 
     worker._process_detections([_CENTERED_FACE], 101, 101, _K, _D)
 
     values = _read_target(target_mailbox)
     assert values[0] == 1.0  # seq
     assert values[1] == 1.0  # detected
-    assert values[2] == pytest.approx(0.0, abs=1e-6)  # roll
-    assert values[3] == pytest.approx(face_tracking._PITCH_OFFSET_RAD, abs=1e-6)
-    assert values[4] == pytest.approx(0.0, abs=1e-6)  # yaw
-    assert values[5] == pytest.approx(0.0, abs=1e-9)  # x_norm
-    assert values[6] == pytest.approx(0.0, abs=1e-9)  # y_norm
+    np.testing.assert_allclose(np.array(values[2:11]).reshape(3, 3), np.eye(3), atol=1e-6)
+    assert values[11] == pytest.approx(0.0, abs=1e-9)  # x_norm
+    assert values[12] == pytest.approx(0.0, abs=1e-9)  # y_norm
+
+
+def test_worker_target_is_absolute_in_the_world_frame() -> None:
+    """The same centered face seen from a yawed head yields that yawed orientation."""
+    worker, target_mailbox, pose_mailbox = _make_worker()
+    yawed = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+    _set_head_pose(pose_mailbox, yawed)
+
+    worker._process_detections([_CENTERED_FACE], 101, 101, _K, _D)
+
+    values = _read_target(target_mailbox)
+    np.testing.assert_allclose(np.array(values[2:11]).reshape(3, 3), yawed, atol=1e-6)
 
 
 def test_worker_without_head_pose_reports_a_miss() -> None:
@@ -99,8 +115,7 @@ def test_worker_without_head_pose_reports_a_miss() -> None:
 def test_worker_publishes_miss_and_increments_seq_without_faces() -> None:
     """Every processed frame publishes, so the daemon can distinguish fresh misses."""
     worker, target_mailbox, pose_mailbox = _make_worker()
-    with pose_mailbox.get_lock():
-        pose_mailbox[0] = 1.0
+    _set_head_pose(pose_mailbox, np.eye(3))
 
     worker._process_detections([_CENTERED_FACE], 101, 101, _K, _D)
     worker._process_detections([], 101, 101, _K, _D)
@@ -249,12 +264,11 @@ def _emit_one_worker(
     with target_mailbox.get_lock():
         target_mailbox[0] = 1.0  # seq
         target_mailbox[1] = 1.0  # detected
-        target_mailbox[2] = 0.1  # roll
-        target_mailbox[3] = 0.2  # pitch
-        target_mailbox[4] = 0.3  # yaw
-        target_mailbox[5] = 0.25  # x
-        target_mailbox[6] = -0.5  # y
-        target_mailbox[7] = 0.05  # face roll
+        for i in range(9):  # rotation: 1..9 row-major
+            target_mailbox[2 + i] = float(i + 1)
+        target_mailbox[11] = 0.25  # x
+        target_mailbox[12] = -0.5  # y
+        target_mailbox[13] = 0.05  # face roll
     stop.wait(30.0)
 
 
@@ -295,7 +309,7 @@ def test_latest_returns_target_from_detector_process(
             time.sleep(0.05)
         assert target is not None
         assert target.detected is True
-        assert (target.roll, target.pitch, target.yaw) == (0.1, 0.2, 0.3)
+        np.testing.assert_array_equal(target.rotation, np.arange(1.0, 10.0).reshape(3, 3))
         assert (target.x, target.y, target.face_roll) == (0.25, -0.5, 0.05)
     finally:
         tracker.stop()
@@ -304,9 +318,10 @@ def test_latest_returns_target_from_detector_process(
 def test_publish_head_pose_reaches_the_pose_mailbox() -> None:
     """The daemon's head angles land in the mailbox the worker reads."""
     tracker = FaceTracker()
-    tracker.publish_head_pose(0.1, -0.2, 0.3)
+    rotation = np.arange(1.0, 10.0).reshape(3, 3)
+    tracker.publish_head_pose(rotation)
     with tracker._pose_mailbox.get_lock():
-        assert list(tracker._pose_mailbox) == [1.0, 0.1, -0.2, 0.3]
+        assert list(tracker._pose_mailbox) == [1.0, *range(1, 10)]
 
 
 def test_start_hides_stale_target_from_a_previous_run(

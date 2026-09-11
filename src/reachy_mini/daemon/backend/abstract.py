@@ -736,9 +736,10 @@ class Backend:
     def step_head_tracking(self) -> None:
         """Servo the aim one bounded step toward the latest target angles.
 
-        The detector process publishes absolute head angles ("the face is at
-        these angles in the robot frame"); this method treats the latest
-        publication as where the person is now and moves the aim by
+        The detector process publishes the absolute head orientation that
+        looks at the face; this method converts it to angles, adds the gaze
+        trim, treats the latest publication as where the person is now and
+        moves the aim by
         ``clip(p * error, +/-max_step)`` per tick. Re-applying a stale absolute
         target converges and stops, so no timestamps are needed. A brief
         detection gap holds the last target; a sustained loss retargets the
@@ -751,18 +752,17 @@ class Backend:
             now = time.monotonic()
             if self._tracker is not None:
                 # Share the current head orientation so the detector can turn
-                # a face pixel into absolute angles.
-                self._tracker.publish_head_pose(
-                    *self._pose_rpy(self.get_current_head_pose())
-                )
+                # a face pixel into an absolute orientation.
+                self._tracker.publish_head_pose(self.get_current_head_pose()[:3, :3])
                 target = self._tracker.latest()
                 if target is not None and target.seq != self._tracking_seq:
                     self._tracking_seq = target.seq
                     if target.detected:
+                        roll, pitch, yaw = R.from_matrix(target.rotation).as_euler("xyz")
                         self._tracking_target_rpy = (
-                            target.roll,
-                            target.pitch,
-                            target.yaw,
+                            float(roll),
+                            float(pitch) + _TRACKING_PITCH_TRIM_RAD,
+                            float(yaw),
                         )
                         self._tracking_weight = self._tracking_requested_weight
                         self._last_face_seen = now
