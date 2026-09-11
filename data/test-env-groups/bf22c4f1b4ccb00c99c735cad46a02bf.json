@@ -1,1 +1,1 @@
-{"id":"bf22c4f1b4ccb00c99c735cad46a02bf","fullName":"tests.unit_tests.test_daemon_utils#test_find_serial_port_wireless_missing","name":"test_find_serial_port_wireless_missing","status":"passed","testResultsByEnv":{"default":"599440cd39883afe97bd10a375616c27"}}
+{"id":"bf22c4f1b4ccb00c99c735cad46a02bf","fullName":"tests.unit_tests.test_daemon_utils#test_find_serial_port_wireless_missing","name":"test_find_serial_port_wireless_missing","status":"passed","testResultsByEnv":{"default":"02c04401d5540cd33b8e2be1d3c1caca"}}

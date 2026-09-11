@@ -1,1 +1,1 @@
-{"id":"fcade616a305f6b58f31e09138336d6a","fullName":"tests.unit_tests.test_trusted_endpoints#test_router_reports_authenticated_response","name":"test_router_reports_authenticated_response[308]","status":"passed","testResultsByEnv":{"default":"d837d905a60738154c26aa8f535e26a0"}}
+{"id":"fcade616a305f6b58f31e09138336d6a","fullName":"tests.unit_tests.test_trusted_endpoints#test_router_reports_authenticated_response","name":"test_router_reports_authenticated_response[200]","status":"passed","testResultsByEnv":{"default":"8a0da9aa935d1899e68cfafdd5f94136"}}

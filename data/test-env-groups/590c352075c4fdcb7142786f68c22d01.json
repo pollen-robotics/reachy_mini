@@ -1,1 +1,1 @@
-{"id":"590c352075c4fdcb7142786f68c22d01","fullName":"tests.unit_tests.test_hf_auth_device_code#test_start_returns_error_when_request_fails","name":"test_start_returns_error_when_request_fails","status":"passed","testResultsByEnv":{"default":"2bd9ea2671ccd56e8b3de3e66f1de540"}}
+{"id":"590c352075c4fdcb7142786f68c22d01","fullName":"tests.unit_tests.test_hf_auth_device_code#test_start_returns_error_when_request_fails","name":"test_start_returns_error_when_request_fails","status":"passed","testResultsByEnv":{"default":"78c1274ebad9bd3f5a1c1eacd2fdb734"}}

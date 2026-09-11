@@ -1,1 +1,1 @@
-{"id":"d95b2015a3c03ead7c3609fb1759e053","fullName":"tests.unit_tests.test_hf_auth#test_oauth_token_uses_huggingface_configured_path","name":"test_oauth_token_uses_huggingface_configured_path","status":"passed","testResultsByEnv":{"default":"8085cb9e083c4abe3637dc190a76188a"}}
+{"id":"d95b2015a3c03ead7c3609fb1759e053","fullName":"tests.unit_tests.test_hf_auth#test_oauth_token_uses_huggingface_configured_path","name":"test_oauth_token_uses_huggingface_configured_path","status":"passed","testResultsByEnv":{"default":"04827cd99c17c0cfd3536801a97f4ee6"}}

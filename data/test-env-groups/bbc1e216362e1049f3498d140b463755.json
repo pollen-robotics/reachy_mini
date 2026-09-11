@@ -1,1 +1,1 @@
-{"id":"bbc1e216362e1049f3498d140b463755","fullName":"tests.unit_tests.test_startup_check_stamp#test_first_run_does_full_checks_and_writes_stamp","name":"test_first_run_does_full_checks_and_writes_stamp","status":"passed","testResultsByEnv":{"default":"c15e716def1b821d07209561e57c508f"}}
+{"id":"bbc1e216362e1049f3498d140b463755","fullName":"tests.unit_tests.test_startup_check_stamp#test_first_run_does_full_checks_and_writes_stamp","name":"test_first_run_does_full_checks_and_writes_stamp","status":"passed","testResultsByEnv":{"default":"aac52e8c2517a63e8fcb4ab3bdde94a6"}}
