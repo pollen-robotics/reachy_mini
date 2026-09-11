@@ -54,12 +54,7 @@ from reachy_mini.media.audio_utils import (
 from reachy_mini.motion.recorded_move import preload_default_datasets
 from reachy_mini.utils.discovery import MdnsServiceRegistration
 from reachy_mini.utils.wireless_version.startup_check import (
-    check_and_fix_restore_venv,
-    check_and_fix_venvs_ownership,
-    check_and_sync_apps_venv_sdk,
-    check_and_update_bluetooth_service,
-    check_and_update_gpio_shutdown_service,
-    check_and_update_wireless_launcher,
+    run_wireless_startup_checks,
 )
 
 logger = logging.getLogger(__name__)
@@ -853,21 +848,11 @@ def main() -> None:
     configure_root_logging(args.log_level, args.log_file)
 
     if args.wireless_version:
-        # Check and fix ownership of /venvs directory
-        check_and_fix_venvs_ownership()
-
-        # Check and update bluetooth service if needed
-        check_and_update_bluetooth_service()
-
-        # Check and update wireless launcher if needed
-        check_and_update_wireless_launcher()
-        check_and_update_gpio_shutdown_service()
-
-        # Check and sync apps_venv SDK version with daemon
-        check_and_sync_apps_venv_sdk()
-
-        # Check and fix restore venv if it has legacy editable install
-        check_and_fix_restore_venv()
+        # Startup checks. The expensive ones (full /venvs ownership scan,
+        # apps_venv SDK sync probe, restore-venv pip check) are skipped when
+        # the startup stamp proves nothing changed since the last full run;
+        # the cheap file checks (bluetooth, systemd units) run on every boot.
+        run_wireless_startup_checks()
 
         if check_reachymini_asoundrc():
             logging.getLogger().info(
