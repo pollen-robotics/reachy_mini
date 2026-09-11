@@ -58,6 +58,7 @@ from reachy_mini.utils.wireless_version.startup_check import (
     check_and_fix_venvs_ownership,
     check_and_sync_apps_venv_sdk,
     check_and_update_bluetooth_service,
+    check_and_update_gpio_shutdown_service,
     check_and_update_wireless_launcher,
 )
 
@@ -860,6 +861,7 @@ def main() -> None:
 
         # Check and update wireless launcher if needed
         check_and_update_wireless_launcher()
+        check_and_update_gpio_shutdown_service()
 
         # Check and sync apps_venv SDK version with daemon
         check_and_sync_apps_venv_sdk()

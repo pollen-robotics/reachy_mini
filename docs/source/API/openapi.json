@@ -987,7 +987,7 @@
     "/api/hf-auth/central-robot-status": {
       "get": {
         "summary": "Get Central Robot Status",
-        "description": "Proxy to the central signaling server's /api/robot-status endpoint.\n\nUses the stored HF token server-side so the desktop frontend never\nsees the raw token. The frontend polls this to know whether any of\nthe user's robots is currently held by a remote JS app, and if so\nwhich one (so it can show \"In use by Hand Tracker\" in the UI).\n\nResponse shape:\n    { \"available\": bool, \"robots\": [...], \"reason\": str? }\n\n`available` is false when:\n  - no HF token stored (user not logged in)\n  - central server is unreachable / returned an error\nCallers should treat `available: false` as \"unknown, don't block\".",
+        "description": "Proxy to the central signaling server's /api/robot-status endpoint.\n\nUses the stored HF token server-side so the desktop frontend never\nsees the raw token. The frontend polls this to know whether any of\nthe user's robots is currently held by a remote JS app, and if so\nwhich one (so it can show \"In use by Hand Tracker\" in the UI).\n\nResponse shape:\n    { \"available\": bool, \"robots\": [...], \"reason\": str? }\n\n`available` is false when:\n  - no HF token stored (user not logged in)\n  - central URL configuration is invalid\n  - central server is unreachable / returned an error\nCallers should treat `available: false` as \"unknown, don't block\".",
         "operationId": "get_central_robot_status_api_hf_auth_central_robot_status_get",
         "responses": {
           "200": {
@@ -2347,6 +2347,33 @@
         }
       }
     },
+    "/api/state/imu": {
+      "get": {
+        "summary": "Get Imu",
+        "description": "Get the latest IMU reading (accelerometer, gyroscope, quaternion, temperature).\n\nAccelerations are in m/s\u00b2, angular rates in rad/s, the quaternion is\nw-first and the temperature in \u00b0C.\nReturns None on versions without an IMU (Lite, simulation) or when the\ncached reading has gone stale.",
+        "operationId": "get_imu_api_state_imu_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ImuData"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Imu Api State Imu Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/state/full": {
       "get": {
         "summary": "Get Full State",
@@ -2461,6 +2488,16 @@
               "type": "boolean",
               "default": false,
               "title": "With Doa"
+            }
+          },
+          {
+            "name": "with_imu",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "With Imu"
             }
           },
           {
@@ -3342,6 +3379,16 @@
                 "type": "null"
               }
             ]
+          },
+          "imu": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImuData"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -3451,6 +3498,44 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "ImuData": {
+        "properties": {
+          "accelerometer": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Accelerometer"
+          },
+          "gyroscope": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Gyroscope"
+          },
+          "quaternion": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Quaternion"
+          },
+          "temperature": {
+            "type": "number",
+            "title": "Temperature"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accelerometer",
+          "gyroscope",
+          "quaternion",
+          "temperature"
+        ],
+        "title": "ImuData",
+        "description": "IMU sensor reading (BMI088, wireless version only).\n\nThe payload half of :class:`ImuDataMsg`, reused wherever the reading\nis carried without the legacy WS discriminator (state snapshots,\nREST replies)."
       },
       "InterpolationTechnique": {
         "type": "string",

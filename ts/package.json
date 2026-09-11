@@ -45,6 +45,8 @@
   ],
   "sideEffects": false,
   "scripts": {
+    "gen:version": "node scripts/gen-version.mjs",
+    "prebuild:sdk": "node scripts/gen-version.mjs",
     "build:sdk": "tsc -p tsconfig.json",
     "build:host": "cd host && vite build && tsc -p tsconfig.build.json",
     "build": "npm run build:sdk && npm run build:host",
@@ -53,6 +55,8 @@
     "typecheck:host": "cd host && tsc --noEmit",
     "typecheck": "npm run typecheck:sdk && npm run typecheck:host",
     "dev": "cd host && vite",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "clean": "rm -rf dist host/dist"
   },
   "dependencies": {
@@ -67,18 +71,25 @@
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^25.7.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.0.0",
+    "jsdom": "^29.1.1",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "typescript": "^5.7.3",
-    "vite": "^7.2.1"
+    "vite": "^7.2.1",
+    "vitest": "^4.1.10"
   },
   "keywords": [
     "reachy",

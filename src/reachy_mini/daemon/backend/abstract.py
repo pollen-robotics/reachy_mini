@@ -34,6 +34,7 @@ from reachy_mini.io.protocol import (
     DeleteHfTokenCmd,
     DoaSnapshot,
     FaceTarget,
+    GetFirstWakeUpCmd,
     GetHardwareIdCmd,
     GetImuCmd,
     GetMicrophoneVolumeCmd,
@@ -51,10 +52,12 @@ from reachy_mini.io.protocol import (
     MockupSimBackendStatus,
     MotorControlMode,
     MujocoBackendStatus,
+    PlayRecordedMoveCmd,
     PlaySoundCmd,
     PlayUploadedAudioCmd,
     PlayUploadedMoveCmd,
     PoseFrame,
+    PreloadDatasetCmd,
     ReadAudioParameterCmd,
     RecordedDataMsg,
     RestartDaemonCmd,
@@ -62,6 +65,7 @@ from reachy_mini.io.protocol import (
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
     SetBodyYawCmd,
+    SetFirstWakeUpCmd,
     SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
@@ -77,6 +81,7 @@ from reachy_mini.io.protocol import (
     StartRecordingCmd,
     StartUpdateCmd,
     StateSnapshot,
+    StopMoveCmd,
     StopRecordingCmd,
     SubscribeLogsCmd,
     SubscribePoseCmd,
@@ -114,6 +119,11 @@ from reachy_mini.vision.look_at import (
     default_head_to_camera_transform,
     look_at_image_pose,
 )
+
+# Gaze trim added to lower head-tracking aim pitch. This pose feels better
+# (subjective) and also improves the orientation of the microphone when
+# speaking to it.
+_TRACKING_PITCH_TRIM_RAD = float(np.radians(15.0))
 
 
 class _PlaybackCancelToken:
@@ -274,6 +284,11 @@ class Backend:
         self._active_move_depth = (
             0  # Tracks nested acquisitions within the owning thread
         )
+        # Global "stop now" flag flipped by ``StopMoveCmd`` and polled by
+        # every ``play_move`` loop (nested gotos included), regardless of
+        # who started the move. Cleared when a new top-level move starts,
+        # so a stale stop can't kill the next run.
+        self._stop_move_requested = False
 
         # Per-run cancellation handle for the active play_uploaded_move.
         # Set by ``_async_play_uploaded_move`` before each play, cleared
@@ -775,7 +790,7 @@ class Backend:
         u = (x_norm + 1.0) * 0.5 * max(width - 1, 1)
         v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)
         try:
-            self._tracking_target_pose = look_at_image_pose(
+            target_pose = look_at_image_pose(
                 u=u,
                 v=v,
                 K=camera_matrix,
@@ -783,6 +798,11 @@ class Backend:
                 T_world_head=self.get_current_head_pose(),
                 T_head_cam=self.T_head_cam,
             )
+            roll_a, pitch_a, yaw_a = R.from_matrix(target_pose[:3, :3]).as_euler("xyz")
+            target_pose[:3, :3] = R.from_euler(
+                "xyz", [roll_a, pitch_a + _TRACKING_PITCH_TRIM_RAD, yaw_a]
+            ).as_matrix()
+            self._tracking_target_pose = target_pose
         except Exception as e:
             self.logger.warning("Head-tracking aim update failed: %s", e)
 
@@ -818,12 +838,19 @@ class Backend:
             play_frequency (float): The frequency at which to evaluate the move (in Hz).
             initial_goto_duration (float): Duration for an initial goto to the move's starting position. If 0.0, no initial goto is performed.
             audio_lead_s (float): How many seconds the audio (if any) starts BEFORE the motion. Positive values compensate for the constant GStreamer playbin latency on the robot so the audio reaches the speaker at the same moment the actuator starts moving. Negative values delay audio relative to motion. No-op when the move has no sound_path. Default 0.
-            cancel_token (_PlaybackCancelToken, optional): If provided, the inner loop polls ``cancel_token.cancelled`` every tick and exits when flipped. Used by ``_async_play_uploaded_move`` to wire ``cancel_move`` to a specific upload_id; direct callers (goto_target, etc.) pass None and stay non-cancellable.
+            cancel_token (_PlaybackCancelToken, optional): If provided, the inner loop polls ``cancel_token.cancelled`` every tick and exits when flipped. Used by ``_async_play_uploaded_move`` to wire ``cancel_move`` to a specific upload_id; direct callers (goto_target, etc.) pass None. Independently of the token, every loop also polls the global ``_stop_move_requested`` flag flipped by ``StopMoveCmd``, so any move is interruptible by ``stop_move``.
 
         """
         if not self._try_start_move():
             self.logger.warning("Ignoring play_move request: another move is running.")
             return
+
+        if self._active_move_depth == 1:
+            # New top-level move: clear any stop request left over from a
+            # previous run so a stale stop_move can't kill this one. Nested
+            # play_moves (initial goto, goto_target inside a recorded move)
+            # keep the flag so one stop interrupts the whole stack.
+            self._stop_move_requested = False
 
         try:
             if initial_goto_duration > 0.0:
@@ -867,13 +894,19 @@ class Backend:
                         return
                     if cancel_token is not None and cancel_token.cancelled:
                         return
+                    if self._stop_move_requested:
+                        return
                     self.play_sound(sound_path_str)
 
                 delayed_sound_task = asyncio.create_task(_delayed_sound())
+            interrupted = False
             try:
                 while time.time() - t0 < move.duration:
-                    if cancel_token is not None and cancel_token.cancelled:
+                    if self._stop_move_requested or (
+                        cancel_token is not None and cancel_token.cancelled
+                    ):
                         self.logger.info("play_move cancelled, exiting playback loop")
+                        interrupted = True
                         break
                     t = time.time() - t0
 
@@ -897,6 +930,14 @@ class Backend:
                 # the sleep elapsed.
                 if delayed_sound_task is not None and not delayed_sound_task.done():
                     delayed_sound_task.cancel()
+                # Interrupted mid-move: silence the sidecar sound too,
+                # otherwise a recorded move's audio would keep playing to
+                # the end of the WAV after the motion has stopped.
+                if interrupted and move.sound_path is not None:
+                    try:
+                        self.stop_sound()
+                    except Exception as e:
+                        self.logger.warning(f"play_move: stop_sound failed: {e}")
         finally:
             self._end_move()
 
@@ -1194,6 +1235,11 @@ class Backend:
     # a (velocity-eased) tick short of the commanded endpoint.
     INIT_TARGET_ATOL: float = 1e-2
 
+    # Radius (magic units) around SLEEP_HEAD_POSE within which the robot counts
+    # as already down. Shared by goto_sleep's "no travel needed" branch and
+    # is_at_sleep_pose() so the trajectory and the skip can't drift apart.
+    SLEEP_POSE_MAGIC_ATOL: float = 10.0
+
     def is_awake_at_init_pose(self) -> bool:
         """Motors on and init is the pose the controller is actively holding.
 
@@ -1220,6 +1266,20 @@ class Backend:
                 )
             )
         )
+
+    def is_at_sleep_pose(self) -> bool:
+        """Head physically resting within the sleep-pose radius.
+
+        Reads the measured pose, not the commanded target: a limp robot has no
+        meaningful target, and the whole point is to tell a robot parked down by
+        a clean leave sequence from one left limp mid-pose by a crashed app.
+        """
+        if self.current_head_pose is None:
+            return False
+        _, _, dist_to_sleep_pose = distance_between_poses(
+            self.get_current_head_pose(), self.SLEEP_HEAD_POSE
+        )
+        return bool(dist_to_sleep_pose <= self.SLEEP_POSE_MAGIC_ATOL)
 
     async def wake_up(self, *, force: bool = False) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound.
@@ -1270,13 +1330,7 @@ class Backend:
             - If we are far from the initial position, we move there first.
             - If we are close to the initial position, we move directly to the sleep position.
         """
-        # Stop head wobbling so leftover speech offsets don't fight the
-        # sleep pose during the goto. Head tracking is also a primary
-        # aim source, so it must be disabled before moving to sleep.
-        if self._media_server is not None:
-            self._media_server.disable_wobbling()
-        self.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
-        self.disable_head_tracking()
+        self._quiesce_aim_sources()
 
         # Magic units
         _, _, dist_to_sleep_pose = distance_between_poses(
@@ -1288,7 +1342,7 @@ class Backend:
         sleep_time = 2.0
 
         # Thresholds found empirically.
-        if dist_to_sleep_pose > 10:
+        if dist_to_sleep_pose > self.SLEEP_POSE_MAGIC_ATOL:
             if dist_to_init_pose > 30:
                 # Move to the initial position
                 await self.goto_target(
@@ -1316,6 +1370,57 @@ class Backend:
 
         # Rest limp at the sleep pose, like a fresh boot.
         self.set_motor_control_mode(MotorControlMode.Disabled)
+
+    def _quiesce_aim_sources(self) -> None:
+        """Silence every secondary head-aim source before a scripted move.
+
+        Wobbling and leftover speech offsets are added on top of the commanded
+        target, and head tracking is a primary aim source in its own right, so
+        any of them left running would fight the trajectory.
+        """
+        if self._media_server is not None:
+            self._media_server.disable_wobbling()
+        self.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+        self.disable_head_tracking()
+
+    async def reset_to_sleep(self) -> None:
+        """Put the robot to sleep from ANY motor state the last app left behind.
+
+        ``goto_sleep()`` assumes it inherits a robot under position control.
+        When that assumption is broken it degrades silently instead of failing:
+        under gravity compensation the control loop ignores position targets
+        outright, so the whole trajectory is written into the void and the final
+        torque cut drops the head from wherever it happened to be. Motors left
+        limp - globally or per-motor via ``set_torque(ids=...)`` - are just as
+        bad, and none of these paths are hypothetical: a crashed app, a killed
+        tab or a dropped Wi-Fi link all skip the client's own cleanup.
+
+        So re-establish the assumption first, then reuse the normal sequence:
+        torque on (``enable_motors`` pins every target to the measured pose, so
+        nothing snaps), lift to the init pose, then ``goto_sleep()``, which ends
+        limp at the sleep pose. The lift is what makes the result predictable -
+        it collapses every possible inherited pose into the one starting point
+        the sleep trajectory was tuned for.
+        """
+        # Ordered: quiesce first so tracking can't re-aim the head between the
+        # torque coming back and the lift starting.
+        self._quiesce_aim_sources()
+        self.set_motor_control_mode(MotorControlMode.Enabled)
+
+        _, _, magic_distance = distance_between_poses(
+            self.get_current_head_pose(), self.INIT_HEAD_POSE
+        )
+        await self.goto_target(
+            self.INIT_HEAD_POSE,
+            antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
+            # Same magic-unit scaling as wake_up, floored so a head already at
+            # init still gets a real (if brief) move rather than a zero-length
+            # one, and capped so a fully drooped head doesn't crawl back up.
+            duration=float(np.clip(magic_distance * 20 / 1000, 0.3, 1.5)),
+        )
+        await asyncio.sleep(0.2)
+
+        await self.goto_sleep()
 
     # Motor control modes
     @abstractmethod
@@ -1499,6 +1604,8 @@ class Backend:
             # Sound Direction of Arrival (ReSpeaker mic array), or None when
             # unavailable. Cached, never blocks (see _doa_poll_loop).
             doa=self.read_doa(),
+            # IMU (wireless only), or None on Lite/sim or when the cache is stale.
+            imu=self.get_imu_data(),
         )
 
     def build_state_dict(self) -> dict[str, Any]:
@@ -1609,6 +1716,12 @@ class Backend:
         elif isinstance(cmd, PlaySoundCmd):
             self.play_sound(cmd.file)
             send_response({"status": "ok", "command": "play_sound"})
+
+        elif isinstance(cmd, PlayRecordedMoveCmd):
+            asyncio.create_task(self._async_play_recorded_move(cmd, send_response))
+
+        elif isinstance(cmd, PreloadDatasetCmd):
+            asyncio.create_task(self._async_preload_dataset(cmd, send_response))
 
         elif isinstance(cmd, ClearIncomingAudioCmd):
             self.clear_incoming_audio()
@@ -1766,6 +1879,36 @@ class Backend:
                     "status": "ok" if ok else "error",
                 }
             )
+
+        elif isinstance(cmd, (GetFirstWakeUpCmd, SetFirstWakeUpCmd)):
+            # First wake-up wizard completion is a persistent, robot-wide
+            # flag stored in the daemon config file (next to startup_app &
+            # co) so the post-connection setup wizard only ever shows once,
+            # whichever client connects. Read/write helpers are fail-safe
+            # (never raise) so a storage error can't break the command loop.
+            from reachy_mini.daemon.startup_app_config import (
+                get_first_wake_up_completed,
+                set_first_wake_up_completed,
+            )
+
+            if isinstance(cmd, SetFirstWakeUpCmd):
+                ok = set_first_wake_up_completed(cmd.is_completed)
+                send_response(
+                    {
+                        "command": "set_first_wake_up",
+                        "status": "ok" if ok else "error",
+                        "is_completed": cmd.is_completed
+                        if ok
+                        else get_first_wake_up_completed(),
+                    }
+                )
+            else:  # GetFirstWakeUpCmd
+                send_response(
+                    {
+                        "command": "get_first_wake_up",
+                        "is_completed": get_first_wake_up_completed(),
+                    }
+                )
 
         elif isinstance(
             cmd,
@@ -1986,6 +2129,8 @@ class Backend:
             asyncio.create_task(self._async_play_uploaded_move(cmd))
         elif isinstance(cmd, CancelMoveCmd):
             self._handle_cancel_move(cmd)
+        elif isinstance(cmd, StopMoveCmd):
+            self._handle_stop_move(send_response)
         elif isinstance(cmd, PlayUploadedAudioCmd):
             self._handle_play_uploaded_audio(cmd)
         elif isinstance(cmd, CancelAudioCmd):
@@ -2285,6 +2430,38 @@ class Backend:
                 return
             token.cancelled = True
 
+    def _handle_stop_move(
+        self, send_response: Callable[[dict[str, Any]], None]
+    ) -> None:
+        """Stop whatever move is currently playing (recorded, uploaded, goto).
+
+        The blunt client-facing counterpart of ``_handle_cancel_move``: no
+        upload_id needed, it flips the global stop flag every ``play_move``
+        loop polls, and also cancels the active uploaded-move token (if any)
+        so that run's end broadcast reports ``cancelled`` instead of
+        ``finished``. Idempotent: always acks ok, with ``stopped`` telling
+        whether a move was actually interrupted.
+        """
+        if not self.is_move_running:
+            send_response(
+                {
+                    "status": "ok",
+                    "command": "stop_move",
+                    "stopped": False,
+                    "info": "no active move",
+                }
+            )
+            return
+        self._stop_move_requested = True
+        # Also flip the per-run token (RLock is reentrant on the event-loop
+        # thread, same as _handle_cancel_move) so an in-flight
+        # play_uploaded_move bookkeeps this as a cancellation.
+        with self._play_move_lock:
+            token = self._active_move_token
+            if token is not None:
+                token.cancelled = True
+        send_response({"status": "ok", "command": "stop_move", "stopped": True})
+
     def _handle_upload_finish(self, cmd: UploadMoveFinishCmd) -> None:
         slot = self._upload_chunks.pop(cmd.upload_id, None)
         meta = self._upload_meta.pop(cmd.upload_id, None)
@@ -2514,6 +2691,97 @@ class Backend:
             send_response({"status": "ok", "command": "goto_sleep", "completed": True})
         except Exception as e:
             send_response({"error": str(e), "command": "goto_sleep"})
+
+    async def _async_play_recorded_move(
+        self,
+        cmd: PlayRecordedMoveCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Load a named move from a dataset and play it (motion + sound).
+
+        Mirrors the ``/api/move/play/recorded-move-dataset`` route but over the
+        data channel so it works on a remote WebRTC session. Fire-and-forget:
+        the ack reports dispatch success/failure (unknown move, missing
+        dataset), not playback completion. ``RecordedMoves`` reads the local
+        HF cache first, so on a pre-downloaded robot this stays off the
+        network.
+        """
+        from reachy_mini.motion.recorded_move import (
+            DEFAULT_EMOTIONS_DATASET,
+            RecordedMoves,
+        )
+
+        dataset = cmd.dataset_name or DEFAULT_EMOTIONS_DATASET
+        try:
+            # On a cold cache RecordedMoves() triggers a blocking
+            # snapshot_download: run it in a worker thread so it cannot stall
+            # the daemon's event loop (and its pose stream) mid-session.
+            move = await asyncio.to_thread(
+                lambda: RecordedMoves(dataset).get(cmd.move_name)
+            )
+        except Exception as e:
+            self.logger.warning(
+                f"play_recorded_move: {cmd.move_name!r} from {dataset!r} "
+                f"failed to load: {e}"
+            )
+            send_response(
+                {
+                    "command": "play_recorded_move",
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
+            return
+
+        # Dispatched: ack now (fire-and-forget), then run the move. play_move
+        # self-guards against a concurrent move, so a double-tap is a no-op.
+        send_response(
+            {
+                "command": "play_recorded_move",
+                "status": "ok",
+                "move_name": cmd.move_name,
+            }
+        )
+        try:
+            await self.play_move(move, initial_goto_duration=cmd.initial_goto_duration)
+        except Exception as e:
+            self.logger.warning(f"play_recorded_move: playback failed: {e}")
+
+    async def _async_preload_dataset(
+        self,
+        cmd: PreloadDatasetCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Warm the local HF cache for a recorded-move dataset.
+
+        Runs ``snapshot_download`` (cache-first, so a no-op when already
+        cached) in a worker thread: it does blocking network + disk IO and
+        must not stall the daemon's event loop mid-session. The ack carries
+        the cached path on success so clients can log/verify; a failure is
+        reported but deliberately not fatal - ``play_recorded_move`` will
+        retry the download on demand at playback time.
+        """
+        from reachy_mini.motion.recorded_move import preload_dataset
+
+        local_path = await asyncio.to_thread(preload_dataset, cmd.dataset_name)
+        if local_path is None:
+            send_response(
+                {
+                    "command": "preload_dataset",
+                    "status": "error",
+                    "dataset_name": cmd.dataset_name,
+                    "error": "download failed (see daemon logs)",
+                }
+            )
+            return
+        send_response(
+            {
+                "command": "preload_dataset",
+                "status": "ok",
+                "dataset_name": cmd.dataset_name,
+                "local_path": local_path,
+            }
+        )
 
     async def _async_play_uploaded_move(self, cmd: PlayUploadedMoveCmd) -> None:
         """Run Backend.play_move on a previously-uploaded move slot.
@@ -2864,15 +3132,26 @@ class Backend:
             task.cancel()
         self._idle_reset_task = None
 
+    def _already_idle(self) -> bool:
+        """Nothing left to do: the robot is limp AND physically at the sleep pose.
+
+        Both halves matter. A well-behaved client (e.g. the mobile app, which
+        sleeps then disables on leave) satisfies them and must not get a
+        redundant trajectory + sound. Limp *anywhere else* is the crashed-app
+        signature - torque cut mid-pose, head drooped - and does need the reset,
+        which is why the motor mode alone is not a sufficient test.
+        """
+        return (
+            self.get_motor_control_mode() == MotorControlMode.Disabled
+            and self.is_at_sleep_pose()
+        )
+
     def _maybe_start_idle_reset(self, grace_s: float) -> None:
-        """Kick off a goto_sleep if the robot is still awake. Runs on the loop."""
+        """Kick off a sleep reset if the robot isn't already idle. Runs on the loop."""
         try:
             if not self.ready.is_set() or self.is_shutting_down:
                 return
-            # Already limp / asleep: a well-behaved client (e.g. the mobile app,
-            # which sleeps + disables on leave) leaves nothing to do, so we skip
-            # the redundant trajectory + sound.
-            if self.get_motor_control_mode() == MotorControlMode.Disabled:
+            if self._already_idle():
                 return
             self._cancel_idle_reset()
             self._idle_reset_task = asyncio.create_task(self._async_idle_reset(grace_s))
@@ -2885,10 +3164,12 @@ class Backend:
         Starts with a debounce (``grace_s``): a fast reconnect or a local app
         grabbing the robot cancels the task during that window, so no motion
         happens at all on transient drops. Only if the slot stays free past the
-        grace period do we actually goto_sleep.
+        grace period do we actually reset.
 
-        Mirrors the reference leave behaviour clients already run by hand
-        (gotoSleep -> motors off). ``goto_sleep()`` finishes with
+        Goes through ``reset_to_sleep()`` rather than ``goto_sleep()`` directly:
+        the client that just vanished may have left the motors limp or in
+        gravity compensation, and a bare ``goto_sleep()`` degrades silently in
+        both cases. ``reset_to_sleep()`` finishes with
         ``set_motor_control_mode(Disabled)``, which also clears
         ``gravity_compensation_mode`` - so the next session's ``ensureAwake()``
         correctly triggers a fresh wake.
@@ -2900,15 +3181,15 @@ class Backend:
             # held the slot). Re-check before committing to the trajectory.
             if self.is_shutting_down:
                 return
-            if self.get_motor_control_mode() == MotorControlMode.Disabled:
+            if self._already_idle():
                 return
-            await self.goto_sleep()
+            await self.reset_to_sleep()
         except asyncio.CancelledError:
             # A new session (or local app) grabbed the robot before/mid-reset:
             # let it take over without noise.
             raise
         except Exception:
-            self.logger.warning("Idle reset goto_sleep failed", exc_info=True)
+            self.logger.warning("Idle reset to sleep failed", exc_info=True)
         finally:
             # Only clear the handle if it still points at *this* task: a
             # concurrent _cancel_idle_reset()+reschedule may have already
