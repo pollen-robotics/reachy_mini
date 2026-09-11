@@ -1,1 +1,1 @@
-{"id":"2160c346c41f953e4bb82dc537851410","fullName":"tests.unit_tests.test_proxy_env_support#test_proxy_for_skips_non_http_proxy_urls","name":"test_proxy_for_skips_non_http_proxy_urls","status":"passed","testResultsByEnv":{"default":"8919142e1f4a916d335ee65c3579cf44"}}
+{"id":"2160c346c41f953e4bb82dc537851410","fullName":"tests.unit_tests.test_proxy_env_support#test_proxy_for_skips_non_http_proxy_urls","name":"test_proxy_for_skips_non_http_proxy_urls","status":"passed","testResultsByEnv":{"default":"51bb3638b0b49a6cd7986302b4999b4d"}}

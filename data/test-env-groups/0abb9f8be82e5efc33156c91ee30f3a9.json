@@ -1,1 +1,1 @@
-{"id":"0abb9f8be82e5efc33156c91ee30f3a9","fullName":"tests.unit_tests.test_no_token_in_urls#test_no_token_in_urls","name":"test_no_token_in_urls[ts/reachy-mini-sdk.ts]","status":"passed","testResultsByEnv":{"default":"f297b0557ed7eef9fd2a5f1289627f90"}}
+{"id":"0abb9f8be82e5efc33156c91ee30f3a9","fullName":"tests.unit_tests.test_no_token_in_urls#test_no_token_in_urls","name":"test_no_token_in_urls[ts/lib/reachy-mini.ts]","status":"passed","testResultsByEnv":{"default":"1214773a1a06e41ed78556395208e9b4"}}
