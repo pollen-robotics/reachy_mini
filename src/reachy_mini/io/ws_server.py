@@ -15,16 +15,17 @@ Server->Client messages are Pydantic models serialized to JSON, e.g.:
 import asyncio
 import logging
 import threading
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from fastapi import WebSocket, WebSocketDisconnect
 
-from reachy_mini.daemon.backend.abstract import Backend
 from reachy_mini.io.abstract import AbstractServer
 from reachy_mini.io.protocol import (
     AnyCommand,
+    DaemonStatus,
     GotoTaskRequest,
     PlayMoveTaskRequest,
     TaskProgress,
@@ -33,19 +34,27 @@ from reachy_mini.io.protocol import (
 )
 from reachy_mini.io.publisher import Publisher
 
+if TYPE_CHECKING:
+    from reachy_mini.daemon.backend.abstract import Backend
+
 logger = logging.getLogger(__name__)
 
 
 class WSServer(AbstractServer):
     """WebSocket server for Reachy Mini."""
 
-    def __init__(self, backend: Backend) -> None:
+    def __init__(
+        self,
+        backend: "Backend",
+        status_provider: Callable[[], DaemonStatus] | None = None,
+    ) -> None:
         """Initialize the WebSocket server."""
         self.backend = backend
+        self._status_provider = status_provider
         self._cmd_event = threading.Event()
 
         # Connected client queues (populated when clients connect via handle_client)
-        self._clients: set[asyncio.Queue[str]] = set()
+        self._clients: tuple[asyncio.Queue[str], ...] = ()
 
         # Captured lazily in handle_client() from uvicorn's event loop
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -72,7 +81,7 @@ class WSServer(AbstractServer):
 
     def stop(self) -> None:
         """Stop the WebSocket server."""
-        self._clients.clear()
+        self._clients = ()
         self._loop = None
 
     def command_received_event(self) -> threading.Event:
@@ -85,22 +94,23 @@ class WSServer(AbstractServer):
 
     def _broadcast(self, msg: str) -> None:
         """Thread-safe broadcast to all connected client queues."""
-        # No clients: skip the per-tick call_soon_threadsafe wakeup.
-        if self._loop is None or not self._clients:
+        loop = self._loop
+        clients = self._clients
+        if loop is None or not clients:
             return
 
-        def _put(msg: str = msg) -> None:
-            for q in list(self._clients):
+        def _put() -> None:
+            for queue in clients:
                 try:
-                    q.put_nowait(msg)
+                    queue.put_nowait(msg)
                 except asyncio.QueueFull:
                     try:
-                        q.get_nowait()
-                        q.put_nowait(msg)
+                        queue.get_nowait()
+                        queue.put_nowait(msg)
                     except (asyncio.QueueEmpty, asyncio.QueueFull):
                         pass
 
-        self._loop.call_soon_threadsafe(_put)
+        loop.call_soon_threadsafe(_put)
 
     def publish_status(self, json_str: str) -> None:
         """Publish daemon status to all connected clients.
@@ -124,7 +134,9 @@ class WSServer(AbstractServer):
         await websocket.accept()
 
         queue: asyncio.Queue[str] = asyncio.Queue(maxsize=100)
-        self._clients.add(queue)
+        if self._status_provider is not None:
+            queue.put_nowait(self._status_provider().model_dump_json())
+        self._clients += (queue,)
 
         send_task = asyncio.create_task(self._send_loop(websocket, queue))
         try:
@@ -135,7 +147,9 @@ class WSServer(AbstractServer):
             logger.error(f"WS client error: {e}")
         finally:
             send_task.cancel()
-            self._clients.discard(queue)
+            self._clients = tuple(
+                client for client in self._clients if client is not queue
+            )
 
     async def _send_loop(self, websocket: WebSocket, queue: asyncio.Queue[str]) -> None:
         """Forward queued messages to the WebSocket client."""
@@ -165,6 +179,7 @@ class WSServer(AbstractServer):
 
     def _handle_command(self, cmd: AnyCommand) -> None:
         """Dispatch a validated command through Backend.process_command."""
+
         def send(resp: dict[str, Any]) -> None:
             pass  # SDK commands are fire-and-forget
 
