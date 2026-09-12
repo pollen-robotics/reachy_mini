@@ -64,7 +64,7 @@ from reachy_mini.media.audio_base import (
     AEC_PROBE_NAME,
     AEC_RATE,
     AudioBase,
-    make_speaker_eq,
+    make_audiosink_tee_bin,
 )
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
@@ -271,8 +271,6 @@ class GStreamerAudio(AudioBase):
         """
         appsink = Gst.ElementFactory.make("appsink")
         # Force mono so the speech tapper receives a 1-D float32 array.
-        # The per-branch audioconvert in _build_audiosink_tee_bin /
-        # _init_pipeline_playback handles the downmix.
         caps = Gst.Caps.from_string(
             f"audio/x-raw,format=F32LE,channels=1,"
             f"rate={self.SAMPLE_RATE},layout=interleaved"
@@ -299,67 +297,6 @@ class GStreamerAudio(AudioBase):
         pcm = np.frombuffer(data, dtype=np.float32)
         self._head_wobbler.feed(pcm, time.monotonic_ns())
         return Gst.FlowReturn.OK
-
-    def _build_audiosink_tee_bin(self) -> Gst.Bin:
-        """Build a Gst.Bin with a tee splitting audio to speaker and wobbler.
-
-        Per-branch audioconvert+audioresample isolate each leaf's caps
-        from the other (the wobbler appsink demands F32LE/2/16000; the
-        audiosink wants whatever the device prefers — e.g. on the
-        wireless XMOS PCM, anything but its native rate triggers an
-        IEC958 fallback that fails to open).
-
-        The bin exposes a single ghost sink pad for use as a playbin audio-sink::
-
-            ghost_sink → tee ─┬→ queue → audioconvert → audioresample → audiosink
-                               └→ queue → audioconvert → audioresample → appsink
-
-        """
-        audio_bin = Gst.Bin.new("audio_tee_bin")
-
-        tee = Gst.ElementFactory.make("tee")
-        queue_speaker = Gst.ElementFactory.make("queue")
-        ac_speaker = Gst.ElementFactory.make("audioconvert")
-        ar_speaker = Gst.ElementFactory.make("audioresample")
-        eq_speaker = make_speaker_eq(self.logger)
-        audiosink = self._build_audiosink_element()
-        queue_wobbler = Gst.ElementFactory.make("queue")
-        ac_wobbler = Gst.ElementFactory.make("audioconvert")
-        ar_wobbler = Gst.ElementFactory.make("audioresample")
-        appsink_wobbler = self._make_wobbler_appsink()
-
-        for el in (
-            tee,
-            queue_speaker,
-            ac_speaker,
-            ar_speaker,
-            audiosink,
-            queue_wobbler,
-            ac_wobbler,
-            ar_wobbler,
-            appsink_wobbler,
-        ):
-            audio_bin.add(el)
-
-        tee.link(queue_speaker)
-        queue_speaker.link(ac_speaker)
-        ac_speaker.link(ar_speaker)
-        if eq_speaker is not None:
-            audio_bin.add(eq_speaker)
-            ar_speaker.link(eq_speaker)
-            eq_speaker.link(audiosink)
-        else:
-            ar_speaker.link(audiosink)
-
-        tee.link(queue_wobbler)
-        queue_wobbler.link(ac_wobbler)
-        ac_wobbler.link(ar_wobbler)
-        ar_wobbler.link(appsink_wobbler)
-
-        ghost_pad = Gst.GhostPad.new("sink", tee.get_static_pad("sink"))
-        audio_bin.add_pad(ghost_pad)
-
-        return audio_bin
 
     def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
         self._appsrc = Gst.ElementFactory.make("appsrc")
@@ -392,16 +329,9 @@ class GStreamerAudio(AudioBase):
         )
         silence_queue = Gst.ElementFactory.make("queue")
 
-        tee = Gst.ElementFactory.make("tee")
-        queue_speaker = Gst.ElementFactory.make("queue")
-        ac_speaker = Gst.ElementFactory.make("audioconvert")
-        ar_speaker = Gst.ElementFactory.make("audioresample")
-        eq_speaker = make_speaker_eq(self.logger)
-        audiosink = self._build_audiosink_element()
-        queue_wobbler = Gst.ElementFactory.make("queue")
-        ac_wobbler = Gst.ElementFactory.make("audioconvert")
-        ar_wobbler = Gst.ElementFactory.make("audioresample")
-        appsink_wobbler = self._make_wobbler_appsink()
+        audio_bin = make_audiosink_tee_bin(
+            self.logger, self._build_audiosink_element(), self._make_wobbler_appsink()
+        )
 
         for el in (
             self._appsrc,
@@ -410,19 +340,9 @@ class GStreamerAudio(AudioBase):
             silence_caps,
             silence_queue,
             mixer,
-            tee,
-            queue_speaker,
-            ac_speaker,
-            ar_speaker,
-            audiosink,
-            queue_wobbler,
-            ac_wobbler,
-            ar_wobbler,
-            appsink_wobbler,
+            audio_bin,
         ):
             pipeline.add(el)
-        if eq_speaker is not None:
-            pipeline.add(eq_speaker)
 
         self._appsrc.link(appsrc_queue)
         appsrc_queue.link(mixer)
@@ -448,22 +368,9 @@ class GStreamerAudio(AudioBase):
             ac_probe.link(ar_probe)
             ar_probe.link(cf_probe)
             cf_probe.link(self._webrtcechoprobe)
-            self._webrtcechoprobe.link(tee)
+            self._webrtcechoprobe.link(audio_bin)
         else:
-            mixer.link(tee)
-
-        tee.link(queue_speaker)
-        queue_speaker.link(ac_speaker)
-        ac_speaker.link(ar_speaker)
-        if eq_speaker is not None:
-            ar_speaker.link(eq_speaker)
-            eq_speaker.link(audiosink)
-        else:
-            ar_speaker.link(audiosink)
-        tee.link(queue_wobbler)
-        queue_wobbler.link(ac_wobbler)
-        ac_wobbler.link(ar_wobbler)
-        ar_wobbler.link(appsink_wobbler)
+            mixer.link(audio_bin)
 
     def _on_bus_message(
         self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
@@ -563,7 +470,14 @@ class GStreamerAudio(AudioBase):
             uri = f"file://{file_path}"
         playbin.set_property("uri", uri)
 
-        playbin.set_property("audio-sink", self._build_audiosink_tee_bin())
+        playbin.set_property(
+            "audio-sink",
+            make_audiosink_tee_bin(
+                self.logger,
+                self._build_audiosink_element(),
+                self._make_wobbler_appsink(),
+            ),
+        )
         if self._head_wobbler is not None:
             self._head_wobbler.reset()
             self._head_wobbler.start()

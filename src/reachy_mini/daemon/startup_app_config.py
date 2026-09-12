@@ -45,12 +45,12 @@ def _read() -> dict:  # type: ignore[type-arg]
     """Load the config dict, or {} if missing/unreadable (best-effort)."""
     path = _config_path()
     try:
-        with path.open() as f:
+        with path.open(encoding="utf-8") as f:
             data = json.load(f)
         return data if isinstance(data, dict) else {}
     except FileNotFoundError:
         return {}
-    except (OSError, json.JSONDecodeError) as e:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
         logger.warning(f"Ignoring unreadable daemon config {path}: {e}")
         return {}
 
@@ -138,7 +138,7 @@ def _update(key: str, value: object | None) -> None:
     # truncate the file, and the next _update() rebuilds it from the empty
     # dict _read() returns for unparseable JSON, dropping every other key.
     tmp = path.with_suffix(".json.tmp")
-    with tmp.open("w") as f:
+    with tmp.open("w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
     tmp.replace(path)
 
