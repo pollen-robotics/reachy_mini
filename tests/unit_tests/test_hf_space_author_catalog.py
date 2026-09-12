@@ -12,7 +12,7 @@ from reachy_mini.apps.sources import hf_space
 
 
 def _space(space_id: str, likes: int = 0) -> SimpleNamespace:
-    return SimpleNamespace(__dict__={"id": space_id, "likes": likes, "cardData": {}})
+    return SimpleNamespace(id=space_id, likes=likes, cardData={})
 
 
 def test_merge_space_payloads_keeps_first_id() -> None:
