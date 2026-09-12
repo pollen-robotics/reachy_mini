@@ -29,6 +29,7 @@ from reachy_mini.motion import (
     speech_tapper_v3,
     speech_tapper_v4,
     speech_tapper_v5,
+    speech_tapper_v6,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,13 @@ SpeechOffsets = tuple[float, float, float, float, float, float]
 LATENCY_COMPENSATION_MS = int(os.environ.get("WOBBLER_LATENCY_COMPENSATION_MS", "50"))
 LATENCY_COMPENSATION_NS = LATENCY_COMPENSATION_MS * 1_000_000
 
+# Emotional colouring for tapper versions that accept it (v6 and later).
+# Ignored by the other versions. WOBBLER_EMOTION is an emotion name
+# ("neutral", "angry", "sassy", "sad", "pleading"), WOBBLER_ENERGY a float
+# amplitude scale (1.0 default, clamped by the tapper).
+WOBBLER_EMOTION = os.environ.get("WOBBLER_EMOTION", "neutral")
+WOBBLER_ENERGY = float(os.environ.get("WOBBLER_ENERGY", "1.0"))
+
 
 class HeadWobbler:
     """PTS-driven scheduler that turns audio into timed head offsets."""
@@ -58,6 +66,7 @@ class HeadWobbler:
         "v3": speech_tapper_v3,
         "v4": speech_tapper_v4,
         "v5": speech_tapper_v5,
+        "v6": speech_tapper_v6,
     }
 
     _ZERO_OFFSETS: SpeechOffsets = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -90,12 +99,30 @@ class HeadWobbler:
         logger.info("Using wobbler version: %s (%s)", version, sway_cls.__module__)
         self._sway_cls = sway_cls
         self._sample_rate = int(sample_rate)
-        self.sway = sway_cls(sample_rate=self._sample_rate)
+        self._sway_kwargs: dict[str, Any] = {}
+        if hasattr(sway_cls, "set_emotion"):
+            self._sway_kwargs = {"emotion": WOBBLER_EMOTION, "energy": WOBBLER_ENERGY}
+            logger.info(
+                "Wobbler emotion: %s (energy %.2f)", WOBBLER_EMOTION, WOBBLER_ENERGY
+            )
+        self.sway = self._make_sway()
 
         self._lock = threading.Lock()
         self._sway_lock = threading.Lock()
         # Bumped on stop/reset so in-flight GLib timeouts no-op when fired.
         self._generation = 0
+
+    def _make_sway(self) -> Any:
+        return self._sway_cls(sample_rate=self._sample_rate, **self._sway_kwargs)
+
+    def set_emotion(self, emotion: str, energy: float | None = None) -> None:
+        """Change the colouring at runtime. No-op for versions without it."""
+        with self._sway_lock:
+            setter = getattr(self.sway, "set_emotion", None)
+            if setter is None:
+                logger.debug("Wobbler version has no emotion input, ignoring")
+                return
+            setter(emotion, energy)
 
     def start(self) -> None:
         """Reset DSP and hop generation. Idempotent."""
@@ -117,7 +144,7 @@ class HeadWobbler:
         with self._lock:
             self._generation += 1
         with self._sway_lock:
-            self.sway = self._sway_cls(sample_rate=self._sample_rate)
+            self.sway = self._make_sway()
         self._apply_offsets(self._ZERO_OFFSETS)
 
     def feed(

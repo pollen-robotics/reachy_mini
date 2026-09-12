@@ -15,6 +15,7 @@ Requirements:
 Usage:
     python examples/live_mic_wobble.py
     python examples/live_mic_wobble.py --wobbler-version v5
+    python examples/live_mic_wobble.py --wobbler-version v6 --emotion sassy --energy 1.2
     python examples/live_mic_wobble.py --device 2 --blocksize 400
     python examples/live_mic_wobble.py --list-devices
 """
@@ -36,8 +37,8 @@ SAMPLE_RATE = 16_000  # SwayRollRT's preferred rate; matches HOP_MS arithmetic
 ZERO_OFFSETS = [0.0] * 6
 
 # Mapping from CLI version flag to the module that provides SwayRollRT.
-# v0 is the original; v1 to v5 are the iterations documented in
-# examples/wobbler_lab/BLOG.md.
+# v0 is the original; v1 to v6 are the iterations documented in
+# examples/wobbler_lab/BLOG.md. v6 takes --emotion and --energy.
 VERSIONS = {
     "v0": "reachy_mini.motion.speech_tapper",
     "v1": "reachy_mini.motion.speech_tapper_v1",
@@ -45,6 +46,7 @@ VERSIONS = {
     "v3": "reachy_mini.motion.speech_tapper_v3",
     "v4": "reachy_mini.motion.speech_tapper_v4",
     "v5": "reachy_mini.motion.speech_tapper_v5",
+    "v6": "reachy_mini.motion.speech_tapper_v6",
 }
 
 
@@ -77,6 +79,11 @@ def main() -> None:
     parser.add_argument("--wobbler-version", type=str, default="v5",
                         choices=sorted(VERSIONS),
                         help="speech tapper version (default: v5)")
+    parser.add_argument("--emotion", type=str, default=None,
+                        help="emotional colouring for versions that accept it (v6+): "
+                             "neutral, angry, sassy, sad, pleading")
+    parser.add_argument("--energy", type=float, default=None,
+                        help="amplitude scale for versions that accept it (v6+), default 1.0")
     args = parser.parse_args()
 
     if args.list_devices:
@@ -84,7 +91,16 @@ def main() -> None:
         return
 
     sway_cls = load_sway_class(args.wobbler_version)
-    sway = sway_cls(sample_rate=args.samplerate)
+    sway_kwargs = {}
+    if hasattr(sway_cls, "set_emotion"):
+        if args.emotion is not None:
+            sway_kwargs["emotion"] = args.emotion
+        if args.energy is not None:
+            sway_kwargs["energy"] = args.energy
+    elif args.emotion is not None or args.energy is not None:
+        print(f"{args.wobbler_version} has no emotion input, ignoring --emotion/--energy",
+              file=sys.stderr)
+    sway = sway_cls(sample_rate=args.samplerate, **sway_kwargs)
 
     # Single-slot queue: only the most-recent offsets matter. The audio
     # callback drops into this queue (non-blocking); a worker thread
@@ -149,7 +165,9 @@ def main() -> None:
         print(
             f"Listening on device={args.device or 'default'} "
             f"@ {args.samplerate} Hz, blocksize={args.blocksize}, "
-            f"wobbler={args.wobbler_version}. Ctrl-C to stop."
+            f"wobbler={args.wobbler_version}"
+            + (f" emotion={sway_kwargs}" if sway_kwargs else "")
+            + ". Ctrl-C to stop."
         )
         try:
             with sd.InputStream(

@@ -17,6 +17,7 @@ VERSIONS = {
     "v3": "reachy_mini.motion.speech_tapper_v3",
     "v4": "reachy_mini.motion.speech_tapper_v4",
     "v5": "reachy_mini.motion.speech_tapper_v5",
+    "v6": "reachy_mini.motion.speech_tapper_v6",
 }
 
 
@@ -24,7 +25,7 @@ VERSIONS = {
 class SimResult:
     audio: NDArray[np.float32]
     sample_rate: int
-    motion: NDArray[np.float32]            # (T, 6) — pitch, yaw, roll (rad), x, y, z (mm)
+    motion: NDArray[np.float32]            # (T, 6): pitch, yaw, roll (rad), x, y, z (mm)
     motion_time: NDArray[np.float32]       # (T,)
     hop_ms: int
 
@@ -40,10 +41,31 @@ def load_audio(path: str, target_sr: int = 16_000) -> tuple[NDArray[np.float32],
     return pcm.astype(np.float32), int(sr)
 
 
-def run_tapper(version: str, pcm: NDArray[np.float32], sample_rate: int) -> SimResult:
-    """Feed *pcm* through *version*'s SwayRollRT in 1-s chunks, collect motion."""
+def supports_emotion(version: str) -> bool:
+    """True when *version*'s SwayRollRT takes emotion / energy kwargs."""
+    return hasattr(_load_module(version).SwayRollRT, "set_emotion")
+
+
+def run_tapper(
+    version: str,
+    pcm: NDArray[np.float32],
+    sample_rate: int,
+    emotion: str | None = None,
+    energy: float | None = None,
+) -> SimResult:
+    """Feed *pcm* through *version*'s SwayRollRT in 1-s chunks, collect motion.
+
+    *emotion* and *energy* are passed only to versions that accept them
+    (v6 and later); the other versions ignore them.
+    """
     mod = _load_module(version)
-    sway = mod.SwayRollRT(sample_rate=sample_rate)
+    kwargs: dict[str, object] = {}
+    if hasattr(mod.SwayRollRT, "set_emotion"):
+        if emotion is not None:
+            kwargs["emotion"] = emotion
+        if energy is not None:
+            kwargs["energy"] = float(energy)
+    sway = mod.SwayRollRT(sample_rate=sample_rate, **kwargs)
     chunk = sample_rate
     results: list[dict[str, float]] = []
     for i in range(0, len(pcm), chunk):
