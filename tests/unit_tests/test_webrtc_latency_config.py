@@ -46,3 +46,17 @@ def test_resolve_rejects_non_integer_env(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv(ENV_WEBRTCBIN_LATENCY_MS, "abc")
     with pytest.raises(ValueError, match="integer"):
         resolve_webrtcbin_latency_ms(None)
+
+
+@pytest.mark.parametrize("value", [2**32, 1.5, True, "invalid"])
+def test_resolve_rejects_invalid_explicit_values(value) -> None:
+    """Reject overflow and lossy GObject conversions before runtime startup."""
+    with pytest.raises(ValueError):
+        resolve_webrtcbin_latency_ms(value)
+
+
+def test_resolve_rejects_env_overflow(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The environment has the same guint limit as an explicit argument."""
+    monkeypatch.setenv(ENV_WEBRTCBIN_LATENCY_MS, str(2**32))
+    with pytest.raises(ValueError, match="<="):
+        resolve_webrtcbin_latency_ms()
