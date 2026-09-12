@@ -9,6 +9,7 @@ This exposes:
 
 import asyncio
 import json
+import logging
 from typing import Any, Coroutine
 from uuid import UUID, uuid4
 
@@ -26,6 +27,9 @@ from ..models import AnyPose, FullBodyTarget
 
 move_tasks: dict[UUID, asyncio.Task[None]] = {}
 move_listeners: list[WebSocket] = []
+logger = logging.getLogger(__name__)
+MOVE_CANCEL_TIMEOUT_S = 2.0
+MOVE_NOTIFICATION_TIMEOUT_S = 0.2
 
 
 router = APIRouter(prefix="/move")
@@ -78,16 +82,25 @@ def create_move_task(coro: Coroutine[Any, Any, None]) -> MoveUUID:
     uuid = uuid4()
 
     async def notify_listeners(message: str, details: str = "") -> None:
-        for ws in move_listeners:
-            try:
-                await ws.send_json(
-                    {
-                        "type": message,
-                        "uuid": str(uuid),
-                        "details": details,
-                    }
-                )
-            except (RuntimeError, WebSocketDisconnect):
+        # A notification is best effort and must not hold up move cleanup. One
+        # budget covers the entire broadcast, regardless of listener count.
+        ws = None
+        notification_timeout = asyncio.timeout(MOVE_NOTIFICATION_TIMEOUT_S)
+        try:
+            async with notification_timeout:
+                for ws in list(move_listeners):
+                    try:
+                        await ws.send_json(
+                            {"type": message, "uuid": str(uuid), "details": details}
+                        )
+                    except (RuntimeError, WebSocketDisconnect):
+                        if ws in move_listeners:
+                            move_listeners.remove(ws)
+        except TimeoutError:
+            if not notification_timeout.expired():
+                raise  # Preserve a real send failure; only our own deadline is best effort.
+            logger.warning("Timed out sending %s for move %s", message, uuid)
+            if ws in move_listeners:
                 move_listeners.remove(ws)
 
     async def wrap_coro() -> None:
@@ -96,50 +109,59 @@ def create_move_task(coro: Coroutine[Any, Any, None]) -> MoveUUID:
             await coro
             await notify_listeners("move_completed")
         except Exception as e:
+            logger.exception("Move %s failed: %s", uuid, e)
             await notify_listeners("move_failed", details=str(e))
         except asyncio.CancelledError:
             await notify_listeners("move_cancelled")
+            raise
         finally:
             move_tasks.pop(uuid, None)
+            # Cancellation may arrive while the start notification is waiting,
+            # before the supplied move coroutine was ever awaited.
+            coro.close()
 
     task = asyncio.create_task(wrap_coro())
     move_tasks[uuid] = task
 
+    def task_finished(done: asyncio.Task[None]) -> None:
+        # Also handles cancellation before wrap_coro got its first timeslice.
+        move_tasks.pop(uuid, None)
+        coro.close()
+        if not done.cancelled() and (error := done.exception()) is not None:
+            logger.error("Move %s cleanup failed: %s", uuid, error)
+
+    task.add_done_callback(task_finished)
     return MoveUUID(uuid=uuid)
 
 
-async def cancel_all_move_tasks() -> None:
-    """Cancel every HTTP/WebSocket move task still registered.
+async def _cancel_move_tasks(tasks: list[asyncio.Task[None]], timeout: float) -> None:
+    for task in tasks:
+        task.cancel()
+    if not tasks:
+        return
+    # wait(), unlike wait_for(), does not wait past the deadline for a task
+    # that suppresses cancellation. Pending tasks retain their registry entries.
+    done, pending = await asyncio.wait(tasks, timeout=timeout)
+    for task in done:
+        if not task.cancelled():
+            task.result()
+    if pending:
+        raise TimeoutError(
+            f"{len(pending)} move task(s) did not stop within {timeout}s"
+        )
 
-    Used when an app stops so an in-flight goto cannot keep the backend
-    move guard forever. Safe when the dict is empty.
-    """
-    uuids = list(move_tasks.keys())
-    for uuid in uuids:
-        try:
-            await stop_move_task(uuid)
-        except KeyError:
-            continue
+
+async def cancel_all_move_tasks(timeout: float = MOVE_CANCEL_TIMEOUT_S) -> None:
+    """Cancel registered moves together and await cleanup within one deadline."""
+    await _cancel_move_tasks(list(move_tasks.values()), timeout)
 
 
 async def stop_move_task(uuid: UUID) -> dict[str, str]:
-    """Stop a running move task by cancelling it."""
+    """Stop a move, retaining ownership until its coroutine actually finishes."""
     if uuid not in move_tasks:
         raise KeyError(f"Running move with UUID {uuid} not found")
-
-    task = move_tasks.pop(uuid, None)
-    assert task is not None
-
-    if task:
-        if task.cancel():
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-
-    return {
-        "message": f"Stopped move with UUID: {uuid}",
-    }
+    await _cancel_move_tasks([move_tasks[uuid]], MOVE_CANCEL_TIMEOUT_S)
+    return {"message": f"Stopped move with UUID: {uuid}"}
 
 
 @router.get("/running")
