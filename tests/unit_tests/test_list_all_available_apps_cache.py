@@ -151,3 +151,129 @@ async def test_failed_hf_fetch_does_not_poison_cache(
     apps = await mgr.list_all_available_apps()
     assert [a.name for a in apps] == ["space-a"]
     assert calls["hf_space"] == 2
+
+
+@pytest.mark.asyncio
+async def test_cancelled_waiter_does_not_cancel_shared_catalog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A disconnected caller must not cancel another caller's fetch."""
+    mgr = AppManager()
+    started, release = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def load() -> list[AppInfo]:
+        nonlocal calls
+        calls += 1
+        started.set()
+        await release.wait()
+        return [_app("shared", SourceKind.HF_SPACE, "me/shared")]
+
+    monkeypatch.setattr(mgr, "_load_hf_catalog_apps", load)
+    first = asyncio.create_task(mgr._get_hf_catalog_apps())
+    await started.wait()
+    second = asyncio.create_task(mgr._get_hf_catalog_apps())
+    await asyncio.sleep(0)
+    first.cancel()
+    await asyncio.gather(first, return_exceptions=True)
+    release.set()
+    result = (await asyncio.gather(second, return_exceptions=True))[0]
+    assert isinstance(result, list), repr(result)
+    assert result[0].name == "shared"
+    assert calls == 1
+    await mgr.close()
+
+
+@pytest.mark.asyncio
+async def test_abandoned_fetch_is_owned_until_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Close awaits fetch cleanup even when every original waiter disconnected."""
+    mgr = AppManager()
+    started, cleaned = asyncio.Event(), asyncio.Event()
+
+    async def load() -> list[AppInfo]:
+        started.set()
+        try:
+            await asyncio.Event().wait()
+            return []
+        finally:
+            await asyncio.sleep(0)
+            cleaned.set()
+
+    monkeypatch.setattr(mgr, "_load_hf_catalog_apps", load)
+    waiter = asyncio.create_task(mgr._get_hf_catalog_apps())
+    await started.wait()
+    waiter.cancel()
+    await asyncio.gather(waiter, return_exceptions=True)
+    task = mgr._hf_catalog_task
+    assert task is not None
+    try:
+        assert not task.done(), "request cancellation reached manager-owned work"
+        await mgr.close()
+        assert task.done() and cleaned.is_set()
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_close_cancels_catalog_even_if_app_stop_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """App cleanup failures cannot leak shielded catalog tasks."""
+    mgr = AppManager()
+    started = asyncio.Event()
+
+    async def load() -> list[AppInfo]:
+        started.set()
+        await asyncio.Event().wait()
+        return []
+
+    async def fail_stop() -> None:
+        raise RuntimeError("app stop failed")
+
+    monkeypatch.setattr(mgr, "_load_hf_catalog_apps", load)
+    monkeypatch.setattr(mgr, "is_app_running", lambda: True)
+    monkeypatch.setattr(mgr, "stop_current_app", fail_stop)
+    waiter = asyncio.create_task(mgr._get_hf_catalog_apps())
+    await started.wait()
+    try:
+        with pytest.raises(RuntimeError, match="app stop failed"):
+            await mgr.close()
+        assert mgr._hf_catalog_task is None or mgr._hf_catalog_task.done()
+    finally:
+        waiter.cancel()
+        await asyncio.gather(waiter, return_exceptions=True)
+        if mgr._hf_catalog_task is not None:
+            mgr._hf_catalog_task.cancel()
+            await asyncio.gather(mgr._hf_catalog_task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_abandoned_failure_can_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fetch that fails after its last caller leaves does not poison retries."""
+    mgr = AppManager()
+    started, release = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def load() -> list[AppInfo]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            started.set()
+            await release.wait()
+            raise ValueError("late fetch failure")
+        return [_app("retry", SourceKind.HF_SPACE, "me/retry")]
+
+    monkeypatch.setattr(mgr, "_load_hf_catalog_apps", load)
+    waiter = asyncio.create_task(mgr._get_hf_catalog_apps())
+    await started.wait()
+    waiter.cancel()
+    await asyncio.gather(waiter, return_exceptions=True)
+    release.set()
+    await asyncio.sleep(0)
+    assert [a.name for a in await mgr._get_hf_catalog_apps()] == ["retry"]
+    await mgr.close()
+    with pytest.raises(RuntimeError, match="closed"):
+        await mgr._get_hf_catalog_apps()

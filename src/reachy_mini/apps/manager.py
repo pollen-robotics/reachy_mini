@@ -83,11 +83,23 @@ class AppManager:
         self._hf_catalog_cache_at: float = 0.0
         self._hf_catalog_lock = asyncio.Lock()
         self._hf_catalog_task: asyncio.Task[list[AppInfo]] | None = None
+        self._hf_catalog_closed = False
 
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
-        if self.is_app_running():
-            await self.stop_current_app()
+        self._hf_catalog_closed = True
+        try:
+            if self.is_app_running():
+                await self.stop_current_app()
+        finally:
+            task = self._hf_catalog_task
+            if task is not None and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+            self._hf_catalog_task = None
 
     def _kill_process_tree(self, pid: int) -> None:
         """Kill a process and all its children recursively."""
@@ -447,6 +459,8 @@ class AppManager:
 
     async def _get_hf_catalog_apps(self) -> list[AppInfo]:
         """Return HF catalog apps with TTL cache and single-flight."""
+        if self._hf_catalog_closed:
+            raise RuntimeError("AppManager is closed")
         now = time.monotonic()
         cached = self._hf_catalog_cache
         if cached is not None and (now - self._hf_catalog_cache_at) < HF_CATALOG_TTL_S:
@@ -464,9 +478,14 @@ class AppManager:
             task = self._hf_catalog_task
             if task is None or task.done():
                 task = asyncio.create_task(self._load_hf_catalog_apps())
+                # Observe failures even if every request disconnects. Awaiters still
+                # receive the original exception and a later request can retry.
+                task.add_done_callback(
+                    lambda done: None if done.cancelled() else done.exception()
+                )
                 self._hf_catalog_task = task
 
-        return list(await task)
+        return list(await asyncio.shield(task))
 
     async def list_all_available_apps(self) -> list[AppInfo]:
         """List available apps while preserving curated-only entries."""
