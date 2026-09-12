@@ -64,6 +64,35 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 from gi.repository import GLib, GObject, Gst, GstApp  # noqa: E402, F401
 
+DEFAULT_WEBRTCBIN_LATENCY_MS = 10
+ENV_WEBRTCBIN_LATENCY_MS = "REACHY_WEBRTC_LATENCY_MS"
+
+
+def resolve_webrtcbin_latency_ms(latency_ms: int | None = None) -> int:
+    """Return webrtcbin jitter-buffer latency in milliseconds.
+
+    Preference order:
+    1. Explicit ``latency_ms`` argument when provided.
+    2. ``REACHY_WEBRTC_LATENCY_MS`` environment variable.
+    3. ``DEFAULT_WEBRTCBIN_LATENCY_MS`` (10).
+    """
+    if latency_ms is not None:
+        if latency_ms < 0:
+            raise ValueError(f"webrtc latency_ms must be >= 0, got {latency_ms}")
+        return latency_ms
+    raw = os.getenv(ENV_WEBRTCBIN_LATENCY_MS)
+    if raw is None or raw.strip() == "":
+        return DEFAULT_WEBRTCBIN_LATENCY_MS
+    try:
+        value = int(raw)
+    except ValueError as e:
+        raise ValueError(
+            f"{ENV_WEBRTCBIN_LATENCY_MS} must be an integer, got {raw!r}"
+        ) from e
+    if value < 0:
+        raise ValueError(f"{ENV_WEBRTCBIN_LATENCY_MS} must be >= 0, got {value}")
+    return value
+
 
 class GstWebRTCClient(CameraBase, AudioBase):
     """WebRTC client that provides both camera frames and audio.
@@ -82,6 +111,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         signaling_host: str = "",
         signaling_port: int = 8443,
         camera_specs: Optional[CameraSpecs] = None,
+        webrtcbin_latency_ms: int | None = None,
     ):
         """Initialize the WebRTC client.
 
@@ -93,10 +123,14 @@ class GstWebRTCClient(CameraBase, AudioBase):
             camera_specs: Camera specifications detected by the daemon.
                 When ``None`` falls back to ``ReachyMiniLiteCamSpecs``
                 with a warning.
+            webrtcbin_latency_ms: Jitter-buffer latency for ``webrtcbin`` in
+                milliseconds. When ``None``, uses ``REACHY_WEBRTC_LATENCY_MS``
+                or the default of 10 ms.
 
         """
         CameraBase.__init__(self, log_level=log_level)
         AudioBase.__init__(self, log_level=log_level)
+        self.webrtcbin_latency_ms = resolve_webrtcbin_latency_ms(webrtcbin_latency_ms)
 
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
@@ -252,7 +286,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
             assert webrtcbin is not None, (
                 "Could not find webrtcbin element in webrtcsrc"
             )
-            webrtcbin.set_property("latency", 10)
+            webrtcbin.set_property("latency", self.webrtcbin_latency_ms)
 
     def _webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
         self._configure_webrtcbin(webrtcsrc)
