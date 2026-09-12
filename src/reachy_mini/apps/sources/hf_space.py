@@ -113,8 +113,66 @@ def _build_app_info(item: SpaceData | None) -> AppInfo | None:
     )
 
 
+def _space_payloads_from_hf_objects(spaces: object) -> list[SpaceData]:
+    """Normalize an HfApi list_spaces iterable into SpaceData payloads."""
+    payloads: list[SpaceData] = []
+    for space in spaces:  # type: ignore[attr-defined]
+        space_dict = space.__dict__ if hasattr(space, "__dict__") else space
+        space_data = _coerce_space_data(_to_plain_json(space_dict))
+        if space_data is None or _get_string(space_data, "id") is None:
+            continue
+        payloads.append(_normalize_space_data(space_data))
+    return payloads
+
+
+def _merge_space_payloads(*groups: list[SpaceData]) -> list[SpaceData]:
+    """Merge SpaceData groups, keeping the first payload for each Space id."""
+    merged: list[SpaceData] = []
+    seen: set[str] = set()
+    for group in groups:
+        for space_data in group:
+            space_id = _get_string(space_data, "id")
+            if space_id is None or space_id in seen:
+                continue
+            seen.add(space_id)
+            merged.append(space_data)
+    return merged
+
+
+def _list_author_spaces_with_hf_api(api: HfApi, token: str) -> list[SpaceData]:
+    """List Spaces owned by the authenticated Hugging Face user."""
+    try:
+        user_info = api.whoami(token=token)
+    except Exception as exc:  # noqa: BLE001 - catalog must stay available
+        logger.warning("Could not resolve HF username for author Spaces: %s", exc)
+        return []
+
+    author = user_info.get("name") if isinstance(user_info, dict) else None
+    if not isinstance(author, str) or not author:
+        logger.warning("HF whoami response had no username; skipping author Spaces")
+        return []
+
+    try:
+        spaces = api.list_spaces(
+            filter=HF_SPACES_FILTER,
+            author=author,
+            full=True,
+            token=token,
+        )
+        # list_spaces is lazy: network/pagination errors occur during consumption.
+        return _space_payloads_from_hf_objects(spaces)
+    except Exception as exc:  # noqa: BLE001 - catalog must stay available
+        logger.warning("Could not list author HF Spaces for %s: %s", author, exc)
+        return []
+
+
 def _list_all_spaces_with_hf_api(token: str | None) -> list[SpaceData]:
-    """List spaces with Hugging Face Hub API using an optional token."""
+    """List spaces with Hugging Face Hub API using an optional token.
+
+    Always queries the likes-sorted public catalog (limit
+    ``HF_SPACES_LIMIT``). When a token is present, also merges Spaces owned
+    by that user so private / zero-like apps stay visible (issue #1374).
+    """
     api = HfApi()
     spaces = api.list_spaces(
         filter=HF_SPACES_FILTER,
@@ -123,13 +181,12 @@ def _list_all_spaces_with_hf_api(token: str | None) -> list[SpaceData]:
         full=True,
         token=token,
     )
-    payloads: list[SpaceData] = []
-    for space in spaces:
-        space_data = _coerce_space_data(_to_plain_json(space.__dict__))
-        if space_data is None or _get_string(space_data, "id") is None:
-            continue
-        payloads.append(_normalize_space_data(space_data))
-    return payloads
+    catalog = _space_payloads_from_hf_objects(spaces)
+    if not token:
+        return catalog
+    author_spaces = _list_author_spaces_with_hf_api(api, token)
+    # Author Spaces first so the user's own apps win on id collisions.
+    return _merge_space_payloads(author_spaces, catalog)
 
 
 async def _fetch_space_data(
