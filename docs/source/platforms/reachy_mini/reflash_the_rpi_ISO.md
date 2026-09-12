@@ -9,6 +9,36 @@
 
 ---
 
+## The easy way: the Reachy Mini Flasher app (macOS / Windows)
+
+On macOS and Windows, the [**Reachy Mini Flasher**](https://github.com/pollen-robotics/reachy_mini_flasher) does everything described on this page for you: it downloads the latest OS image, runs `rpiboot` to expose the CM4 eMMC (installing the USB driver first, on Windows), and writes the image to it.
+
+Download the latest build for your system from the [releases page](https://github.com/pollen-robotics/reachy_mini_flasher/releases/latest) — a `.dmg` on macOS, a `.msi` or `.exe` installer on Windows — and open it.
+
+> [!TIP]
+> The installers are unsigned, so your system warns you the first time: on macOS, right-click the app and choose **Open**; on Windows, click **More info** then **Run anyway** in the SmartScreen dialog.
+
+![Flasher welcome screen](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/flasher-welcome.png)
+
+The app walks you through the hardware steps (open the head, set **SW1** to **DOWNLOAD**, plug **USB2**, power on):
+
+![Flasher connect step](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/flasher-switch.png)
+
+Once the robot is in download mode, it shows up in the app. Select it and continue:
+
+![Reachy detected by the flasher](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/flasher-found.png)
+
+Your system asks for permission (raw disk writes need admin rights: an administrator password on macOS, a UAC prompt on Windows), then the image is written. Keep the robot plugged in until it finishes:
+
+![Flashing progress](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/flasher-progress.png)
+
+The app then guides you through restoring the normal boot mode (switch back to **DEBUG**, unplug USB, close the head).
+
+> [!NOTE]
+> There is no Linux build. On Linux, follow the manual procedure below — which is also what the app automates, if you'd rather do it by hand.
+
+---
+
 ## Download the OS image (and bmap)
 
 First, download the latest OS image and `.bmap` file from:  
