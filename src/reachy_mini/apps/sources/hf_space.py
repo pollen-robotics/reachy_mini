@@ -159,10 +159,11 @@ def _list_author_spaces_with_hf_api(api: HfApi, token: str) -> list[SpaceData]:
             full=True,
             token=token,
         )
+        # list_spaces is lazy: network/pagination errors occur during consumption.
+        return _space_payloads_from_hf_objects(spaces)
     except Exception as exc:  # noqa: BLE001 - catalog must stay available
         logger.warning("Could not list author HF Spaces for %s: %s", author, exc)
         return []
-    return _space_payloads_from_hf_objects(spaces)
 
 
 def _list_all_spaces_with_hf_api(token: str | None) -> list[SpaceData]:

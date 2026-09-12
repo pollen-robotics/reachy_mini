@@ -78,3 +78,26 @@ def test_list_all_spaces_survives_whoami_failure(
     payloads = hf_space._list_all_spaces_with_hf_api("hf_token")
 
     assert [p["id"] for p in payloads] == ["org/popular"]
+
+
+@pytest.mark.parametrize("page", [1, 2])
+def test_author_pagination_failure_preserves_public_catalog(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, page: int
+) -> None:
+    """Lazy failures at either page must fall back to the complete public result."""
+    api = MagicMock()
+    api.whoami.return_value = {"name": "me"}
+
+    def list_spaces(**kwargs: Any):
+        if "author" in kwargs:
+            if page == 2:
+                yield _space("me/partial-private")
+            raise RuntimeError(f"author page {page} failed")
+        yield _space("org/popular", likes=9)
+        yield _space("org/second", likes=4)
+
+    api.list_spaces.side_effect = list_spaces
+    monkeypatch.setattr(hf_space, "HfApi", lambda: api)
+    result = hf_space._list_all_spaces_with_hf_api("offline-fixture")
+    assert [p["id"] for p in result] == ["org/popular", "org/second"]
+    assert f"author page {page} failed" in caplog.text
