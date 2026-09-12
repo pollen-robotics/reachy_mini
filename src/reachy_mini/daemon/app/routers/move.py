@@ -108,6 +108,20 @@ def create_move_task(coro: Coroutine[Any, Any, None]) -> MoveUUID:
     return MoveUUID(uuid=uuid)
 
 
+async def cancel_all_move_tasks() -> None:
+    """Cancel every HTTP/WebSocket move task still registered.
+
+    Used when an app stops so an in-flight goto cannot keep the backend
+    move guard forever. Safe when the dict is empty.
+    """
+    uuids = list(move_tasks.keys())
+    for uuid in uuids:
+        try:
+            await stop_move_task(uuid)
+        except KeyError:
+            continue
+
+
 async def stop_move_task(uuid: UUID) -> dict[str, str]:
     """Stop a running move task by cancelling it."""
     if uuid not in move_tasks:

@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import signal
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
@@ -355,6 +356,29 @@ class AppManager:
                 await self.current_app.monitor_task
             except asyncio.CancelledError:
                 pass
+
+        # Clear any in-flight move before idle reset (issue #1401).
+        if self.daemon is not None and self.daemon.backend is not None:
+            backend = self.daemon.backend
+            if backend.is_move_running:
+                backend.request_stop_move()
+                try:
+                    from reachy_mini.daemon.app.routers.move import (
+                        cancel_all_move_tasks,
+                    )
+
+                    await cancel_all_move_tasks()
+                except Exception as e:  # noqa: BLE001 - best-effort cleanup
+                    self.logger.getChild("runner").debug(
+                        f"cancel_all_move_tasks failed: {e}"
+                    )
+                deadline = time.monotonic() + 2.0
+                while backend.is_move_running and time.monotonic() < deadline:
+                    await asyncio.sleep(0.02)
+                if backend.is_move_running:
+                    self.logger.getChild("runner").warning(
+                        "Move still running after app stop; idle reset may be skipped."
+                    )
 
         # Return to zero after an app stops, unless the app left it asleep.
         if self.daemon is not None and self.daemon.backend is not None:

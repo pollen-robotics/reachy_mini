@@ -2430,6 +2430,25 @@ class Backend:
                 return
             token.cancelled = True
 
+    def request_stop_move(self) -> bool:
+        """Request cancellation of any in-flight play_move / goto.
+
+        Flips the global stop flag polled by ``play_move`` and cancels the
+        active uploaded-move token when present. Returns True when a move
+        was running at the time of the call.
+        """
+        if not self.is_move_running:
+            return False
+        self._stop_move_requested = True
+        # Also flip the per-run token (RLock is reentrant on the event-loop
+        # thread, same as _handle_cancel_move) so an in-flight
+        # play_uploaded_move bookkeeps this as a cancellation.
+        with self._play_move_lock:
+            token = self._active_move_token
+            if token is not None:
+                token.cancelled = True
+        return True
+
     def _handle_stop_move(
         self, send_response: Callable[[dict[str, Any]], None]
     ) -> None:
@@ -2442,7 +2461,7 @@ class Backend:
         ``finished``. Idempotent: always acks ok, with ``stopped`` telling
         whether a move was actually interrupted.
         """
-        if not self.is_move_running:
+        if not self.request_stop_move():
             send_response(
                 {
                     "status": "ok",
@@ -2452,14 +2471,6 @@ class Backend:
                 }
             )
             return
-        self._stop_move_requested = True
-        # Also flip the per-run token (RLock is reentrant on the event-loop
-        # thread, same as _handle_cancel_move) so an in-flight
-        # play_uploaded_move bookkeeps this as a cancellation.
-        with self._play_move_lock:
-            token = self._active_move_token
-            if token is not None:
-                token.cancelled = True
         send_response({"status": "ok", "command": "stop_move", "stopped": True})
 
     def _handle_upload_finish(self, cmd: UploadMoveFinishCmd) -> None:
