@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import signal
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
@@ -24,6 +25,9 @@ if TYPE_CHECKING:
 
 # Sleep-pose proximity in magic-mm (mm + deg), matching Backend.goto_sleep.
 SLEEP_POSE_MAGIC_DISTANCE = 10.0
+
+# HF catalog cache for list_all_available_apps (issue #1352).
+HF_CATALOG_TTL_S = 45.0
 
 
 class AppState(str, Enum):
@@ -75,6 +79,10 @@ class AppManager:
         self.desktop_app_daemon = desktop_app_daemon
         self.running_on_wireless = wireless_version
         self.daemon = daemon
+        self._hf_catalog_cache: list[AppInfo] | None = None
+        self._hf_catalog_cache_at: float = 0.0
+        self._hf_catalog_lock = asyncio.Lock()
+        self._hf_catalog_task: asyncio.Task[list[AppInfo]] | None = None
 
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
@@ -414,18 +422,11 @@ class AppManager:
         return None
 
     # Apps management interface
-    async def list_all_available_apps(self) -> list[AppInfo]:
-        """List available apps while preserving curated-only entries."""
-        (
-            hf_space_apps,
-            dashboard_selection_apps,
-            local_apps,
-            installed_apps,
-        ) = await asyncio.gather(
+    async def _load_hf_catalog_apps(self) -> list[AppInfo]:
+        """Fetch and deduplicate HF-backed catalog apps."""
+        hf_space_apps, dashboard_selection_apps = await asyncio.gather(
             self.list_available_apps(SourceKind.HF_SPACE),
             self.list_available_apps(SourceKind.DASHBOARD_SELECTION),
-            self.list_available_apps(SourceKind.LOCAL),
-            self.list_available_apps(SourceKind.INSTALLED),
         )
 
         catalog_apps: list[AppInfo] = []
@@ -440,6 +441,40 @@ class AppManager:
             seen_catalog_apps.add(app_key)
             catalog_apps.append(app)
 
+        self._hf_catalog_cache = catalog_apps
+        self._hf_catalog_cache_at = time.monotonic()
+        return catalog_apps
+
+    async def _get_hf_catalog_apps(self) -> list[AppInfo]:
+        """Return HF catalog apps with TTL cache and single-flight."""
+        now = time.monotonic()
+        cached = self._hf_catalog_cache
+        if cached is not None and (now - self._hf_catalog_cache_at) < HF_CATALOG_TTL_S:
+            return list(cached)
+
+        async with self._hf_catalog_lock:
+            now = time.monotonic()
+            cached = self._hf_catalog_cache
+            if (
+                cached is not None
+                and (now - self._hf_catalog_cache_at) < HF_CATALOG_TTL_S
+            ):
+                return list(cached)
+
+            task = self._hf_catalog_task
+            if task is None or task.done():
+                task = asyncio.create_task(self._load_hf_catalog_apps())
+                self._hf_catalog_task = task
+
+        return list(await task)
+
+    async def list_all_available_apps(self) -> list[AppInfo]:
+        """List available apps while preserving curated-only entries."""
+        catalog_apps, local_apps, installed_apps = await asyncio.gather(
+            self._get_hf_catalog_apps(),
+            self.list_available_apps(SourceKind.LOCAL),
+            self.list_available_apps(SourceKind.INSTALLED),
+        )
         return [*catalog_apps, *local_apps, *installed_apps]
 
     async def list_available_apps(self, source: SourceKind) -> list[AppInfo]:
