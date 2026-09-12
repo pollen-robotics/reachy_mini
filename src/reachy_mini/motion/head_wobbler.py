@@ -89,7 +89,7 @@ class HeadWobbler:
         Args:
             set_speech_offsets: Called with a 6-tuple of head offsets per hop.
             sample_rate: Sample rate of the PCM that will be fed via
-                :meth:`feed` — must match the wobbler appsink's caps.
+                :meth:`feed`, must match the wobbler appsink's caps.
 
         """
         self._apply_offsets = set_speech_offsets

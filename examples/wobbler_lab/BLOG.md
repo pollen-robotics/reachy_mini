@@ -435,3 +435,64 @@ To make the file path actually compensate latency, we need lookahead that respec
 2. **Add an `audiodelay` element on the speaker branch only.** Keep `sync=True` on the wobbler appsink. Insert a fixed delay (say 100 ms) between `audioresample` and `audiosink` on the speaker branch. Now the appsink callback fires at the buffer's intended playout time, but the speaker plays the audio 100 ms later. The head wobbler can subtract that 100 ms from `target_ns` and the motion is genuinely 100 ms ahead of audio. The cost is 100 ms of added latency at the start of every clip, which for `sound_tts.py` is unnoticeable.
 
 Approach 2 is simpler. Approach 1 is more general (it would also let live audio go beyond the current 50 ms compensation cap by enlarging the audiosink buffer, which Approach 2 already requires anyway). Either could be tried next session if 50 ms on the live path isn't enough.
+
+## 16. v6: emotional colouring (2026-09-12)
+
+The theater scenes need the same voice to move differently depending on the line. Angry, sassy, sad, pleading. v5 has one personality. v6 is v5 with a colouring input on top.
+
+`src/reachy_mini/motion/speech_tapper_v6.py`. Same public shape as v5, plus `emotion` and `energy` constructor kwargs and `set_emotion(emotion, energy)` at runtime. The v5 signal path is untouched. Every added term is either multiplied by the voiced envelope or is a short gesture that returns to exactly zero. So the silence guarantee holds.
+
+### The colourings
+
+| emotion | what changes |
+|---|---|
+| neutral | v5, plus the two phrase layers below. |
+| angry | Faster attack (lerp 0.55, envelope attack 0.9), sharper decay. Pitch and x gains up. Each nucleus adds a 5 deg downward pitch jab with a 4 mm forward thrust. Constant 5 mm forward lean. |
+| sassy | Every 3 nuclei the head glides to the other side: yaw 7 deg and roll 5 deg, alternating together. Yaw and roll gains up, chin slightly up. |
+| sad | All gains 0.6. Slower smoothing (lerp 0.25, slow envelope). Head down 5 deg, sunk 2 mm. On 15 % of nuclei, at most every 2.5 s, a slow extra 4 deg drop over 1.5 s. |
+| pleading | Head up 4 deg, forward 5 mm, 3 deg roll. Softer gains (0.8 to 0.9) but nuclei fire more often (spacing 80 ms, rise 0.06), each with a soft 3 deg nod. F0 tilt gain 1.3. |
+
+`energy` scales everything, clamped to [0, 1.5]. On top of that the final output is clamped per axis to 1.5 times the largest value v5 can produce (39 deg pitch, 48 deg yaw, 17 deg roll, 27 / 22 / 13.5 mm). The scene's loudest line (`hearts`, angry 1.4) peaks at 26 deg pitch and 23 mm x. Well inside.
+
+Switching emotion at runtime cross-fades the gains and biases over ~300 ms (PARAM_LERP 0.15). The event parameters (attack, spacing) switch immediately. No step on the head.
+
+### Two layers that tie the motion to the phrase
+
+Both are active in every colouring.
+
+1. **Phrase-final tilt.** When the gate closes after at least 500 ms of speech, the F0 slope over the last 300 ms of voicing picks a gesture: rising contour, head up (question); falling, head down (statement). It is a 300 ms half-sine on pitch that returns to exactly zero. This is the only term that runs into the silence. On purpose: it is the "full stop" of the sentence. It fires 1 to 4 times per line on the couple_fight material, at phrase boundaries, not on every gap. Set `final_tilt_deg=0` in a profile to remove it.
+2. **Phrase-start yaw drift.** Each time the gate opens, a new random yaw target (a few degrees, per colouring) is drawn and the head glides there over ~1 s while the phrase lasts. Envelope-gated, so it vanishes between phrases. Gives the head somewhere to look during a phrase instead of hovering around zero.
+
+### Wiring
+
+`head_wobbler.py` registers `v6`. `WOBBLER_EMOTION` and `WOBBLER_ENERGY` are read at construction, only passed to versions with a `set_emotion` method. `HeadWobbler.set_emotion()` forwards at runtime, no-op for the older versions. `simulate.run_tapper()` takes `emotion` / `energy` and passes them only where accepted. `live_mic_wobble.py` has `--emotion` and `--energy`.
+
+Two new lab tools:
+
+* `offsets.py`: writes the offsets JSON the theater player reads (format in `agentic_robot_theater/scenes/couple_fight/FORMATS.md`). Single wav, or batch over a directory with `--scene scene.json` to pick each line's colouring by beat id.
+* `compare.py`: one PNG per line with v0 / v5 / v6 stacked (rotation and translation rows per version) plus `summary.png` and `metrics.md`. Outputs under `out/couple_fight/`.
+
+### What the couple_fight lines show
+
+Nine lines, 1.4 to 8.2 s, one TTS voice per character. v6 with the beat's colouring.
+
+```
+version   stillness   onset   peak rot (deg)   rot rms (deg)
+v0          0.889     0.978       11.2            4.23
+v5          0.889     1.160       16.6            4.39
+v6          0.866     1.159       13.8            4.16
+```
+
+* `late` is 1.4 s with no frame below -55 dB, so stillness is 0 by definition for all three. That drags the means; on the other eight lines v0 and v5 are at 1.000 and v6 sits between 0.950 and 1.000.
+* The v6 stillness loss is the phrase-final tilt. 300 ms of a few degrees after each phrase, then exactly zero. Nothing else leaks.
+* Onset alignment: v6 matches v5 (1.16, versus 0.98 for v0). The colouring does not break the syllable sync.
+* Amplitude now follows the line. `hearts` (angry 1.4) has a rotation RMS of 9.0 deg, `father` (sad 0.9) 1.8 deg, against 4 to 5 deg for v5 on both. Look at `out/couple_fight/hearts.png` and `father.png` side by side: same algorithm, very different body language.
+* `so_much_time` (sassy 0.6) is small, as asked by the scene, and the yaw glides read clearly on the plot.
+
+### Unverified on the real robot
+
+* All the signs. I assumed positive pitch_rad is nose down (same as v5's TILT_SIGN) and positive x is forward. If either is wrong, angry jabs backward and pleading looks at the floor. Flip `PITCH_UP` or the x bias sign.
+* Whether the pleading nods (3 deg, 200 ms) survive the motor smoothing or vanish.
+* Whether the phrase-final tilt feels like punctuation or like a twitch. If it twitches, raise `FINAL_MIN_PHRASE_HOPS` or zero `final_tilt_deg`.
+* The sad slow drop is random (15 % of nuclei). On a short line it may never fire.
+* Nothing here has been timed on the CM4. It is the same FFT as v5 plus a few dozen scalar ops per hop, so it should not matter, but it is not measured.

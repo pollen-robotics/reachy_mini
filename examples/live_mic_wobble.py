@@ -62,7 +62,7 @@ def load_sway_class(version: str):
 
 
 def main() -> None:
-    """Entry point — parse args, open the mic, push offsets until Ctrl-C."""
+    """Entry point: parse args, open the mic, push offsets until Ctrl-C."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", type=int, default=None,
                         help="sounddevice input index (default: system default)")
@@ -106,7 +106,7 @@ def main() -> None:
     # callback drops into this queue (non-blocking); a worker thread
     # picks the latest tuple and sends SetSpeechOffsetsCmd over the
     # WebSocket. This decouples the audio thread from any network
-    # hiccup — a slow send can never glitch capture.
+    # hiccup: a slow send can never glitch capture.
     offsets_q: "queue.Queue[list[float] | None]" = queue.Queue(maxsize=1)
     stop_event = threading.Event()
 
@@ -131,7 +131,7 @@ def main() -> None:
             r["pitch_rad"],
             r["yaw_rad"],
         ]
-        # Replace any unsent stale offsets — only the latest matters.
+        # Replace any unsent stale offsets, only the latest matters.
         try:
             offsets_q.get_nowait()
         except queue.Empty:
