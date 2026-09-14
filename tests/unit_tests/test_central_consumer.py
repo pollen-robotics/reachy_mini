@@ -1,15 +1,16 @@
-"""Tests for the cloud-backend consumer's outbound command path.
-
-`send_command` is the only part of `ReachyCentralConsumer` that runs
-without a peer connection: it serializes an envelope and marshals the
-send onto aiortc's loop. Both are faked here, so what is under test is
-the wire format the daemon will have to parse.
-"""
+"""Consumer endpoint configuration and outbound command serialization."""
 
 import json
 
+import pytest
+
 from reachy_mini.io.protocol import GotoTargetCmd, SetFullTargetCmd
 from reachy_mini.media.central_consumer import ReachyCentralConsumer
+
+
+def test_consumer_rejects_plaintext_remote_central() -> None:
+    with pytest.raises(ValueError, match="HTTPS outside loopback"):
+        ReachyCentralConsumer(hf_token="hf_test", central_url="http://central.example")
 
 
 class _FakeChannel:

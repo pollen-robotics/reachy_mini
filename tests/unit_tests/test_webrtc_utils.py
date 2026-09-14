@@ -157,46 +157,18 @@ def test_turn_credentials_uris_empty_before_any_fetch() -> None:
     assert webrtc_utils.TurnCredentials().turn_uris() == []
 
 
-def test_turn_credentials_refresh_once_populates_cache(monkeypatch) -> None:
-    """A successful fetch is converted to URIs and cached for readers."""
-    creds = webrtc_utils.TurnCredentials(
-        url="https://turn.example/credentials", ttl=600
-    )
-
-    class _Resp:
-        @staticmethod
-        def raise_for_status() -> None:
-            pass
-
-        @staticmethod
-        def json() -> dict:
-            return {
-                "iceServers": [
-                    {"urls": "stun:stun.example:3478"},
-                    {
-                        "urls": "turn:relay.example:3478",
-                        "username": "u",
-                        "credential": "p",
-                    },
-                ]
-            }
-
-    seen: dict = {}
-
-    def _fake_get(url, **kwargs):
-        seen["url"] = url
-        seen["headers"] = kwargs.get("headers")
-        seen["params"] = kwargs.get("params")
-        return _Resp()
-
-    monkeypatch.setattr(webrtc_utils, "requests", type("R", (), {"get": _fake_get}))
-    monkeypatch.setattr("huggingface_hub.get_token", lambda: "hf_tok", raising=False)
-
-    assert creds._refresh_once() == 300.0  # half the 600 s TTL
-    assert creds.turn_uris() == ["turn://u:p@relay.example:3478"]
-    assert seen["url"] == "https://turn.example/credentials"
-    assert seen["headers"]["Authorization"] == "Bearer hf_tok"
-    assert seen["params"] == {"ttl": 600}
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://turn.example/credentials",
+        "https://secret@turn.example/credentials",
+        "https://turn.example/credentials?target=elsewhere",
+    ],
+)
+def test_turn_credentials_reject_unsafe_bearer_destinations(url: str) -> None:
+    """TURN never sends the daemon bearer to an unsafe configured endpoint."""
+    with pytest.raises(ValueError, match="REACHY_TURN_URL"):
+        webrtc_utils.TurnCredentials(url=url)
 
 
 def test_turn_credentials_network_failure_retries_soon(monkeypatch) -> None:

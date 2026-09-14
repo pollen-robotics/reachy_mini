@@ -11,6 +11,8 @@ from urllib.parse import quote
 import requests
 from websockets.sync.client import connect
 
+from reachy_mini.utils.network import validate_secure_http_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,8 +29,11 @@ logger = logging.getLogger(__name__)
 # STUN. So there is no central-server change and no consumer-side
 # credential to manage (which matters because aiortc's STUN client works
 # while its TURN client does not).
+#
+# turn.fastrtc.org (this default until 2026-09) has dead DNS since June 2026;
+# address the fastrtc/turn-service Space directly.
 TURN_CREDENTIALS_URL = os.getenv(
-    "REACHY_TURN_URL", "https://turn.fastrtc.org/credentials"
+    "REACHY_TURN_URL", "https://fastrtc-turn-service.hf.space/credentials"
 )
 TURN_TTL_SECONDS = int(os.getenv("REACHY_TURN_TTL", "600"))
 
@@ -109,7 +114,7 @@ class TurnCredentials:
                 refresh period is half this.
 
         """
-        self._url = url
+        self._url = validate_secure_http_url(url, "REACHY_TURN_URL")
         self._ttl = ttl
         # Written only by the refresher thread, read by the GStreamer
         # thread. Rebound as a whole list, never mutated in place, so a
@@ -168,8 +173,18 @@ class TurnCredentials:
                 headers={"Authorization": f"Bearer {token}"},
                 params={"ttl": self._ttl},
                 timeout=_TURN_HTTP_TIMEOUT_S,
+                allow_redirects=False,
             )
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                logger.warning(
+                    "TURN proxy returned HTTP %s; expected 200", resp.status_code
+                )
+                # A redirect needs a configuration fix, not a fast retry.
+                return (
+                    period
+                    if 300 <= resp.status_code < 400
+                    else _TURN_RETRY_AFTER_FAILURE_S
+                )
             uris = ice_servers_to_turn_uris(resp.json().get("iceServers") or [])
         except Exception as e:  # noqa: BLE001 - a relay is best-effort
             logger.warning("Failed to fetch TURN credentials: %r", e)

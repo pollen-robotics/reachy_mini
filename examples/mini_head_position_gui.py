@@ -6,10 +6,10 @@ import time
 import tkinter as tk
 
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini
 from reachy_mini.utils import create_head_pose
+from reachy_mini.utils.rotation import Rotation as R
 
 
 def main() -> None:
