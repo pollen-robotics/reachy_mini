@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from huggingface_hub.errors import RepositoryNotFoundError
 from pydantic import BaseModel
 
-from reachy_mini.motion.recorded_move import RecordedMoves
+from reachy_mini.motion.recorded_move import RecordedMoves, get_recorded_moves
 from reachy_mini.utils.interpolation import InterpolationTechnique
 
 from ....daemon.backend.abstract import Backend
@@ -161,15 +161,26 @@ async def play_goto_sleep(backend: Backend = Depends(get_backend)) -> MoveUUID:
     return create_move_task(backend.goto_sleep())
 
 
+async def load_recorded_moves(dataset_name: str) -> RecordedMoves:
+    """Load a recorded-move library without blocking the event loop.
+
+    Building a library reads the whole dataset, and downloads it first when the
+    HF cache is cold. Both are synchronous, so running them inline would freeze
+    every other route and the state stream until they finish - unreachable HF
+    turns one emotion into a dead daemon. Hand it to a worker thread instead.
+    """
+    try:
+        return await asyncio.to_thread(get_recorded_moves, dataset_name)
+    except RepositoryNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.get("/recorded-move-datasets/list/{dataset_name:path}")
 async def list_recorded_move_dataset(
     dataset_name: str,
 ) -> list[str]:
     """List available recorded moves in a dataset."""
-    try:
-        moves = RecordedMoves(dataset_name)
-    except RepositoryNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    moves = await load_recorded_moves(dataset_name)
 
     return moves.list_moves()
 
@@ -181,10 +192,7 @@ async def play_recorded_move_dataset(
     backend: Backend = Depends(get_backend),
 ) -> MoveUUID:
     """Request the robot to play a predefined recorded move from a dataset."""
-    try:
-        recorded_moves = RecordedMoves(dataset_name)
-    except RepositoryNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    recorded_moves = await load_recorded_moves(dataset_name)
     try:
         move = recorded_moves.get(move_name)
     except ValueError as e:
