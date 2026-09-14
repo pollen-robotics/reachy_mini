@@ -128,6 +128,24 @@ const POSE_STREAM_FRESH_MS = 750;
  */
 const WAKE_TRAJECTORY_BUDGET_MS = 5000;
 
+/**
+ * Wire payload for `play_recorded_move`, shared by the fire-and-forget and
+ * the awaited variant so the two can't drift apart.
+ */
+function recordedMoveCmd(
+    moveName: string,
+    { dataset, initialGotoDuration }: { dataset?: string; initialGotoDuration?: number },
+): { type: string } & Record<string, unknown> {
+    return {
+        type: 'play_recorded_move',
+        move_name: moveName,
+        ...(dataset ? { dataset_name: dataset } : {}),
+        ...(initialGotoDuration && initialGotoDuration > 0
+            ? { initial_goto_duration: initialGotoDuration }
+            : {}),
+    };
+}
+
 export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Config ──────────────────────────────────────────────────────────
@@ -1047,19 +1065,55 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     playRecordedMove(
         moveName: string,
-        {
-            dataset,
-            initialGotoDuration,
-        }: { dataset?: string; initialGotoDuration?: number } = {},
+        opts: { dataset?: string; initialGotoDuration?: number } = {},
     ): boolean {
-        return this._sendCommand({
-            type: 'play_recorded_move',
-            move_name: moveName,
-            ...(dataset ? { dataset_name: dataset } : {}),
-            ...(initialGotoDuration && initialGotoDuration > 0
-                ? { initial_goto_duration: initialGotoDuration }
-                : {}),
-        });
+        return this._sendCommand(recordedMoveCmd(moveName, opts));
+    }
+
+    /**
+     * Like `playRecordedMove()`, but resolves once the daemon acks the
+     * dispatch: `true` when the move was loaded and handed to the player,
+     * `false` when the daemon could not load it (unknown name, missing
+     * dataset), `null` on the fail-open timeout. Rejects when the data
+     * channel isn't open.
+     *
+     * Use this over the fire-and-forget variant whenever the dataset may be
+     * cold: the daemon loads the move *before* acking, downloading the
+     * dataset on the spot if it isn't cached, so the ack is the only honest
+     * "it got that far" signal. Watching `is_move_running` with a short
+     * deadline instead makes a slow download look like a missing move.
+     *
+     * Hence the generous default timeout: it has to cover a multi-MB
+     * download on the robot's Wi-Fi, not just a data-channel round trip.
+     * Warm the cache with `preloadDatasetAndWait()` first if you'd rather
+     * surface the download as its own step.
+     *
+     * Two things `true` does *not* promise, both daemon-side:
+     * - the robot is moving. The daemon acks before starting the player,
+     *   which then drops the move if another one is already running. Call
+     *   `stopMove()` first when a new move must win.
+     * - the move ran to completion. There is no end-of-playback broadcast
+     *   for recorded moves (unlike `playMove()`), so a caller that needs
+     *   the end still watches `is_move_running` fall - from this ack
+     *   rather than from its own call, which is the point.
+     */
+    playRecordedMoveAndWait(
+        moveName: string,
+        opts: { dataset?: string; initialGotoDuration?: number; timeoutMs?: number } = {},
+    ): Promise<boolean | null> {
+        // Key the reply on the move name, not the bare `command` echo:
+        // broadcast matching hands a message to the newest matching waiter,
+        // so with two `play_recorded_move` commands in flight a bare-echo
+        // predicate lets concurrent calls swap results. Error acks also
+        // match on status alone because older daemons omit `move_name`
+        // there (newer ones include it) - a fully-strict name match would
+        // miss those failures and fall through to the timeout.
+        return this.request(recordedMoveCmd(moveName, opts), {
+            timeoutMs: opts.timeoutMs ?? 120000,
+            match: (m) =>
+                m.command === 'play_recorded_move' &&
+                (m.status === 'error' || m.move_name === moveName),
+        }).then((reply) => (reply == null ? null : reply.status === 'ok'));
     }
 
     /**
