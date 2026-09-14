@@ -12,14 +12,14 @@ drop into any script::
     # --- read ---
     tag = nfc.read_tag()
     if tag.present:
-        print("UID:", tag.uid, "contenu:", tag.content)
+        print("UID:", tag.uid, "content:", tag.content)
 
     # block until a tag shows up (or timeout)
     tag = nfc.wait_for_tag(timeout=10)
 
     # --- write ---
     if nfc.write_text("badge42"):             # present a tag within ~6 s
-        print("écrit !")
+        print("written!")
     nfc.write_uri("https://pollen-robotics.com")   # a phone will open this
 
     # --- erase ---
@@ -195,36 +195,36 @@ def _demo() -> None:
 
     status = nfc.status()
     print(
-        f"Lecteur : connecté={status['connected']} "
-        f"puce={status['chip_version']} port={status['port']}"
+        f"Reader: connected={status['connected']} "
+        f"chip={status['chip_version']} port={status['port']}"
     )
     if not status["driver_available"]:
-        print("⚠️  Driver absent — installe reachy_mini[nfc] et relance le daemon.")
+        print("⚠️  Driver missing — install reachy_mini[nfc] and restart the daemon.")
         return
     if not status["connected"]:
-        print(f"⚠️  Lecteur non connecté ({status['error']}).")
+        print(f"⚠️  Reader not connected ({status['error']}).")
         return
 
-    print("Approche un tag…")
+    print("Present a tag…")
     tag = nfc.wait_for_tag(timeout=15)
     if tag is None:
-        print("Aucun tag détecté.")
+        print("No tag detected.")
         return
 
-    print(f"Tag : uid={tag.uid} modèle={tag.model} capacité={tag.capacity}")
+    print(f"Tag: uid={tag.uid} model={tag.model} capacity={tag.capacity}")
     if tag.blank:
-        print("  tag vierge")
+        print("  blank tag")
     elif not tag.readable:
-        print(f"  contenu illisible : {tag.error}")
+        print(f"  unreadable content: {tag.error}")
     for record in tag.records:
         detail = record.value or f"{record.type_name} {record.data_hex}"
-        print(f"  {record.kind:6} : {detail}")
+        print(f"  {record.kind:6}: {detail}")
 
-    text = input("Texte à écrire sur le prochain tag (vide = ne rien faire) : ").strip()
+    text = input("Text to write on the next tag (empty = do nothing): ").strip()
     if text:
-        print("Présente un tag…")
+        print("Present a tag…")
         result = nfc.write_result(text=text)
-        print("✓ Écrit !" if result["success"] else f"✗ Échec : {result['error']}")
+        print("✓ Written!" if result["success"] else f"✗ Failed: {result['error']}")
 
 
 if __name__ == "__main__":
