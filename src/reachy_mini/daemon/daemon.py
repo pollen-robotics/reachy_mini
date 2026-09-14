@@ -168,6 +168,17 @@ class Daemon:
         self._status.media_released = False
         self.logger.info("Media hardware re-acquired.")
 
+    async def start_central_relay_if_running(self) -> None:
+        """Start the relay after a login, but only while RUNNING with media acquired.
+
+        Elsewhere the local signalling server is down and the relay would loop
+        on connection errors; start()/acquire_media() start it themselves.
+        """
+        if self._status.state != DaemonState.RUNNING or self._media_released:
+            self.logger.info("Daemon not running, relay starts with it")
+            return
+        await self._start_central_signaling_relay()
+
     def _setup_jsonrpc_relay(
         self, backend: "Backend", app_manager: "AppManager"
     ) -> None:
