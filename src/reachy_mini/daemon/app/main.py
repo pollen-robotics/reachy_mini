@@ -123,6 +123,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
+        # The JSON-RPC app relay must not be scheduled onto whichever loop
+        # `Daemon.start` runs on: over HTTP that is a background job's
+        # throwaway loop. This one owns the app and lives as long as the
+        # process.
+        app.state.daemon.set_rpc_loop(asyncio.get_running_loop())
         dataset_updater_task: asyncio.Task[None] | None = None
         # Held on app.state so the /apps/startup-app endpoint can re-arm it live.
         app.state.startup_app_antenna_watcher_task = None
