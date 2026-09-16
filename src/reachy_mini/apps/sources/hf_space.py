@@ -19,6 +19,20 @@ HF_SPACES_API_URL = "https://huggingface.co/api/spaces"
 # TODO look for js apps too (reachy_mini_js_app)
 HF_SPACES_FILTER = "reachy_mini_python_app"
 HF_SPACES_LIMIT = 500
+# Only the fields the app store clients read from AppInfo.extra. Requesting
+# them explicitly (instead of full=True) leaves out each space's file list
+# ("siblings"), which is ~90% of the payload and is never read from the catalog.
+HF_SPACE_EXPAND_FIELDS = [
+    "author",
+    "cardData",
+    "createdAt",
+    "lastModified",
+    "likes",
+    "private",
+    "runtime",
+    "sdk",
+    "tags",
+]
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 logger = logging.getLogger("reachy_mini.apps.sources.hf_space")
 SpaceData = dict[str, object]
@@ -77,6 +91,10 @@ def _normalize_space_data(space_data: SpaceData) -> SpaceData:
     """Normalize HF API responses to the shape used by the app store."""
     normalized = dict(space_data)
 
+    # The file list is never read from the catalog; drop it so neither path
+    # (HfApi listing or per-space HTTP fetch) ships it to clients.
+    normalized.pop("siblings", None)
+
     created_at = normalized.pop("created_at", None)
     if not normalized.get("createdAt") and created_at is not None:
         normalized["createdAt"] = created_at
@@ -120,7 +138,7 @@ def _list_all_spaces_with_hf_api(token: str | None) -> list[SpaceData]:
         filter=HF_SPACES_FILTER,
         sort="likes",
         limit=HF_SPACES_LIMIT,
-        full=True,
+        expand=HF_SPACE_EXPAND_FIELDS,
         token=token,
     )
     payloads: list[SpaceData] = []
