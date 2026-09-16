@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from reachy_mini.apps import AppInfo, SourceKind
+from reachy_mini.apps.sources import hf_space
 from reachy_mini.apps.sources.hf_space import (
     _build_app_info,
     _coerce_space_data,
@@ -142,3 +143,53 @@ def test_build_app_info_defaults_empty_description() -> None:
 
     assert app is not None
     assert app.description == ""
+
+
+def test_normalize_space_data_drops_siblings() -> None:
+    # The per-space file list is never read from the catalog; it only bloats
+    # the response (about 90% of the payload on a full listing).
+    assert _normalize_space_data(
+        {"id": "owner/app", "siblings": [{"rfilename": "app/__main__.py"}]}
+    ) == {"id": "owner/app"}
+    # HfApi gives siblings=None when the field was not requested.
+    assert _normalize_space_data({"id": "owner/app", "siblings": None}) == {
+        "id": "owner/app"
+    }
+
+
+def test_list_all_spaces_requests_only_app_store_fields(monkeypatch) -> None:
+    # Fields the app store clients actually read from AppInfo.extra.
+    expected_fields = {
+        "author",
+        "cardData",
+        "createdAt",
+        "lastModified",
+        "likes",
+        "private",
+        "runtime",
+        "sdk",
+        "tags",
+    }
+    recorded: dict = {}
+
+    class _FakeSpaceInfo:
+        def __init__(self) -> None:
+            self.id = "owner/app"
+            self.likes = 3
+            self.siblings = None
+            self.card_data = {"short_description": "desc"}
+
+    class _FakeHfApi:
+        def list_spaces(self, **kwargs):  # type: ignore[no-untyped-def]
+            recorded.update(kwargs)
+            return [_FakeSpaceInfo()]
+
+    monkeypatch.setattr(hf_space, "HfApi", _FakeHfApi)
+
+    spaces = hf_space._list_all_spaces_with_hf_api(token=None)
+
+    assert not recorded.get("full"), "full=True pulls the file list of every space"
+    assert set(recorded.get("expand") or []) == expected_fields
+    assert spaces == [
+        {"id": "owner/app", "likes": 3, "cardData": {"short_description": "desc"}}
+    ]

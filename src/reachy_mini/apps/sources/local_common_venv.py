@@ -421,7 +421,7 @@ def _find_metadata_for_entry_point(ep_name: str) -> dict:  # type: ignore
                 return file_metadata  # type: ignore
 
             # Check 2: Entry point name appears in siblings (package structure)
-            siblings = file_metadata.get("siblings", [])
+            siblings = file_metadata.get("siblings") or []
             for sibling in siblings:
                 rfilename = sibling.get("rfilename", "")
                 # Check if entry point package folder exists in siblings
@@ -475,6 +475,11 @@ async def install_package(
             "Install uv for faster installs: pip install uv"
         )
 
+    # Metadata persisted next to the install. The catalog no longer carries the
+    # space's file list ("siblings"), so it is filled in from the space itself
+    # below; _find_metadata_for_entry_point relies on it.
+    metadata = dict(app.extra)
+
     if app.source_kind == SourceKind.HF_SPACE:
         # Use huggingface_hub to download the repo (handles LFS automatically)
         # This avoids requiring git-lfs to be installed on the system
@@ -518,6 +523,10 @@ async def install_package(
                         repo_id=repo_id, repo_type="space", token=token
                     )
                     logger.info(f"Files available in space: {', '.join(files_in_repo)}")
+                    if not metadata.get("siblings"):
+                        metadata["siblings"] = [
+                            {"rfilename": name} for name in files_in_repo
+                        ]
                 except Exception as list_error:
                     logger.warning(f"Could not list files in space: {list_error}")
             except Exception as verify_error:
@@ -668,9 +677,9 @@ async def install_package(
         logger.info(f"Successfully installed '{app_name}' in {venv_path}")
 
         # Save app metadata (e.g., private flag)
-        if app.extra:
-            _save_app_metadata(app_name, app.extra)
-            logger.info(f"Saved metadata for '{app_name}': {app.extra}")
+        if metadata:
+            _save_app_metadata(app_name, metadata)
+            logger.info(f"Saved metadata for '{app_name}': {metadata}")
 
         return 0
     else:
@@ -688,11 +697,11 @@ async def install_package(
 
         ret = await running_command(install_cmd, logger=logger)
 
-        if ret == 0 and app.extra:
+        if ret == 0 and metadata:
             # Save app metadata so we can match by extra.id later
             # Use the space name (app.name) as the key
-            _save_app_metadata(app.name, app.extra)
-            logger.info(f"Saved metadata for '{app.name}': {app.extra}")
+            _save_app_metadata(app.name, metadata)
+            logger.info(f"Saved metadata for '{app.name}': {metadata}")
 
         return ret
 
