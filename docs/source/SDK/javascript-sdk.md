@@ -5,9 +5,10 @@
 > the repo root. It covers scaffolding, `public/icon.svg`, the host
 > shell, `sdk: static` deploy,
 > `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host
-> ↔ embed contract. **Pin the SDK to
-> `@pollen-robotics/reachy-mini-sdk@1.8.0`** (the stable release
-> validated against the host shell + daemon).
+> ↔ embed contract. **Pin the SDK to the latest release on
+> [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk)**
+> (`npm install @pollen-robotics/reachy-mini-sdk@latest`) — the stable
+> release validated against the host shell + daemon.
 >
 > **This file** is the runtime API surface of the `ReachyMini` class
 > you receive from `handle.reachy` once `connectToHost()` resolves:
