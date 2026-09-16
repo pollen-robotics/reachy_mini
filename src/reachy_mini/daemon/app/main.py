@@ -571,7 +571,12 @@ def run_app(args: Args) -> None:
 
     # Downgrade noisy polling routes to DEBUG in uvicorn access logs
     class AccessLogFilter(logging.Filter):
-        _POLLING_PATHS = {"/health-check", "/api/hf-auth/relay-status"}
+        _POLLING_PATHS = {
+            "/health-check",
+            "/api/hf-auth/relay-status",
+            "/api/nfc/status",
+            "/api/nfc/tag",
+        }
 
         def filter(self, record: logging.LogRecord) -> bool:
             msg = record.getMessage()
