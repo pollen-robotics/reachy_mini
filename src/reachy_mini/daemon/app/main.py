@@ -24,7 +24,10 @@ from fastapi.responses import HTMLResponse
 
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon import startup_app_config
-from reachy_mini.daemon.app.middleware import MaxBodySizeMiddleware
+from reachy_mini.daemon.app.middleware import (
+    LocalNetworkGuardMiddleware,
+    MaxBodySizeMiddleware,
+)
 from reachy_mini.daemon.app.routers import (
     apps,
     audio_config,
@@ -350,6 +353,13 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         max_body_size=media.MAX_SOUND_UPLOAD_BYTES,
         paths={"/api/media/sounds/upload"},
     )
+
+    # Block DNS rebinding and preflight-free cross-site writes against the
+    # unauthenticated API (CAN-2026-2032024): validates the Host header on all
+    # requests and the Origin header on state-changing ones. Added before CORS
+    # so CORS stays outermost and rejections for allowed origins carry its
+    # headers; requests without an Origin (curl, SDK, native apps) pass through.
+    app.add_middleware(LocalNetworkGuardMiddleware)
 
     # Restrict cross-origin access to local browser tooling and the native app
     # webviews (see CORS_ORIGIN_REGEX); everything else is same-origin or WebRTC.
