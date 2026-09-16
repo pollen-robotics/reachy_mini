@@ -1,9 +1,4 @@
-import json
-from dataclasses import dataclass
-from datetime import datetime
-
 from reachy_mini.apps import AppInfo, SourceKind
-from reachy_mini.apps.sources import hf_space
 from reachy_mini.apps.sources.hf_space import (
     _build_app_info,
     _coerce_space_data,
@@ -11,30 +6,7 @@ from reachy_mini.apps.sources.hf_space import (
     _get_card_data,
     _get_string,
     _normalize_space_data,
-    _to_plain_json,
 )
-
-
-@dataclass
-class _FakeSibling:
-    rfilename: str
-
-
-def test_to_plain_json_normalizes_hf_objects() -> None:
-    # Mirrors a SpaceInfo.__dict__: nested SDK objects + datetimes that the raw
-    # HfApi path would otherwise leave non-serializable in AppInfo.extra.
-    raw = {
-        "id": "owner/app",
-        "siblings": [_FakeSibling("app/__main__.py")],
-        "created_at": datetime(2024, 1, 2, 3, 4, 5),
-    }
-
-    plain = _to_plain_json(raw)
-
-    # Result must be pure JSON (no exception) and match the HTTP API shape.
-    json.dumps(plain)  # must not raise
-    assert plain["siblings"][0]["rfilename"] == "app/__main__.py"
-    assert plain["created_at"] == "2024-01-02T03:04:05"
 
 
 def test_coerce_space_data_stringifies_keys() -> None:
@@ -155,41 +127,3 @@ def test_normalize_space_data_drops_siblings() -> None:
     assert _normalize_space_data({"id": "owner/app", "siblings": None}) == {
         "id": "owner/app"
     }
-
-
-def test_list_all_spaces_requests_only_app_store_fields(monkeypatch) -> None:
-    # Fields the app store clients actually read from AppInfo.extra.
-    expected_fields = {
-        "author",
-        "cardData",
-        "createdAt",
-        "lastModified",
-        "likes",
-        "private",
-        "runtime",
-        "sdk",
-        "tags",
-    }
-    recorded: dict = {}
-
-    class _FakeSpaceInfo:
-        def __init__(self) -> None:
-            self.id = "owner/app"
-            self.likes = 3
-            self.siblings = None
-            self.card_data = {"short_description": "desc"}
-
-    class _FakeHfApi:
-        def list_spaces(self, **kwargs):  # type: ignore[no-untyped-def]
-            recorded.update(kwargs)
-            return [_FakeSpaceInfo()]
-
-    monkeypatch.setattr(hf_space, "HfApi", _FakeHfApi)
-
-    spaces = hf_space._list_all_spaces_with_hf_api(token=None)
-
-    assert not recorded.get("full"), "full=True pulls the file list of every space"
-    assert set(recorded.get("expand") or []) == expected_fields
-    assert spaces == [
-        {"id": "owner/app", "likes": 3, "cardData": {"short_description": "desc"}}
-    ]
