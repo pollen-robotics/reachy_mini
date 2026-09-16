@@ -30,9 +30,7 @@ def test_find_metadata_by_id_when_siblings_is_null(monkeypatch, tmp_path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_install_saves_space_file_list_as_siblings(
-    monkeypatch, tmp_path
-) -> None:
+async def test_install_saves_space_file_list_as_siblings(monkeypatch, tmp_path) -> None:
     # The catalog no longer ships siblings, but the entry-point matcher relies
     # on them, so install must record the space's file list itself.
     saved: dict = {}
