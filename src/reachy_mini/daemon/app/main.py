@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.daemon.app import security
 from reachy_mini.daemon.app.routers import (
     apps,
     daemon,
@@ -83,19 +84,36 @@ class Args:
 
     robot_name: str = "reachy_mini"
 
-    fastapi_host: str = "0.0.0.0"
+    fastapi_host: str | None = None
     fastapi_port: int = 8000
 
     localhost_only: bool | None = None
 
 
+def resolve_localhost_only(args: Args) -> bool:
+    """Resolve the effective localhost_only setting."""
+    if args.localhost_only is not None:
+        return args.localhost_only
+    return not args.wireless_version
+
+
+def resolve_fastapi_host(args: Args) -> str:
+    """Resolve the HTTP bind address.
+
+    Unless explicitly overridden with --fastapi-host, the API only listens
+    on the loopback interface when localhost_only is in effect (Lite and
+    desktop variants). The API is unauthenticated, so it must not be
+    exposed to the network unless required (wireless robots, where the
+    dashboard is accessed from another machine).
+    """
+    if args.fastapi_host is not None:
+        return args.fastapi_host
+    return "127.0.0.1" if resolve_localhost_only(args) else "0.0.0.0"
+
+
 def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
-    localhost_only = (
-        args.localhost_only
-        if args.localhost_only is not None
-        else (False if args.wireless_version else True)
-    )
+    localhost_only = resolve_localhost_only(args)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -230,10 +248,13 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # or restrict to your HF domain
+        allow_origin_regex=security.ALLOWED_ORIGIN_REGEX,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Outermost middleware: validates Host (DNS rebinding) and Origin (CSRF)
+    # headers before any other handling. See security.py for the threat model.
+    security.add_local_network_guard(app)
 
     STATIC_DIR = Path(__file__).parent / "dashboard" / "static"
     TEMPLATES_DIR = Path(__file__).parent / "dashboard" / "templates"
@@ -328,7 +349,7 @@ def run_app(args: Args) -> None:
 
         config = uvicorn.Config(
             app,
-            host=args.fastapi_host,
+            host=resolve_fastapi_host(args),
             port=args.fastapi_port,
             log_config=None,  # Don't override Python logging configuration
         )
@@ -556,6 +577,10 @@ def main() -> None:
         "--fastapi-host",
         type=str,
         default=default_args.fastapi_host,
+        help=(
+            "Bind address for the HTTP API. Defaults to 127.0.0.1 when "
+            "localhost-only is in effect, 0.0.0.0 otherwise."
+        ),
     )
     parser.add_argument(
         "--fastapi-port",
