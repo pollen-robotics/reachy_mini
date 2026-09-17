@@ -32,7 +32,7 @@ The same app code works in both modes; only the entry point differs.
 
 | Document | Audience | Read it when… |
 |----------|----------|----------------|
-| **[`../APP_CREATION_GUIDE.md`](../APP_CREATION_GUIDE.md)** | app authors **and** host maintainers | Single source of truth: scaffold, `sdk: static` deploy, host ↔ embed contract, invariants, protocol v1. Today's SDK pin: `1.8.0`. |
+| **[`../APP_CREATION_GUIDE.md`](../APP_CREATION_GUIDE.md)** | app authors **and** host maintainers | Single source of truth: scaffold, `sdk: static` deploy, host ↔ embed contract, invariants, protocol v1. SDK pin: the latest stable release on [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk). |
 
 App authors and library maintainers both start with the
 **[App Creation Guide](../APP_CREATION_GUIDE.md)**: §1-§12 are the
@@ -149,7 +149,7 @@ incompatible postMessage changes
 (see [`APP_CREATION_GUIDE.md` §13.6](../APP_CREATION_GUIDE.md#136-protocol-v1-messages)).
 
 App authors should **pin to the exact version that the reference
-apps use** - today `1.8.0`, see
+apps use** - the latest stable release on [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk), see
 [`APP_CREATION_GUIDE.md` §10](../APP_CREATION_GUIDE.md#10-sdk-version-pinning).
 
 ## License
