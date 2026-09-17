@@ -56,7 +56,7 @@ contract - your app is agnostic of everything else.
 
 - `sdk: docker` instead of `sdk: static` (only if you need a server,
   secrets, websockets, or Python compute - see the guide).
-- Microphone / camera (`enableMicrophone: true`, `attachVideo`).
+- Microphone / camera (`enableMicrophone: true`, `handle.media.attachVideo`).
 - npm dependencies other than the SDK.
 - A desktop-only / kiosk UI (default is mobile-first).
 
@@ -65,7 +65,12 @@ contract - your app is agnostic of everything else.
 - Roll your own OAuth, sign-in screen, or robot picker.
 - Call `reachy.stopSession()` yourself - the host tears down; use `onLeave`.
 - Reach into host internals or private SDK fields (e.g. `reachy._pc`).
-  Use the public API (`attachVideo`, `enableMicrophone`).
+  Use the public API (`handle.media.attachVideo`, `enableMicrophone`).
+- Call `reachy.attachVideo()` in an embedded app - it silently no-ops.
+  `connectToHost()` finishes the WebRTC handshake before your app mounts,
+  so the one-shot `videoTrack` event has already fired and your listener
+  never runs. Use `handle.media.attachVideo(el)`, which replays the
+  already-arrived tracks.
 - Carry degrees through motion code below the UI layer - speak radians /
   magic-mm; convert at the UI boundary with `degToRad` / `radToDeg`.
 - Mutate `INIT_POSE` or `DEFAULT_SCALED_DURATION_PRESET` (deep-frozen).

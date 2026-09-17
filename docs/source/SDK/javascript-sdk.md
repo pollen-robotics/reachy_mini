@@ -120,7 +120,7 @@ new ReachyMini({
 | `stopSession()` | `Promise` | End session, back to `connected` |
 | `disconnect()` | — | Close signaling (keeps auth) |
 | `logout()` | — | Clear HF credentials |
-| `attachVideo(videoEl)` | `() => void` | Bind video stream to element; returns cleanup function |
+| `attachVideo(videoEl)` | `() => void` | Bind video stream to element; returns cleanup function. **Standalone apps only** — in a host-shell embed the handshake completes before your app mounts, so this silently no-ops; use `handle.media.attachVideo(videoEl)` instead (see the App Creation Guide, §5) |
 | `setTarget({ head?, antennas?, body_yaw? })` | `boolean` | Atomic raw-units update — `head` is `number[16]` (flat 4×4), `antennas` is `[rRad, lRad]`, `body_yaw` is radians |
 | `gotoTarget({ head?, antennas?, body_yaw?, duration })` | `boolean` | Smooth daemon-side interpolation to a target pose over `duration` seconds (same wire units as `setTarget`). Throws `TypeError` on invalid input |
 | `setHeadRpyDeg(roll, pitch, yaw)` | `boolean` | Set head orientation in degrees (wraps `setTarget`) |

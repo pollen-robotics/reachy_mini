@@ -367,6 +367,7 @@ The resolved `handle` exposes:
 interface ConnectedHandle<TConfig> {
   // Live state at boot
   reachy: ReachyMiniInstance;        // SDK instance, session live, robot awake
+  media: RobotMedia;                 // WebRTC streams - see "Video: use `handle.media`"
   theme: 'dark' | 'light';
   config: TConfig | null;
   appName: string;
@@ -388,6 +389,41 @@ interface ConnectedHandle<TConfig> {
 The API is intentionally minimal. If you need a custom channel
 between host and embed, file a feature request - we'll add it as
 a typed message rather than expose a free-form sink.
+
+### Video: use `handle.media`
+
+`connectToHost()` resolves only *after* the WebRTC handshake is
+complete. By the time your app mounts, the SDK's one-shot
+`videoTrack` event and the underlying `pc.ontrack` have **already
+fired**. So `reachy.attachVideo(el)` installs a listener that never
+fires, and an embed never calls `startSession()` again: the element
+stays black forever, with no error anywhere.
+
+`handle.media` exists for exactly this. It replays the streams from a
+synchronous snapshot of the peer connection's receivers, so a
+late-mounting consumer sees the camera immediately:
+
+```ts
+interface RobotMedia {
+  attachVideo(el: HTMLVideoElement): () => void;  // returns a detach fn
+  readonly robotStream: MediaStream | null;       // robot video + audio
+  readonly micStream: MediaStream | null;         // local mic, if enabled
+}
+
+const handle = await connectToHost();
+const detach = handle.media.attachVideo(videoEl);
+handle.onLeave(() => detach());
+```
+
+There is no equivalent race for the data channel, mute toggles, motor
+commands or state updates: the bridge resolves only once ICE **and**
+the data channel are connected, and state events stream continuously
+at 50 Hz. Keep calling `reachy.setHeadRpyDeg(...)`,
+`reachy.setMicMuted(...)` and `reachy.addEventListener('state', ...)`
+directly.
+
+`reachy.attachVideo()` remains correct in a **standalone** app
+(`mountHost`), where your code runs before the session starts.
 
 ### Typing your config
 
@@ -1038,8 +1074,11 @@ shell without touching your motion code. The four-step recipe:
    only exists on the modern SDK; if you weren't using it, nothing
    changes. If you reached into private fields like `robot._pc`
    (RTCPeerConnection), prefer the public alternatives:
-   `robot.attachVideo(videoEl)` for video, `enableMicrophone: true` on
-   `mountHost` for bidirectional audio.
+   `handle.media.attachVideo(videoEl)` for video, `enableMicrophone: true`
+   on `mountHost` for bidirectional audio. Once embedded, use
+   `handle.media.attachVideo()` and **not** `robot.attachVideo()`: the
+   latter silently no-ops because the handshake completed before your
+   app mounted (see [§5 Video](#video-use-handlemedia)).
 
 Your `README.md` frontmatter doesn't need any changes: `sdk: static`
 and `hf_oauth: true` work for both variants. You can still skip
