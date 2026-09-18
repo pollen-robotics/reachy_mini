@@ -12,9 +12,9 @@ from typing import Annotated
 import numpy as np
 from numpy.typing import NDArray
 from reachy_mini_rust_kinematics import ReachyMiniRustKinematics
-from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
+from reachy_mini.utils.rotation import Rotation as R
 
 # Duplicated for now.
 SLEEP_HEAD_POSE = np.array(
