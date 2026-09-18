@@ -1,8 +1,9 @@
-"""Face tracking: a detector process publishing absolute head angles to aim at.
+"""Face tracking: a detector thread publishing the absolute head orientation to aim at.
 
-Detection runs in a separate *process*, not a thread: YuNet's pre/post
-processing holds the GIL in chunks that measurably stall the daemon's 50 Hz
-control loop when they share an interpreter. The exchange with the daemon is
+Detection runs in a low-priority daemon thread. Its cost is bounded by a
+wall-clock rate cap (``_DETECTION_FPS``) applied before the frame copy and the
+inference, so a faster camera feed cannot drag it up; the inference itself
+runs in onnxruntime with the GIL released. The exchange with the daemon is
 two fixed-size "latest value" mailboxes, deliberately without timestamps or
 queues:
 
@@ -26,12 +27,11 @@ over and overshoot).
 
 import logging
 import math
-import multiprocessing
 import os
 import platform
+import threading
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
 
 import gi
 import numpy as np
@@ -47,10 +47,6 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 # GstApp is unused directly but installs appsink.try_pull_sample().
 from gi.repository import Gst, GstApp  # noqa: E402, F401
-
-if TYPE_CHECKING:
-    from multiprocessing.process import BaseProcess
-    from multiprocessing.sharedctypes import SynchronizedArray
 
 logger = logging.getLogger(__name__)
 
@@ -181,33 +177,44 @@ class Tracker:
         return self._center is not None
 
 
-class _EventLike(Protocol):
-    """The Event subset shared by threading and multiprocessing events."""
+class _Mailbox:
+    """Fixed-size slot of floats shared between the daemon and detector threads.
 
-    def is_set(self) -> bool:
-        """Whether the event is set."""
-        ...
+    ``get_lock()`` returns the lock guarding the slot; readers and writers hold
+    it for the few assignments a mailbox exchange takes.
+    """
 
-    def wait(self, timeout: float | None = None) -> bool:
-        """Wait up to ``timeout`` for the event; return whether it is set."""
-        ...
+    def __init__(self, size: int) -> None:
+        self._values = [0.0] * size
+        self._lock = threading.Lock()
+
+    def get_lock(self) -> threading.Lock:
+        """Return the lock guarding the slot."""
+        return self._lock
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+    def __iter__(self):  # type: ignore[no-untyped-def]
+        return iter(self._values)
+
+    def __getitem__(self, index: int) -> float:
+        return self._values[index]
+
+    def __setitem__(self, index: int, value: float) -> None:
+        self._values[index] = float(value)
 
 
 class _DetectionWorker:
-    """Detector-side pipeline, detection, selection, and target publication.
-
-    Runs in the detector process in production; unit tests run it in a thread
-    (the shared arrays and events work identically in-process), which is why
-    the events are duck-typed.
-    """
+    """Detector-side pipeline, detection, selection, and target publication."""
 
     def __init__(
         self,
         camera_specs: CameraSpecs,
-        target_mailbox: "SynchronizedArray[float]",
-        pose_mailbox: "SynchronizedArray[float]",
-        active: _EventLike,
-        stop: _EventLike,
+        target_mailbox: _Mailbox,
+        pose_mailbox: _Mailbox,
+        active: threading.Event,
+        stop: threading.Event,
     ) -> None:
         """Wire the worker to its camera specs, mailboxes, and control events."""
         self._camera_specs = camera_specs
@@ -413,8 +420,6 @@ class _DetectionWorker:
                     self._camera_specs.D,
                 )
         except Exception:
-            # Logged in the detector process (stderr -> journal); the parent
-            # additionally notices the dead process in FaceTracker.latest().
             logger.exception("Face tracker crashed.")
         finally:
             pipeline.set_state(Gst.State.NULL)
@@ -422,46 +427,34 @@ class _DetectionWorker:
 
 def _worker_entry(
     camera_specs: CameraSpecs,
-    target_mailbox: "SynchronizedArray[float]",
-    pose_mailbox: "SynchronizedArray[float]",
-    active: _EventLike,
-    stop: _EventLike,
+    target_mailbox: _Mailbox,
+    pose_mailbox: _Mailbox,
+    active: threading.Event,
+    stop: threading.Event,
 ) -> None:
-    """Run the detection worker; entry point of the detector process."""
-    logging.basicConfig(level=logging.INFO)
-    if hasattr(os, "nice"):
-        try:
-            # The whole detector process yields to the daemon's control loop.
-            os.nice(19)
-        except OSError:
-            pass
+    """Run the detection worker; entry point of the detector thread."""
+    if platform.system() == "Linux":
+        # Per-thread nice so the detector yields CPU to the control loop.
+        os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 19)
     _DetectionWorker(camera_specs, target_mailbox, pose_mailbox, active, stop).run()
 
 
 class FaceTracker:
-    """Run the face detector in a child process and expose the latest aim target."""
+    """Run the face detector in a daemon thread and expose the latest aim target."""
 
     def __init__(self) -> None:
-        """Initialize the tracker; no process is started until ``start``."""
-        # spawn, not fork: forking the daemon would duplicate its GStreamer,
-        # asyncio, and motor-controller state into the child.
-        self._ctx = multiprocessing.get_context("spawn")
-        self._process: BaseProcess | None = None
-        self._target_mailbox: "SynchronizedArray[float]" = self._ctx.Array(
-            "d", _TARGET_SLOTS
-        )
-        self._pose_mailbox: "SynchronizedArray[float]" = self._ctx.Array(
-            "d", _POSE_SLOTS
-        )
-        self._active = self._ctx.Event()
-        self._stop = self._ctx.Event()
-        self._death_logged = False
+        """Initialize the tracker; no thread is started until ``start``."""
+        self._thread: threading.Thread | None = None
+        self._target_mailbox = _Mailbox(_TARGET_SLOTS)
+        self._pose_mailbox = _Mailbox(_POSE_SLOTS)
+        self._active = threading.Event()
+        self._stop = threading.Event()
 
     def start(self, camera_specs: CameraSpecs) -> None:
-        """Start the detector process if it is not already running."""
-        if self._process is not None and self._process.is_alive():
+        """Start the detector thread if it is not already running."""
+        if self._thread is not None and self._thread.is_alive():
             return
-        self._stop = self._ctx.Event()
+        self._stop = threading.Event()
         # Zero the mailboxes so stale targets from a previous run are dropped.
         with self._target_mailbox.get_lock():
             for i in range(_TARGET_SLOTS):
@@ -469,8 +462,7 @@ class FaceTracker:
         with self._pose_mailbox.get_lock():
             for i in range(_POSE_SLOTS):
                 self._pose_mailbox[i] = 0.0
-        self._death_logged = False
-        self._process = self._ctx.Process(
+        self._thread = threading.Thread(
             target=_worker_entry,
             args=(
                 camera_specs,
@@ -482,7 +474,7 @@ class FaceTracker:
             daemon=True,
             name="face-tracker",
         )
-        self._process.start()
+        self._thread.start()
 
     def set_active(self, active: bool) -> None:
         """Pause or resume detection; a paused tracker disconnects from the camera feed."""
@@ -501,19 +493,8 @@ class FaceTracker:
 
     def latest(self) -> TrackingTarget | None:
         """Return the latest published aim target, or None before the first one."""
-        if (
-            self._process is not None
-            and not self._process.is_alive()
-            and not self._stop.is_set()
-            and not self._death_logged
-        ):
-            self._death_logged = True
-            logger.warning(
-                "Face tracker process died (exit code %s); no more targets.",
-                self._process.exitcode,
-            )
         with self._target_mailbox.get_lock():
-            values = [self._target_mailbox[i] for i in range(_TARGET_SLOTS)]
+            values = list(self._target_mailbox)
         seq = int(values[0])
         if seq == 0:
             return None
@@ -528,18 +509,13 @@ class FaceTracker:
         )
 
     def stop(self) -> None:
-        """Stop the detector process."""
+        """Stop the detector thread."""
         self._stop.set()
-        process = self._process
-        if process is None:
+        if self._thread is None:
             return
-        process.join(timeout=2.0)
-        if process.is_alive():
-            # Unlike a thread, a wedged child can be reclaimed by force.
-            process.terminate()
-            process.join(timeout=1.0)
-        if process.is_alive():
-            # Keep the handle: forgetting a live process lets start() double-run.
-            logger.warning("Face tracker process did not stop in time.")
-            return
-        self._process = None
+        self._thread.join(timeout=2.0)
+        if self._thread.is_alive():
+            # Keep the handle: forgetting a live thread lets start() clear its stop flag and double-run.
+            logger.warning("Face tracker thread did not stop in time.")
+        else:
+            self._thread = None

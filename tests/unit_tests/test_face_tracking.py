@@ -1,6 +1,5 @@
-"""Tests for face-tracking selection, target publication, and process lifecycle."""
+"""Tests for face-tracking selection, target publication, and thread lifecycle."""
 
-import multiprocessing
 import threading
 import time
 from types import SimpleNamespace
@@ -16,13 +15,11 @@ from reachy_mini.vision.face_tracking import (
     Tracker,
     TrackingTarget,
     _DetectionWorker,
+    _Mailbox,
 )
 
 if TYPE_CHECKING:
-    from multiprocessing.sharedctypes import SynchronizedArray
-
     from reachy_mini.media.camera_constants import CameraSpecs
-    from reachy_mini.vision.face_tracking import _EventLike
 
 
 def _face(
@@ -34,11 +31,9 @@ def _face(
     return SimpleNamespace(bbox=bbox, right_eye=right_eye, left_eye=left_eye, nose=nose)
 
 
-def _make_worker() -> tuple[
-    _DetectionWorker, "SynchronizedArray[float]", "SynchronizedArray[float]"
-]:
-    target_mailbox = multiprocessing.Array("d", face_tracking._TARGET_SLOTS)
-    pose_mailbox = multiprocessing.Array("d", face_tracking._POSE_SLOTS)
+def _make_worker() -> tuple[_DetectionWorker, _Mailbox, _Mailbox]:
+    target_mailbox = _Mailbox(face_tracking._TARGET_SLOTS)
+    pose_mailbox = _Mailbox(face_tracking._POSE_SLOTS)
     worker = _DetectionWorker(
         ReachyMiniLiteCamSpecs(),
         target_mailbox,
@@ -49,7 +44,7 @@ def _make_worker() -> tuple[
     return worker, target_mailbox, pose_mailbox
 
 
-def _read_target(mailbox: "SynchronizedArray[float]") -> list[float]:
+def _read_target(mailbox: _Mailbox) -> list[float]:
     with mailbox.get_lock():
         return list(mailbox)
 
@@ -62,7 +57,7 @@ _CENTERED_FACE = _face(
 )
 
 
-def _set_head_pose(pose_mailbox: "SynchronizedArray[float]", rotation: np.ndarray) -> None:
+def _set_head_pose(pose_mailbox: _Mailbox, rotation: np.ndarray) -> None:
     with pose_mailbox.get_lock():
         pose_mailbox[0] = 1.0
         for i, value in enumerate(np.asarray(rotation).reshape(-1)):
@@ -84,7 +79,9 @@ def test_worker_publishes_the_absolute_look_at_orientation() -> None:
     values = _read_target(target_mailbox)
     assert values[0] == 1.0  # seq
     assert values[1] == 1.0  # detected
-    np.testing.assert_allclose(np.array(values[2:11]).reshape(3, 3), np.eye(3), atol=1e-6)
+    np.testing.assert_allclose(
+        np.array(values[2:11]).reshape(3, 3), np.eye(3), atol=1e-6
+    )
     assert values[11] == pytest.approx(0.0, abs=1e-9)  # x_norm
     assert values[12] == pytest.approx(0.0, abs=1e-9)  # y_norm
 
@@ -244,23 +241,23 @@ def test_rate_gate_tolerates_jitter_at_the_cap_rate() -> None:
 
 def _sleepy_worker(
     camera_specs: "CameraSpecs",
-    target_mailbox: "SynchronizedArray[float]",
-    pose_mailbox: "SynchronizedArray[float]",
-    active: "_EventLike",
-    stop: "_EventLike",
+    target_mailbox: _Mailbox,
+    pose_mailbox: _Mailbox,
+    active: threading.Event,
+    stop: threading.Event,
 ) -> None:
-    """Stub detector process: hold until asked to stop."""
+    """Stub detector worker: hold until asked to stop."""
     stop.wait(30.0)
 
 
 def _emit_one_worker(
     camera_specs: "CameraSpecs",
-    target_mailbox: "SynchronizedArray[float]",
-    pose_mailbox: "SynchronizedArray[float]",
-    active: "_EventLike",
-    stop: "_EventLike",
+    target_mailbox: _Mailbox,
+    pose_mailbox: _Mailbox,
+    active: threading.Event,
+    stop: threading.Event,
 ) -> None:
-    """Stub detector process: publish one target, then hold."""
+    """Stub detector worker: publish one target, then hold."""
     with target_mailbox.get_lock():
         target_mailbox[0] = 1.0  # seq
         target_mailbox[1] = 1.0  # detected
@@ -272,32 +269,32 @@ def _emit_one_worker(
     stop.wait(30.0)
 
 
-def test_start_is_idempotent_and_stop_reaps_the_process(
+def test_start_is_idempotent_and_stop_reaps_the_thread(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """start() on a live tracker is a no-op and stop() reliably reaps the child."""
+    """start() on a live tracker is a no-op and stop() reliably joins the thread."""
     monkeypatch.setattr(face_tracking, "_worker_entry", _sleepy_worker)
     specs = cast("CameraSpecs", None)
     tracker = FaceTracker()
     tracker.start(specs)
-    first = tracker._process
+    first = tracker._thread
     assert first is not None and first.is_alive()
     tracker.start(specs)
-    assert tracker._process is first  # no second detector
+    assert tracker._thread is first  # no second detector
 
     tracker.stop()
-    assert tracker._process is None
+    assert tracker._thread is None
     assert not first.is_alive()
 
     tracker.start(specs)  # a stopped tracker can be restarted
-    assert tracker._process is not None and tracker._process.is_alive()
+    assert tracker._thread is not None and tracker._thread.is_alive()
     tracker.stop()
 
 
-def test_latest_returns_target_from_detector_process(
+def test_latest_returns_target_from_detector_thread(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A target published by the child round-trips through the mailbox intact."""
+    """A target published by the worker round-trips through the mailbox intact."""
     monkeypatch.setattr(face_tracking, "_worker_entry", _emit_one_worker)
     tracker = FaceTracker()
     tracker.start(cast("CameraSpecs", None))
@@ -309,7 +306,9 @@ def test_latest_returns_target_from_detector_process(
             time.sleep(0.05)
         assert target is not None
         assert target.detected is True
-        np.testing.assert_array_equal(target.rotation, np.arange(1.0, 10.0).reshape(3, 3))
+        np.testing.assert_array_equal(
+            target.rotation, np.arange(1.0, 10.0).reshape(3, 3)
+        )
         assert (target.x, target.y, target.face_roll) == (0.25, -0.5, 0.05)
     finally:
         tracker.stop()
