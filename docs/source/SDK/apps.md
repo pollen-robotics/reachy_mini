@@ -289,13 +289,16 @@ Open the Reachy Mini dashboard and click **Install** on any community app. This 
 
 ### Via the REST API
 
-The daemon host is `localhost:8000` on Lite (daemon on your machine) and `reachy-mini.local:8000` (or the robot's IP) on Wireless — substitute it for `<HOST>` below.
+The daemon host is `localhost:8000` on Lite (daemon on your machine) and `reachy-mini.local:8000` (or the robot's IP) on Wireless — substitute it for `<HOST>` below. On Lite the daemon listens on loopback only, so run the commands on that machine. These commands were run on a Wireless; they were not tested on a Lite.
 
 ```bash
-# Install from Hugging Face
+# Install from Hugging Face (returns a job_id; "name" and "source_kind" are required)
 curl -X POST http://<HOST>/api/apps/install \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://huggingface.co/spaces/<user>/<app_name>"}'
+  -d '{"name": "<app_name>", "source_kind": "hf_space", "url": "https://huggingface.co/spaces/<user>/<app_name>"}'
+
+# Follow a job (status: pending, in_progress, done, failed)
+curl http://<HOST>/api/apps/job-status/<job_id>
 
 # Start an app
 curl -X POST http://<HOST>/api/apps/start-app/<app_name>
@@ -304,8 +307,24 @@ curl -X POST http://<HOST>/api/apps/start-app/<app_name>
 curl -X POST http://<HOST>/api/apps/stop-current-app
 
 # List installed apps
-curl http://<HOST>/api/apps/list
+curl http://<HOST>/api/apps/list-available/installed
+
+# What is running now (null when nothing runs)
+curl http://<HOST>/api/apps/current-app-status
+
+# Remove an app (returns a job_id)
+curl -X POST http://<HOST>/api/apps/remove/<app_name>
+
+# Update an app to the latest version (returns a job_id)
+curl -X POST http://<HOST>/api/apps/update/<app_name>
+
+# App that auto-starts on wake-up: read, set, clear
+curl http://<HOST>/api/apps/startup-app
+curl -X PUT http://<HOST>/api/apps/startup-app -H "Content-Type: application/json" -d '{"startup_app": "<app_name>"}'
+curl -X PUT http://<HOST>/api/apps/startup-app -H "Content-Type: application/json" -d '{"startup_app": null}'
 ```
+
+Only one app runs at a time: starting while another runs answers `400 An app is already running`, and stopping when nothing runs answers `400 No app is currently running`. The full route list is served by the daemon at `http://<HOST>/docs`, see the [REST API](../API/rest-api) page.
 
 ### Offline / manual deployment for a Wireless unit
 
