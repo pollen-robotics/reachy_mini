@@ -19,12 +19,12 @@ Colourings (all amplitudes at energy 1.0, before the per-axis safety clamp):
 | sassy    | Every 3 nuclei the head glides to the other side: yaw +-7 deg and a  |
 |          | roll tilt +-5 deg that alternate together. Yaw and roll gains up,    |
 |          | breath a touch bigger, chin slightly up.                             |
-| sad      | All gains 0.6, breath 0.7, tilt 0.6. Slower smoothing (DIR_LERP      |
+| sad      | Gains 0.8 to 0.85, breath 0.9, tilt 0.8 (valence, not arousal: use `energy` for that). Slower smoothing (DIR_LERP      |
 |          | 0.25, slow envelope). Head biased down 5 deg and sunk 2 mm. On some  |
 |          | nuclei (15 %, at most every 2.5 s) a slow extra drop of 4 deg over   |
 |          | 1.5 s.                                                               |
 | pleading | Head up 4 deg and forward 5 mm, small constant roll (3 deg). Softer  |
-|          | gestures (gains 0.8 to 0.9) but more frequent nuclei (spacing 80 ms, |
+|          | gestures (gains 0.95 to 1.0) but more frequent nuclei (spacing 80 ms, |
 |          | rise 0.06) and a soft 3 deg nod on each one. Tilt gain 1.3.          |
 
 Two extra layers, active in every colouring:
@@ -231,9 +231,9 @@ PROFILES: dict[str, EmotionProfile] = {
     ),
     "sad": EmotionProfile(
         name="sad",
-        gain=(0.6, 0.6, 0.6, 0.6, 0.6, 0.6),
-        breath_gain=0.7,
-        tilt_gain=0.6,
+        gain=(0.85, 0.8, 0.85, 0.85, 0.8, 0.85),
+        breath_gain=0.9,
+        tilt_gain=0.8,
         dir_lerp=0.25,
         dir_decay=0.92,
         env_attack=0.4,
@@ -251,7 +251,7 @@ PROFILES: dict[str, EmotionProfile] = {
     ),
     "pleading": EmotionProfile(
         name="pleading",
-        gain=(0.8, 0.8, 0.9, 0.9, 0.9, 0.9),
+        gain=(0.95, 0.95, 1.0, 1.0, 1.0, 1.0),
         breath_gain=1.0,
         tilt_gain=1.3,
         dir_lerp=0.45,
