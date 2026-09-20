@@ -119,6 +119,46 @@ In both cases, the channels and samplerate information can be reliably retrieved
 
 > **⚠️ Note:** `push_audio_sample()` is non-blocking, meaning it returns immediately while audio plays in the background. If you need to wait for playback completion, calculate the duration based on sample length and sample rate.
 
+### Head Wobbling
+
+With wobbling enabled, the head moves with the speech that Reachy Mini plays (`play_sound()`, `push_audio_sample()`, incoming WebRTC audio and the daemon's own sounds):
+
+```python
+from reachy_mini import ReachyMini
+
+with ReachyMini() as mini:
+    mini.enable_wobbling()
+    mini.media.play_sound("speech.wav")
+    ...
+    mini.disable_wobbling()
+```
+
+See the [Sound TTS example](../examples/sound_tts.md).
+
+The audio analysis is done by a speech tapper. The official wobbler (v0) is the default and needs no configuration. Other tappers are opt-in, selected with the `WOBBLER_VERSION` environment variable in the process that runs the wobbler (the daemon, or your script with the local media backend):
+
+| `WOBBLER_VERSION` | Tapper |
+|---|---|
+| unset or `v0` | Official wobbler. |
+| `v4` | Strict silence gate (the head is exactly still when nobody speaks), speaker-relative loudness, a gesture on each syllable onset. |
+| `v5` | v4 plus a head pitch that follows the intonation. |
+| `v6` | Prosody wobbler: v5 plus phrase-level gestures and an optional emotional colouring. |
+
+An unknown value logs a warning and falls back to the official wobbler.
+
+The Prosody wobbler (v6) takes two optional inputs. Without them it is neutral, that is v5 plus a small yaw drift at each phrase start and a short tilt at each phrase end (up on a question, down on a statement).
+
+- `WOBBLER_EMOTION`: `neutral` (default), `angry`, `sassy`, `sad` or `pleading`. An unknown name logs a warning and falls back to `neutral`.
+- `WOBBLER_ENERGY`: amplitude scale, `1.0` by default, clamped to `[0, 1.5]`.
+
+```bash
+WOBBLER_VERSION=v6 WOBBLER_EMOTION=sassy WOBBLER_ENERGY=1.2 reachy-mini-daemon
+```
+
+The colouring can also change while the robot speaks, with `HeadWobbler.set_emotion(emotion, energy=None)` (`reachy_mini.motion.head_wobbler`). It cross-fades over about 300 ms, keeps the energy when omitted, survives a wobbler reset, and does nothing with the tappers that have no emotion input. It is not exposed through `ReachyMini` or the REST API yet.
+
+All tappers only use numpy, there is no extra dependency. How v4 to v6 work and how they were tuned is written up in [examples/wobbler_lab](https://github.com/pollen-robotics/reachy_mini/tree/main/examples/wobbler_lab).
+
 ## Media Backend Options
 
 Choose the appropriate media backend based on your Reachy Mini version and requirements:
