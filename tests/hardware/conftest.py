@@ -183,4 +183,18 @@ def head_raised(mini: ReachyMini) -> Iterator[None]:
     mini.goto_target(
         INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=2.0
     )
+    # Verify, don't trust: a goto can be accepted and move nothing (it did on
+    # 1.10.0), and a head left resting on the speaker muffles it while every
+    # gate still sees sound.
+    z_m = float(mini.get_current_head_pose()[2, 3])
+    if z_m < HEAD_RAISED_MIN_Z_M:
+        pytest.fail(
+            f"Head is still down (z={z_m * 1000:.1f} mm, need > "
+            f"{HEAD_RAISED_MIN_Z_M * 1000:.0f} mm): it would block the speaker."
+        )
     yield
+
+
+# Sleep pose sits at z = -45.6 mm, the raised init pose at z ~ 0; -20 mm
+# splits them with margin both ways.
+HEAD_RAISED_MIN_Z_M = -0.020

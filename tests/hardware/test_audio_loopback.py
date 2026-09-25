@@ -69,12 +69,15 @@ SWEEP_AMPLITUDE = 0.7  # mic clips before the sweep does at full scale
 USABLE_BANDS = slice(2, 8)
 
 # Shared reference curve for the USABLE_BANDS, dB relative to the bands'
-# median. Measured on a Reachy Mini Wireless (isolated room, median of 3
-# sweeps, 2026-08-31). All Reachy Minis share the same speaker/shell/mic, so
-# one baseline serves them all — the first run on a *different* robot is the
-# test of that assumption; if a known-good robot fails the curve gate, widen
-# CURVE_TOL_DB or re-baseline from the printed curve.
-BASELINE_DB = (19.9, 4.1, -1.3, -4.6, -8.6, 1.3)
+# median. Median of 6 runs (each itself a median of 3 sweeps) on a Reachy Mini
+# Wireless, 1.11.0, head verified up. Run-to-run spread: +-1.4 dB or better
+# at 119-947 Hz, +-2.5 dB at 1889 Hz, +-5.3 dB at 3770 Hz (one outlier run).
+# The previous reference was recorded with the head unknowingly resting on the
+# speaker: +10 dB of bass and -6.5 dB at the top band against this one, which
+# is why the fixture now verifies the head height. All Reachy Minis share the
+# same speaker/shell/mic, so one baseline serves them all; if a known-good
+# robot fails the curve gate, re-baseline from the printed curve.
+BASELINE_DB = (9.1, -1.4, 1.4, -2.2, -5.5, 7.8)
 
 # Pass/fail knobs, measured on a Reachy Mini Wireless, speaker
 # pinned to 100 / mic to 70, isolated room.
@@ -95,7 +98,8 @@ BASELINE_DB = (19.9, 4.1, -1.3, -4.6, -8.6, 1.3)
 #     baseline across rooms or robots.
 #   - 3770 Hz (8 dB): spiked +5.8 dB once on a healthy run (intermittent,
 #     suspected head-servo whine in that range).
-#   Excluding them, measured separation: healthy <= 3.3 dB vs broken >= 9.1 dB.
+#   Measured against the head-up reference: healthy runs drift <= 1.4 dB on
+#   every band, echo cancellation left on drifts 5.8-15.0 dB.
 PEAK_MIN = 1e-3
 BURST_MIN = 5.0
 CURVE_TOL_DB = (float("inf"), 4.0, 4.0, 4.0, 4.0, 8.0)
