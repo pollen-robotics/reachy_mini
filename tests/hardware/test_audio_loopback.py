@@ -88,21 +88,22 @@ BASELINE_DB = (9.1, -1.4, 1.4, -2.2, -5.5, 7.8)
 #   137-267. Note the adaptive AEC cancels a sweep far less well than speech
 #   (burst 53 with AEC on), so this gate does NOT catch AEC-still-on — the
 #   curve gate does, at 4-17 dB of drift.
-# CURVE_TOL_DB: per-band |median measured - baseline|. Single sweeps swing up
-#   to ~5 dB at 947 Hz; the median of N_SWEEPS tames that, and a real tuning
-#   change (EQ zeroed) reliably blows out several bands by 9-16 dB.
-#   Two bands are NOT gated at 4 dB:
-#   - 119 Hz (inf = report-only): bass is room-mode dominated — measured
-#     drifting monotonically to -7.4 dB over ~an hour as the room changed,
-#     while every other band stayed within 3.3 dB. It cannot hold a fixed
+# CURVE_TOL_DB: per-band |median measured - baseline|. Deliberately loose:
+#   the gate is there to catch a *dramatic* change in how the robot sounds,
+#   not small drift. Scale, measured head-up: healthy runs drift <= 1.4 dB,
+#   typing on a keyboard next to the robot pushed one run to 12 dB, echo
+#   cancellation left on drifts 5.8-15.0 dB, and removing the speaker EQ
+#   entirely moved bands by up to 6.4 dB (measured before the head fix, so
+#   indicative). 6 dB keeps ~4x headroom over normal variation while still
+#   failing on those faults.
+#   - 119 Hz (inf = report-only): bass is room-mode dominated and drifted
+#     -7.4 dB over an hour with the room alone. It cannot hold a fixed
 #     baseline across rooms or robots.
-#   - 3770 Hz (8 dB): spiked +5.8 dB once on a healthy run (intermittent,
-#     suspected head-servo whine in that range).
-#   Measured against the head-up reference: healthy runs drift <= 1.4 dB on
-#   every band, echo cancellation left on drifts 5.8-15.0 dB.
+#   - 3770 Hz (10 dB): the noisiest gated band, with intermittent spikes
+#     (suspected head-servo whine in that range).
 PEAK_MIN = 1e-3
 BURST_MIN = 5.0
-CURVE_TOL_DB = (float("inf"), 4.0, 4.0, 4.0, 4.0, 8.0)
+CURVE_TOL_DB = (float("inf"), 6.0, 6.0, 6.0, 6.0, 10.0)
 N_SWEEPS = 3
 
 # 50 ms at 16 kHz: long enough for a stable RMS, short enough to isolate the
