@@ -55,7 +55,12 @@ from reachy_mini.tools.speaker_eq_calibration.calibrate import (
     BAND_CENTERS,
     bin_to_bands,
 )
-from tests.audio_helpers import correlation_peak
+from tests.audio_helpers import (
+    correlation_peak,
+    log_sweep,
+    loudest_block_rms,
+    noise_floor,
+)
 
 # The excitation: a log sweep. Ideal for the matched filter (sharp, unambiguous
 # correlation peak) and covers every band the 16 kHz voice path can carry.
@@ -117,22 +122,7 @@ NOISE_WINDOW_S = 0.3
 TAIL_S = 1.0
 
 
-def _make_sweep() -> npt.NDArray[np.float64]:
-    """Log sweep with 10 ms raised-cosine fades (no click)."""
-    t = np.arange(int(SWEEP_S * RATE)) / RATE
-    ratio = SWEEP_F1 / SWEEP_F0
-    phase = (
-        2 * np.pi * SWEEP_F0 * SWEEP_S / np.log(ratio) * (ratio ** (t / SWEEP_S) - 1)
-    )
-    sweep = SWEEP_AMPLITUDE * np.sin(phase)
-    fade = int(0.01 * RATE)
-    window = np.hanning(2 * fade)
-    sweep[:fade] *= window[:fade]
-    sweep[-fade:] *= window[fade:]
-    return sweep
-
-
-SWEEP = _make_sweep()
+SWEEP = log_sweep(SWEEP_S, SWEEP_F0, SWEEP_F1, RATE, SWEEP_AMPLITUDE)
 
 
 def _capture(media: MediaManager, seconds: float) -> npt.NDArray[np.float64]:
@@ -150,26 +140,6 @@ def _capture(media: MediaManager, seconds: float) -> npt.NDArray[np.float64]:
     if not samples:
         return np.empty((0, 0), dtype=np.float64)
     return np.concatenate(samples, axis=0).astype(np.float64)
-
-
-def _noise_floor(noise: npt.NDArray[np.float64]) -> float:
-    """Transient-resistant noise level, as a Gaussian-equivalent RMS.
-
-    Plain RMS over the short noise window is dominated by whatever transient
-    happened to land in it — a chair, a voice, a fan. The median of |x|
-    ignores brief spikes; the 1.2533 factor (sqrt(pi/2)) converts it back to
-    the RMS of an equivalent Gaussian so ratios stay meaningful.
-    """
-    return float(np.median(np.abs(noise)) * 1.2533)
-
-
-def _loudest_block_rms(track: npt.NDArray[np.float64], block: int) -> float:
-    """RMS of the loudest ``block``-sample window of ``track``."""
-    usable = len(track) // block * block
-    if usable == 0:
-        return float(np.sqrt(np.mean(track**2))) if len(track) else 0.0
-    blocks = track[:usable].reshape(-1, block)
-    return float(np.sqrt((blocks**2).mean(axis=1)).max())
 
 
 def _band_response(segment: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
@@ -245,8 +215,8 @@ def test_speaker_mic_acoustic_path(
     for channel in range(played.shape[1]):
         track = played[:, channel]
         peak = float(np.abs(track).max())
-        burst = _loudest_block_rms(track, BLOCK_SAMPLES) / (
-            _noise_floor(noise[:, channel]) + 1e-12
+        burst = loudest_block_rms(track, BLOCK_SAMPLES) / (
+            noise_floor(noise[:, channel]) + 1e-12
         )
         peaks.append(peak)
         bursts.append(burst)

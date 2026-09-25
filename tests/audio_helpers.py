@@ -13,6 +13,56 @@ import numpy as np
 import numpy.typing as npt
 
 
+def log_sweep(
+    duration_s: float,
+    f0: float,
+    f1: float,
+    rate: int,
+    amplitude: float,
+) -> npt.NDArray[np.float64]:
+    """Logarithmic sine sweep with 10 ms raised-cosine fades (no click).
+
+    The standard excitation for acoustic measurements: matched filtering it
+    (``correlation_peak``) gives a sharp lag estimate, and its spectrum against
+    a capture's gives the frequency response.
+    """
+    t = np.arange(int(duration_s * rate)) / rate
+    ratio = f1 / f0
+    phase = (
+        2 * np.pi * f0 * duration_s / np.log(ratio) * (ratio ** (t / duration_s) - 1)
+    )
+    sweep = amplitude * np.sin(phase)
+    fade = int(0.01 * rate)
+    window = np.hanning(2 * fade)
+    sweep[:fade] *= window[:fade]
+    sweep[-fade:] *= window[fade:]
+    return sweep
+
+
+def noise_floor(noise: npt.NDArray[np.floating]) -> float:
+    """Transient-resistant noise level, as a Gaussian-equivalent RMS.
+
+    Plain RMS over a short noise window is dominated by whatever transient
+    happened to land in it — a chair, a voice, a fan. The median of |x|
+    ignores brief spikes; the 1.2533 factor (sqrt(pi/2)) converts it back to
+    the RMS of an equivalent Gaussian so ratios stay meaningful.
+    """
+    return float(np.median(np.abs(noise)) * 1.2533)
+
+
+def loudest_block_rms(track: npt.NDArray[np.floating], block: int) -> float:
+    """RMS of the loudest ``block``-sample window of ``track``.
+
+    A short sound inside a longer capture is diluted by the silence around it
+    in a whole-capture RMS; the loudest block isolates the sound itself.
+    """
+    usable = len(track) // block * block
+    if usable == 0:
+        return float(np.sqrt(np.mean(track**2))) if len(track) else 0.0
+    blocks = np.asarray(track[:usable]).reshape(-1, block)
+    return float(np.sqrt((blocks**2).mean(axis=1)).max())
+
+
 def correlation_peak(
     capture: npt.NDArray[np.floating],
     reference: npt.NDArray[np.floating],
@@ -46,17 +96,28 @@ def correlation_peak(
         seconds.
 
     """
-    from scipy.signal import fftconvolve
-
     c = np.asarray(capture, dtype=np.float64)
     r = np.asarray(reference, dtype=np.float64)
     c = c - c.mean()
     r = r - r.mean()
 
-    corr = fftconvolve(c, r[::-1], mode="valid")
+    # numpy-only on purpose: the SDK dropped its scipy runtime dependency
+    # (#1342), so a plain `pip install reachy-mini` test client has no scipy.
+    n_valid = len(c) - len(r) + 1
+    if n_valid < 1:
+        raise ValueError("capture must be at least as long as reference")
+
+    # FFT cross-correlation. corr[k] = sum_i c[i + k] * r[i], i.e. the
+    # correlation of the capture window starting at k against the reference.
+    size = 1 << (len(c) + len(r) - 1).bit_length()
+    corr = np.fft.irfft(np.fft.rfft(c, size) * np.conj(np.fft.rfft(r, size)), size)
+    corr = corr[:n_valid]
+
     # Per-position energy of the capture window, so the normalization is local:
     # a loud noise burst elsewhere in the capture can't deflate the peak.
-    window_energy = fftconvolve(c**2, np.ones(len(r)), mode="valid")
+    # A cumsum gives the exact sliding-window sum in one pass.
+    cumulative = np.concatenate(([0.0], np.cumsum(c**2)))
+    window_energy = cumulative[len(r) :] - cumulative[:n_valid]
     ncc = corr / (np.linalg.norm(r) * np.sqrt(np.clip(window_energy, 1e-12, None)))
 
     k = int(np.argmax(np.abs(ncc)))
