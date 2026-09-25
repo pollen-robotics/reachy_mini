@@ -1524,6 +1524,25 @@
         }
       }
     },
+    "/api/media/latency": {
+      "get": {
+        "summary": "Media Pipeline Latency",
+        "description": "Report the media sender pipeline's latency, as GStreamer computes it.\n\nDerived from the pipeline's configuration (element latencies plus jitter\nbuffers) rather than from the network, so it is a property of this robot\nand does not depend on the client or the link. That makes it the figure to\ntrack against a baseline; it was previously only written to the daemon log.",
+        "operationId": "media_pipeline_latency_api_media_latency_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineLatencyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/media/play_sound": {
       "post": {
         "summary": "Play Sound",
@@ -3736,6 +3755,20 @@
         ],
         "title": "MujocoBackendStatus",
         "description": "Status of the Mujoco backend."
+      },
+      "PipelineLatencyResponse": {
+        "properties": {
+          "latency_ms": {
+            "type": "number",
+            "title": "Latency Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "latency_ms"
+        ],
+        "title": "PipelineLatencyResponse",
+        "description": "Response body for the media pipeline latency endpoint."
       },
       "PlaySoundRequest": {
         "properties": {
