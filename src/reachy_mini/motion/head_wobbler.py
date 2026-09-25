@@ -11,7 +11,9 @@ There is no background thread: scheduling runs on whichever GLib main
 loop the caller's pipeline already uses for its bus watch.
 """
 
+import importlib
 import logging
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -26,6 +28,41 @@ logger = logging.getLogger(__name__)
 
 # Public type alias; re-exported by ``media/*`` modules.
 SpeechOffsets = tuple[float, float, float, float, float, float]
+
+# Opt-in speech tappers, selected with the WOBBLER_VERSION environment
+# variable. Unset (or "v0") keeps the official wobbler, ``speech_tapper``.
+# Imported lazily so the default path pays nothing for them.
+TAPPER_VERSIONS: dict[str, str] = {
+    "v4": "reachy_mini.motion.speech_tapper_v4",
+    "v5": "reachy_mini.motion.speech_tapper_v5",
+    "v6": "reachy_mini.motion.speech_tapper_v6",
+}
+
+
+def _load_tapper() -> tuple[str, Any]:
+    """Return (version, tapper module) for the WOBBLER_VERSION env var."""
+    version = os.environ.get("WOBBLER_VERSION", "").strip().lower()
+    if version in ("", "v0"):
+        return "v0", speech_tapper
+    module_name = TAPPER_VERSIONS.get(version)
+    if module_name is None:
+        logger.warning(
+            "Unknown WOBBLER_VERSION %r, using the official wobbler (v0)", version
+        )
+        return "v0", speech_tapper
+    return version, importlib.import_module(module_name)
+
+
+def _energy_from_env() -> float:
+    """Return WOBBLER_ENERGY as a float, 1.0 when unset or not a number."""
+    raw = os.environ.get("WOBBLER_ENERGY", "")
+    if not raw.strip():
+        return 1.0
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("WOBBLER_ENERGY %r is not a number, using 1.0", raw)
+        return 1.0
 
 
 class HeadWobbler:
@@ -48,14 +85,46 @@ class HeadWobbler:
         """
         self._apply_offsets = set_speech_offsets
 
-        self._hop_ms = speech_tapper.HOP_MS
+        self.version, tapper = _load_tapper()
+        if self.version != "v0":
+            logger.info("Head wobbler uses speech tapper %s", self.version)
+        self._sway_cls = tapper.SwayRollRT
+        self._hop_ms = int(tapper.HOP_MS)
         self._sample_rate = int(sample_rate)
-        self.sway = speech_tapper.SwayRollRT(sample_rate=self._sample_rate)
+        # Emotional colouring, only for tappers that accept it (v6). Both
+        # inputs are optional: WOBBLER_EMOTION defaults to "neutral" and
+        # WOBBLER_ENERGY to 1.0. set_emotion() overrides them at runtime.
+        self._sway_kwargs: dict[str, Any] = {}
+        if hasattr(self._sway_cls, "set_emotion"):
+            self._sway_kwargs = {
+                "emotion": os.environ.get("WOBBLER_EMOTION", "neutral"),
+                "energy": _energy_from_env(),
+            }
+        self.sway = self._make_sway()
 
         self._lock = threading.Lock()
         self._sway_lock = threading.Lock()
         # Bumped on stop/reset so in-flight GLib timeouts no-op when fired.
         self._generation = 0
+
+    def _make_sway(self) -> Any:
+        return self._sway_cls(sample_rate=self._sample_rate, **self._sway_kwargs)
+
+    def set_emotion(self, emotion: str, energy: float | None = None) -> None:
+        """Change the emotional colouring at runtime.
+
+        No-op with a tapper that has no emotion input (v0, v4, v5). Unknown
+        names fall back to neutral with a warning. ``energy`` is kept as is
+        when omitted. The choice survives :meth:`reset`.
+        """
+        with self._sway_lock:
+            if not self._sway_kwargs:
+                logger.debug("Speech tapper %s has no emotion input", self.version)
+                return
+            self.sway.set_emotion(emotion, energy)
+            self._sway_kwargs["emotion"] = emotion
+            if energy is not None:
+                self._sway_kwargs["energy"] = energy
 
     def start(self) -> None:
         """Reset DSP and hop generation. Idempotent."""
@@ -77,7 +146,7 @@ class HeadWobbler:
         with self._lock:
             self._generation += 1
         with self._sway_lock:
-            self.sway = speech_tapper.SwayRollRT(sample_rate=self._sample_rate)
+            self.sway = self._make_sway()
         self._apply_offsets(self._ZERO_OFFSETS)
 
     def feed(
