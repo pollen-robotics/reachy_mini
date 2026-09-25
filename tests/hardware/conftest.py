@@ -10,6 +10,7 @@ run (see the marker exclusions in ``.github/workflows/pytest.yml`` and
 from __future__ import annotations
 
 import os
+import time
 import warnings
 from collections.abc import Iterator
 
@@ -133,15 +134,9 @@ SPEAKER_VOLUME = 100
 MIC_VOLUME = int(os.environ.get("REACHY_TEST_MIC_VOL", "70"))
 
 
-@pytest.fixture
-def pinned_volume() -> Iterator[None]:
-    """Pin speaker and mic volume, restoring the user's levels after.
-
-    Uses the daemon's REST API (the suite already requires the daemon on
-    localhost: the USB board and the daemon live on the same machine in both
-    supported setups).
-    """
-    base = "http://localhost:8000/api/volume"
+def _pinned_volume(host: str) -> Iterator[None]:
+    """Pin speaker and mic volume on ``host``'s daemon, restoring the levels after."""
+    base = f"http://{host}:8000/api/volume"
     saved: list[tuple[str, int]] = []
     for path, level in (("", SPEAKER_VOLUME), ("/microphone", MIC_VOLUME)):
         resp = requests.get(f"{base}{path}/current", timeout=5)
@@ -164,17 +159,38 @@ def pinned_volume() -> Iterator[None]:
 
 
 @pytest.fixture
+def pinned_volume() -> Iterator[None]:
+    """Pin volumes on the local daemon (USB board and daemon share a machine)."""
+    yield from _pinned_volume("localhost")
+
+
+# Head height above which the head is considered up, off the speaker. The
+# sleep pose sits at z = -45.6 mm and the raised init pose at z ~ 0 (a few mm
+# off from calibration residual), so -20 mm splits them with margin both ways.
+HEAD_RAISED_MIN_Z_M = -0.020
+
+
+def _assert_head_raised(z_m: float) -> None:
+    """Fail unless the head actually rose; asking it to move is not enough.
+
+    A goto can be accepted and still move nothing (motors disabled, a dead
+    write path), and a measurement with the head resting on the speaker reads
+    as a muffled or broken speaker.
+    """
+    if z_m < HEAD_RAISED_MIN_Z_M:
+        pytest.fail(
+            f"Head is still down (z={z_m * 1000:.1f} mm, need > "
+            f"{HEAD_RAISED_MIN_Z_M * 1000:.0f} mm): it would block the speaker. "
+            "The move was requested but did not happen; check the motor mode."
+        )
+
+
+@pytest.fixture
 def head_raised(mini: ReachyMini) -> Iterator[None]:
     """Raise the head so it isn't sitting over the speaker, muffling it.
 
-    In the sleep pose the head covers the speaker, so a measurement taken there
-    reads as a quiet or dead speaker.  This has to be enforced rather than
-    documented: otherwise the thresholds get tuned against a blocked speaker.
-
-    Deliberately *not* ``mini.wake_up()`` — that plays ``wake_up.wav`` through
-    the very speaker under test, so its chime could be what the mic records,
-    passing the test even if the test's own playback did nothing.
-    ``goto_target`` is silent and blocking (it waits on task completion).
+    Deliberately *not* ``mini.wake_up()``: that plays ``wake_up.wav`` through
+    the very speaker under test. ``goto_target`` is silent and blocking.
 
     No teardown: leaving the head up is harmless, and ``goto_sleep()`` would
     play ``go_sleep.wav`` and cost ~4 s.
@@ -183,18 +199,175 @@ def head_raised(mini: ReachyMini) -> Iterator[None]:
     mini.goto_target(
         INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=2.0
     )
-    # Verify, don't trust: a goto can be accepted and move nothing (it did on
-    # 1.10.0), and a head left resting on the speaker muffles it while every
-    # gate still sees sound.
-    z_m = float(mini.get_current_head_pose()[2, 3])
-    if z_m < HEAD_RAISED_MIN_Z_M:
-        pytest.fail(
-            f"Head is still down (z={z_m * 1000:.1f} mm, need > "
-            f"{HEAD_RAISED_MIN_Z_M * 1000:.0f} mm): it would block the speaker."
-        )
+    _assert_head_raised(float(mini.get_current_head_pose()[2, 3]))
     yield
 
 
-# Sleep pose sits at z = -45.6 mm, the raised init pose at z ~ 0; -20 mm
-# splits them with margin both ways.
-HEAD_RAISED_MIN_Z_M = -0.020
+# --- Remote (laptop-as-client) fixtures ------------------------------------
+#
+# The `wireless`-marked tests run on a machine on the same LAN as a Wireless
+# robot and drive it entirely over the network: daemon REST for state, the
+# WebRTC media path for audio/video. Nothing here needs USB or SSH.
+
+ROBOT_HOST = os.environ.get("REACHY_TEST_HOST", "reachy-mini.local")
+
+
+@pytest.fixture(scope="session")
+def robot_host() -> str:
+    """The robot to test against, or skip when none answers.
+
+    Reachability is the skip gate (same role the USB probe plays for the
+    on-robot tests): no robot on the LAN means "not available here", while
+    everything after — daemon fails to start, media never flows — is a
+    failure.
+    """
+    try:
+        requests.get(f"http://{ROBOT_HOST}:8000/api/daemon/status", timeout=5)
+    except requests.RequestException:
+        pytest.skip(f"No robot answering at {ROBOT_HOST}:8000 (REACHY_TEST_HOST).")
+    return ROBOT_HOST
+
+
+@pytest.fixture(scope="session")
+def daemon_running(robot_host: str) -> str:
+    """Ensure the daemon backend is running (starts it if needed).
+
+    The WebRTC producer (webrtcsink + its signalling server on :8443) only
+    exists while the backend is running. Raising the head is not this
+    fixture's job: ``head_raised_remote`` does it and verifies it. The daemon
+    is left running afterwards; it idles fine.
+    """
+    base = f"http://{robot_host}:8000/api/daemon"
+    state = requests.get(f"{base}/status", timeout=5).json().get("state")
+    if state != "running":
+        # /start is synchronous and includes the wake-up motion, so it can
+        # outlive any reasonable request timeout — fire it, tolerate the
+        # timeout, and let the poll below be the actual arbiter.
+        try:
+            requests.post(f"{base}/start", params={"wake_up": "true"}, timeout=60)
+        except requests.Timeout:
+            pass
+        deadline = time.time() + 90
+        while state != "running":
+            if time.time() > deadline:
+                pytest.fail(f"Daemon did not reach 'running' within 90s at {base}.")
+            time.sleep(2)
+            state = requests.get(f"{base}/status", timeout=5).json().get("state")
+        time.sleep(2)  # let the media server finish coming up
+    return robot_host
+
+
+def _remote_apply(base: str, config: AudioConfig) -> bool:
+    resp = requests.post(
+        f"{base}/api/audio/config/apply",
+        json={
+            "config": [{"name": n, "values": list(v)} for n, v in config],
+            "verify": True,
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return bool(resp.json()["applied"])
+
+
+@pytest.fixture
+def aec_disabled_remote(daemon_running: str) -> Iterator[AudioConfig]:
+    """The `aec_disabled` fixture, over the daemon's REST API instead of USB.
+
+    Same registers, same save/restore contract; see `aec_disabled` for why
+    each parameter is written.
+    """
+    base = f"http://{daemon_running}:8000"
+    wanted = _parse_aec_config(os.environ.get("REACHY_TEST_AEC_OFF", DEFAULT_AEC_OFF))
+
+    originals = [
+        (
+            name,
+            requests.get(
+                f"{base}/api/audio/config/parameter/{name}", timeout=10
+            ).json()["values"],
+        )
+        for name, _ in wanted
+    ]
+
+    assert _remote_apply(base, wanted), f"Failed to apply {wanted} over REST."
+    try:
+        yield wanted
+    finally:
+        if not _remote_apply(base, originals):
+            warnings.warn(
+                f"Failed to restore {originals} on the audio board (REST). "
+                "Power-cycle the robot before trusting later audio results.",
+                stacklevel=2,
+            )
+
+
+@pytest.fixture
+def pinned_volume_remote(daemon_running: str) -> Iterator[None]:
+    """The `pinned_volume` fixture, addressed to a remote robot."""
+    yield from _pinned_volume(daemon_running)
+
+
+def _remote_head_pose(base: str) -> dict[str, float]:
+    resp = requests.get(f"{base}/api/state/present_head_pose", timeout=5)
+    resp.raise_for_status()
+    return {k: float(v) for k, v in resp.json().items()}
+
+
+def _remote_motor_mode(base: str) -> str:
+    resp = requests.get(f"{base}/api/motors/status", timeout=5)
+    resp.raise_for_status()
+    return str(resp.json()["mode"])
+
+
+def _wait_motors_disabled(base: str, timeout_s: float) -> bool:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if _remote_motor_mode(base) == "disabled":
+            return True
+        time.sleep(0.3)
+    return False
+
+
+@pytest.fixture
+def head_raised_remote(daemon_running: str) -> Iterator[None]:
+    """The `head_raised` fixture over REST: head up and verified before any sound.
+
+    The robot idles with motors disabled and the head resting on the speaker,
+    so the motors are enabled first; otherwise the goto is accepted and
+    nothing moves.
+
+    Teardown never cuts torque itself: doing so with the head up drops it.
+    It runs the daemon's sleep move instead, which lowers the head under
+    torque and releases it only at the rest pose.
+    """
+    base = f"http://{daemon_running}:8000"
+    original_mode = _remote_motor_mode(base)
+
+    requests.post(f"{base}/api/motors/set_mode/enabled", timeout=5).raise_for_status()
+    requests.post(
+        f"{base}/api/move/goto",
+        json={
+            "head_pose": {"x": 0, "y": 0, "z": 0, "roll": 0, "pitch": 0, "yaw": 0},
+            "antennas": list(INIT_ANTENNAS_JOINT_POSITIONS),
+            "duration": 2.0,
+        },
+        timeout=5,
+    ).raise_for_status()
+    deadline = time.time() + 10
+    while requests.get(f"{base}/api/move/running", timeout=5).json():
+        if time.time() > deadline:
+            pytest.fail("Head move did not finish within 10 s.")
+        time.sleep(0.2)
+    _assert_head_raised(_remote_head_pose(base)["z"])
+    try:
+        yield
+    finally:
+        if original_mode == "disabled":
+            requests.post(f"{base}/api/move/play/goto_sleep", timeout=5)
+            if not _wait_motors_disabled(base, 15):
+                warnings.warn(
+                    "Robot did not return to sleep; it is holding its pose "
+                    "with torque on (safe, but not idle).",
+                    stacklevel=2,
+                )
