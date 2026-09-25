@@ -348,10 +348,30 @@ class GstMediaServer:
         """Destructor to ensure gstreamer resources are released."""
         self.close()
 
-    def _dump_latency(self) -> None:
+    def pipeline_latency_ms(self) -> Optional[float]:
+        """Report the sender pipeline's latency in milliseconds.
+
+        GStreamer derives this from the pipeline's configuration (element
+        latencies plus jitter buffers), not from the network, so it is a
+        property of the robot alone and stays put unless the graph changes.
+        That makes it the figure to baseline against.
+
+        Returns:
+            The minimum latency in ms, or ``None`` if the pipeline declines
+            the query (it answers only once it is at least PAUSED).
+
+        """
         query = Gst.Query.new_latency()
-        self._pipeline_sender.query(query)
-        self._logger.info(f"Pipeline latency {query.parse_latency()}")
+        if not self._pipeline_sender.query(query):
+            return None
+        _live, min_ns, _max_ns = query.parse_latency()
+        if min_ns == Gst.CLOCK_TIME_NONE:
+            return None
+        return float(min_ns) / float(Gst.MSECOND)
+
+    def _dump_latency(self) -> None:
+        latency_ms = self.pipeline_latency_ms()
+        self._logger.info(f"Pipeline latency {latency_ms} ms")
 
     def _configure_webrtc(self, pipeline: Gst.Pipeline) -> Gst.Element:
         self._logger.debug("Configuring WebRTC")

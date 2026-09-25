@@ -62,6 +62,36 @@ async def media_status(daemon: Daemon = Depends(get_daemon)) -> dict[str, bool]:
     }
 
 
+class PipelineLatencyResponse(BaseModel):
+    """Response body for the media pipeline latency endpoint."""
+
+    latency_ms: float
+
+
+@router.get("/latency")
+async def media_pipeline_latency(
+    daemon: Daemon = Depends(get_daemon),
+) -> PipelineLatencyResponse:
+    """Report the media sender pipeline's latency, as GStreamer computes it.
+
+    Derived from the pipeline's configuration (element latencies plus jitter
+    buffers) rather than from the network, so it is a property of this robot
+    and does not depend on the client or the link. That makes it the figure to
+    track against a baseline; it was previously only written to the daemon log.
+    """
+    media_server = daemon._media_server
+    if media_server is None:
+        raise HTTPException(status_code=503, detail="Media server not running")
+
+    latency_ms = media_server.pipeline_latency_ms()
+    if latency_ms is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Pipeline did not answer the latency query (not started yet?)",
+        )
+    return PipelineLatencyResponse(latency_ms=latency_ms)
+
+
 class PlaySoundRequest(BaseModel):
     """Request body for the play_sound endpoint."""
 
