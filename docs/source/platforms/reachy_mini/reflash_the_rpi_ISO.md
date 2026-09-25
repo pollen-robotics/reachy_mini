@@ -13,10 +13,20 @@
 
 On macOS and Windows, the [**Reachy Mini Flasher**](https://github.com/pollen-robotics/reachy_mini_flasher) does everything described on this page for you: it downloads the latest OS image, runs `rpiboot` to expose the CM4 eMMC (installing the USB driver first, on Windows), and writes the image to it.
 
-Download the latest build for your system from the [releases page](https://github.com/pollen-robotics/reachy_mini_flasher/releases/latest) — a `.dmg` on macOS, a `.msi` or `.exe` installer on Windows — and open it.
+Download the latest build for your system from the [releases page](https://github.com/pollen-robotics/reachy_mini_flasher/releases/latest): the `.dmg` on macOS, the `.msi` or `.exe` installer on Windows.
 
-> [!TIP]
-> The installers are unsigned, so your system warns you the first time: on macOS, right-click the app and choose **Open**; on Windows, click **More info** then **Run anyway** in the SmartScreen dialog.
+> [!WARNING]
+> The macOS build is for **Apple Silicon** Macs only (M1 and later). There is no Intel build yet; on an Intel Mac, follow the manual procedure below.
+
+The installers are unsigned, so your system blocks them the first time you open them:
+
+- **macOS**: drag the app to `Applications` and open it. When macOS refuses, go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. If macOS instead says the app _is damaged and can't be opened_, clear the quarantine flag in a terminal, then open it again:
+
+  ```bash
+  xattr -cr "/Applications/Reachy Mini Flasher.app"
+  ```
+
+- **Windows**: in the SmartScreen dialog, click **More info**, then **Run anyway**.
 
 ![Flasher welcome screen](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/flasher-welcome.png)
 
@@ -35,7 +45,7 @@ Your system asks for permission (raw disk writes need admin rights: an administr
 The app then guides you through restoring the normal boot mode (switch back to **DEBUG**, unplug USB, close the head).
 
 > [!NOTE]
-> There is no Linux build. On Linux, follow the manual procedure below — which is also what the app automates, if you'd rather do it by hand.
+> There is no Linux build. On Linux, follow the manual procedure below. It is also exactly what the app automates, if you'd rather do it by hand.
 
 ---
 
