@@ -133,7 +133,7 @@ See and run `examples/minimal_demo.py` - demonstrates connection, head motion, a
 >
 > That guide is the **single source of truth** for building a Reachy Mini JS app: scaffolding, `public/icon.svg`, host shell, `sdk: static` deploy, `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host ↔ embed architecture reference. Everything that used to live in `SPEC.md` and `APP_AUTHOR_GUIDE.md` is folded in.
 >
-> **Today's SDK pin** (used by all three reference apps): `@pollen-robotics/reachy-mini-sdk@1.8.0`. See [§10 SDK version pinning](ts/APP_CREATION_GUIDE.md#10-sdk-version-pinning).
+> **SDK pin**: all three reference apps pin the latest stable `@pollen-robotics/reachy-mini-sdk` release from [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk). Install with `npm install @pollen-robotics/reachy-mini-sdk@latest`. See [§10 SDK version pinning](ts/APP_CREATION_GUIDE.md#10-sdk-version-pinning).
 
 Browser apps that drive a Reachy Mini over WebRTC, deployed as Hugging Face Spaces. Any HF-authenticated user opens the Space URL from anywhere and reaches any robot they have access to, through the central signaling server.
 
