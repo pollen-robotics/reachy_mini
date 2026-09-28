@@ -121,21 +121,26 @@ def test_access_log_filter_redacts_only_callback_queries() -> None:
     assert ordinary.getMessage().endswith('configured?next=/health-check HTTP/1.1" 200')
 
 
-def test_hub_refresh_filter_preserves_other_errors() -> None:
-    """Preserve unrelated Hub diagnostics."""
-    record = logging.LogRecord(
-        "huggingface_hub.utils._auth",
-        logging.ERROR,
-        _auth.__file__,
-        390,
-        "Error parsing stored tokens file: invalid config",
-        (),
-        None,
-        "_read_stored_tokens_full",
-    )
+def test_hub_stored_tokens_parse_error_redacts_token(
+    clean_root, capsys, monkeypatch, tmp_path
+) -> None:
+    """Keep stored token lines out of Hub parse errors."""
+    token_path = tmp_path / "token"
+    stored_path = tmp_path / "stored_tokens"
+    token_path.write_text("hf_old_token")
+    stored_path.write_text("hf_token = hf_old_token\n")
+    monkeypatch.setattr(constants, "HF_TOKEN_PATH", str(token_path))
+    monkeypatch.setattr(constants, "HF_STORED_TOKENS_PATH", str(stored_path))
+    monkeypatch.setattr(_auth, "_OAUTH_REFRESH_CACHE", None)
+    for name in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HF_OIDC_RESOURCE"):
+        monkeypatch.delenv(name, raising=False)
+    configure_root_logging("INFO")
 
-    assert main._hub_auth_log_filter(record)
-    assert record.getMessage() == "Error parsing stored tokens file: invalid config"
+    assert hf_auth.get_hf_token() == "hf_old_token"
+
+    output = capsys.readouterr().err
+    assert "Could not parse the stored Hugging Face tokens file" in output
+    assert "hf_old_token" not in output
 
 
 @pytest.mark.parametrize("error_code", ["invalid_grant", "server_error"])
@@ -171,7 +176,7 @@ def test_hub_refresh_log_redacts_provider_text(
     assert hf_auth.get_hf_token() == "hf_old_token"
 
     output = capsys.readouterr().err
-    assert "Hugging Face credential lookup or refresh failed" in output
+    assert "Hugging Face credential refresh failed" in output
     assert "provider-secret-marker" not in output
     assert "hf_old_token" not in output
     assert "hf_refresh_token" not in output

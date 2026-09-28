@@ -310,6 +310,36 @@ def test_refresh_relay_redacts_response_and_log(monkeypatch, router_app, caplog)
     assert "provider-secret-marker" not in caplog.text
 
 
+@pytest.mark.parametrize(
+    "path", ["/oauth/callback?code=code&state=state", "/oauth/device/status/session"]
+)
+def test_oauth_success_survives_relay_start_failure(
+    monkeypatch, router_app, caplog, path
+):
+    """Keep relay start failures out of successful login responses and logs."""
+    monkeypatch.setattr(
+        src,
+        "exchange_code_for_token",
+        AsyncMock(return_value={"status": "success", "username": "alice"}),
+    )
+    monkeypatch.setattr(
+        src,
+        "get_device_code_session_status",
+        lambda sid: {"status": "authorized", "username": "alice"},
+    )
+    monkeypatch.setattr(src, "consume_device_session_relay_pending", lambda sid: True)
+    start_relay = AsyncMock(side_effect=RuntimeError("provider-secret-marker"))
+    daemon = types.SimpleNamespace(_start_central_signaling_relay=start_relay)
+
+    response = router_app(hf_auth.router, daemon=daemon).get("/hf-auth" + path)
+
+    assert response.status_code == 200
+    assert "alice" in response.text
+    start_relay.assert_awaited_once_with()
+    assert "RuntimeError" in caplog.text
+    assert "provider-secret-marker" not in response.text + caplog.text
+
+
 def test_oauth_callback_missing_code(router_app):
     """Callback without code/state -> 400 failure page (no network)."""
     client = router_app(hf_auth.router)

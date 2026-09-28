@@ -518,15 +518,19 @@ def configure_root_logging(log_level: str, log_file: str | None = None) -> None:
 
 _POLLING_PATHS = ("/health-check", "/api/hf-auth/relay-status")
 _OAUTH_CALLBACK_PATH = "/api/hf-auth/oauth/callback"
-_HUB_REFRESH_FUNCTIONS = {
-    "_refresh_oauth_token_if_needed",
-    "_warn_refresh_failure_once",
+
+# Hub embeds provider text or stored token lines in these messages.
+_HUB_AUTH_REDACTIONS = {
+    "_refresh_oauth_token_if_needed": "Hugging Face credential refresh failed",
+    "_warn_refresh_failure_once": "Hugging Face credential refresh failed",
+    "_read_stored_tokens_full": "Could not parse the stored Hugging Face tokens file",
 }
 
 
 def _hub_auth_log_filter(record: logging.LogRecord) -> bool:
-    if record.levelno >= logging.WARNING and record.funcName in _HUB_REFRESH_FUNCTIONS:
-        record.msg = "Hugging Face credential lookup or refresh failed"
+    message = _HUB_AUTH_REDACTIONS.get(record.funcName)
+    if record.levelno >= logging.WARNING and message:
+        record.msg = message
         record.args = ()
         record.exc_info = record.exc_text = record.stack_info = None
     return True
