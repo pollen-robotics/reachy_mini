@@ -66,6 +66,11 @@ contract - your app is agnostic of everything else.
 - Carry degrees through motion code below the UI layer - speak radians /
   magic-mm; convert at the UI boundary with `degToRad` / `radToDeg`.
 - Mutate `INIT_POSE` or `DEFAULT_SCALED_DURATION_PRESET` (deep-frozen).
+- Clock a **continuous** robot loop (pose streaming, audio pipeline,
+  stream-health watchdog) off `requestAnimationFrame` or `setInterval`
+  alone. Hidden tabs pause rAF and clamp intervals to ~1 Hz, freezing the
+  robot mid-motion. Clock logic from a **Web Worker** heartbeat and keep
+  rAF for visuals only - see guide §14.7.
 
 ## Procedure
 
@@ -182,7 +187,16 @@ colors inlined.
 
 - Gestures use degrees at the UI boundary, radians/magic-mm below it.
 - For smooth keyframed gestures, tween client-side with `requestAnimationFrame`
-  and feed `setHeadRpyDeg` / `setAntennasDeg` each frame.
+  and feed `setHeadRpyDeg` / `setAntennasDeg` each frame. rAF is fine for a
+  **short, user-triggered** gesture; it is NOT fine as the clock of a
+  continuous loop (next bullet).
+- If the app streams poses continuously (follow modes, idle sway, audio
+  reactivity, watchdogs), clock that logic from a **Web Worker** heartbeat:
+  hidden tabs pause rAF entirely and clamp `setInterval` to ~1 Hz, so a
+  rAF-clocked stream freezes the robot mid-motion on tab switch. Keep rAF
+  for visuals only, clamp `dt` after hidden stretches, resync on
+  `visibilitychange`, `worker.terminate()` in `onLeave`. Copy-paste recipe:
+  guide §14.7.
 - For long or audio-synced moves, prefer daemon-side `reachy.playMove(motion, { audioBlob })`.
 - Use `scaledDuration(current, target)` from `/animation` to size move
   durations instead of hardcoding. Full recipe: guide §14.
@@ -215,6 +229,8 @@ Never commit `dist/`. Full deploy details + FAQ: guide §11.
 - [ ] SDK pinned to the exact build string in `package.json`.
 - [ ] `handle.config` validated before use (if used).
 - [ ] Theme mirrored from `handle.theme` + `onThemeChange`.
+- [ ] Any continuous robot loop is clocked off a Web Worker heartbeat, not
+      rAF/`setInterval` (guide §14.7) - or the app has no such loop.
 - [ ] Mobile-first: tested in phone emulation, touch targets >= 44px.
 - [ ] `public/icon.svg` committed; frontmatter has `reachy_mini_js_app` tag
       and `short_description` <= 60 chars.

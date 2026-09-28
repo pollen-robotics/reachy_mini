@@ -186,6 +186,15 @@ class AppManager:
             #   * The app ends up using .venv's plugin scanner binary and registry cache,
             #     which can mask issues specific to apps_venv's own gstreamer install.
             # See pollen-robotics/reachy-mini-desktop-app#185.
+            #
+            # PYTHONPATH and GST_PYTHONPATH_1_0 belong to the same set and are the
+            # most damaging members: they point at the daemon's own site-packages and
+            # take precedence over the target interpreter's. An app launched with
+            # apps_venv's Python therefore imports `reachy_mini` and `gi` from the
+            # *daemon's* venv, so an app pinned to a different SDK than the daemon
+            # fails at import time (ModuleNotFoundError for `reachy_mini.io.jsonrpc`
+            # and `gi` respectively). apps_venv's own gstreamer_bundle.pth sets both
+            # afresh at interpreter startup.
             app_env = os.environ.copy()
             for key in (
                 "GST_PLUGIN_PATH_1_0",
@@ -196,6 +205,8 @@ class AppManager:
                 "PYGI_DLL_DIRS",
                 "XDG_DATA_DIRS",
                 "XDG_CONFIG_DIRS",
+                "PYTHONPATH",
+                "GST_PYTHONPATH_1_0",
             ):
                 app_env.pop(key, None)
 

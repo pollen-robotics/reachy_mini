@@ -16,7 +16,6 @@ from typing import Dict, List, Literal, Optional, Union, cast
 import numpy as np
 import numpy.typing as npt
 from asgiref.sync import async_to_sync
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import (
@@ -44,6 +43,7 @@ from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.discovery import find_robots
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
+from reachy_mini.utils.rotation import Rotation as R
 from reachy_mini.vision.look_at import (
     default_head_to_camera_transform,
     look_at_image_pose,

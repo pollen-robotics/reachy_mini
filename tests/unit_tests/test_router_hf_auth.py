@@ -1,12 +1,17 @@
 """Unit tests for the HuggingFace auth router (delegating to apps.sources.hf_auth)."""
 
+import importlib
 import types
-from unittest.mock import AsyncMock
+from collections.abc import Callable
+from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastapi import APIRouter
+from fastapi.testclient import TestClient
 
 from reachy_mini.apps.sources import hf_auth as src
 from reachy_mini.daemon.app.routers import hf_auth
+from reachy_mini.media import central_signaling_relay
 
 # The router does ``from reachy_mini.apps.sources import hf_auth`` and calls
 # ``hf_auth.<fn>``, so the delegated functions live on the source module (``src``);
@@ -233,6 +238,42 @@ def test_device_oauth_status_keeps_mobile_contract(monkeypatch, router_app):
 
     assert resp.status_code == 200
     assert resp.json() == {"status": "authorized", "username": "alice"}
+
+
+def test_central_status_refuses_an_untrusted_central_before_sending_the_bearer(
+    monkeypatch: pytest.MonkeyPatch,
+    router_app: Callable[[APIRouter], TestClient],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Invalid configuration imports safely and warns once across repeated polls."""
+    monkeypatch.setattr(src, "get_hf_token", lambda: "hf_tok")
+
+    session = Mock(side_effect=AssertionError("must not contact an untrusted central"))
+
+    try:
+        with monkeypatch.context() as config:
+            config.setattr(
+                central_signaling_relay,
+                "CENTRAL_SIGNALING_SERVER",
+                "http://central.example",
+            )
+            config.setattr(hf_auth.aiohttp, "ClientSession", session)
+            importlib.reload(hf_auth)
+            client = router_app(hf_auth.router)
+            for _ in range(3):
+                resp = client.get("/hf-auth/central-robot-status")
+                assert resp.status_code == 200
+                assert resp.json() == {
+                    "available": False,
+                    "robots": [],
+                    "reason": "invalid_configuration",
+                }
+            warnings = [r for r in caplog.records if r.name == hf_auth.__name__]
+            assert len(warnings) == 1
+            assert "REACHY_CENTRAL_URL" in warnings[0].message
+            assert "central.example" not in warnings[0].message
+    finally:
+        importlib.reload(hf_auth)
 
 
 def test_central_robot_status_no_token(monkeypatch, router_app):

@@ -226,12 +226,62 @@ def test_get_pypi_version_stable(monkeypatch):
     assert update_available.get_pypi_version("reachy-mini", pre_release=False) == semver.Version.parse("2.0.0")
 
 
+_FILES = [{"yanked": False}]
+
+
 def test_get_pypi_version_prerelease(monkeypatch):
-    """Pre-release lookup prefers a newer trailing release entry."""
-    payload = {"info": {"version": "2.0.0"}, "releases": {"1.9.0": [], "2.1.0rc1": []}}
+    """Pre-release lookup prefers a newer pre-release over the stable one."""
+    payload = {"info": {"version": "2.0.0"}, "releases": {"1.9.0": _FILES, "2.1.0rc1": _FILES}}
     monkeypatch.setattr(update_available.requests, "get", lambda *a, **k: _FakeResponse(payload))
     v = update_available.get_pypi_version("reachy-mini", pre_release=True)
     assert (v.major, v.minor, v.patch) == (2, 1, 0)
+
+
+def test_get_pypi_version_prerelease_ignores_key_order(monkeypatch):
+    """Regression: PyPI orders `releases` lexicographically, not by version.
+
+    "1.10.0rc5" sorts *before* "1.9.0rc1" as a string, so taking the trailing
+    key picked 1.9.0rc1, which is older than the stable info.version. The beta
+    channel then silently reported "up to date" while rc5 was live on PyPI.
+    """
+    payload = {
+        "info": {"version": "1.9.0"},
+        "releases": {
+            "1.10.0rc5": _FILES,
+            "1.8.4": _FILES,
+            "1.9.0": _FILES,
+            "1.9.0rc1": _FILES,  # last key, but not the newest version
+        },
+    }
+    monkeypatch.setattr(update_available.requests, "get", lambda *a, **k: _FakeResponse(payload))
+    v = update_available.get_pypi_version("reachy-mini", pre_release=True)
+    assert (v.major, v.minor, v.patch) == (1, 10, 0)
+    assert v.prerelease == "rc.5"
+
+
+def test_get_pypi_version_prerelease_skips_yanked_and_deleted(monkeypatch):
+    """A yanked or file-less release is not offered: pip would refuse to install it.
+
+    Offering one loops the update flow forever: the check keeps reporting the
+    version as available while `pip install --pre` resolves to something else.
+    """
+    payload = {
+        "info": {"version": "1.9.0"},
+        "releases": {
+            "1.10.0rc5": [{"yanked": True}],
+            "1.10.0rc4": [],  # deleted: no files left
+            "1.9.0": _FILES,
+        },
+    }
+    monkeypatch.setattr(update_available.requests, "get", lambda *a, **k: _FakeResponse(payload))
+    assert update_available.get_pypi_version("reachy-mini", pre_release=True) == semver.Version.parse("1.9.0")
+
+
+def test_get_pypi_version_prerelease_skips_unparseable(monkeypatch):
+    """A version scheme we cannot compare (e.g. `.post1`) is skipped, not fatal."""
+    payload = {"info": {"version": "1.9.0"}, "releases": {"1.9.0.post1": _FILES, "1.9.0": _FILES}}
+    monkeypatch.setattr(update_available.requests, "get", lambda *a, **k: _FakeResponse(payload))
+    assert update_available.get_pypi_version("reachy-mini", pre_release=True) == semver.Version.parse("1.9.0")
 
 
 def test_get_pypi_version_prerelease_pep440_info_version(monkeypatch):
@@ -241,7 +291,7 @@ def test_get_pypi_version_prerelease_pep440_info_version(monkeypatch):
     info.version string; semver coerces the RHS with strict parse, so a
     non-semver info.version (e.g. an rc release) raised ValueError.
     """
-    payload = {"info": {"version": "2.0.0rc1"}, "releases": {"1.9.0": [], "2.0.0rc2": []}}
+    payload = {"info": {"version": "2.0.0rc1"}, "releases": {"1.9.0": _FILES, "2.0.0rc2": _FILES}}
     monkeypatch.setattr(
         update_available.requests, "get", lambda *a, **k: _FakeResponse(payload)
     )

@@ -105,3 +105,17 @@ describe('getImu - degraded paths', () => {
         await expect(r.getImu()).rejects.toThrow(/Data channel not open/);
     });
 });
+
+describe('robotState.imu mirror', () => {
+    it('is set by a state frame and cleared again by imu: null', () => {
+        const { r, internals } = makeInstance();
+
+        internals._handleRobotMessage({ state: { imu: READING } });
+        expect(r.robotState.imu).toEqual(READING);
+
+        // The daemon nulls the field once its cache goes stale; the mirror
+        // must clear rather than serve a frozen reading.
+        internals._handleRobotMessage({ state: { imu: null } });
+        expect(r.robotState.imu).toBeUndefined();
+    });
+});

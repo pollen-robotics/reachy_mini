@@ -22,7 +22,6 @@ from typing import Annotated, Any, Callable, Dict, Optional
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.io.jsonrpc import looks_like_jsonrpc
 from reachy_mini.io.protocol import (
@@ -98,6 +97,7 @@ from reachy_mini.io.protocol import (
     command_adapter,
 )
 from reachy_mini.io.publisher import Publisher
+from reachy_mini.utils.rotation import Rotation as R
 
 if typing.TYPE_CHECKING:
     from reachy_mini.kinematics import AnyKinematics
@@ -119,6 +119,11 @@ from reachy_mini.vision.look_at import (
     default_head_to_camera_transform,
     look_at_image_pose,
 )
+
+# Gaze trim added to lower head-tracking aim pitch. This pose feels better
+# (subjective) and also improves the orientation of the microphone when
+# speaking to it.
+_TRACKING_PITCH_TRIM_RAD = float(np.radians(15.0))
 
 
 class _PlaybackCancelToken:
@@ -785,7 +790,7 @@ class Backend:
         u = (x_norm + 1.0) * 0.5 * max(width - 1, 1)
         v = (y_norm + 1.0) * 0.5 * max(height - 1, 1)
         try:
-            self._tracking_target_pose = look_at_image_pose(
+            target_pose = look_at_image_pose(
                 u=u,
                 v=v,
                 K=camera_matrix,
@@ -793,6 +798,11 @@ class Backend:
                 T_world_head=self.get_current_head_pose(),
                 T_head_cam=self.T_head_cam,
             )
+            roll_a, pitch_a, yaw_a = R.from_matrix(target_pose[:3, :3]).as_euler("xyz")
+            target_pose[:3, :3] = R.from_euler(
+                "xyz", [roll_a, pitch_a + _TRACKING_PITCH_TRIM_RAD, yaw_a]
+            ).as_matrix()
+            self._tracking_target_pose = target_pose
         except Exception as e:
             self.logger.warning("Head-tracking aim update failed: %s", e)
 
@@ -1594,6 +1604,8 @@ class Backend:
             # Sound Direction of Arrival (ReSpeaker mic array), or None when
             # unavailable. Cached, never blocks (see _doa_poll_loop).
             doa=self.read_doa(),
+            # IMU (wireless only), or None on Lite/sim or when the cache is stale.
+            imu=self.get_imu_data(),
         )
 
     def build_state_dict(self) -> dict[str, Any]:

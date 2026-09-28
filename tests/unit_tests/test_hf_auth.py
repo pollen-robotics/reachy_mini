@@ -24,6 +24,14 @@ class _TokenResponse:
 
 
 class _ClientSession:
+    """Stub aiohttp session recording constructor and request kwargs."""
+
+    last_kwargs: dict[str, object] = {}
+    last_post_kwargs: dict[str, object] = {}
+
+    def __init__(self, **kwargs: object) -> None:
+        _ClientSession.last_kwargs = kwargs
+
     async def __aenter__(self) -> "_ClientSession":
         return self
 
@@ -31,6 +39,7 @@ class _ClientSession:
         pass
 
     def post(self, _url: str, **_kwargs: object) -> _TokenResponse:
+        _ClientSession.last_post_kwargs = _kwargs
         return _TokenResponse()
 
 
@@ -58,6 +67,9 @@ async def test_oauth_token_is_stored_in_the_daemon_record(
         hf_auth._oauth_sessions.clear()
 
     assert result == {"status": "success", "username": "tester"}
+    # No trust_env (it would read ~/.netrc); the proxy is passed per request.
+    assert "trust_env" not in _ClientSession.last_kwargs
+    assert "proxy" in _ClientSession.last_post_kwargs
     assert hf_auth.get_hf_token() == "oauth-token"
     assert not token_path.exists()
     if os.name != "nt":

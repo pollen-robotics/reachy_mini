@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from reachy_mini.daemon import startup_app_config
 from reachy_mini.apps.sources import hf_auth
+from reachy_mini.daemon import startup_app_config
 from reachy_mini.media import webrtc_utils
 
 
@@ -165,9 +165,7 @@ def test_turn_credentials_refresh_once_populates_cache(monkeypatch) -> None:
     )
 
     class _Resp:
-        @staticmethod
-        def raise_for_status() -> None:
-            pass
+        status_code = 200
 
         @staticmethod
         def json() -> dict:
@@ -198,6 +196,20 @@ def test_turn_credentials_refresh_once_populates_cache(monkeypatch) -> None:
     assert seen["url"] == "https://turn.example/credentials"
     assert seen["headers"]["Authorization"] == "Bearer hf_tok"
     assert seen["params"] == {"ttl": 600}
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://turn.example/credentials",
+        "https://secret@turn.example/credentials",
+        "https://turn.example/credentials?target=elsewhere",
+    ],
+)
+def test_turn_credentials_reject_unsafe_bearer_destinations(url: str) -> None:
+    """TURN never sends the daemon bearer to an unsafe configured endpoint."""
+    with pytest.raises(ValueError, match="REACHY_TURN_URL"):
+        webrtc_utils.TurnCredentials(url=url)
 
 
 def test_turn_credentials_network_failure_retries_soon(monkeypatch) -> None:

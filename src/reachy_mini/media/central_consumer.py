@@ -112,6 +112,8 @@ from aiortc.sdp import candidate_from_sdp
 from pydantic import BaseModel
 
 from reachy_mini.io.protocol import AnyCommand
+from reachy_mini.utils.network import validate_secure_http_url
+from reachy_mini.utils.proxy import proxy_for
 
 logger = logging.getLogger(__name__)
 
@@ -233,13 +235,15 @@ class ReachyCentralConsumer:
                 ``on_pcm``.
 
         Raises:
-            ValueError: if ``hf_token`` is empty.
+            ValueError: if ``hf_token`` is empty or ``central_url`` is unsafe.
 
         """
         if not hf_token:
             raise ValueError("hf_token is required for ReachyCentralConsumer")
         self._hf_token = hf_token
-        self._central_url = central_url.rstrip("/")
+        self._central_url = validate_secure_http_url(central_url, "central_url").rstrip(
+            "/"
+        )
         self._robot_name = robot_name
         self._consumer_label = consumer_label
         self._ice_servers_provider = ice_servers_provider
@@ -397,6 +401,10 @@ class ReachyCentralConsumer:
         if self._task is not None and not self._task.done():
             return
         self._stopping = False
+        # Explicit proxy resolution (HTTP_PROXY/HTTPS_PROXY/NO_PROXY) is done
+        # per request via utils.proxy.proxy_for — deliberately NOT
+        # trust_env=True, which would also read ~/.netrc and break the
+        # Authorization-header requests below (see utils/proxy.py).
         self._http = aiohttp.ClientSession()
         self._task = asyncio.create_task(self._run_forever(), name="reachy-consumer")
 
@@ -452,7 +460,13 @@ class ReachyCentralConsumer:
         # No total timeout (long-lived); sock_read covers stalls.
         timeout = aiohttp.ClientTimeout(total=None, sock_read=60.0)
         assert self._http is not None
-        async with self._http.get(url, headers=headers, timeout=timeout) as resp:
+        async with self._http.get(
+            url,
+            headers=headers,
+            timeout=timeout,
+            allow_redirects=False,
+            proxy=proxy_for(url),
+        ) as resp:
             if resp.status != 200:
                 txt = (await resp.text())[:200]
                 raise RuntimeError(f"SSE /events HTTP {resp.status}: {txt!r}")
@@ -691,8 +705,13 @@ class ReachyCentralConsumer:
             url,
             headers=headers,
             timeout=aiohttp.ClientTimeout(total=10.0),
+            allow_redirects=False,
+            proxy=proxy_for(url),
         ) as resp:
-            resp.raise_for_status()
+            if resp.status != 200:
+                raise RuntimeError(
+                    f"GET /api/robot-status HTTP {resp.status}; expected 200"
+                )
             payload = await resp.json()
         return payload.get("robots") or []
 
@@ -766,6 +785,8 @@ class ReachyCentralConsumer:
                 headers=headers,
                 json=body,
                 timeout=timeout,
+                allow_redirects=False,
+                proxy=proxy_for(url),
             ) as resp:
                 if resp.status != 200:
                     txt = (await resp.text())[:200]
@@ -1173,6 +1194,7 @@ def from_env(
 
     Returns ``None`` if ``HF_TOKEN`` is not set — the caller is expected to
     surface that as a configuration error to the user.
+    Raises ``ValueError`` if ``REACHY_CENTRAL_URL`` is unsafe.
     """
     hf_token = (os.getenv("HF_TOKEN") or "").strip()
     if not hf_token:

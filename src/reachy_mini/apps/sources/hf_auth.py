@@ -20,6 +20,8 @@ from huggingface_hub import HfApi, whoami
 from huggingface_hub.constants import HF_TOKEN_PATH
 from huggingface_hub.errors import HfHubHTTPError
 
+from reachy_mini.utils.proxy import proxy_for
+
 logger = logging.getLogger(__name__)
 
 # The OAuth app registers both redirects; HF_OAUTH_CLIENT_ID can override it.
@@ -250,8 +252,13 @@ async def exchange_code_for_token(
     }
 
     try:
+        # Explicit proxy resolution (HTTP_PROXY/HTTPS_PROXY/NO_PROXY) —
+        # deliberately NOT trust_env=True, which would also read ~/.netrc
+        # and break Authorization-header requests (see utils/proxy.py).
         async with aiohttp.ClientSession() as http_session:
-            async with http_session.post(token_url, data=data) as response:
+            async with http_session.post(
+                token_url, data=data, proxy=proxy_for(token_url)
+            ) as response:
                 response_text = await response.text()
                 if response.status != 200:
                     logger.warning(
