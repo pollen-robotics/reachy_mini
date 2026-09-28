@@ -12,13 +12,24 @@ from pydantic import BaseModel
 
 from reachy_mini.apps.sources import hf_auth
 from reachy_mini.media.central_signaling_relay import CENTRAL_SIGNALING_SERVER
+from reachy_mini.utils.network import validate_secure_http_url
 from reachy_mini.utils.proxy import proxy_for
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/hf-auth")
 
-CENTRAL_ROBOT_STATUS_URL = f"{CENTRAL_SIGNALING_SERVER}/api/robot-status"
+# The relay module owns the central default and its REACHY_CENTRAL_URL override.
+CENTRAL_ROBOT_STATUS_URL: str | None = None
+try:
+    CENTRAL_ROBOT_STATUS_URL = (
+        validate_secure_http_url(CENTRAL_SIGNALING_SERVER, "REACHY_CENTRAL_URL").rstrip(
+            "/"
+        )
+        + "/api/robot-status"
+    )
+except ValueError as error:
+    logger.warning("[central-robot-status] %s", error)
 CENTRAL_ROBOT_STATUS_TIMEOUT = aiohttp.ClientTimeout(total=5)
 
 
@@ -153,12 +164,16 @@ async def get_central_robot_status() -> dict[str, Any]:
 
     `available` is false when:
       - no HF token stored (user not logged in)
+      - central URL configuration is invalid
       - central server is unreachable / returned an error
     Callers should treat `available: false` as "unknown, don't block".
     """
     token = hf_auth.get_hf_token()
     if not token:
         return {"available": False, "robots": [], "reason": "not_authenticated"}
+
+    if CENTRAL_ROBOT_STATUS_URL is None:
+        return {"available": False, "robots": [], "reason": "invalid_configuration"}
 
     try:
         # Avoid trust_env: ~/.netrc credentials would conflict with Authorization.
@@ -174,6 +189,7 @@ async def get_central_robot_status() -> dict[str, Any]:
             async with session.get(
                 CENTRAL_ROBOT_STATUS_URL,
                 headers={"Authorization": f"Bearer {token}"},
+                allow_redirects=False,
                 proxy=proxy_for(CENTRAL_ROBOT_STATUS_URL),
             ) as response:
                 if response.status == 200:

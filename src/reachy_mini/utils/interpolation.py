@@ -5,7 +5,8 @@ from typing import Callable, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
-from scipy.spatial.transform import Rotation as R
+
+from reachy_mini.utils.rotation import Rotation as R
 
 InterpolationFunc = Callable[[float], npt.NDArray[np.float64]]
 

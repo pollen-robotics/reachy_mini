@@ -186,6 +186,12 @@ def _make_relay(
     return CentralSignalingRelay(robot_name=robot_name, transport=transport)
 
 
+def test_relay_rejects_plaintext_remote_central() -> None:
+    """The relay must not send its bearer token over remote HTTP."""
+    with pytest.raises(ValueError):
+        CentralSignalingRelay(central_uri="http://central.example")
+
+
 def test_meta_carries_robot_name() -> None:
     """The relay carries ``robot_name`` into ``meta.name`` verbatim."""
     relay = _make_relay(robot_name="Sparky")
@@ -931,7 +937,12 @@ class _FakeHTTPSession:
         self.closed = False
 
     def post(
-        self, url: str, json: Any = None, headers: Any = None, proxy: Any = None
+        self,
+        url: str,
+        json: Any = None,
+        headers: Any = None,
+        allow_redirects: bool = True,
+        proxy: Any = None,
     ) -> _FakeResponse:
         self.posts.append((url, json, headers))
         return _FakeResponse(self._status)
