@@ -22,6 +22,7 @@ import aiohttp
 import websockets
 from websockets.asyncio.client import ClientConnection
 
+from reachy_mini.apps.sources import hf_auth
 from reachy_mini.daemon.robot_app_lock import RobotAppLock, RobotAppLockState
 from reachy_mini.utils.hardware_id import get_hardware_id
 from reachy_mini.utils.network import validate_secure_http_url
@@ -566,10 +567,8 @@ class CentralSignalingRelay:
 
     def _refresh_token(self, force_refresh: bool = False) -> Optional[str]:
         """Re-read the daemon-owned credentials, refreshing them when asked."""
-        from reachy_mini.apps.sources.hf_auth import get_hf_credential
-
         try:
-            token = get_hf_credential(force_refresh).token
+            token = hf_auth.get_hf_credential(force_refresh).token
             if token != self.hf_token:
                 if token:
                     logger.info("[Central Relay] HF token detected (user logged in)")
@@ -1195,8 +1194,10 @@ class CentralSignalingRelay:
                 proxy=proxy_for(events_url),
             ) as response:
                 if response.status == 401:
+                    # Returning retries at once; setting _token_updated would
+                    # tear down that retry and fall back to a full backoff.
                     if await self._recover_from_unauthorized(self.hf_token):
-                        self._token_updated.set()
+                        self._connection_attempts += 1
                     return
                 elif response.status != 200:
                     self._set_state(
@@ -1652,10 +1653,8 @@ _relay_instance: Optional[CentralSignalingRelay] = None
 
 def _daemon_token() -> Optional[str]:
     """Return the daemon-owned token, or None when the robot is signed out."""
-    from reachy_mini.apps.sources.hf_auth import get_hf_token
-
     try:
-        return get_hf_token()
+        return hf_auth.get_hf_token()
     except Exception as error:  # noqa: BLE001 - the relay degrades without a token
         logger.debug(
             "[Central Relay] Could not read daemon credentials (%s)",

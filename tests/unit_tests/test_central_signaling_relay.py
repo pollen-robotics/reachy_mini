@@ -1155,7 +1155,7 @@ def test_notify_token_change_forwards_to_instance(
 def test_relay_recovers_from_an_unauthorized_sse_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A 401 mid-session refreshes the daemon credentials and asks to reconnect."""
+    """A 401 mid-session refreshes the credentials and retries without a teardown."""
     from reachy_mini.apps.sources import hf_auth
 
     relay = _make_relay()
@@ -1170,7 +1170,9 @@ def test_relay_recovers_from_an_unauthorized_sse_response(
     asyncio.run(relay._handle_central_sse())
 
     assert relay.hf_token == "fresh"
-    assert relay._token_updated.is_set()
+    assert not relay._token_updated.is_set()
+    assert relay._connection_attempts == 1
+    assert relay.state is not RelayState.ERROR
 
 
 def test_relay_reports_a_401_it_cannot_recover_from(

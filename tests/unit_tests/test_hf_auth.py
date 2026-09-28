@@ -80,6 +80,8 @@ async def test_oauth_token_is_stored_in_the_daemon_record(
 async def test_cancelling_redirect_oauth_while_exchanging_refuses_the_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A redirect login cancelled mid-exchange never stores the late token."""
+
     async def cancel_then_return_token(_response: _TokenResponse) -> str:
         assert hf_auth.cancel_oauth_session("state") is True
         return '{"access_token": "late-token"}'

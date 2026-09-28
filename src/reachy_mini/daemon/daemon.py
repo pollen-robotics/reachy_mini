@@ -14,6 +14,7 @@ from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import TYPE_CHECKING, Any, Optional
 
+from reachy_mini.apps.sources import hf_auth
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
 from reachy_mini.daemon.utils import (
     SimulationMode,
@@ -196,9 +197,7 @@ class Daemon:
             return
 
         try:
-            from reachy_mini.apps.sources.hf_auth import get_hf_token
-
-            hf_token = get_hf_token()
+            hf_token = hf_auth.get_hf_token()
         except Exception as e:
             self.logger.debug(f"No HF token available, central signaling disabled: {e}")
             return

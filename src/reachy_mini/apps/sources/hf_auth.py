@@ -18,7 +18,12 @@ from urllib.parse import urlencode
 import aiohttp
 from huggingface_hub import HfApi, whoami
 from huggingface_hub.constants import HF_TOKEN_PATH
-from huggingface_hub.errors import HfHubHTTPError
+from huggingface_hub.errors import DeviceCodeError, HfHubHTTPError
+from huggingface_hub.utils._oauth_device import (
+    poll_device_token,
+    refresh_access_token,
+    request_device_code,
+)
 
 from reachy_mini.utils.proxy import proxy_for
 
@@ -172,22 +177,17 @@ class OAuthSession:
 _oauth_sessions: dict[str, OAuthSession] = {}
 
 
-def _cleanup_expired_sessions() -> None:
+def _drop_expired(sessions: dict[str, Any]) -> None:
     now = time.time()
-    expired = [
-        session_id
-        for session_id, session in _oauth_sessions.items()
-        if session.expires_at < now
-    ]
-    for session_id in expired:
-        del _oauth_sessions[session_id]
+    for session_id in [sid for sid, s in sessions.items() if s.expires_at < now]:
+        del sessions[session_id]
 
 
 def create_oauth_session(
     wireless_version: bool, use_localhost: bool = False
 ) -> dict[str, Any]:
     """Create a redirect OAuth session."""
-    _cleanup_expired_sessions()
+    _drop_expired(_oauth_sessions)
 
     if not OAUTH_CLIENT_ID:
         return {
@@ -241,7 +241,7 @@ def create_oauth_session(
 
 def get_oauth_session(session_id: str) -> OAuthSession | None:
     """Return an active redirect OAuth session."""
-    _cleanup_expired_sessions()
+    _drop_expired(_oauth_sessions)
     return _oauth_sessions.get(session_id)
 
 
@@ -331,30 +331,14 @@ async def exchange_code_for_token(
         return {"status": "error", "message": session.error_message}
 
     # Get username
-    username = ""
-    try:
-        user_info = whoami(token=access_token)
-        if isinstance(user_info, dict):
-            username = user_info.get("name", "") or user_info.get("fullname", "")
-    except Exception as error:  # noqa: BLE001 - username is optional
-        logger.debug(
-            "[HF Auth] Could not resolve OAuth username (%s)", type(error).__name__
-        )
+    username = _resolve_username(access_token)
 
     # Update session
     session.status = "authorized"
     session.username = username
 
     # Notify central relay of new token for immediate reconnection
-    try:
-        from reachy_mini.media.central_signaling_relay import notify_token_change
-
-        await notify_token_change(access_token)
-        logger.info("[HF Auth] Notified central relay of OAuth login")
-    except Exception as error:  # noqa: BLE001 - relay notification is best effort
-        logger.debug(
-            "[HF Auth] Could not notify relay (%s)", type(error).__name__
-        )
+    await _notify_relay(access_token)
 
     return {
         "status": "success",
@@ -406,7 +390,7 @@ def is_oauth_configured() -> bool:
 # so it works even when HF_OAUTH_CLIENT_ID is not configured.
 
 # How long an authorized session is kept so the frontend can read the result and
-# the relay can be started once, after which _cleanup removes it (a token-less
+# the relay can be started once, after which _drop_expired removes it (a token-less
 # boot polls for a few seconds; 5 min is a generous margin).
 _AUTHORIZED_SESSION_TTL_S = 300
 
@@ -436,20 +420,7 @@ class DeviceCodeSession:
 _device_code_sessions: dict[str, DeviceCodeSession] = {}
 
 
-def _cleanup_expired_device_sessions() -> None:
-    now = time.time()
-    stale = [
-        session_id
-        for session_id, session in _device_code_sessions.items()
-        if session.expires_at < now
-    ]
-    for session_id in stale:
-        _device_code_sessions.pop(session_id, None)
-
-
-def _complete_device_login(
-    response: Any, session: DeviceCodeSession
-) -> str | None:
+def _complete_device_login(response: Any, session: DeviceCodeSession) -> str | None:
     with _store_lock:
         if (
             session.cancel_event.is_set()
@@ -462,30 +433,19 @@ def _complete_device_login(
             return None
         session.status = "authorized"
         session.username = ""
-        # Bound the authorized session's lifetime so _cleanup reclaims it after the
-        # frontend has read the result (rather than leaking until daemon restart).
+        # Bound the authorized session's lifetime so _drop_expired reclaims it after
+        # the frontend has read the result (rather than leaking until daemon restart).
         session.expires_at = time.time() + _AUTHORIZED_SESSION_TTL_S
 
-    try:
-        user_info = whoami(token=response["access_token"])
-    except Exception as error:  # noqa: BLE001 - username is optional
-        logger.debug(
-            "[HF Auth] Could not resolve device username (%s)", type(error).__name__
-        )
-        return ""
-    if not isinstance(user_info, dict):
-        return ""
-    return str(user_info.get("name") or "")
+    return _resolve_username(response["access_token"])
 
 
 async def start_device_code_login() -> dict[str, Any]:
     """Begin a device-code OAuth login."""
-    _cleanup_expired_device_sessions()
+    _drop_expired(_device_code_sessions)
     lifecycle_generation = _read_store().lifecycle_generation
 
     try:
-        from huggingface_hub.utils._oauth_device import request_device_code
-
         device_info = await asyncio.to_thread(request_device_code)
     except Exception as error:  # noqa: BLE001 - callers always get a result
         logger.error(
@@ -514,9 +474,6 @@ async def start_device_code_login() -> dict[str, Any]:
 
 
 async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) -> None:
-    from huggingface_hub.errors import DeviceCodeError
-    from huggingface_hub.utils._oauth_device import poll_device_token
-
     def _abort_if_cancelled() -> None:
         # poll_device_token calls this after each "authorization pending" poll,
         # just before it sleeps; raising here unwinds it and frees the worker
@@ -566,20 +523,12 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
 
     # Notify a *running* central relay so it reconnects with the new token. A
     # token-less boot has no relay instance yet; the status route starts one.
-    try:
-        from reachy_mini.media.central_signaling_relay import notify_token_change
-
-        await notify_token_change(response.get("access_token"))
-        logger.info("[HF Auth] Notified central relay of device-code login")
-    except Exception as error:  # noqa: BLE001
-        logger.debug(
-            "[HF Auth] Could not notify relay (%s)", type(error).__name__
-        )
+    await _notify_relay(response.get("access_token"))
 
 
 def get_device_code_session_status(session_id: str) -> dict[str, Any]:
     """Return the status of a device-code OAuth session."""
-    _cleanup_expired_device_sessions()
+    _drop_expired(_device_code_sessions)
     session = _device_code_sessions.get(session_id)
     if session is None:
         return {"status": "expired", "message": "Session expired or not found"}
@@ -613,25 +562,37 @@ def cancel_device_code_session(session_id: str) -> bool:
         return True
 
 
-def _notify_relay_of_token_change(new_token: str | None = None) -> None:
+def _resolve_username(token: str) -> str:
     try:
+        user_info = whoami(token=token)
+    except Exception as error:  # noqa: BLE001 - username is optional
+        logger.debug("[HF Auth] Could not resolve username (%s)", type(error).__name__)
+        return ""
+    if not isinstance(user_info, dict):
+        return ""
+    return str(user_info.get("name") or user_info.get("fullname") or "")
+
+
+async def _notify_relay(new_token: str | None) -> None:
+    try:
+        # Lazy: the relay imports this module and pulls in websockets.
         from reachy_mini.media.central_signaling_relay import notify_token_change
 
-        # Try to get the running event loop
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # No running loop - run in new loop (blocking but quick)
-            asyncio.run(notify_token_change(new_token))
-        else:
-            # If we're already in an async context, schedule as task
-            loop.create_task(notify_token_change(new_token))
-
-        logger.info("[HF Auth] Notified central relay of token change")
+        await notify_token_change(new_token)
     except Exception as error:  # noqa: BLE001 - relay notification is best effort
-        logger.debug(
-            "[HF Auth] Could not notify relay (%s)", type(error).__name__
-        )
+        logger.debug("[HF Auth] Could not notify relay (%s)", type(error).__name__)
+
+
+def _notify_relay_of_token_change(new_token: str | None = None) -> None:
+    # Try to get the running event loop
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop - run in new loop (blocking but quick)
+        asyncio.run(_notify_relay(new_token))
+    else:
+        # If we're already in an async context, schedule as task
+        loop.create_task(_notify_relay(new_token))
 
 
 def save_hf_token(token: str) -> dict[str, Any]:
@@ -664,34 +625,39 @@ def save_hf_token(token: str) -> dict[str, Any]:
         return {"status": "error", "message": CREDENTIAL_SAVE_FAILED_MESSAGE}
 
 
+def _usable_credential(stored: _Stored) -> HfCredential:
+    expired = stored.expires_at is not None and stored.expires_at <= time.time()
+    return HfCredential(
+        None if expired else stored.access_token, stored.lifecycle_generation
+    )
+
+
 def get_hf_credential(force_refresh: bool = False) -> HfCredential:
     """Return the daemon bearer and its lifecycle generation as one atomic read."""
     with _store_lock:
         stored = _read_store()
-        expires_at = stored.expires_at
-        expired = expires_at is not None and expires_at <= time.time()
-        # Also the answer when a due refresh fails: never hand out an expired token.
-        usable = HfCredential(
-            None if expired else stored.access_token, stored.lifecycle_generation
-        )
-        due = force_refresh or (
-            expires_at is not None and expires_at <= time.time() + _REFRESH_MARGIN_S
-        )
-        if not stored.refresh_token or not due:
-            return usable
+    due = force_refresh or (
+        stored.expires_at is not None
+        and stored.expires_at <= time.time() + _REFRESH_MARGIN_S
+    )
+    if not stored.refresh_token or not due:
+        return _usable_credential(stored)
 
-        from huggingface_hub.utils._oauth_device import refresh_access_token
-
-        try:
-            response = refresh_access_token(stored.refresh_token)
-        except Exception as error:  # noqa: BLE001 - refresh is best effort
-            logger.warning(
-                "[HF Auth] Could not refresh credentials (%s)", type(error).__name__
-            )
-            return usable
+    # The network round-trip runs unlocked; the write below is compare-and-set.
+    refreshed = None
+    try:
+        response = refresh_access_token(stored.refresh_token)
         refreshed = replace(stored, **_token_fields(response, stored.refresh_token))
-        _write_store(refreshed)
-        return HfCredential(refreshed.access_token, refreshed.lifecycle_generation)
+    except Exception as error:  # noqa: BLE001 - refresh is best effort
+        logger.warning(
+            "[HF Auth] Could not refresh credentials (%s)", type(error).__name__
+        )
+    with _store_lock:
+        current = _read_store()
+        if refreshed is not None and current == stored:
+            _write_store(refreshed)
+            current = refreshed
+    return _usable_credential(current)
 
 
 def get_hf_token() -> str | None:

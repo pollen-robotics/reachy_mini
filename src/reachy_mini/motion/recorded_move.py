@@ -39,6 +39,7 @@ def dataset_token(dataset_name: str) -> str | bool | None:
     """Return the credentials a dataset needs, sending none for public defaults."""
     if dataset_name in DEFAULT_DATASETS:
         return False
+    # Lazy: apps import this module and must not pull in aiohttp.
     from reachy_mini.apps.sources.hf_auth import get_hf_token
 
     return get_hf_token() or False

@@ -1,9 +1,7 @@
 """Tests for the device-code OAuth flow."""
 
 import asyncio
-import sys
 import time
-import types
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -27,13 +25,11 @@ def _install_fake_oauth_device(
     request_device_code: Any = None,
     poll_device_token: Any = None,
 ) -> None:
-    """Inject a fake ``huggingface_hub.utils._oauth_device`` module."""
-    fake = types.ModuleType("huggingface_hub.utils._oauth_device")
+    """Stub the hub's device-code calls where ``hf_auth`` uses them."""
     if request_device_code is not None:
-        fake.request_device_code = request_device_code  # type: ignore[attr-defined]
+        monkeypatch.setattr(hf_auth, "request_device_code", request_device_code)
     if poll_device_token is not None:
-        fake.poll_device_token = poll_device_token  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "huggingface_hub.utils._oauth_device", fake)
+        monkeypatch.setattr(hf_auth, "poll_device_token", poll_device_token)
 
 
 _DEVICE_INFO = {
@@ -322,9 +318,7 @@ def test_cleanup_prunes_authorized_after_expiry() -> None:
     hf_auth._device_code_sessions["live"] = live
     hf_auth._device_code_sessions["stale"] = stale
 
-    hf_auth._cleanup_expired_device_sessions()
-
-    assert "live" in hf_auth._device_code_sessions
+    assert hf_auth.get_device_code_session_status("live")["status"] == "authorized"
     assert "stale" not in hf_auth._device_code_sessions
 
 

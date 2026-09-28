@@ -59,7 +59,9 @@ def test_create_oauth_session_selects_redirect(
     assert result["auth_url"].startswith("https://huggingface.co/oauth/authorize?")
     assert result["redirect_uri"] == expected_redirect
     assert result["expires_in"] == 600
-    assert hf_auth._oauth_sessions[result["session_id"]].redirect_uri == expected_redirect
+    assert (
+        hf_auth._oauth_sessions[result["session_id"]].redirect_uri == expected_redirect
+    )
 
 
 def test_create_oauth_session_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -289,9 +291,7 @@ def test_an_expiring_token_is_refreshed_and_rotated(
         exchanged.append(refresh_token)
         return {"access_token": "second", "refresh_token": "r2", "expires_in": 3600}
 
-    monkeypatch.setattr(
-        "huggingface_hub.utils._oauth_device.refresh_access_token", _refresh
-    )
+    monkeypatch.setattr(hf_auth, "refresh_access_token", _refresh)
 
     assert hf_auth.get_hf_token() == "second"
     assert exchanged == ["r1"]
@@ -315,8 +315,34 @@ def test_a_failed_refresh_does_not_hand_out_an_expired_token(
     def _boom(_refresh_token: str) -> dict[str, object]:
         raise RuntimeError("secret-marker")
 
-    monkeypatch.setattr(
-        "huggingface_hub.utils._oauth_device.refresh_access_token", _boom
+    monkeypatch.setattr(hf_auth, "refresh_access_token", _boom)
+
+    assert hf_auth.get_hf_token() is None
+
+
+def test_a_sign_out_during_a_refresh_is_not_overwritten(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refresh that lost its race with sign-out must not restore the robot."""
+    _validating_api(monkeypatch)
+    assert hf_auth.save_hf_token("first")["status"] == "success"
+    hf_auth._write_store(
+        replace(
+            hf_auth._read_store(),
+            refresh_token="r1",
+            expires_at=int(time.time()) + 5,
+        )
     )
 
+    def _sign_out_during_refresh(_refresh_token: str) -> dict[str, object]:
+        assert hf_auth.delete_hf_token() is True
+        return {"access_token": "late", "refresh_token": "r2", "expires_in": 3600}
+
+    monkeypatch.setattr(
+        hf_auth,
+        "refresh_access_token",
+        _sign_out_during_refresh,
+    )
+
+    assert hf_auth.get_hf_token() is None
     assert hf_auth.get_hf_token() is None

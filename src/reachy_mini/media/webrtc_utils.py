@@ -156,6 +156,7 @@ class TurnCredentials:
         """
         period = self._ttl * _TURN_REFRESH_RATIO
         try:
+            # Lazy: the SDK imports this module and must not pull in aiohttp.
             from reachy_mini.apps.sources.hf_auth import get_hf_token
 
             token = get_hf_token()
