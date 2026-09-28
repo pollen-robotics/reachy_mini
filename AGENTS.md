@@ -151,8 +151,8 @@ Browser apps that drive a Reachy Mini over WebRTC, deployed as Hugging Face Spac
 | Reference app | Stack | Use it for |
 |---|---|---|
 | [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | **Vanilla TS + Vite** | Smallest runtime, zero framework. |
-| [`tfrere/emotions`](https://huggingface.co/spaces/tfrere/emotions) | React 19 + MUI 7 + Vite | UI-rich apps (rich components, theming, deep links). |
-| [`tfrere/telepresence`](https://huggingface.co/spaces/tfrere/telepresence) | React 19 + MUI 7 + Vite | Camera / media-stream apps. |
+| [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions) | React 19 + MUI 7 + Vite | UI-rich apps (rich components, theming, deep links). |
+| [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence) | React 19 + MUI 7 + Vite | Camera / media-stream apps. |
 
 These are kept in lockstep with every SDK release. **Mimicking them is the fastest path to a working app.** The 3-file contract, deploy steps, gotchas, and SDK pin all live in [`ts/APP_CREATION_GUIDE.md`](ts/APP_CREATION_GUIDE.md) - read it before scaffolding anything non-trivial.
 

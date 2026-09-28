@@ -131,8 +131,8 @@ with every release:
 | App | Stack | What it shows |
 |-----|-------|---------------|
 | [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | Vanilla TypeScript | Smallest possible app. Tech-freedom proof. |
-| [`tfrere/emotions`](https://huggingface.co/spaces/tfrere/emotions) | React + MUI | Plutchik emotion wheel + dance triggers. |
-| [`tfrere/telepresence`](https://huggingface.co/spaces/tfrere/telepresence) | React + MUI | Live video + head / body teleop. |
+| [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions) | React + MUI | Plutchik emotion wheel + dance triggers. |
+| [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence) | React + MUI | Live video + head / body teleop. |
 
 App authors are free to use any UI framework they want inside the iframe; the
 host doesn't care. This is a hard design rule, not an accident

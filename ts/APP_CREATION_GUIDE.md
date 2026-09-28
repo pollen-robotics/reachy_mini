@@ -112,8 +112,8 @@ Pick the reference closest to your needs and clone its repo from Hugging Face:
 | Reference app                       | Stack                       | Use it for                                  |
 |-------------------------------------|-----------------------------|---------------------------------------------|
 | [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | **Vanilla TS + Vite**       | Smallest bundled runtime, no framework. **Voice apps**: live speech with the robot's mic via the HF realtime backend, no server |
-| [`tfrere/emotions`](https://huggingface.co/spaces/tfrere/emotions)                         | React 19 + MUI 7 + Vite     | UI-rich app with rich components / theming  |
-| [`tfrere/telepresence`](https://huggingface.co/spaces/tfrere/telepresence)                 | React 19 + MUI 7 + Vite     | App with camera / media streams             |
+| [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions)                         | React 19 + MUI 7 + Vite     | UI-rich app with rich components / theming  |
+| [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence)                 | React 19 + MUI 7 + Vite     | App with camera / media streams             |
 
 ```bash
 # Example: start from the vanilla TS template
@@ -664,8 +664,8 @@ explicitly tracking a newer release.
 > When a newer release is published, the source of truth is whichever
 > string is currently shared by [`minimal-conversation`'s
 > `package.json`](https://huggingface.co/spaces/tfrere/minimal-conversation/blob/main/package.json),
-> [`emotions`'s `package.json`](https://huggingface.co/spaces/tfrere/emotions/blob/main/package.json),
-> and [`telepresence`'s `package.json`](https://huggingface.co/spaces/tfrere/telepresence/blob/main/package.json).
+> [`emotions`'s `package.json`](https://huggingface.co/spaces/pollen-robotics/emotions/blob/main/package.json),
+> and [`telepresence`'s `package.json`](https://huggingface.co/spaces/pollen-robotics/telepresence/blob/main/package.json).
 > If those three diverge, fall back to whatever this guide says.
 
 ### Why pin a specific build (not `^1.10.0` or a major like `@1`)?

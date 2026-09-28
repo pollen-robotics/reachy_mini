@@ -397,7 +397,7 @@ await robot.signOut();
 The three reference apps maintained alongside the SDK are the canonical worked examples. They all use the host shell pattern and the current SDK pin:
 
 - [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) — vanilla TS + Vite.
-- [`tfrere/emotions`](https://huggingface.co/spaces/tfrere/emotions) — React 19 + MUI 7 + Vite.
-- [`tfrere/telepresence`](https://huggingface.co/spaces/tfrere/telepresence) — React 19 + MUI 7 + Vite with camera + media streams.
+- [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions) — React 19 + MUI 7 + Vite.
+- [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence) — React 19 + MUI 7 + Vite with camera + media streams.
 
 Clone the closest one and trim. See [`ts/APP_CREATION_GUIDE.md`](../../../ts/APP_CREATION_GUIDE.md) for the step-by-step.
