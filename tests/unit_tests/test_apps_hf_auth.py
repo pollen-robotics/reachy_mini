@@ -24,12 +24,18 @@ def _clear_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(hf_auth, "_oauth_sessions", {})
 
 
+# ---- Pure helpers
+
+
 def test_is_oauth_configured_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
     """is_oauth_configured reflects the client-id constant."""
     monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "some-id")
     assert hf_auth.is_oauth_configured() is True
     monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "")
     assert hf_auth.is_oauth_configured() is False
+
+
+# ---- OAuth-session lifecycle
 
 
 @pytest.mark.parametrize(
@@ -117,6 +123,9 @@ def test_expired_session_not_returned(monkeypatch: pytest.MonkeyPatch) -> None:
     assert hf_auth.get_oauth_session_status(sid)["status"] == "expired"
 
 
+# ---- exchange_code_for_token early error branches (no aiohttp)
+
+
 @pytest.mark.asyncio
 async def test_exchange_code_invalid_session() -> None:
     """Unknown state returns an invalid-session error before any network."""
@@ -137,6 +146,9 @@ async def test_exchange_code_not_configured(monkeypatch: pytest.MonkeyPatch) -> 
     result = await hf_auth.exchange_code_for_token("code", session.session_id)
     assert result == {"status": "error", "message": "OAuth not configured"}
     assert session.status == "error"
+
+
+# ---- Token functions (daemon credential store)
 
 
 def _validating_api(monkeypatch: pytest.MonkeyPatch, name: str = "alice") -> MagicMock:

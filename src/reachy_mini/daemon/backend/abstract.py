@@ -1869,7 +1869,7 @@ class Backend:
             # WAITING_FOR_TOKEN), so the robot de-registers and disappears
             # from its owner's list until it is set up again. Fail-safe:
             # delete_hf_token() never raises (returns False on failure), so
-            # a storage/logout error can't break the command loop.
+            # a storage error can't break the command loop.
             from reachy_mini.apps.sources.hf_auth import delete_hf_token
 
             ok = delete_hf_token()

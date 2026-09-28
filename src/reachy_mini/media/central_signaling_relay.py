@@ -1723,6 +1723,7 @@ async def start_central_relay(
     if _relay_instance is not None:
         return _relay_instance
 
+    # Try to get HF token if not provided
     if hf_token is None:
         hf_token = _daemon_token()
 

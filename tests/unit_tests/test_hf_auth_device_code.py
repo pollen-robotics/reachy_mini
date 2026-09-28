@@ -46,6 +46,11 @@ _DEVICE_INFO = {
 }
 
 
+# --------------------------------------------------------------------------- #
+# start_device_code_login
+# --------------------------------------------------------------------------- #
+
+
 def test_start_returns_user_code_and_registers_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -53,6 +58,7 @@ def test_start_returns_user_code_and_registers_session(
         monkeypatch, request_device_code=lambda: dict(_DEVICE_INFO)
     )
 
+    # Stub the background poll so the test does not depend on its timing.
     monkeypatch.setattr(hf_auth, "_run_device_code_poll", AsyncMock())
 
     async def scenario() -> dict[str, Any]:
@@ -84,6 +90,11 @@ def test_start_returns_error_when_request_fails(
     assert result["message"] == hf_auth.AUTHENTICATION_UNAVAILABLE_MESSAGE
     assert "network down" not in result["message"]
     assert hf_auth._device_code_sessions == {}
+
+
+# --------------------------------------------------------------------------- #
+# _run_device_code_poll
+# --------------------------------------------------------------------------- #
 
 
 def test_poll_success_persists_token_and_notifies_relay(
@@ -151,6 +162,11 @@ def test_poll_denied_maps_to_error_status(
     assert session.status == "error"
 
 
+# --------------------------------------------------------------------------- #
+# get_device_code_session_status / consume_device_session_relay_pending
+# --------------------------------------------------------------------------- #
+
+
 def test_status_unknown_session_is_expired() -> None:
     assert hf_auth.get_device_code_session_status("nope")["status"] == "expired"
 
@@ -204,6 +220,7 @@ def test_cancel_signals_the_polling_thread() -> None:
 
     assert session.cancel_event.is_set() is False
     assert hf_auth.cancel_device_code_session("s8") is True
+    # We keep the local reference, so we can assert the thread would stop.
     assert session.cancel_event.is_set() is True
 
 
@@ -212,6 +229,9 @@ def test_poll_aborts_when_cancel_event_set(monkeypatch: pytest.MonkeyPatch) -> N
     calls = {"on_pending": 0}
 
     def _fake_poll(device_info: Any, *, on_pending: Any = None) -> dict[str, Any]:
+        # Mimic the hub: invoke on_pending each pending cycle. With the event
+        # already set it raises _DeviceCodeCancelled on the first call, so the
+        # (real) blocking loop never runs.
         for _ in range(1000):
             if on_pending is not None:
                 calls["on_pending"] += 1
@@ -276,7 +296,7 @@ def test_authorized_session_gets_bounded_ttl(
 
     session = hf_auth.DeviceCodeSession(
         session_id="s10",
-        expires_at=time.time() + 900,
+        expires_at=time.time() + 900,  # original device-code expiry
     )
     hf_auth._device_code_sessions[session.session_id] = session
 
