@@ -512,19 +512,20 @@ def configure_root_logging(log_level: str, log_file: str | None = None) -> None:
 
     if log_file:
         file_handler = logging.FileHandler(log_file, mode="a")
-        file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
 
 
 _POLLING_PATHS = ("/health-check", "/api/hf-auth/relay-status")
-# Hugging Face redirects here with the OAuth authorization code in the query.
 _OAUTH_CALLBACK_PATH = "/api/hf-auth/oauth/callback"
+_HUB_REFRESH_FUNCTIONS = {
+    "_refresh_oauth_token_if_needed",
+    "_warn_refresh_failure_once",
+}
 
 
 def _hub_auth_log_filter(record: logging.LogRecord) -> bool:
-    # Hub refresh warnings embed provider text before returning the cached token.
-    if record.levelno >= logging.WARNING:
+    if record.levelno >= logging.WARNING and record.funcName in _HUB_REFRESH_FUNCTIONS:
         record.msg = "Hugging Face credential lookup or refresh failed"
         record.args = ()
         record.exc_info = record.exc_text = record.stack_info = None
@@ -532,7 +533,7 @@ def _hub_auth_log_filter(record: logging.LogRecord) -> bool:
 
 
 def access_log_filter(record: logging.LogRecord) -> bool:
-    """Keep the OAuth code out of uvicorn access logs and quieten polling routes."""
+    """Redact OAuth codes and lower polling log levels."""
     args = record.args
     if not isinstance(args, tuple) or len(args) < 3 or not isinstance(args[2], str):
         return True

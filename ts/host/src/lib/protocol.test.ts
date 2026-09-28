@@ -68,11 +68,11 @@ describe('encodeCredsToHash / decodeCredsFromHash', () => {
     expect(decodeCredsFromHash('#creds=aGVsbG8')).toBeNull(); // "hello", not JSON
   });
 
-  it('never echoes the bundle when decoding fails', () => {
+  it('does not log a malformed credentials bundle', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const truncated = window.btoa('{"hfToken":"browser-secret-marker"');
+    const malformed = window.btoa('{"hfToken":"browser-secret-marker"');
 
-    expect(decodeCredsFromHash(`#creds=${truncated}`)).toBeNull();
+    expect(decodeCredsFromHash(`#creds=${malformed}`)).toBeNull();
     expect(warn).toHaveBeenCalledExactlyOnceWith(
       '[reachy-mini-sdk/host] failed to decode creds hash',
     );
