@@ -1,0 +1,1 @@
+{"id":"6c10903083f24670662d95c17884fbb3.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_startup_check_gpio_shutdown#test_failed_enable_on_fresh_install_is_retried_on_the_next_boot","name":"test_failed_enable_on_fresh_install_is_retried_on_the_next_boot","status":"passed","testResultsByEnv":{"default":"242091f8bcbd136cf4dc51b07c878cb1"}}

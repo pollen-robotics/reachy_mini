@@ -1,0 +1,1 @@
+{"id":"74d2807685269abe8e17409110dfa343.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_webrtc_client_gstreamer#test_clear_player_without_send_chain_warns_and_flushes_daemon","name":"test_clear_player_without_send_chain_warns_and_flushes_daemon","status":"passed","testResultsByEnv":{"default":"f07999492dfbe5cfb1b253f238bc669e"}}

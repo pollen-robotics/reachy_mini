@@ -1,0 +1,1 @@
+{"id":"bab5c37dfd29597dc277faa5d2cff9c3.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_robot_app_lock#test_try_local_acquire_refused_while_remote_held","name":"test_try_local_acquire_refused_while_remote_held","status":"passed","testResultsByEnv":{"default":"e9065112594a9be58c3b7a8c7551e285"}}

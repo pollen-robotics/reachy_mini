@@ -1,0 +1,1 @@
+{"id":"49adf91093da4f982701742a4d54d515.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_proxy_env_support#test_no_proxy_env_var_bypasses_the_proxy","name":"test_no_proxy_env_var_bypasses_the_proxy","status":"passed","testResultsByEnv":{"default":"3c6245d7a0e1ef603b541b8fe8de9390"}}

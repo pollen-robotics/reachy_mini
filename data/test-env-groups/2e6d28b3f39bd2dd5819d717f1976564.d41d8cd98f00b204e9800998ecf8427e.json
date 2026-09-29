@@ -1,0 +1,1 @@
+{"id":"2e6d28b3f39bd2dd5819d717f1976564.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_robot_app_lock#test_became_free_handler_not_fired_on_eviction","name":"test_became_free_handler_not_fired_on_eviction","status":"passed","testResultsByEnv":{"default":"9d8f3486edfd22fe06fcfc1b6ea94dbd"}}

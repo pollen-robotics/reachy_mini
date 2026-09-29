@@ -1,0 +1,1 @@
+{"id":"e5a6271db1e7d5f5008dcf7c0195cdcc.334d4ffb84b2b9008f2816b801f99e94","fullName":"tests.unit_tests.test_network#test_rejects_unsafe_urls_without_echoing_credentials","name":"test_rejects_unsafe_urls_without_echoing_credentials[ https://central.example-valid HTTP]","status":"passed","testResultsByEnv":{"default":"c7979accea136807687cf0e07922f6ce"}}

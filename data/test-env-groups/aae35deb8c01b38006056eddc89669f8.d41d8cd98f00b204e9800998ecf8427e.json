@@ -1,0 +1,1 @@
+{"id":"aae35deb8c01b38006056eddc89669f8.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_media_server_pose#test_push_pose_skips_tick_when_provider_returns_none","name":"test_push_pose_skips_tick_when_provider_returns_none","status":"passed","testResultsByEnv":{"default":"ad4e4e421dd8612ce7cccfe792ea01f1"}}

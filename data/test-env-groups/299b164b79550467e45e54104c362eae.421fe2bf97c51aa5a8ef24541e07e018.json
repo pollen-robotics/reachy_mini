@@ -1,0 +1,1 @@
+{"id":"299b164b79550467e45e54104c362eae.421fe2bf97c51aa5a8ef24541e07e018","fullName":"tests.unit_tests.test_trusted_endpoints#test_signaling_authenticates_without_following_redirects","name":"test_signaling_authenticates_without_following_redirects[/send-302-relay]","status":"passed","testResultsByEnv":{"default":"0fa17bc213c4b1f28b89da56eb5a4226"}}
