@@ -57,9 +57,7 @@ OAUTH_REDIRECT_URI_LITE = "http://localhost:8000/api/hf-auth/oauth/callback"
 
 # Returned over HTTP, so never carry provider text, exception detail, or tokens.
 AUTHENTICATION_FAILED_MESSAGE = "Authentication failed. Please try again."
-AUTHENTICATION_UNAVAILABLE_MESSAGE = (
-    "Hugging Face authentication is unavailable. Please try again."
-)
+AUTHORIZATION_DENIED_MESSAGE = "Authorization was denied."
 LOGIN_EXPIRED_MESSAGE = "Login expired. Please try again."
 _CANCELLED_SESSION_MESSAGE = "Sign-in was cancelled. Please try again."
 CREDENTIAL_SAVE_FAILED_MESSAGE = "Could not save credentials. Please try again."
@@ -280,7 +278,6 @@ async def exchange_code_for_token(
             async with http_session.post(
                 token_url, data=data, proxy=proxy_for(token_url)
             ) as response:
-                response_text = await response.text()
                 if response.status != 200:
                     logger.warning(
                         "[HF Auth] OAuth token exchange returned HTTP %s",
@@ -290,7 +287,7 @@ async def exchange_code_for_token(
                     session.error_message = AUTHENTICATION_FAILED_MESSAGE
                     return {"status": "error", "message": session.error_message}
 
-                token_data = json.loads(response_text)
+                token_data = await response.json(content_type=None)
 
         # HuggingFace returns accessToken (camelCase)
         access_token = token_data.get("access_token") or token_data.get("accessToken")
@@ -306,7 +303,7 @@ async def exchange_code_for_token(
             "[HF Auth] OAuth token request failed (%s)", type(error).__name__
         )
         session.status = "error"
-        session.error_message = AUTHENTICATION_UNAVAILABLE_MESSAGE
+        session.error_message = AUTHENTICATION_FAILED_MESSAGE
         return {"status": "error", "message": session.error_message}
 
     # Save token directly to the daemon's credential store
@@ -451,7 +448,7 @@ async def start_device_code_login() -> dict[str, Any]:
         logger.error(
             "[HF Auth] Failed to request device code (%s)", type(error).__name__
         )
-        return {"status": "error", "message": AUTHENTICATION_UNAVAILABLE_MESSAGE}
+        return {"status": "error", "message": AUTHENTICATION_FAILED_MESSAGE}
 
     session_id = secrets.token_urlsafe(16)
     session = DeviceCodeSession(
@@ -501,7 +498,7 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
     except Exception as error:  # noqa: BLE001
         logger.error("[HF Auth] Device-code polling error (%s)", type(error).__name__)
         session.status = "error"
-        session.error_message = AUTHENTICATION_UNAVAILABLE_MESSAGE
+        session.error_message = AUTHENTICATION_FAILED_MESSAGE
         return
 
     try:
@@ -573,6 +570,10 @@ def _resolve_username(token: str) -> str:
     return str(user_info.get("name") or user_info.get("fullname") or "")
 
 
+# Keep a strong reference so a pending notification is not garbage-collected.
+_relay_tasks: set[asyncio.Task[None]] = set()
+
+
 async def _notify_relay(new_token: str | None) -> None:
     try:
         # Lazy: the relay imports this module and pulls in websockets.
@@ -580,7 +581,7 @@ async def _notify_relay(new_token: str | None) -> None:
 
         await notify_token_change(new_token)
     except Exception as error:  # noqa: BLE001 - relay notification is best effort
-        logger.debug("[HF Auth] Could not notify relay (%s)", type(error).__name__)
+        logger.warning("[HF Auth] Could not notify relay (%s)", type(error).__name__)
 
 
 def _notify_relay_of_token_change(new_token: str | None = None) -> None:
@@ -592,7 +593,9 @@ def _notify_relay_of_token_change(new_token: str | None = None) -> None:
         asyncio.run(_notify_relay(new_token))
     else:
         # If we're already in an async context, schedule as task
-        loop.create_task(_notify_relay(new_token))
+        task = loop.create_task(_notify_relay(new_token))
+        _relay_tasks.add(task)
+        task.add_done_callback(_relay_tasks.discard)
 
 
 def save_hf_token(token: str) -> dict[str, Any]:

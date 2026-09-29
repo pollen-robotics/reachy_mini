@@ -73,18 +73,23 @@ def test_start_returns_user_code_and_registers_session(
 
 
 def test_start_returns_error_when_request_fails(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """Keep provider text out of device-code startup failures."""
+
     def _boom() -> dict[str, Any]:
-        raise RuntimeError("network down")
+        raise RuntimeError("provider-secret-marker")
 
     _install_fake_oauth_device(monkeypatch, request_device_code=_boom)
 
     result = asyncio.run(hf_auth.start_device_code_login())
 
-    assert result["status"] == "error"
-    assert result["message"] == hf_auth.AUTHENTICATION_UNAVAILABLE_MESSAGE
-    assert "network down" not in result["message"]
+    assert result == {
+        "status": "error",
+        "message": hf_auth.AUTHENTICATION_FAILED_MESSAGE,
+    }
+    assert "RuntimeError" in caplog.text
+    assert "provider-secret-marker" not in caplog.text
     assert hf_auth._device_code_sessions == {}
 
 

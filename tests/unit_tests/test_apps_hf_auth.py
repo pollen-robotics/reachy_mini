@@ -3,7 +3,7 @@
 import time
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -150,6 +150,38 @@ async def test_exchange_code_not_configured(monkeypatch: pytest.MonkeyPatch) -> 
     assert session.status == "error"
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "payload"),
+    [(400, {}), (200, {"error": "provider-secret-marker"})],
+)
+async def test_exchange_code_failure_redacts_provider_text(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    status: int,
+    payload: dict[str, str],
+) -> None:
+    """Keep provider response details out of responses and logs."""
+    response = MagicMock(status=status)
+    response.json = AsyncMock(return_value=payload)
+    client = MagicMock()
+    http_session = client.return_value.__aenter__.return_value
+    http_session.post = MagicMock()
+    http_session.post.return_value.__aenter__.return_value = response
+    monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "cid")
+    monkeypatch.setattr(hf_auth.aiohttp, "ClientSession", client)
+    sid = hf_auth.create_oauth_session(wireless_version=True)["session_id"]
+
+    result = await hf_auth.exchange_code_for_token("code", sid)
+
+    assert result == {
+        "status": "error",
+        "message": hf_auth.AUTHENTICATION_FAILED_MESSAGE,
+    }
+    assert hf_auth.get_oauth_session_status(sid)["message"] == result["message"]
+    assert "provider-secret-marker" not in caplog.text
+
+
 # ---- Token functions (daemon credential store)
 
 
@@ -202,6 +234,25 @@ def test_save_reports_a_write_failure_without_leaking_it(
         "message": hf_auth.CREDENTIAL_SAVE_FAILED_MESSAGE,
     }
     assert "secret-marker" not in result["message"]
+
+
+def test_save_hf_token_unexpected_error_is_redacted(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Keep unexpected provider errors out of responses and logs."""
+    api = MagicMock()
+    api.whoami.side_effect = RuntimeError("provider-secret-marker")
+    monkeypatch.setattr(hf_auth, "HfApi", MagicMock(return_value=api))
+    monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *a: None)
+
+    result = hf_auth.save_hf_token("tok")
+
+    assert result == {
+        "status": "error",
+        "message": hf_auth.CREDENTIAL_SAVE_FAILED_MESSAGE,
+    }
+    assert "provider-secret-marker" not in caplog.text
+    assert "RuntimeError" in caplog.text
 
 
 def test_sign_out_leaves_credentials_the_daemon_does_not_own(

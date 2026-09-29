@@ -1,8 +1,9 @@
 """Tests for Hugging Face authentication persistence."""
 
+import asyncio
 import os
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -19,8 +20,8 @@ class _TokenResponse:
     async def __aexit__(self, *_args: object) -> None:
         pass
 
-    async def text(self) -> str:
-        return '{"accessToken": "oauth-token"}'
+    async def json(self, **_kwargs: object) -> dict[str, str]:
+        return {"access_token": "oauth-token"}
 
 
 class _ClientSession:
@@ -82,9 +83,11 @@ async def test_cancelling_redirect_oauth_while_exchanging_refuses_the_token(
 ) -> None:
     """A redirect login cancelled mid-exchange never stores the late token."""
 
-    async def cancel_then_return_token(_response: _TokenResponse) -> str:
+    async def cancel_then_return_token(
+        _response: _TokenResponse, **_kwargs: object
+    ) -> dict[str, str]:
         assert hf_auth.cancel_oauth_session("state") is True
-        return '{"access_token": "late-token"}'
+        return {"access_token": "late-token"}
 
     session = hf_auth.OAuthSession(
         session_id="state",
@@ -92,7 +95,7 @@ async def test_cancelling_redirect_oauth_while_exchanging_refuses_the_token(
         redirect_uri=hf_auth.OAUTH_REDIRECT_URI_LITE,
     )
     hf_auth._oauth_sessions[session.session_id] = session
-    monkeypatch.setattr(_TokenResponse, "text", cancel_then_return_token)
+    monkeypatch.setattr(_TokenResponse, "json", cancel_then_return_token)
     monkeypatch.setattr(hf_auth.aiohttp, "ClientSession", _ClientSession)
     monkeypatch.setattr(hf_auth, "whoami", lambda **_kwargs: {"name": "tester"})
     relay_notify = AsyncMock()
@@ -136,3 +139,36 @@ async def test_lite_first_run_ignores_credentials_on_the_same_machine(
     assert result == {"status": "success", "username": "tester"}
     assert hf_auth.get_hf_token() == "oauth-token"
     assert token_path.read_text(encoding="utf-8") == "the-users-own-token"
+
+
+@pytest.mark.asyncio
+async def test_save_token_keeps_relay_task_until_finished(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    """Retain relay work until it completes."""
+    monkeypatch.setattr(hf_auth, "HF_TOKEN_PATH", str(tmp_path / "token"))
+    api = MagicMock()
+    api.whoami.return_value = {"name": "alice"}
+    monkeypatch.setattr(hf_auth, "HfApi", MagicMock(return_value=api))
+    started = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def notify(_token: str) -> None:
+        started.set()
+        await finish.wait()
+        raise RuntimeError("provider-secret-marker")
+
+    monkeypatch.setattr(central_signaling_relay, "notify_token_change", notify)
+
+    assert hf_auth.save_hf_token("tok")["status"] == "success"
+    await started.wait()
+    assert len(hf_auth._relay_tasks) == 1
+    finish.set()
+    await asyncio.gather(*tuple(hf_auth._relay_tasks))
+    await asyncio.sleep(0)
+
+    assert not hf_auth._relay_tasks
+    assert "RuntimeError" in caplog.text
+    assert "provider-secret-marker" not in caplog.text
