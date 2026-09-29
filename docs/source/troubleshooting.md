@@ -194,7 +194,7 @@ Be sure to unpack everything first. Some parts are pre-assembled (e.g the bottom
 
 Then, check the assembly guide's parts list to see if you really miss a part:
 If you are 100% sure you miss a part, please contact sales@pollen-robotics.com with a picture of all the parts you have and order number or invoice number.  
-You can also find [stl files](https://github.com/pollen-robotics/reachy_mini/tree/develop/src/reachy_mini/descriptions/reachy_mini/mjcf/assets) to print it by yourself in the meantime.
+You can also find [stl files](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/descriptions/reachy_mini/mjcf/assets) to print it by yourself in the meantime.
 </details>
 
 
