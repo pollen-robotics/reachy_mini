@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from html import escape
 from typing import Any
 
 import aiohttp
@@ -136,11 +137,13 @@ async def refresh_relay() -> dict[str, Any]:
             "token_available": bool(token),
             "reason": "relay_unavailable",
         }
-    except Exception as e:
-        logger.warning("[refresh-relay] notify_force_reconnect failed: %s", e)
+    except Exception as error:
+        logger.warning(
+            "[refresh-relay] notify_force_reconnect failed (%s)", type(error).__name__
+        )
         raise HTTPException(
-            status_code=500, detail=f"Failed to refresh relay: {e}"
-        ) from e
+            status_code=500, detail="Failed to refresh relay"
+        ) from error
 
     if not kicked_off:
         return {
@@ -347,8 +350,10 @@ async def get_device_oauth_status(session_id: str, request: Request) -> dict[str
         if daemon is not None:
             try:
                 await daemon._start_central_signaling_relay()
-            except Exception as e:
-                logger.warning("[oauth/device] relay start failed: %r", e)
+            except Exception as error:
+                logger.warning(
+                    "[oauth/device] relay start failed (%s)", type(error).__name__
+                )
 
     return result
 
@@ -375,18 +380,17 @@ async def oauth_callback(
     Shows a success/error page that the user can close.
     """
     if error:
-        # OAuth error from HF
+        message = (
+            hf_auth.AUTHORIZATION_DENIED_MESSAGE
+            if error == "access_denied"
+            else hf_auth.AUTHENTICATION_FAILED_MESSAGE
+        )
         session = hf_auth.get_session_by_state(state) if state else None
         if session:
             session.status = "error"
-            session.error_message = error_description or error
+            session.error_message = message
 
-        return HTMLResponse(
-            content=_oauth_result_page(
-                success=False,
-                message=error_description or error,
-            )
-        )
+        return HTMLResponse(content=_oauth_result_page(success=False, message=message))
 
     if not code or not state:
         return HTMLResponse(
@@ -417,8 +421,10 @@ async def oauth_callback(
         if daemon is not None:
             try:
                 await daemon._start_central_signaling_relay()
-            except Exception as e:
-                logger.warning("[oauth/callback] relay start failed: %r", e)
+            except Exception as error:
+                logger.warning(
+                    "[oauth/callback] relay start failed (%s)", type(error).__name__
+                )
 
         return HTMLResponse(
             content=_oauth_result_page(
@@ -489,7 +495,7 @@ def _oauth_result_page(success: bool, message: str) -> str:
     <div class="container">
         <div class="icon">{icon}</div>
         <h1>{title}</h1>
-        <p>{message}</p>
+        <p>{escape(message)}</p>
         <div class="hint">
             You can close this window and return to your robot's dashboard.
         </div>

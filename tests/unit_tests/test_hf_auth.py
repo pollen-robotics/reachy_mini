@@ -19,8 +19,8 @@ class _TokenResponse:
     async def __aexit__(self, *_args: object) -> None:
         pass
 
-    async def text(self) -> str:
-        return '{"access_token": "oauth-token"}'
+    async def json(self, **_kwargs: object) -> dict[str, str]:
+        return {"access_token": "oauth-token"}
 
 
 class _ClientSession:
@@ -112,6 +112,6 @@ async def test_oauth_token_is_not_retained_when_permissions_cannot_be_enforced(
         hf_auth._oauth_sessions.clear()
 
     assert result["status"] == "error"
-    assert result["message"].startswith("Failed to save token: PermissionError")
+    assert result["message"] == hf_auth.CREDENTIAL_SAVE_FAILED_MESSAGE
     assert not token_path.exists()
     assert list(token_path.parent.iterdir()) == []

@@ -50,6 +50,11 @@ OAUTH_SCOPES = os.environ.get(
 OAUTH_REDIRECT_URI_WIRELESS = "http://reachy-mini.local:8000/api/hf-auth/oauth/callback"
 OAUTH_REDIRECT_URI_LITE = "http://localhost:8000/api/hf-auth/oauth/callback"
 
+AUTHENTICATION_FAILED_MESSAGE = "Authentication failed. Please try again."
+AUTHORIZATION_DENIED_MESSAGE = "Authorization was denied."
+CREDENTIAL_SAVE_FAILED_MESSAGE = "Could not save credentials. Please try again."
+LOGIN_EXPIRED_MESSAGE = "Login expired. Please try again."
+
 # In-memory storage for OAuth sessions (device-flow-like pattern)
 _oauth_sessions: dict[str, "OAuthSession"] = {}
 
@@ -273,26 +278,31 @@ async def exchange_code_for_token(
             async with http_session.post(
                 token_url, data=data, proxy=proxy_for(token_url)
             ) as response:
-                response_text = await response.text()
                 if response.status != 200:
+                    logger.warning(
+                        "[HF Auth] OAuth token exchange returned HTTP %s",
+                        response.status,
+                    )
                     session.status = "error"
-                    session.error_message = f"Token exchange failed (HTTP {response.status}): {response_text}"
+                    session.error_message = AUTHENTICATION_FAILED_MESSAGE
                     return {"status": "error", "message": session.error_message}
 
-                import json
-
-                token_data = json.loads(response_text)
+                token_data = await response.json(content_type=None)
 
         # HuggingFace returns accessToken (camelCase)
         access_token = token_data.get("access_token") or token_data.get("accessToken")
         if not access_token:
+            logger.warning("[HF Auth] OAuth response did not include an access token")
             session.status = "error"
-            session.error_message = f"No access token. Response: {token_data}"
+            session.error_message = AUTHENTICATION_FAILED_MESSAGE
             return {"status": "error", "message": session.error_message}
 
-    except Exception as e:
+    except Exception as error:
+        logger.warning(
+            "[HF Auth] OAuth token request failed (%s)", type(error).__name__
+        )
         session.status = "error"
-        session.error_message = f"Token request error: {type(e).__name__}: {e}"
+        session.error_message = AUTHENTICATION_FAILED_MESSAGE
         return {"status": "error", "message": session.error_message}
 
     # Save token directly to HuggingFace token file
@@ -315,9 +325,12 @@ async def exchange_code_for_token(
             os.fsync(token_file.fileno())
         os.replace(temporary_path, token_path)
         temporary_path = None
-    except Exception as e:
+    except Exception as error:
+        logger.warning(
+            "[HF Auth] Could not save OAuth credentials (%s)", type(error).__name__
+        )
         session.status = "error"
-        session.error_message = f"Failed to save token: {type(e).__name__}: {e}"
+        session.error_message = CREDENTIAL_SAVE_FAILED_MESSAGE
         return {"status": "error", "message": session.error_message}
     finally:
         if temporary_path is not None:
@@ -345,8 +358,8 @@ async def exchange_code_for_token(
         logger.info("[HF Auth] Notified central relay of OAuth login")
     except ImportError:
         pass  # Central relay not available
-    except Exception as e:
-        logger.debug(f"[HF Auth] Could not notify relay: {e}")
+    except Exception as error:
+        logger.warning("[HF Auth] Could not notify relay (%s)", type(error).__name__)
 
     return {
         "status": "success",
@@ -499,11 +512,13 @@ async def start_device_code_login() -> dict[str, Any]:
         from huggingface_hub.utils._oauth_device import request_device_code
 
         device_info = await asyncio.to_thread(request_device_code)
-    except Exception as e:  # noqa: BLE001 — surface any failure to the caller
-        logger.error("[HF Auth] Failed to request device code: %s", e)
+    except Exception as error:  # noqa: BLE001 — surface any failure to the caller
+        logger.error(
+            "[HF Auth] Failed to request device code (%s)", type(error).__name__
+        )
         return {
             "status": "error",
-            "message": f"Could not start login: {type(e).__name__}: {e}",
+            "message": AUTHENTICATION_FAILED_MESSAGE,
         }
 
     session_id = secrets.token_urlsafe(16)
@@ -549,23 +564,29 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
         logger.info("[HF Auth] Device-code login cancelled: %s", session.session_id)
         session.status = "cancelled"
         return
-    except DeviceCodeError as e:
-        logger.info("[HF Auth] Device-code login failed: %s", e)
-        session.status = "expired" if "expired" in str(e).lower() else "error"
-        session.error_message = str(e)
+    except DeviceCodeError as error:
+        logger.info("[HF Auth] Device-code login failed (%s)", type(error).__name__)
+        expired = "expired" in str(error).lower()
+        session.status = "expired" if expired else "error"
+        session.error_message = (
+            LOGIN_EXPIRED_MESSAGE if expired else AUTHENTICATION_FAILED_MESSAGE
+        )
         return
-    except Exception as e:  # noqa: BLE001
-        logger.error("[HF Auth] Device-code polling error: %s", e)
+    except Exception as error:  # noqa: BLE001
+        logger.error("[HF Auth] Device-code polling error (%s)", type(error).__name__)
         session.status = "error"
-        session.error_message = f"{type(e).__name__}: {e}"
+        session.error_message = AUTHENTICATION_FAILED_MESSAGE
         return
 
     try:
         _, username = await asyncio.to_thread(_persist_device_oauth_token, response)
-    except Exception as e:  # noqa: BLE001
-        logger.error("[HF Auth] Failed to persist device-code token: %s", e)
+    except Exception as error:  # noqa: BLE001
+        logger.error(
+            "[HF Auth] Failed to persist device-code token (%s)",
+            type(error).__name__,
+        )
         session.status = "error"
-        session.error_message = f"Failed to save token: {type(e).__name__}: {e}"
+        session.error_message = CREDENTIAL_SAVE_FAILED_MESSAGE
         return
 
     session.username = username or ""
@@ -583,8 +604,8 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
         logger.info("[HF Auth] Notified central relay of device-code login")
     except ImportError:
         pass  # Central relay not available (e.g. Lite version)
-    except Exception as e:  # noqa: BLE001
-        logger.debug("[HF Auth] Could not notify relay: %s", e)
+    except Exception as error:  # noqa: BLE001
+        logger.warning("[HF Auth] Could not notify relay (%s)", type(error).__name__)
 
 
 def get_device_code_session_status(session_id: str) -> dict[str, Any]:
@@ -634,6 +655,20 @@ def cancel_device_code_session(session_id: str) -> bool:
     return True
 
 
+_relay_tasks: set[asyncio.Task[None]] = set()
+
+
+async def _notify_relay(new_token: Optional[str]) -> None:
+    try:
+        from reachy_mini.media.central_signaling_relay import notify_token_change
+
+        await notify_token_change(new_token)
+    except ImportError:
+        return
+    except Exception as error:
+        logger.warning("[HF Auth] Could not notify relay (%s)", type(error).__name__)
+
+
 def _notify_relay_of_token_change(new_token: Optional[str] = None) -> None:
     """Notify the central signaling relay of a token change.
 
@@ -641,23 +676,13 @@ def _notify_relay_of_token_change(new_token: Optional[str] = None) -> None:
     new (or no) token. It handles the async call in a background task.
     """
     try:
-        from reachy_mini.media.central_signaling_relay import notify_token_change
-
-        # Try to get the running event loop
-        try:
-            loop = asyncio.get_running_loop()
-            # If we're already in an async context, schedule as task
-            loop.create_task(notify_token_change(new_token))
-        except RuntimeError:
-            # No running loop - run in new loop (blocking but quick)
-            asyncio.run(notify_token_change(new_token))
-
-        logger.info("[HF Auth] Notified central relay of token change")
-    except ImportError:
-        # Central relay module not available (e.g., Lite version)
-        pass
-    except Exception as e:
-        logger.debug(f"[HF Auth] Could not notify relay: {e}")
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(_notify_relay(new_token))
+    else:
+        task = loop.create_task(_notify_relay(new_token))
+        _relay_tasks.add(task)
+        task.add_done_callback(_relay_tasks.discard)
 
 
 def save_hf_token(token: str) -> dict[str, Any]:
@@ -699,10 +724,13 @@ def save_hf_token(token: str) -> dict[str, Any]:
             "status": "error",
             "message": "Invalid token or network error",
         }
-    except Exception as e:
+    except Exception as error:
+        logger.warning(
+            "[HF Auth] Could not save credentials (%s)", type(error).__name__
+        )
         return {
             "status": "error",
-            "message": str(e),
+            "message": CREDENTIAL_SAVE_FAILED_MESSAGE,
         }
 
 

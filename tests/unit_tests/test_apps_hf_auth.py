@@ -6,13 +6,15 @@ symbols monkeypatched. The real aiohttp token POST in
 `exchange_code_for_token` is not exercised; only its early error branches.
 """
 
+import asyncio
 import time
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from huggingface_hub.errors import HfHubHTTPError
 
 from reachy_mini.apps.sources import hf_auth
+from reachy_mini.media import central_signaling_relay
 
 
 @pytest.fixture(autouse=True)
@@ -186,6 +188,38 @@ async def test_exchange_code_not_configured(monkeypatch: pytest.MonkeyPatch) -> 
     assert session.status == "error"
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "payload"),
+    [(400, {}), (200, {"error": "provider-secret-marker"})],
+)
+async def test_exchange_code_failure_redacts_provider_text(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    status: int,
+    payload: dict[str, str],
+) -> None:
+    """Keep provider response details out of responses and logs."""
+    response = MagicMock(status=status)
+    response.json = AsyncMock(return_value=payload)
+    client = MagicMock()
+    http_session = client.return_value.__aenter__.return_value
+    http_session.post = MagicMock()
+    http_session.post.return_value.__aenter__.return_value = response
+    monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "cid")
+    monkeypatch.setattr(hf_auth.aiohttp, "ClientSession", client)
+    sid = hf_auth.create_oauth_session(wireless_version=True)["session_id"]
+
+    result = await hf_auth.exchange_code_for_token("code", sid, True)
+
+    assert result == {
+        "status": "error",
+        "message": hf_auth.AUTHENTICATION_FAILED_MESSAGE,
+    }
+    assert hf_auth.get_oauth_session_status(sid)["message"] == result["message"]
+    assert "provider-secret-marker" not in caplog.text
+
+
 # ---- Token functions (huggingface_hub monkeypatched)
 
 
@@ -217,16 +251,55 @@ def test_save_hf_token_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result == {"status": "error", "message": "Invalid token or network error"}
 
 
-def test_save_hf_token_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Other exceptions surface their string in the error message."""
+def test_save_hf_token_unexpected_error_is_redacted(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Keep unexpected provider errors out of responses and logs."""
     api = MagicMock()
-    api.whoami.side_effect = RuntimeError("kaboom")
+    api.whoami.side_effect = RuntimeError("provider-secret-marker")
     monkeypatch.setattr(hf_auth, "HfApi", MagicMock(return_value=api))
     monkeypatch.setattr(hf_auth, "login", MagicMock())
     monkeypatch.setattr(hf_auth, "_notify_relay_of_token_change", lambda *a: None)
 
     result = hf_auth.save_hf_token("tok")
-    assert result == {"status": "error", "message": "kaboom"}
+
+    assert result == {
+        "status": "error",
+        "message": hf_auth.CREDENTIAL_SAVE_FAILED_MESSAGE,
+    }
+    assert "provider-secret-marker" not in caplog.text
+    assert "RuntimeError" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_save_token_keeps_relay_task_until_finished(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Retain relay work until it completes."""
+    api = MagicMock()
+    api.whoami.return_value = {"name": "alice"}
+    monkeypatch.setattr(hf_auth, "HfApi", MagicMock(return_value=api))
+    monkeypatch.setattr(hf_auth, "login", MagicMock())
+    started = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def notify(_token: str) -> None:
+        started.set()
+        await finish.wait()
+        raise RuntimeError("provider-secret-marker")
+
+    monkeypatch.setattr(central_signaling_relay, "notify_token_change", notify)
+
+    assert hf_auth.save_hf_token("tok")["status"] == "success"
+    await started.wait()
+    assert len(hf_auth._relay_tasks) == 1
+    finish.set()
+    await asyncio.gather(*tuple(hf_auth._relay_tasks))
+    await asyncio.sleep(0)
+
+    assert not hf_auth._relay_tasks
+    assert "RuntimeError" in caplog.text
+    assert "provider-secret-marker" not in caplog.text
 
 
 def test_save_hf_token_hfhub_error(monkeypatch: pytest.MonkeyPatch) -> None:
