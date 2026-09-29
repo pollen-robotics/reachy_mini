@@ -312,9 +312,9 @@ async def exchange_code_for_token(
             if _oauth_sessions.get(session.session_id) is not session:
                 landed = False
             else:
-                landed = _persist_login(
-                    _token_fields(token_data, None), session.lifecycle_generation
-                )
+                # HF won't refresh Pollen's OAuth app tokens, so keep no refresh token.
+                fields = {**_token_fields(token_data, None), "refresh_token": None}
+                landed = _persist_login(fields, session.lifecycle_generation)
     except OSError as error:
         logger.warning(
             "[HF Auth] Could not save OAuth credentials (%s)", type(error).__name__
@@ -664,7 +664,7 @@ def get_hf_credential(force_refresh: bool = False) -> HfCredential:
 
 
 def get_hf_token() -> str | None:
-    """Return the daemon-owned token, refreshing it when it is close to expiry."""
+    """Return the daemon-owned token, refreshing a device-code login near expiry."""
     return get_hf_credential().token
 
 

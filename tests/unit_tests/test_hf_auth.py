@@ -172,3 +172,33 @@ async def test_save_token_keeps_relay_task_until_finished(
     assert not hf_auth._relay_tasks
     assert "RuntimeError" in caplog.text
     assert "provider-secret-marker" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_redirect_oauth_login_is_never_refreshed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Pollen's OAuth app cannot refresh, so its tokens expire without a retry."""
+    monkeypatch.setattr(hf_auth, "HF_TOKEN_PATH", str(tmp_path / "token"))
+    monkeypatch.setattr(hf_auth.aiohttp, "ClientSession", _ClientSession)
+    monkeypatch.setattr(hf_auth, "whoami", lambda **_kwargs: {"name": "tester"})
+    monkeypatch.setattr(central_signaling_relay, "notify_token_change", AsyncMock())
+
+    async def token_with_refresh(
+        _response: _TokenResponse, **_kwargs: object
+    ) -> dict[str, object]:
+        return {"access_token": "oauth-token", "refresh_token": "r", "expires_in": 60}
+
+    monkeypatch.setattr(_TokenResponse, "json", token_with_refresh)
+    refresh = MagicMock()
+    monkeypatch.setattr(hf_auth, "refresh_access_token", refresh)
+
+    start = hf_auth.create_oauth_session(wireless_version=False)
+    try:
+        result = await hf_auth.exchange_code_for_token("code", start["session_id"])
+    finally:
+        hf_auth._oauth_sessions.clear()
+
+    assert result["status"] == "success"
+    assert hf_auth.get_hf_token() == "oauth-token"
+    refresh.assert_not_called()
