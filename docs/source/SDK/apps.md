@@ -289,7 +289,7 @@ Open the Reachy Mini dashboard and click **Install** on any community app. This 
 
 ### Via the REST API
 
-The daemon host is `localhost:8000` on Lite (daemon on your machine) and `reachy-mini.local:8000` (or the robot's IP) on Wireless — substitute it for `<HOST>` below. On Lite the daemon listens on loopback only, so run the commands on that machine. These commands were run on a Wireless; they were not tested on a Lite.
+The daemon host is `localhost:8000` on Lite (daemon on your machine) and `reachy-mini.local:8000` (or the robot's IP) on Wireless — substitute it for `<HOST>` below. On Lite the daemon listens on loopback only, so run the commands on that machine.
 
 ```bash
 # Install from Hugging Face (returns a job_id; "name" and "source_kind" are required)
