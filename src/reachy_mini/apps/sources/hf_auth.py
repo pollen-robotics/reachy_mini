@@ -419,24 +419,25 @@ class DeviceCodeSession:
 _device_code_sessions: dict[str, DeviceCodeSession] = {}
 
 
-def _complete_device_login(response: Any, session: DeviceCodeSession) -> str | None:
+def _complete_device_login(response: Any, session: DeviceCodeSession) -> bool:
+    # Resolved first, so a status poll never sees "authorized" without a name.
+    username = _resolve_username(response["access_token"])
     with _store_lock:
         if (
             session.cancel_event.is_set()
             or _device_code_sessions.get(session.session_id) is not session
         ):
-            return None
+            return False
         if not _persist_login(
             _token_fields(response, None), session.lifecycle_generation
         ):
-            return None
+            return False
+        session.username = username
         session.status = "authorized"
-        session.username = ""
         # Bound the authorized session's lifetime so _drop_expired reclaims it after
         # the frontend has read the result (rather than leaking until daemon restart).
         session.expires_at = time.time() + _AUTHORIZED_SESSION_TTL_S
-
-    return _resolve_username(response["access_token"])
+    return True
 
 
 async def start_device_code_login() -> dict[str, Any]:
@@ -504,7 +505,7 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
         return
 
     try:
-        username = await asyncio.to_thread(_complete_device_login, response, session)
+        landed = await asyncio.to_thread(_complete_device_login, response, session)
     except Exception as error:  # noqa: BLE001
         logger.error(
             "[HF Auth] Failed to persist device-code token (%s)",
@@ -514,11 +515,10 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
         session.error_message = CREDENTIAL_SAVE_FAILED_MESSAGE
         return
 
-    if username is None:
+    if not landed:
         logger.info("[HF Auth] Device-code login superseded: %s", session.session_id)
         session.status = "cancelled"
         return
-    session.username = username
 
     # Notify a *running* central relay so it reconnects with the new token. A
     # token-less boot has no relay instance yet; the status route starts one.

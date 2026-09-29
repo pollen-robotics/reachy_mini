@@ -132,6 +132,33 @@ def test_poll_success_persists_token_and_notifies_relay(
     assert notified["token"] == "hf_new_token"
 
 
+def test_poll_never_reports_authorized_without_a_username(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A status poll during completion sees pending or the final name, never ""."""
+    _install_fake_oauth_device(
+        monkeypatch,
+        poll_device_token=lambda info, **kw: {"access_token": "hf_new_token"},
+    )
+    seen: list[dict[str, Any]] = []
+
+    def _whoami(**_kwargs: Any) -> dict[str, str]:
+        seen.append(hf_auth.get_device_code_session_status("s11"))
+        return {"name": "alice"}
+
+    monkeypatch.setattr(hf_auth, "whoami", _whoami)
+    session = hf_auth.DeviceCodeSession(session_id="s11")
+    hf_auth._device_code_sessions["s11"] = session
+
+    asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
+
+    assert seen == [{"status": "pending"}]
+    assert hf_auth.get_device_code_session_status("s11") == {
+        "status": "authorized",
+        "username": "alice",
+    }
+
+
 def test_poll_expired_maps_to_expired_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
