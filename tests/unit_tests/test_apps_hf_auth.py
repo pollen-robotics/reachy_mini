@@ -1,5 +1,6 @@
 """Tests for Hugging Face authentication."""
 
+import threading
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -397,3 +398,38 @@ def test_a_sign_out_during_a_refresh_is_not_overwritten(
 
     assert hf_auth.get_hf_token() is None
     assert hf_auth.get_hf_token() is None
+
+
+def test_concurrent_callers_share_one_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Callers inside the refresh margin use the refresh token once between them."""
+    _validating_api(monkeypatch)
+    assert hf_auth.save_hf_token("first")["status"] == "success"
+    hf_auth._write_store(
+        replace(
+            hf_auth._read_store(),
+            refresh_token="r1",
+            expires_at=int(time.time()) + 5,
+        )
+    )
+    exchanged: list[str] = []
+
+    def _slow_refresh(refresh_token: str) -> dict[str, object]:
+        exchanged.append(refresh_token)
+        time.sleep(0.1)
+        return {"access_token": "second", "refresh_token": "r2", "expires_in": 3600}
+
+    monkeypatch.setattr(hf_auth, "refresh_access_token", _slow_refresh)
+    tokens: list[str | None] = []
+    callers = [
+        threading.Thread(target=lambda: tokens.append(hf_auth.get_hf_token()))
+        for _ in range(8)
+    ]
+    for caller in callers:
+        caller.start()
+    for caller in callers:
+        caller.join()
+
+    assert exchanged == ["r1"]
+    assert tokens == ["second"] * 8

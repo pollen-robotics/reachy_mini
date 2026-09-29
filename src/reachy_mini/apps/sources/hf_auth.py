@@ -69,6 +69,8 @@ _REFRESH_MARGIN_S = 300
 _OAUTH_SESSION_TTL_S = 600
 
 _store_lock = threading.RLock()
+# One refresh at a time, so HF sees each rotating refresh token only once.
+_refresh_lock = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -646,20 +648,27 @@ def get_hf_credential(force_refresh: bool = False) -> HfCredential:
     if not stored.refresh_token or not due:
         return _usable_credential(stored)
 
-    # The network call runs without the lock. The write below is compare-and-set.
-    refreshed = None
-    try:
-        response = refresh_access_token(stored.refresh_token)
-        refreshed = replace(stored, **_token_fields(response, stored.refresh_token))
-    except Exception as error:  # noqa: BLE001 - refresh is best effort
-        logger.warning(
-            "[HF Auth] Could not refresh credentials (%s)", type(error).__name__
-        )
-    with _store_lock:
-        current = _read_store()
-        if refreshed is not None and current == stored:
-            _write_store(refreshed)
-            current = refreshed
+    with _refresh_lock:
+        with _store_lock:
+            current = _read_store()
+        # A peer refreshed or signed out while this caller waited.
+        if current != stored:
+            return _usable_credential(current)
+
+        # The store lock is released for the network call, so the write is a CAS.
+        refreshed = None
+        try:
+            response = refresh_access_token(stored.refresh_token)
+            refreshed = replace(stored, **_token_fields(response, stored.refresh_token))
+        except Exception as error:  # noqa: BLE001 - refresh is best effort
+            logger.warning(
+                "[HF Auth] Could not refresh credentials (%s)", type(error).__name__
+            )
+        with _store_lock:
+            current = _read_store()
+            if refreshed is not None and current == stored:
+                _write_store(refreshed)
+                current = refreshed
     return _usable_credential(current)
 
 
