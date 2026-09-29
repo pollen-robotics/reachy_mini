@@ -1193,3 +1193,29 @@ def test_relay_reports_a_401_it_cannot_recover_from(
     asyncio.run(relay._handle_central_sse())
 
     assert relay.state is RelayState.ERROR
+
+
+def test_relay_backs_off_when_central_rejects_every_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the first 401 of a session retries at once. The next one backs off."""
+    from reachy_mini.apps.sources import hf_auth
+
+    relay = _make_relay()
+    relay.hf_token = "stale"
+    relay._http_session = _FakeHTTPSession(status=401)  # type: ignore[assignment]
+    refreshes: list[bool] = []
+
+    def _always_new_token(force_refresh: bool = False) -> hf_auth.HfCredential:
+        refreshes.append(force_refresh)
+        return hf_auth.HfCredential(f"fresh-{len(refreshes)}", 1)
+
+    monkeypatch.setattr(hf_auth, "get_hf_credential", _always_new_token)
+
+    asyncio.run(relay._handle_central_sse())
+    assert relay.state is not RelayState.ERROR
+
+    asyncio.run(relay._handle_central_sse())
+
+    assert refreshes == [True]
+    assert relay.state is RelayState.ERROR

@@ -588,7 +588,6 @@ class CentralSignalingRelay:
         if token and token != failed_token:
             logger.info("[Central Relay] Refreshed credentials after a 401")
             return True
-        self._set_state(RelayState.ERROR, "Authentication failed")
         return False
 
     async def _close_connections(self) -> None:
@@ -1194,10 +1193,15 @@ class CentralSignalingRelay:
                 proxy=proxy_for(events_url),
             ) as response:
                 if response.status == 401:
-                    # Returning retries at once; setting _token_updated would
-                    # tear down that retry and fall back to a full backoff.
-                    if await self._recover_from_unauthorized(self.hf_token):
-                        self._connection_attempts += 1
+                    # A refresh always yields a new token, so only the first 401
+                    # of a session retries at once. Later ones back off as ERROR.
+                    retry_now = self._connection_attempts == 0
+                    self._connection_attempts += 1
+                    if not (
+                        retry_now
+                        and await self._recover_from_unauthorized(self.hf_token)
+                    ):
+                        self._set_state(RelayState.ERROR, "Authentication failed")
                     return
                 elif response.status != 200:
                     self._set_state(
