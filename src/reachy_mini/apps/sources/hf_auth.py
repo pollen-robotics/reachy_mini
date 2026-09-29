@@ -378,9 +378,9 @@ def is_oauth_configured() -> bool:
 #     at a fixed hostname (reachy-mini.local) — the phone only displays a short
 #     code + URL and the robot polls Hugging Face for the result.
 #   - yields a refresh token. The daemon persists it in its own credential
-#     store and `get_hf_credential()` transparently renews the access token
-#     when it is close to expiry, so a long-running robot never needs the user
-#     to re-authenticate by hand.
+#     store and `get_hf_credential()` renews the access token when it is close
+#     to expiry, so a long-running robot never needs the user to
+#     re-authenticate by hand.
 #
 # It uses Hugging Face's first-party device-code OAuth client (shipped in
 # huggingface_hub via DEVICE_CODE_OAUTH_CLIENT_ID), not the Pollen OAuth app,
@@ -646,7 +646,7 @@ def get_hf_credential(force_refresh: bool = False) -> HfCredential:
     if not stored.refresh_token or not due:
         return _usable_credential(stored)
 
-    # The network round-trip runs unlocked; the write below is compare-and-set.
+    # The network call runs without the lock. The write below is compare-and-set.
     refreshed = None
     try:
         response = refresh_access_token(stored.refresh_token)
