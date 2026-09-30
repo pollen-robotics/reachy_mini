@@ -567,7 +567,7 @@ class CentralSignalingRelay:
 
     def _refresh_token(self, force_refresh: bool = False) -> Optional[str]:
         """Re-read the daemon-owned credentials, refreshing them when asked."""
-        token = hf_auth.get_hf_credential(force_refresh).token
+        token = hf_auth.get_hf_token(force_refresh)
         if token != self.hf_token:
             if token:
                 logger.info("[Central Relay] HF token detected (user logged in)")

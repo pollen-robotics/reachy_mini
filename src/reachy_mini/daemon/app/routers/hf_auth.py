@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
 from reachy_mini.apps.sources import hf_auth
-from reachy_mini.media.central_signaling_relay import CENTRAL_SIGNALING_SERVER
+from reachy_mini.media import central_signaling_relay
 from reachy_mini.utils.network import validate_secure_http_url
 from reachy_mini.utils.proxy import proxy_for
 
@@ -23,9 +23,9 @@ router = APIRouter(prefix="/hf-auth")
 CENTRAL_ROBOT_STATUS_URL: str | None = None
 try:
     CENTRAL_ROBOT_STATUS_URL = (
-        validate_secure_http_url(CENTRAL_SIGNALING_SERVER, "REACHY_CENTRAL_URL").rstrip(
-            "/"
-        )
+        validate_secure_http_url(
+            central_signaling_relay.CENTRAL_SIGNALING_SERVER, "REACHY_CENTRAL_URL"
+        ).rstrip("/")
         + "/api/robot-status"
     )
 except ValueError as error:
@@ -86,16 +86,7 @@ async def get_relay_status(request: Request) -> dict[str, Any]:
             "is_connected": False,
         }
 
-    try:
-        from reachy_mini.media.central_signaling_relay import get_relay_status
-
-        return get_relay_status()
-    except ImportError:
-        return {
-            "state": "unavailable",
-            "message": "Central relay not available",
-            "is_connected": False,
-        }
+    return central_signaling_relay.get_relay_status()
 
 
 @router.delete("/token")
@@ -117,26 +108,15 @@ async def refresh_relay() -> dict[str, Any]:
       - ``{"status": "requested", "token_available": bool}`` — a
         reconnect was kicked off.
       - ``{"status": "skipped", "token_available": bool,
-            "reason": "relay_not_running" | "relay_unavailable"}`` — no
-        reconnect happened. The mobile app's auto-heal loop must NOT
+            "reason": "relay_not_running"}`` — no reconnect happened
+        because no relay instance exists (daemon started without a token,
+        pre-init, or shutdown). The mobile app's auto-heal loop must NOT
         wait for a state change in this case (it would hang forever).
-        ``relay_unavailable`` covers the import failure (Lite-only
-        build that ships no relay module); ``relay_not_running`` covers
-        the module-present-but-no-instance case (daemon started
-        without a token / pre-init / shutdown).
     """
     token = hf_auth.get_hf_token()
 
     try:
-        from reachy_mini.media.central_signaling_relay import notify_force_reconnect
-
-        kicked_off = await notify_force_reconnect()
-    except ImportError:
-        return {
-            "status": "skipped",
-            "token_available": bool(token),
-            "reason": "relay_unavailable",
-        }
+        kicked_off = await central_signaling_relay.notify_force_reconnect()
     except Exception as error:
         logger.warning(
             "[refresh-relay] notify_force_reconnect failed (%s)", type(error).__name__

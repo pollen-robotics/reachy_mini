@@ -1163,8 +1163,8 @@ def test_relay_recovers_from_an_unauthorized_sse_response(
     relay._http_session = _FakeHTTPSession(status=401)  # type: ignore[assignment]
     monkeypatch.setattr(
         hf_auth,
-        "get_hf_credential",
-        lambda force_refresh=False: hf_auth.HfCredential("fresh", 1),
+        "get_hf_token",
+        lambda force_refresh=False: "fresh",
     )
 
     asyncio.run(relay._handle_central_sse())
@@ -1186,8 +1186,8 @@ def test_relay_reports_a_401_it_cannot_recover_from(
     relay._http_session = _FakeHTTPSession(status=401)  # type: ignore[assignment]
     monkeypatch.setattr(
         hf_auth,
-        "get_hf_credential",
-        lambda force_refresh=False: hf_auth.HfCredential("stale", 1),
+        "get_hf_token",
+        lambda force_refresh=False: "stale",
     )
 
     asyncio.run(relay._handle_central_sse())
@@ -1206,11 +1206,11 @@ def test_relay_backs_off_when_central_rejects_every_token(
     relay._http_session = _FakeHTTPSession(status=401)  # type: ignore[assignment]
     refreshes: list[bool] = []
 
-    def _always_new_token(force_refresh: bool = False) -> hf_auth.HfCredential:
+    def _always_new_token(force_refresh: bool = False) -> str:
         refreshes.append(force_refresh)
-        return hf_auth.HfCredential(f"fresh-{len(refreshes)}", 1)
+        return f"fresh-{len(refreshes)}"
 
-    monkeypatch.setattr(hf_auth, "get_hf_credential", _always_new_token)
+    monkeypatch.setattr(hf_auth, "get_hf_token", _always_new_token)
 
     asyncio.run(relay._handle_central_sse())
     assert relay.state is not RelayState.ERROR

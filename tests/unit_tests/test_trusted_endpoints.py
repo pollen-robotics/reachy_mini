@@ -27,8 +27,8 @@ async def endpoint_server(
     monkeypatch.setenv("no_proxy", "127.0.0.1")
     monkeypatch.setattr(
         auth_source,
-        "get_hf_credential",
-        lambda force_refresh=False: auth_source.HfCredential("hf_test", 0),
+        "get_hf_token",
+        lambda force_refresh=False: "hf_test",
     )
     requests: list[web.Request] = []
     responses: dict[str, tuple[int, object]] = {}
