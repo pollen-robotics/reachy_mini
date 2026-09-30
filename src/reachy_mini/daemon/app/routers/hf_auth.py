@@ -1,6 +1,7 @@
 """HuggingFace authentication API routes."""
 
 import asyncio
+import html
 import logging
 from html import escape
 from typing import Any
@@ -418,6 +419,9 @@ async def oauth_callback(
 
 def _oauth_result_page(success: bool, message: str) -> str:
     """Generate a simple HTML page showing OAuth result."""
+    # The message may contain attacker-controlled input (e.g. the OAuth
+    # `error_description` query parameter); escape it to prevent XSS.
+    message = html.escape(message, quote=True)
     icon = "✅" if success else "❌"
     title = "Login Successful" if success else "Login Failed"
     color = "#10b981" if success else "#ef4444"
