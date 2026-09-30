@@ -1,0 +1,1 @@
+WARNING  _ble_auth_binding_under_test:bluetooth_service.py:833 BLE write with no device path in options; refusing auth
