@@ -567,20 +567,14 @@ class CentralSignalingRelay:
 
     def _refresh_token(self, force_refresh: bool = False) -> Optional[str]:
         """Re-read the daemon-owned credentials, refreshing them when asked."""
-        try:
-            token = hf_auth.get_hf_credential(force_refresh).token
-            if token != self.hf_token:
-                if token:
-                    logger.info("[Central Relay] HF token detected (user logged in)")
-                else:
-                    logger.debug("[Central Relay] No HF token available")
-                self.hf_token = token
-            return token
-        except Exception as error:
-            logger.debug(
-                "[Central Relay] Could not get HF token (%s)", type(error).__name__
-            )
-            return self.hf_token
+        token = hf_auth.get_hf_credential(force_refresh).token
+        if token != self.hf_token:
+            if token:
+                logger.info("[Central Relay] HF token detected (user logged in)")
+            else:
+                logger.debug("[Central Relay] No HF token available")
+            self.hf_token = token
+        return token
 
     async def _recover_from_unauthorized(self, failed_token: Optional[str]) -> bool:
         """Refresh after a 401 and report whether a retry is worth attempting."""
@@ -1655,18 +1649,6 @@ class CentralSignalingRelay:
 _relay_instance: Optional[CentralSignalingRelay] = None
 
 
-def _daemon_token() -> Optional[str]:
-    """Return the daemon-owned token, or None when the robot is signed out."""
-    try:
-        return hf_auth.get_hf_token()
-    except Exception as error:  # noqa: BLE001 - the relay degrades without a token
-        logger.debug(
-            "[Central Relay] Could not read daemon credentials (%s)",
-            type(error).__name__,
-        )
-        return None
-
-
 def get_relay() -> Optional[CentralSignalingRelay]:
     """Get the global relay instance.
 
@@ -1728,7 +1710,7 @@ async def start_central_relay(
 
     # Try to get HF token if not provided
     if hf_token is None:
-        hf_token = _daemon_token()
+        hf_token = hf_auth.get_hf_token()
 
     _relay_instance = CentralSignalingRelay(
         central_uri=central_uri,
@@ -1767,7 +1749,7 @@ async def notify_token_change(new_token: Optional[str] = None) -> None:
         return
 
     if new_token is None:
-        new_token = _daemon_token()
+        new_token = hf_auth.get_hf_token()
 
     await _relay_instance.update_token(new_token)
 

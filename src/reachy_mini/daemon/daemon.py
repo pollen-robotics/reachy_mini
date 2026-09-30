@@ -196,12 +196,7 @@ class Daemon:
         if not self._media_server:
             return
 
-        try:
-            hf_token = hf_auth.get_hf_token()
-        except Exception as e:
-            self.logger.debug(f"No HF token available, central signaling disabled: {e}")
-            return
-
+        hf_token = hf_auth.get_hf_token()
         if not hf_token:
             self.logger.info("No HF token found, central signaling relay disabled")
             return

@@ -433,3 +433,26 @@ def test_concurrent_callers_share_one_refresh(
 
     assert exchanged == ["r1"]
     assert tokens == ["second"] * 8
+
+
+def test_a_refresh_that_cannot_be_saved_keeps_the_valid_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A store write failure after a refresh is logged, and the old token is served."""
+    _validating_api(monkeypatch)
+    assert hf_auth.save_hf_token("first")["status"] == "success"
+    hf_auth._write_store(
+        replace(
+            hf_auth._read_store(),
+            refresh_token="r1",
+            expires_at=int(time.time()) + 5,
+        )
+    )
+    monkeypatch.setattr(
+        hf_auth,
+        "refresh_access_token",
+        lambda _token: {"access_token": "second", "expires_in": 3600},
+    )
+    monkeypatch.setattr(hf_auth, "_write_store", MagicMock(side_effect=OSError("full")))
+
+    assert hf_auth.get_hf_token() == "first"

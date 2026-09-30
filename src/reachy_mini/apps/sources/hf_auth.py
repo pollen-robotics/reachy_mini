@@ -115,16 +115,15 @@ def _write_store(stored: _Stored) -> None:
 
 
 def _read_store() -> _Stored:
-    path = _store_path()
-    if not path.exists():
-        return _Stored(signed_out=True)
     try:
-        stored = _Stored(**json.loads(path.read_text(encoding="utf-8")))
+        stored = _Stored(**json.loads(_store_path().read_text(encoding="utf-8")))
         if stored.version != _STORE_VERSION or stored.lifecycle_generation < 0:
             raise ValueError("unsupported credential record")
         if not stored.signed_out and not stored.access_token:
             raise ValueError("credential record has no token")
         return stored
+    except FileNotFoundError:
+        return _Stored(signed_out=True)
     except (OSError, TypeError, ValueError) as error:
         logger.warning(
             "[HF Auth] Unreadable credential store (%s)", type(error).__name__
@@ -638,7 +637,7 @@ def _usable_credential(stored: _Stored) -> HfCredential:
 
 
 def get_hf_credential(force_refresh: bool = False) -> HfCredential:
-    """Return the daemon bearer and its lifecycle generation as one atomic read."""
+    """Return the daemon bearer and its lifecycle generation. Never raises."""
     with _store_lock:
         stored = _read_store()
     due = force_refresh or (
@@ -667,8 +666,14 @@ def get_hf_credential(force_refresh: bool = False) -> HfCredential:
         with _store_lock:
             current = _read_store()
             if refreshed is not None and current == stored:
-                _write_store(refreshed)
-                current = refreshed
+                try:
+                    _write_store(refreshed)
+                    current = refreshed
+                except OSError as error:
+                    logger.warning(
+                        "[HF Auth] Could not save refreshed credentials (%s)",
+                        type(error).__name__,
+                    )
     return _usable_credential(current)
 
 
