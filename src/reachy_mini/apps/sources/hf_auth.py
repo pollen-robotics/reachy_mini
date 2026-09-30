@@ -486,7 +486,7 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
         return
     except DeviceCodeError as error:
         logger.info("[HF Auth] Device-code login failed (%s)", type(error).__name__)
-        expired = "expired" in str(error).lower()
+        expired = error.error_code == OAuthErrorCode.EXPIRED_TOKEN
         session.status = "expired" if expired else "error"
         session.error_message = (
             LOGIN_EXPIRED_MESSAGE if expired else AUTHENTICATION_FAILED_MESSAGE
