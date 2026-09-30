@@ -17,10 +17,9 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
-from huggingface_hub import constants
+from huggingface_hub import constants, get_token
 from huggingface_hub.utils import _auth, _oauth_device
 
-from reachy_mini.apps.sources import hf_auth
 from reachy_mini.daemon.app import main
 from reachy_mini.daemon.app.main import configure_root_logging
 
@@ -136,7 +135,7 @@ def test_hub_stored_tokens_parse_error_redacts_token(
         monkeypatch.delenv(name, raising=False)
     configure_root_logging("INFO")
 
-    assert hf_auth.get_hf_token() == "hf_old_token"
+    assert get_token() == "hf_old_token"
 
     output = capsys.readouterr().err
     assert "Could not parse the stored Hugging Face tokens file" in output
@@ -173,7 +172,7 @@ def test_hub_refresh_log_redacts_provider_text(
     monkeypatch.setattr(_oauth_device, "get_session", lambda: provider)
     configure_root_logging("INFO")
 
-    assert hf_auth.get_hf_token() == "hf_old_token"
+    assert get_token() == "hf_old_token"
 
     output = capsys.readouterr().err
     assert "Hugging Face credential refresh failed" in output

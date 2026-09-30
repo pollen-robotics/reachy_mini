@@ -317,8 +317,8 @@ async def cancel_oauth_session(session_id: str) -> dict[str, str]:
 # =============================================================================
 # The phone displays a short code + URL; the robot polls Hugging Face and stores
 # a refresh-capable token. No redirect URI, so this works regardless of how the
-# robot is addressed (no reachy-mini.local dependency), and the token is renewed
-# automatically by huggingface_hub without further user interaction.
+# robot is addressed (no reachy-mini.local dependency), and the daemon renews the
+# token automatically without further user interaction.
 
 
 @router.post("/oauth/device/start")
@@ -385,7 +385,7 @@ async def oauth_callback(
             if error == "access_denied"
             else hf_auth.AUTHENTICATION_FAILED_MESSAGE
         )
-        session = hf_auth.get_session_by_state(state) if state else None
+        session = hf_auth.get_oauth_session(state) if state else None
         if session:
             session.status = "error"
             session.error_message = message
@@ -401,15 +401,10 @@ async def oauth_callback(
             status_code=400,
         )
 
-    # Determine if wireless based on the callback URL
-    host = request.headers.get("host", "")
-    wireless_version = "reachy-mini.local" in host
-
     # Exchange code for token
     result = await hf_auth.exchange_code_for_token(
         code=code,
         state=state,
-        wireless_version=wireless_version,
     )
 
     if result["status"] == "success":

@@ -1869,7 +1869,7 @@ class Backend:
             # WAITING_FOR_TOKEN), so the robot de-registers and disappears
             # from its owner's list until it is set up again. Fail-safe:
             # delete_hf_token() never raises (returns False on failure), so
-            # a storage/logout error can't break the command loop.
+            # a storage error can't break the command loop.
             from reachy_mini.apps.sources.hf_auth import delete_hf_token
 
             ok = delete_hf_token()
@@ -2709,6 +2709,7 @@ class Backend:
         from reachy_mini.motion.recorded_move import (
             DEFAULT_EMOTIONS_DATASET,
             RecordedMoves,
+            dataset_token,
         )
 
         dataset = cmd.dataset_name or DEFAULT_EMOTIONS_DATASET
@@ -2717,7 +2718,9 @@ class Backend:
             # snapshot_download: run it in a worker thread so it cannot stall
             # the daemon's event loop (and its pose stream) mid-session.
             move = await asyncio.to_thread(
-                lambda: RecordedMoves(dataset).get(cmd.move_name)
+                lambda: RecordedMoves(dataset, token=dataset_token(dataset)).get(
+                    cmd.move_name
+                )
             )
         except Exception as e:
             self.logger.warning(
@@ -2761,9 +2764,11 @@ class Backend:
         reported but deliberately not fatal - ``play_recorded_move`` will
         retry the download on demand at playback time.
         """
-        from reachy_mini.motion.recorded_move import preload_dataset
+        from reachy_mini.motion.recorded_move import dataset_token, preload_dataset
 
-        local_path = await asyncio.to_thread(preload_dataset, cmd.dataset_name)
+        local_path = await asyncio.to_thread(
+            preload_dataset, cmd.dataset_name, dataset_token(cmd.dataset_name)
+        )
         if local_path is None:
             send_response(
                 {

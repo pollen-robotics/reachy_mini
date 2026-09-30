@@ -204,6 +204,42 @@ def test_oauth_session_delete_not_found(monkeypatch, router_app):
     assert resp.status_code == 404
 
 
+def test_device_oauth_start_keeps_mobile_contract(monkeypatch, router_app):
+    """The mobile setup endpoint returns the Hugging Face device-code fields."""
+    payload = {
+        "status": "pending",
+        "session_id": "s1",
+        "user_code": "ABCD-1234",
+        "verification_uri": "https://huggingface.co/oauth/device",
+        "verification_uri_complete": "https://huggingface.co/oauth/device?code",
+        "interval": 5,
+        "expires_in": 900,
+    }
+    monkeypatch.setattr(src, "start_device_code_login", AsyncMock(return_value=payload))
+    client = router_app(hf_auth.router)
+
+    resp = client.post("/hf-auth/oauth/device/start")
+
+    assert resp.status_code == 200
+    assert resp.json() == payload
+
+
+def test_device_oauth_status_keeps_mobile_contract(monkeypatch, router_app):
+    """The mobile setup status endpoint preserves authorized and username."""
+    monkeypatch.setattr(
+        src,
+        "get_device_code_session_status",
+        lambda _sid: {"status": "authorized", "username": "alice"},
+    )
+    monkeypatch.setattr(src, "consume_device_session_relay_pending", lambda _sid: False)
+    client = router_app(hf_auth.router)
+
+    resp = client.get("/hf-auth/oauth/device/status/s1")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "authorized", "username": "alice"}
+
+
 def test_central_status_refuses_an_untrusted_central_before_sending_the_bearer(
     monkeypatch: pytest.MonkeyPatch,
     router_app: Callable[[APIRouter], TestClient],
@@ -258,7 +294,7 @@ def test_central_robot_status_no_token(monkeypatch, router_app):
 def test_oauth_callback_redacts_provider_text(monkeypatch, router_app):
     """Callback with an OAuth error renders the failure page (no network)."""
     session = types.SimpleNamespace(status="pending", error_message=None)
-    monkeypatch.setattr(src, "get_session_by_state", lambda state: session)
+    monkeypatch.setattr(src, "get_oauth_session", lambda state: session)
     client = router_app(hf_auth.router)
 
     resp = client.get(

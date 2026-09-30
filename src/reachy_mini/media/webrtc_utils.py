@@ -156,9 +156,10 @@ class TurnCredentials:
         """
         period = self._ttl * _TURN_REFRESH_RATIO
         try:
-            from huggingface_hub import get_token
+            # Lazy: the SDK imports this module and must not pull in aiohttp.
+            from reachy_mini.apps.sources.hf_auth import get_hf_token
 
-            token = get_token()
+            token = get_hf_token()
             if not token:
                 # Steady state on a robot nobody has logged in; say so once.
                 if not self._warned_no_token:
