@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from huggingface_hub.errors import DeviceCodeError
 
 from reachy_mini.apps.sources import hf_auth
 
@@ -442,3 +443,28 @@ def test_a_refresh_that_cannot_be_saved_keeps_the_valid_token(
     monkeypatch.setattr(hf_auth, "_write_store", MagicMock(side_effect=OSError("full")))
 
     assert hf_auth.get_hf_token() == "first"
+
+
+def test_a_revoked_refresh_token_is_dropped_after_one_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """HF rejecting the refresh token stops further refresh calls on every read."""
+    _validating_api(monkeypatch)
+    assert hf_auth.save_hf_token("first")["status"] == "success"
+    hf_auth._write_store(
+        replace(
+            hf_auth._read_store(),
+            refresh_token="r1",
+            expires_at=int(time.time()) + 60,
+        )
+    )
+    refresh = MagicMock(
+        side_effect=DeviceCodeError("revoked", error_code="invalid_grant")
+    )
+    monkeypatch.setattr(hf_auth, "refresh_access_token", refresh)
+
+    tokens = [hf_auth.get_hf_token() for _ in range(20)]
+
+    assert refresh.call_count == 1
+    assert tokens == ["first"] * 20
+    assert hf_auth._read_store().refresh_token is None

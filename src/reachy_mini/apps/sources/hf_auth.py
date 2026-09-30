@@ -18,7 +18,7 @@ from urllib.parse import urlencode
 import aiohttp
 from huggingface_hub import HfApi, whoami
 from huggingface_hub.constants import HF_TOKEN_PATH
-from huggingface_hub.errors import DeviceCodeError, HfHubHTTPError
+from huggingface_hub.errors import DeviceCodeError, HfHubHTTPError, OAuthErrorCode
 from huggingface_hub.utils._oauth_device import (
     poll_device_token,
     refresh_access_token,
@@ -656,6 +656,12 @@ def get_hf_credential(force_refresh: bool = False) -> HfCredential:
             logger.warning(
                 "[HF Auth] Could not refresh credentials (%s)", type(error).__name__
             )
+            # A revoked refresh token never recovers, so stop asking HF for it.
+            if (
+                isinstance(error, DeviceCodeError)
+                and error.error_code == OAuthErrorCode.INVALID_GRANT
+            ):
+                refreshed = replace(stored, refresh_token=None)
         with _store_lock:
             current = _read_store()
             if refreshed is not None and current == stored:
