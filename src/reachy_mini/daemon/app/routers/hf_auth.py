@@ -71,7 +71,7 @@ async def save_token(request: TokenRequest) -> TokenResponse:
 @router.get("/status")
 async def get_auth_status() -> dict[str, Any]:
     """Check if user is authenticated with HuggingFace."""
-    return hf_auth.check_token_status()
+    return await asyncio.to_thread(hf_auth.check_token_status)
 
 
 @router.get("/relay-status")

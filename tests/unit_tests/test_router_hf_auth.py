@@ -1,6 +1,8 @@
 """Unit tests for the HuggingFace auth router (delegating to apps.sources.hf_auth)."""
 
+import asyncio
 import importlib
+import threading
 import types
 from collections.abc import Callable
 from unittest.mock import AsyncMock, Mock
@@ -63,6 +65,24 @@ def test_status(monkeypatch, router_app):
 
     assert resp.status_code == 200
     assert resp.json() == payload
+
+
+def test_status_check_does_not_block_the_event_loop(monkeypatch):
+    """The whoami-backed status check runs off the loop, so other requests proceed."""
+    released = threading.Event()
+
+    def _slow_check():
+        return {"is_logged_in": released.wait(timeout=2), "username": None}
+
+    monkeypatch.setattr(src, "check_token_status", _slow_check)
+
+    async def scenario():
+        status = asyncio.create_task(hf_auth.get_auth_status())
+        await asyncio.sleep(0.05)
+        released.set()
+        return await status
+
+    assert asyncio.run(scenario())["is_logged_in"] is True
 
 
 def test_relay_status_lite_early_return(router_app):
