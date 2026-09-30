@@ -138,20 +138,6 @@ async def test_exchange_code_invalid_session() -> None:
 
 
 @pytest.mark.asyncio
-async def test_exchange_code_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A valid session but missing client id fails as not configured."""
-    monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "cid")
-    sid = hf_auth.create_oauth_session(wireless_version=True)["session_id"]
-    session = hf_auth.get_oauth_session(sid)
-    assert session is not None
-
-    monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "")
-    result = await hf_auth.exchange_code_for_token("code", session.session_id)
-    assert result == {"status": "error", "message": "OAuth not configured"}
-    assert session.status == "error"
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("status", "payload"),
     [(400, {}), (200, {"error": "provider-secret-marker"})],

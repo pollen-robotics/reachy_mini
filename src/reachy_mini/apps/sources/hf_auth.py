@@ -45,9 +45,7 @@ logger = logging.getLogger(__name__)
 # Pollen's HuggingFace OAuth app - works for all Reachy Mini robots
 _DEFAULT_OAUTH_CLIENT_ID = "71146982-8184-45a2-b05a-d561b3cd701d"
 
-OAUTH_CLIENT_ID: str | None = os.environ.get(
-    "HF_OAUTH_CLIENT_ID", _DEFAULT_OAUTH_CLIENT_ID
-)
+OAUTH_CLIENT_ID: str = os.environ.get("HF_OAUTH_CLIENT_ID", _DEFAULT_OAUTH_CLIENT_ID)
 # Read-only: publishing an app happens on a dev machine, never on the robot.
 OAUTH_SCOPES = "openid profile read-repos"
 
@@ -255,11 +253,6 @@ async def exchange_code_for_token(
             "status": "error",
             "message": "Invalid or expired session. Please try again.",
         }
-
-    if not OAUTH_CLIENT_ID:
-        session.status = "error"
-        session.error_message = "OAuth not configured"
-        return {"status": "error", "message": "OAuth not configured"}
 
     # Exchange code for token using PKCE
     token_url = "https://huggingface.co/oauth/token"
