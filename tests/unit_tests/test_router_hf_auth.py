@@ -376,6 +376,22 @@ def test_oauth_success_survives_relay_start_failure(
     assert "provider-secret-marker" not in response.text + caplog.text
 
 
+def test_oauth_callback_error_param_is_escaped(monkeypatch, router_app):
+    """Attacker-controlled error_description must be HTML-escaped (no XSS)."""
+    monkeypatch.setattr(src, "get_session_by_state", lambda state: None)
+    client = router_app(hf_auth.router)
+
+    payload = "</p><script>alert(1)</script><p>"
+    resp = client.get(
+        "/hf-auth/oauth/callback",
+        params={"error": "access_denied", "error_description": payload},
+    )
+
+    assert resp.status_code == 200
+    assert payload not in resp.text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in resp.text
+
+
 def test_oauth_callback_missing_code(router_app):
     """Callback without code/state -> 400 failure page (no network)."""
     client = router_app(hf_auth.router)
