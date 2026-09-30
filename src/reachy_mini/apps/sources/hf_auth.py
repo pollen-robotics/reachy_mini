@@ -119,6 +119,8 @@ def _read_store() -> _Stored:
             raise ValueError("unsupported credential record")
         if not stored.signed_out and not stored.access_token:
             raise ValueError("credential record has no token")
+        if stored.expires_at is not None and not isinstance(stored.expires_at, int):
+            raise ValueError("credential record has an invalid expiry")
         return stored
     except FileNotFoundError:
         return _Stored(signed_out=True)

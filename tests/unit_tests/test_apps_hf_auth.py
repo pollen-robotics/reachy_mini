@@ -468,3 +468,16 @@ def test_a_revoked_refresh_token_is_dropped_after_one_attempt(
     assert refresh.call_count == 1
     assert tokens == ["first"] * 20
     assert hf_auth._read_store().refresh_token is None
+
+
+def test_a_store_with_a_non_numeric_expiry_reads_as_signed_out() -> None:
+    """A hand-edited expiry never raises out of the credential read."""
+    path = hf_auth._store_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        '{"version": 1, "signed_out": false, "access_token": "tok",'
+        ' "refresh_token": "r1", "expires_at": "soon", "lifecycle_generation": 1}',
+        encoding="utf-8",
+    )
+
+    assert hf_auth.get_hf_token() is None
