@@ -1,0 +1,1 @@
+{"id":"c4c32bbc2f04da92310fc81bf43deef7.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_apps_hf_auth#test_sign_out_leaves_credentials_the_daemon_does_not_own","name":"test_sign_out_leaves_credentials_the_daemon_does_not_own","status":"passed","testResultsByEnv":{"default":"614a04f4d917a39498aeae133b76163f"}}

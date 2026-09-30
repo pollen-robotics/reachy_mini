@@ -1,0 +1,1 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:186 Using AnalyticalKinematics kinematics engine

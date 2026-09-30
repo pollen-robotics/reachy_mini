@@ -1,0 +1,1 @@
+{"id":"f286a728ce8e8adfa7fdf05a07d62042.4f7aa9f5076267026d75ec7466ac5b91","fullName":"tests.unit_tests.test_hf_hub_private_api_contract#test_private_symbols_are_callable_or_class","name":"test_private_symbols_are_callable_or_class[huggingface_hub.utils._oauth_device-refresh_access_token]","status":"passed","testResultsByEnv":{"default":"914279cced2f09f93e043bc1868b5770"}}

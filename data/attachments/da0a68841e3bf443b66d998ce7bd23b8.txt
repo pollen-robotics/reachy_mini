@@ -1,0 +1,1 @@
+WARNING  reachy_mini.apps.sources.hf_auth:hf_auth.py:278 [HF Auth] OAuth token exchange returned HTTP 400

@@ -1,1 +1,0 @@
-{"id":"f286a728ce8e8adfa7fdf05a07d62042.6f0d5c97d7ac70119b61e96a74b95a33","fullName":"tests.unit_tests.test_hf_hub_private_api_contract#test_private_symbols_are_callable_or_class","name":"test_private_symbols_are_callable_or_class[huggingface_hub._login-_save_oauth_token]","status":"passed","testResultsByEnv":{"default":"4fcd9de0f647d7f731955866fcd5b4e0"}}

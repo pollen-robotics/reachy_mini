@@ -1,0 +1,1 @@
+{"id":"3df914626e7f678be97af526a734d12c.edcf1b056201ca84118d5cc40633fe52","fullName":"tests.unit_tests.test_apps_hf_auth#test_create_oauth_session_selects_redirect","name":"test_create_oauth_session_selects_redirect[True-True-http://localhost:8000/api/hf-auth/oauth/callback]","status":"passed","testResultsByEnv":{"default":"c6489575779f731f1bd04cec55104a6d"}}
