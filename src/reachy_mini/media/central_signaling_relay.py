@@ -1187,14 +1187,12 @@ class CentralSignalingRelay:
                 proxy=proxy_for(events_url),
             ) as response:
                 if response.status == 401:
-                    # A refresh always yields a new token, so only the first 401
-                    # of a session retries at once. Later ones back off as ERROR.
+                    # Refresh on every 401 so a failed refresh is retried, but retry
+                    # at once only for the first 401 of a session. Later ones back off.
                     retry_now = self._connection_attempts == 0
                     self._connection_attempts += 1
-                    if not (
-                        retry_now
-                        and await self._recover_from_unauthorized(self.hf_token)
-                    ):
+                    refreshed = await self._recover_from_unauthorized(self.hf_token)
+                    if not (retry_now and refreshed):
                         self._set_state(RelayState.ERROR, "Authentication failed")
                     return
                 elif response.status != 200:
