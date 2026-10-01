@@ -134,6 +134,38 @@ def test_public_ip_origin_rejected_even_when_host_matches(client):
     assert resp.status_code == 403
 
 
+def test_duplicate_host_or_origin_headers_rejected(client):
+    """Duplicate Host/Origin headers are denied outright (smuggling seam).
+
+    uvicorn forwards requests with duplicate Host headers even though
+    RFC 9112 mandates rejection; picking either copy invites disagreement
+    with any proxy in front. Browsers cannot emit duplicates, so nothing
+    legitimate is lost.
+    """
+    resp = client().post(
+        "/write",
+        headers=[("host", "reachy-mini.local:8000"), ("host", "evil.example.com")],
+    )
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Duplicate Host or Origin header"}
+
+    resp = client().post(
+        "/write",
+        headers=[
+            ("origin", "http://reachy-mini.local:8000"),
+            ("origin", "https://evil.example.com"),
+        ],
+    )
+    assert resp.status_code == 400
+
+
+def test_webview_scheme_trusted_for_localhost_only(client):
+    """tauri:// and capacitor:// are only trusted with a localhost host."""
+    for origin in ("tauri://evil.example.com", "capacitor://evil.example.com"):
+        resp = client().post("/write", headers={"origin": origin})
+        assert resp.status_code == 403, origin
+
+
 def test_trailing_dot_fqdn_local_accepted(client):
     """Browsers may send the FQDN form 'reachy-mini.local.' -- still local."""
     resp = client("http://reachy-mini.local.:8000").post(

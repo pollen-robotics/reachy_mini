@@ -164,7 +164,8 @@ def is_trusted_origin(origin: str) -> bool:
     except ValueError:
         return False
     if parts.scheme in _WEBVIEW_SCHEMES:
-        return True
+        # The Tauri/Capacitor webviews only ever emit <scheme>://localhost.
+        return parts.hostname == "localhost"
     if parts.scheme not in ("http", "https"):
         return False
     host = parts.hostname
@@ -213,15 +214,25 @@ class LocalNetworkGuardMiddleware:
             await self.app(scope, receive, send)
             return
 
-        host_header = ""
-        origin: str | None = None
+        # Collect ALL Host/Origin occurrences: uvicorn/h11 forwards requests
+        # carrying duplicate Host headers (RFC 9112 mandates rejecting them),
+        # and trusting "the first one" becomes a smuggling seam if a proxy
+        # that picks the other one ever fronts the daemon. Browsers can't
+        # emit duplicates (forbidden headers), so denying them costs nothing.
+        host_headers: list[str] = []
+        origin_headers: list[str] = []
         for name, value in scope.get("headers", []):
-            if name == b"host" and not host_header:
-                host_header = value.decode("latin-1")
-            elif name == b"origin" and origin is None:
-                origin = value.decode("latin-1")
+            if name == b"host":
+                host_headers.append(value.decode("latin-1"))
+            elif name == b"origin":
+                origin_headers.append(value.decode("latin-1"))
 
-        host = _hostname_of(host_header)
+        if len(host_headers) > 1 or len(origin_headers) > 1:
+            await self._deny(scope, send, 400, "Duplicate Host or Origin header")
+            return
+        origin = origin_headers[0] if origin_headers else None
+
+        host = _hostname_of(host_headers[0]) if host_headers else None
         if not is_trusted_host(host):
             await self._deny(scope, send, 400, "Untrusted Host header")
             return
