@@ -199,27 +199,29 @@ class Daemon:
         self._jsonrpc_relay = relay
 
         def handler(raw: str, reply: Callable[[dict[str, Any]], None]) -> None:
-            if loop.is_closed():
-                # Shutdown race. Answer rather than drop the frame: a silent
-                # drop costs the caller its whole timeout and reads as an
-                # unreachable robot.
-                self.logger.error(
-                    "JSON-RPC relay loop is closed, refusing %s", raw[:120]
-                )
-                try:
-                    req = parse_request(raw)
-                except JsonRpcError:
-                    return
-                if not req.is_notification:
-                    reply(
-                        make_error(
-                            req.id,
-                            message="daemon relay is not available",
-                            reason="relay_unavailable",
-                        )
-                    )
+            coro = relay.handle(raw, reply)
+            try:
+                asyncio.run_coroutine_threadsafe(coro, loop)
                 return
-            asyncio.run_coroutine_threadsafe(relay.handle(raw, reply), loop)
+            except RuntimeError:
+                # The loop is closed (shutdown). Checking is_closed() first
+                # would still race with it, so catch the failure instead.
+                coro.close()
+            # Answer rather than drop the frame: a silent drop costs the
+            # caller its whole timeout and reads as an unreachable robot.
+            self.logger.error("JSON-RPC relay loop is closed, refusing %s", raw[:120])
+            try:
+                req = parse_request(raw)
+            except JsonRpcError:
+                return
+            if not req.is_notification:
+                reply(
+                    make_error(
+                        req.id,
+                        message="daemon relay is not available",
+                        reason="relay_unavailable",
+                    )
+                )
 
         backend.set_jsonrpc_handler(handler)
         self.logger.info("JSON-RPC app relay wired to the DataChannel")
