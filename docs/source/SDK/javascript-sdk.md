@@ -202,6 +202,8 @@ Beyond the typed surface above, the runtime object exposes lower-level hooks (no
 
 - `rpcCall(method, params?, { timeoutMs? })` — send a JSON-RPC request over the data channel and await the correlated result (e.g. app-defined methods).
 - `onNotification(method, cb)` — subscribe to one-way JSON-RPC notifications pushed by the robot/app (e.g. `conversation.turn`); returns an unsubscribe fn.
+
+A reply or notification over 64 KiB, the data channel's message limit, is split by the daemon and reassembled by the SDK, so `rpcCall` resolves with the whole result. Older SDKs cannot reassemble and see such a call time out.
 - `startDaemonUpdate({ preRelease?, onProgress? })` — trigger a PyPI update of the daemon. It restarts on success (which tears the session down), so treat a successful reconnect as the "done" signal; `onProgress` fires with `status: "failed"` if the install errors first.
 
 ### Debug logging
