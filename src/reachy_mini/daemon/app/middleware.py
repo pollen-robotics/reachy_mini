@@ -3,7 +3,6 @@
 import ipaddress
 import json
 import logging
-import re
 from collections.abc import Iterable
 from urllib.parse import urlsplit
 
@@ -113,7 +112,6 @@ class MaxBodySizeMiddleware:
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 _LOCAL_HOSTNAMES = frozenset({"localhost", "tauri.localhost"})
 _WEBVIEW_SCHEMES = frozenset({"tauri", "capacitor"})
-_MDNS_HOSTNAME_RE = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)*\.local$", re.IGNORECASE)
 
 
 def _parse_ip(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
@@ -132,7 +130,11 @@ def _hostname_of(netloc: str) -> str | None:
 
 
 def _is_local_name(host: str) -> bool:
-    return host in _LOCAL_HOSTNAMES or _MDNS_HOSTNAME_RE.match(host) is not None
+    # Normalize case and the trailing-dot FQDN form ("reachy-mini.local.")
+    # browsers may send. ".local" is never delegated in the public DNS root
+    # (RFC 6762), so the suffix check alone is sound for this threat model.
+    host = host.lower().rstrip(".")
+    return host in _LOCAL_HOSTNAMES or host.endswith(".local")
 
 
 def is_trusted_host(host: str | None) -> bool:
@@ -149,8 +151,14 @@ def is_trusted_host(host: str | None) -> bool:
     return _is_local_name(host)
 
 
-def is_trusted_origin(origin: str, request_host: str | None) -> bool:
-    """Check the ``Origin`` header of a state-changing request."""
+def is_trusted_origin(origin: str) -> bool:
+    """Check the ``Origin`` header of a state-changing request.
+
+    Note there is deliberately no "same as the request Host" shortcut: it
+    would let a public-IP origin through whenever the robot is reached at
+    that same public IP, and every legitimate origin already matches the
+    local-name or loopback/private/link-local branches below.
+    """
     try:
         parts = urlsplit(origin)
     except ValueError:
@@ -162,8 +170,6 @@ def is_trusted_origin(origin: str, request_host: str | None) -> bool:
     host = parts.hostname
     if not host:
         return False
-    if request_host and host == request_host:
-        return True
     if _is_local_name(host):
         return True
     ip = _parse_ip(host)
@@ -188,6 +194,10 @@ class LocalNetworkGuardMiddleware:
       whose ``Origin`` is not the robot itself, a local/private-network
       origin, or a native webview scheme (Tauri/Capacitor).
 
+    WebSocket handshakes get both checks too, and are never treated as a
+    "safe" method: browsers apply no CORS to WebSockets, so a cross-site
+    page would otherwise get read *and* write access to the WS endpoints.
+
     Requests without an ``Origin`` header (curl, the Python SDK, native apps)
     pass untouched: this guards against browsers acting as confused deputies,
     not against direct LAN clients.
@@ -198,8 +208,8 @@ class LocalNetworkGuardMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        """Validate the Host and Origin headers of HTTP requests."""
-        if scope["type"] != "http":
+        """Validate the Host and Origin headers of HTTP and WebSocket requests."""
+        if scope["type"] not in ("http", "websocket"):
             await self.app(scope, receive, send)
             return
 
@@ -213,19 +223,37 @@ class LocalNetworkGuardMiddleware:
 
         host = _hostname_of(host_header)
         if not is_trusted_host(host):
-            await self._reject(send, 400, "Untrusted Host header")
+            await self._deny(scope, send, 400, "Untrusted Host header")
             return
 
-        method = str(scope.get("method", "GET")).upper()
+        # A WebSocket handshake is never "safe": the socket is readable
+        # cross-origin, unlike a fetch() response blocked by CORS.
+        method = (
+            "POST"
+            if scope["type"] == "websocket"
+            else str(scope.get("method", "GET")).upper()
+        )
         if (
             method not in _SAFE_METHODS
             and origin is not None
-            and not is_trusted_origin(origin, host)
+            and not is_trusted_origin(origin)
         ):
-            await self._reject(send, 403, "Cross-origin request rejected")
+            await self._deny(scope, send, 403, "Cross-origin request rejected")
             return
 
         await self.app(scope, receive, send)
+
+    async def _deny(
+        self, scope: Scope, send: Send, status: int, detail: str
+    ) -> None:
+        if scope["type"] == "websocket":
+            # 1008 = policy violation. Starlette turns this into a rejected
+            # handshake (HTTP 403) for clients that never complete the upgrade.
+            await send(
+                {"type": "websocket.close", "code": 1008, "reason": detail}
+            )
+            return
+        await self._reject(send, status, detail)
 
     async def _reject(self, send: Send, status: int, detail: str) -> None:
         body = json.dumps({"detail": detail}).encode()

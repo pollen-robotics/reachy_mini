@@ -1,16 +1,19 @@
 """Unit tests for LocalNetworkGuardMiddleware (Host/Origin validation).
 
-The guard blocks the two browser vectors that reach the unauthenticated API
-from the internet (CAN-2026-2032024): DNS rebinding (untrusted Host header)
-and preflight-free cross-site writes (untrusted Origin on state-changing
-methods). Everything a legitimate client does must keep working: same-origin
-dashboard calls, Origin-less curl/SDK requests, the desktop app webviews, and
-access by raw LAN IP or .local mDNS name.
+The guard blocks the browser vectors that reach the unauthenticated API from
+the internet (CAN-2026-2032024): DNS rebinding (untrusted Host header),
+preflight-free cross-site writes (untrusted Origin on state-changing
+methods), and cross-site WebSocket hijacking (browsers apply no CORS to
+WebSockets). Everything a legitimate client does must keep working:
+same-origin dashboard calls, Origin-less curl/SDK requests and WS
+connections, the desktop app webviews, and access by raw LAN IP or .local
+mDNS name.
 """
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from reachy_mini.daemon.app.middleware import LocalNetworkGuardMiddleware
 
@@ -29,6 +32,12 @@ def client():
         @app.get("/read")
         async def read() -> dict[str, str]:
             return {"status": "ok"}
+
+        @app.websocket("/ws")
+        async def ws(websocket: WebSocket) -> None:
+            await websocket.accept()
+            await websocket.send_text("connected")
+            await websocket.close()
 
         app.add_middleware(LocalNetworkGuardMiddleware)
         return TestClient(app, base_url=base_url)
@@ -111,3 +120,76 @@ def test_legitimate_hosts_accepted(client, base_url):
     """All documented ways of addressing the robot keep working."""
     resp = client(base_url).post("/write", headers={"origin": base_url})
     assert resp.status_code == 200
+
+
+def test_public_ip_origin_rejected_even_when_host_matches(client):
+    """No same-as-Host shortcut: a public-IP origin stays untrusted.
+
+    If the robot were reachable at a public IP, a page served from that IP
+    must not gain write access just because Origin == Host.
+    """
+    resp = client("http://8.8.8.8:8000").post(
+        "/write", headers={"origin": "http://8.8.8.8:8000"}
+    )
+    assert resp.status_code == 403
+
+
+def test_trailing_dot_fqdn_local_accepted(client):
+    """Browsers may send the FQDN form 'reachy-mini.local.' -- still local."""
+    resp = client("http://reachy-mini.local.:8000").post(
+        "/write", headers={"origin": "http://reachy-mini.local.:8000"}
+    )
+    assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# WebSocket handshakes (browsers apply no CORS to WebSockets, so the guard is
+# the only cross-site defence). NOTE: TestClient hardcodes ``host: testserver``
+# on WS handshakes regardless of base_url, so every case sets Host explicitly.
+# ---------------------------------------------------------------------------
+
+_WS_LOCAL_HOST = {"host": "reachy-mini.local:8000"}
+
+
+def test_ws_originless_sdk_connects(client):
+    """The Python SDK opens WS connections with no Origin header."""
+    with client().websocket_connect("/ws", headers=_WS_LOCAL_HOST) as ws:
+        assert ws.receive_text() == "connected"
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "http://reachy-mini.local:8000",  # dashboard same-origin
+        "http://localhost:3000",
+        "tauri://localhost",
+        "capacitor://localhost",
+    ],
+)
+def test_ws_local_origins_connect(client, origin):
+    """Local and webview origins can open WebSockets."""
+    headers = {**_WS_LOCAL_HOST, "origin": origin}
+    with client().websocket_connect("/ws", headers=headers) as ws:
+        assert ws.receive_text() == "connected"
+
+
+@pytest.mark.parametrize(
+    "origin",
+    ["https://evil.example.com", "http://8.8.8.8", "null"],
+)
+def test_ws_cross_site_hijack_rejected(client, origin):
+    """A drive-by page cannot open a WebSocket (would be readable + writable)."""
+    headers = {**_WS_LOCAL_HOST, "origin": origin}
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client().websocket_connect("/ws", headers=headers):
+            pass
+    assert exc_info.value.code == 1008
+
+
+def test_ws_dns_rebinding_host_rejected(client):
+    """A rebound public DNS name cannot open a WebSocket, even Origin-less."""
+    headers = {"host": "rebind.evil.example.com:8000"}
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client().websocket_connect("/ws", headers=headers):
+            pass
+    assert exc_info.value.code == 1008
