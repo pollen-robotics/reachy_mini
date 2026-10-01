@@ -417,8 +417,8 @@ handle.onLeave(() => detach());
 
 There is no equivalent race for the data channel, mute toggles, motor
 commands or state updates: the bridge resolves only once ICE **and**
-the data channel are connected, and state events stream continuously
-at 50 Hz. Keep calling `reachy.setHeadRpyDeg(...)`,
+the data channel are connected, and state events keep arriving (every
+~500 ms, or ~30 Hz after `subscribePose()`). Keep calling `reachy.setHeadRpyDeg(...)`,
 `reachy.setMicMuted(...)` and `reachy.addEventListener('state', ...)`
 directly.
 
