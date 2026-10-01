@@ -119,6 +119,7 @@ class NfcStatus(BaseModel):
     """Snapshot of the NFC reader hardware status."""
 
     connected: bool  # the serial link is open and the chip answered
+    enabled: bool = True  # the reader is switched on (see NfcReader.start/stop)
     chip_detected: bool  # the CLRC663 answered its version register
     driver_available: bool  # the winnie_nfc package is installed
     port: str | None = None
@@ -150,6 +151,12 @@ class NfcWriteRequest(BaseModel):
                 f"applies too, and is smaller)"
             )
         return self
+
+
+class NfcEnableRequest(BaseModel):
+    """Switch the reader on or off."""
+
+    enabled: bool
 
 
 class NfcEraseRequest(BaseModel):
@@ -567,6 +574,7 @@ class NfcReader:
 
         self._thread: threading.Thread | None = None
         self._should_stop = threading.Event()
+        self._enabled = False  # between start() and stop()
         self._jobs: queue.Queue[_Job] = queue.Queue()
         self._write_lock = threading.Lock()  # one chip conversation at a time
 
@@ -584,6 +592,7 @@ class NfcReader:
 
     def start(self) -> None:
         """Start the background reader thread. Never blocks or raises fatally."""
+        self._enabled = True
         if self._thread is not None and self._thread.is_alive():
             return
         if not driver_available():
@@ -603,13 +612,27 @@ class NfcReader:
         logger.info("NFC reader thread started (port=%s).", self._port_setting)
 
     def stop(self, timeout: float = 3.0) -> None:
-        """Stop the reader thread and release the serial link."""
+        """Stop the reader thread and release the serial link.
+
+        The reader can be started again afterwards: this is how it is switched
+        off and on at runtime.
+        """
+        self._enabled = False
         self._should_stop.set()
         if self._thread is not None:
             self._thread.join(timeout=timeout)
             if self._thread.is_alive():
                 logger.warning("NFC reader thread did not stop in time.")
             self._thread = None
+        # A write posted just before the stop would otherwise wait out its
+        # whole deadline: nobody is left to serve it.
+        while True:
+            try:
+                job = self._jobs.get_nowait()
+            except queue.Empty:
+                break
+            job.abandon("NOT_CONNECTED")
+            job.done.set()
 
     # -- public state accessors -------------------------------------------
 
@@ -623,13 +646,18 @@ class NfcReader:
         with self._lock:
             return NfcStatus(
                 connected=self._connected,
+                enabled=self._enabled,
                 chip_detected=self._chip_detected,
                 driver_available=driver_available(),
                 port=self._port,
                 chip_version=self._chip_version,
-                error=self._error,
+                error=self._error if self._enabled else "NFC reader disabled",
                 last_seen_at=self._last_seen_at,
             )
+
+    def is_enabled(self) -> bool:
+        """Whether the reader is switched on (it may still have no board)."""
+        return self._enabled
 
     def is_connected(self) -> bool:
         """Whether the serial link is currently open."""

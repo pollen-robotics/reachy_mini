@@ -244,6 +244,62 @@ def test_stopping_clears_the_state(driver_installed):
     assert session.closed
 
 
+def test_the_reader_can_be_switched_off_and_on_again(driver_installed):
+    session = FakeSession(tag=NfcTag(present=True, uid="04"))
+    reader = make_reader(session)
+    assert not reader.get_status().enabled
+    started(reader)
+    try:
+        assert reader.get_status().enabled
+        reader.stop()
+        status = reader.get_status()
+        assert not status.enabled
+        assert not status.connected
+        assert status.error == "NFC reader disabled"
+        started(reader)
+        assert reader.get_status().enabled
+        assert wait_until(lambda: reader.get_tag().present)
+    finally:
+        reader.stop()
+
+
+def test_stopping_answers_a_pending_write(driver_installed):
+    # No tag ever comes: the write keeps retrying until the reader is stopped,
+    # and must then answer rather than wait out its deadline.
+    session = FakeSession(
+        write_results=[NfcWriteResult(success=False, error="NO_TAG")] * 1000
+    )
+    reader = make_reader(session)
+    started(reader)
+    results = []
+    writer = threading.Thread(
+        target=lambda: results.append(
+            reader.write(NfcWriteRequest(text="x"), timeout=30)
+        )
+    )
+    writer.start()
+    assert wait_until(lambda: session.write_calls)
+    started_at = time.monotonic()
+    reader.stop()
+    writer.join(timeout=5)
+    assert not writer.is_alive()
+    assert time.monotonic() - started_at < 5
+    assert not results[0].success
+
+
+def test_the_switch_is_remembered_and_on_by_default(tmp_path, monkeypatch):
+    from reachy_mini.nfc import settings
+
+    monkeypatch.setattr(settings, "_STATE_PATH", tmp_path / "nfc.json")
+    assert settings.get_nfc_enabled()
+    assert settings.set_nfc_enabled(False)
+    assert not settings.get_nfc_enabled()
+    assert settings.set_nfc_enabled(True)
+    assert settings.get_nfc_enabled()
+    (tmp_path / "nfc.json").write_text("not json")
+    assert settings.get_nfc_enabled()
+
+
 def test_write_is_served_by_the_reader_thread(driver_installed):
     session = FakeSession()
     reader = make_reader(session)

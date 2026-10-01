@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ....nfc import (
     NfcDump,
+    NfcEnableRequest,
     NfcEraseRequest,
     NfcReader,
     NfcStatus,
@@ -21,6 +22,7 @@ from ....nfc import (
     NfcWriteResult,
     driver_available,
     no_tag,
+    set_nfc_enabled,
 )
 from ..dependencies import get_nfc_reader
 
@@ -49,10 +51,35 @@ async def get_status(
     if reader is None:
         return NfcStatus(
             connected=False,
+            enabled=False,
             chip_detected=False,
             driver_available=driver_available(),
             error="NFC reader disabled",
         )
+    return reader.get_status()
+
+
+@router.post("/enabled")
+async def set_enabled(
+    request: NfcEnableRequest,
+    reader: NfcReader | None = Depends(get_nfc_reader),
+) -> NfcStatus:
+    """Switch the NFC reader on or off, and remember it across restarts.
+
+    Off, the reader thread stops and the serial port is released; on, it goes
+    back to looking for the board. Answers with the status right after the
+    switch: when switching on, the board is usually not connected yet.
+
+    Not available when the daemon was started with ``--no-nfc``.
+    """
+    if reader is None:
+        raise HTTPException(status_code=503, detail="NFC reader disabled")
+
+    set_nfc_enabled(request.enabled)
+    # stop() joins the reader thread, which can take up to a poll's worth of
+    # serial I/O: keep it off the event loop.
+    action = reader.start if request.enabled else reader.stop
+    await asyncio.get_event_loop().run_in_executor(None, action)
     return reader.get_status()
 
 
@@ -69,7 +96,7 @@ async def dump_tag(
     Costs a full transfer (~130 ms on an NTAG215), hence a separate endpoint
     instead of a field served on every poll.
     """
-    if reader is None:
+    if reader is None or not reader.is_enabled():
         return NfcDump(present=False, error="NFC reader disabled")
     return await asyncio.get_event_loop().run_in_executor(None, reader.dump)
 
@@ -92,7 +119,7 @@ async def erase_tag(
     Neither restores the capability container, the lock bytes or a password:
     those pages are one-time programmable. A formatted tag stays formatted.
     """
-    if reader is None:
+    if reader is None or not reader.is_enabled():
         raise HTTPException(status_code=503, detail="NFC reader disabled")
     if not reader.is_connected():
         raise HTTPException(status_code=503, detail="NFC reader not connected")
@@ -116,7 +143,7 @@ async def write_tag(
     NTAG213, 496 on an NTAG215, 872 on an NTAG216. A message that does not fit
     comes back as ``TOO_LONG`` without anything having been written.
     """
-    if reader is None:
+    if reader is None or not reader.is_enabled():
         raise HTTPException(status_code=503, detail="NFC reader disabled")
     if not reader.is_connected():
         raise HTTPException(status_code=503, detail="NFC reader not connected")

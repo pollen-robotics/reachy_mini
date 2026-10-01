@@ -53,7 +53,7 @@ from reachy_mini.media.audio_utils import (
     write_asoundrc_to_home,
 )
 from reachy_mini.motion.recorded_move import preload_default_datasets
-from reachy_mini.nfc import NfcReader
+from reachy_mini.nfc import NfcReader, get_nfc_enabled
 from reachy_mini.utils.discovery import MdnsServiceRegistration
 from reachy_mini.utils.wireless_version.startup_check import (
     run_wireless_startup_checks,
@@ -248,9 +248,10 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
                 daemon_instance.backend.set_robot_name_callback(_apply_robot_name_live)
 
-            # Start the optional NFC reader. It is fully decoupled from the
-            # robot backend and must never block or break daemon startup.
-            if app.state.nfc_reader is not None:
+            # Start the optional NFC reader, unless a client switched it off.
+            # It is fully decoupled from the robot backend and must never
+            # block or break daemon startup.
+            if app.state.nfc_reader is not None and get_nfc_enabled():
                 try:
                     app.state.nfc_reader.start()
                 except Exception as e:
