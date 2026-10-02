@@ -1,0 +1,9 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:187 Using AnalyticalKinematics kinematics engine
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:2275 upload_audio_start: refusing unsafe upload_id '../escape'
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:2275 upload_audio_start: refusing unsafe upload_id '/etc/cron.d/evil'
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:2275 upload_audio_start: refusing unsafe upload_id 'a/b'
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:2275 upload_audio_start: refusing unsafe upload_id 'a\\b'
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:2275 upload_audio_start: refusing unsafe upload_id '..'
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:2275 upload_audio_start: refusing unsafe upload_id 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:2299 upload_audio_chunk: no slot '..', dropping chunk 0
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:2340 upload_audio_finish: no such slot '..'
