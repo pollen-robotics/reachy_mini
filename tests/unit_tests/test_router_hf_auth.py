@@ -376,9 +376,12 @@ def test_oauth_success_survives_relay_start_failure(
     assert "provider-secret-marker" not in response.text + caplog.text
 
 
-def test_oauth_callback_error_param_is_escaped(monkeypatch, router_app):
-    """Attacker-controlled error_description must be HTML-escaped (no XSS)."""
-    monkeypatch.setattr(src, "get_session_by_state", lambda state: None)
+def test_oauth_callback_error_param_is_not_reflected(router_app):
+    """Attacker-controlled error_description must not reach the page at all.
+
+    Since the provider-text redaction, the error path renders a canned
+    message, so the strongest property holds: no reflection, escaped or not.
+    """
     client = router_app(hf_auth.router)
 
     payload = "</p><script>alert(1)</script><p>"
@@ -389,7 +392,8 @@ def test_oauth_callback_error_param_is_escaped(monkeypatch, router_app):
 
     assert resp.status_code == 200
     assert payload not in resp.text
-    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in resp.text
+    assert "alert(1)" not in resp.text
+    assert src.AUTHORIZATION_DENIED_MESSAGE in resp.text
 
 
 def test_oauth_callback_missing_code(router_app):
