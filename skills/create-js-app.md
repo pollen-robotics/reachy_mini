@@ -41,7 +41,10 @@ contract - your app is agnostic of everything else.
 - Go through the host shell: `mountHost()` in `dispatch.ts`,
   `connectToHost()` in `embed.ts`. Free OAuth + picker + top bar + leave.
 - Pin the **exact** SDK version everywhere it appears (npm dep AND any CDN
-  URL): `@pollen-robotics/reachy-mini-sdk@1.8.0`.
+  URL): the latest release on
+  [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk)
+  (`npm install @pollen-robotics/reachy-mini-sdk@latest` writes it into
+  `package.json` for you).
 - Register `onLeave(() => safelyReturnToPose(handle.reachy))` so the robot
   returns to a safe rest pose when the user leaves.
 - Validate `handle.config` at the boundary before using it.
@@ -53,7 +56,7 @@ contract - your app is agnostic of everything else.
 
 - `sdk: docker` instead of `sdk: static` (only if you need a server,
   secrets, websockets, or Python compute - see the guide).
-- Microphone / camera (`enableMicrophone: true`, `attachVideo`).
+- Microphone / camera (`enableMicrophone: true`, `handle.media.attachVideo`).
 - npm dependencies other than the SDK.
 - A desktop-only / kiosk UI (default is mobile-first).
 
@@ -62,7 +65,12 @@ contract - your app is agnostic of everything else.
 - Roll your own OAuth, sign-in screen, or robot picker.
 - Call `reachy.stopSession()` yourself - the host tears down; use `onLeave`.
 - Reach into host internals or private SDK fields (e.g. `reachy._pc`).
-  Use the public API (`attachVideo`, `enableMicrophone`).
+  Use the public API (`handle.media.attachVideo`, `enableMicrophone`).
+- Call `reachy.attachVideo()` in an embedded app - it silently no-ops.
+  `connectToHost()` finishes the WebRTC handshake before your app mounts,
+  so the one-shot `videoTrack` event has already fired and your listener
+  never runs. Use `handle.media.attachVideo(el)`, which replays the
+  already-arrived tracks.
 - Carry degrees through motion code below the UI layer - speak radians /
   magic-mm; convert at the UI boundary with `degToRad` / `radToDeg`.
 - Mutate `INIT_POSE` or `DEFAULT_SCALED_DURATION_PRESET` (deep-frozen).
@@ -118,7 +126,7 @@ Svelte, Vue, or vanilla. The host doesn't care.
   "private": true,
   "type": "module",
   "scripts": { "dev": "vite", "build": "tsc -b && vite build", "preview": "vite preview" },
-  "dependencies": { "@pollen-robotics/reachy-mini-sdk": "1.8.0" },
+  "dependencies": { "@pollen-robotics/reachy-mini-sdk": "<latest from npm - run `npm install @pollen-robotics/reachy-mini-sdk@latest`>" },
   "devDependencies": { "typescript": "^5.5.4", "vite": "^5.4.10" }
 }
 ```
