@@ -1,1 +1,0 @@
-WARNING  reachy_mini.apps.sources.hf_auth:hf_auth.py:580 [HF Auth] Could not notify relay (RuntimeError)

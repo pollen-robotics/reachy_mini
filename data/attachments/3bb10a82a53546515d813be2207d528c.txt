@@ -1,0 +1,1 @@
+ERROR    reachy_mini.apps.sources.hf_auth:hf_auth.py:433 [HF Auth] Failed to request device code (RuntimeError)
