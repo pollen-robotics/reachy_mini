@@ -72,14 +72,6 @@ _refresh_lock = threading.Lock()
 
 
 @dataclass(frozen=True)
-class HfCredential:
-    """The daemon bearer and the lifecycle it belongs to, read as one value."""
-
-    token: str | None = field(repr=False)
-    lifecycle_generation: int
-
-
-@dataclass(frozen=True)
 class _Stored:
     version: int = _STORE_VERSION
     signed_out: bool = False
@@ -147,11 +139,7 @@ def _persist_login(fields: dict[str, Any], expected_generation: int) -> bool:
         if current.lifecycle_generation != expected_generation:
             return False
         _write_store(
-            replace(
-                _Stored(),
-                **fields,
-                lifecycle_generation=current.lifecycle_generation + 1,
-            )
+            _Stored(**fields, lifecycle_generation=current.lifecycle_generation + 1)
         )
         return True
 
@@ -374,7 +362,7 @@ def is_oauth_configured() -> bool:
 #     at a fixed hostname (reachy-mini.local) — the phone only displays a short
 #     code + URL and the robot polls Hugging Face for the result.
 #   - yields a refresh token. The daemon persists it in its own credential
-#     store and `get_hf_credential()` renews the access token when it is close
+#     store and `get_hf_token()` renews the access token when it is close
 #     to expiry, so a long-running robot never needs the user to
 #     re-authenticate by hand.
 #
@@ -486,7 +474,7 @@ async def _run_device_code_poll(session: DeviceCodeSession, device_info: Any) ->
         return
     except DeviceCodeError as error:
         logger.info("[HF Auth] Device-code login failed (%s)", type(error).__name__)
-        expired = "expired" in str(error).lower()
+        expired = error.error_code == OAuthErrorCode.EXPIRED_TOKEN
         session.status = "expired" if expired else "error"
         session.error_message = (
             LOGIN_EXPIRED_MESSAGE if expired else AUTHENTICATION_FAILED_MESSAGE
@@ -624,15 +612,16 @@ def save_hf_token(token: str) -> dict[str, Any]:
         return {"status": "error", "message": CREDENTIAL_SAVE_FAILED_MESSAGE}
 
 
-def _usable_credential(stored: _Stored) -> HfCredential:
+def _usable_token(stored: _Stored) -> str | None:
     expired = stored.expires_at is not None and stored.expires_at <= time.time()
-    return HfCredential(
-        None if expired else stored.access_token, stored.lifecycle_generation
-    )
+    return None if expired else stored.access_token
 
 
-def get_hf_credential(force_refresh: bool = False) -> HfCredential:
-    """Return the daemon bearer and its lifecycle generation. Never raises."""
+def get_hf_token(force_refresh: bool = False) -> str | None:
+    """Return the daemon-owned token, refreshing a device-code login near expiry.
+
+    Never raises.
+    """
     with _store_lock:
         stored = _read_store()
     due = force_refresh or (
@@ -640,14 +629,14 @@ def get_hf_credential(force_refresh: bool = False) -> HfCredential:
         and stored.expires_at <= time.time() + _REFRESH_MARGIN_S
     )
     if not stored.refresh_token or not due:
-        return _usable_credential(stored)
+        return _usable_token(stored)
 
     with _refresh_lock:
         with _store_lock:
             current = _read_store()
         # A peer refreshed or signed out while this caller waited.
         if current != stored:
-            return _usable_credential(current)
+            return _usable_token(current)
 
         # The store lock is released for the network call, so the write is a CAS.
         refreshed = None
@@ -675,12 +664,7 @@ def get_hf_credential(force_refresh: bool = False) -> HfCredential:
                         "[HF Auth] Could not save refreshed credentials (%s)",
                         type(error).__name__,
                     )
-    return _usable_credential(current)
-
-
-def get_hf_token() -> str | None:
-    """Return the daemon-owned token, refreshing a device-code login near expiry."""
-    return get_hf_credential().token
+    return _usable_token(current)
 
 
 def delete_hf_token() -> bool:

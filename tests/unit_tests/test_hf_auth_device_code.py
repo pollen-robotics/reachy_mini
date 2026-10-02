@@ -163,7 +163,9 @@ def test_poll_expired_maps_to_expired_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _expire(info: Any, **kw: Any) -> dict[str, Any]:
-        raise DeviceCodeError("Device code expired. Please try again.")
+        raise DeviceCodeError(
+            "Device code expired. Please try again.", error_code="expired_token"
+        )
 
     _install_fake_oauth_device(monkeypatch, poll_device_token=_expire)
 
@@ -179,7 +181,9 @@ def test_poll_denied_maps_to_error_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _deny(info: Any, **kw: Any) -> dict[str, Any]:
-        raise DeviceCodeError("Authorization was denied. Please try again.")
+        raise DeviceCodeError(
+            "Authorization was denied. Please try again.", error_code="access_denied"
+        )
 
     _install_fake_oauth_device(monkeypatch, poll_device_token=_deny)
 
@@ -188,6 +192,26 @@ def test_poll_denied_maps_to_error_status(
     asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
 
     assert session.status == "error"
+
+
+def test_poll_classifies_by_error_code_not_message_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A denial whose message mentions expiry is still reported as an error."""
+
+    def _deny(info: Any, **kw: Any) -> dict[str, Any]:
+        raise DeviceCodeError(
+            "Your session expired, access denied.", error_code="access_denied"
+        )
+
+    _install_fake_oauth_device(monkeypatch, poll_device_token=_deny)
+
+    session = hf_auth.DeviceCodeSession(session_id="s12")
+
+    asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
+
+    assert session.status == "error"
+    assert session.error_message == hf_auth.AUTHENTICATION_FAILED_MESSAGE
 
 
 # --------------------------------------------------------------------------- #

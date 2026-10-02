@@ -188,7 +188,7 @@ def test_save_then_read_round_trips_through_the_owned_store(
 
     assert hf_auth.save_hf_token("tok") == {"status": "success", "username": "alice"}
     assert hf_auth.get_hf_token() == "tok"
-    assert hf_auth.get_hf_credential().lifecycle_generation == 1
+    assert hf_auth._read_store().lifecycle_generation == 1
 
 
 def test_save_rejects_an_invalid_token_without_storing_it(
@@ -257,7 +257,7 @@ def test_sign_out_leaves_credentials_the_daemon_does_not_own(
 
     assert hf_auth.get_hf_token() is None
     assert cli_token.read_text(encoding="utf-8") == "cli-token"
-    assert hf_auth.get_hf_credential().lifecycle_generation == 2
+    assert hf_auth._read_store().lifecycle_generation == 2
 
 
 def test_sign_out_reports_a_write_failure(monkeypatch: pytest.MonkeyPatch) -> None:
