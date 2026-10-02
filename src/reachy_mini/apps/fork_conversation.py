@@ -60,29 +60,29 @@ def create_from_conversation_app(
     console.print("Creating simplified static files...")
     _create_static_files(target_path, app_name, display_name)
 
-    console.print(f"Creating profile folder: profiles/{profile_name}/")
-    _create_profile(console, target_path, app_name, profile_name)
+    console.print(f"Creating locked profile: profiles/{profile_name}/profile.md")
+    _create_profile(console, target_path, profile_name)
 
     console.print("Updating .gitignore...")
     _update_gitignore(target_path, app_name)
 
     console.print("Cleaning up unnecessary files...")
-    _cleanup(target_path, app_name, profile_name)
+    _cleanup(target_path, profile_name)
 
     console.print("Initializing fresh git repository...")
     _init_git(target_path)
 
     console.print(f"\n✅ Created '{app_name}' in {target_path}/", style="bold green")
     console.print(f"   - Profile locked to: {profile_name}", style="dim")
-    console.print(f"   - Profile folder created: profiles/{profile_name}/", style="dim")
+    console.print(
+        f"   - Profile document: profiles/{profile_name}/profile.md", style="dim"
+    )
 
     console.print("\nFiles to customize:", style="bold yellow")
     console.print(
-        f"  profiles/{profile_name}/instructions.txt  - System prompt for the assistant"
+        f"  profiles/{profile_name}/profile.md  - Assistant prompt and enabled tools"
     )
-    console.print(
-        f"  profiles/{profile_name}/tools.txt         - Available tools (or 'all')"
-    )
+    console.print(f"  src/{app_name}/tools/              - Custom tool implementations")
 
     console.print("\nNext steps:", style="bold")
     console.print(f"  cd {target_path}")
@@ -90,8 +90,8 @@ def create_from_conversation_app(
     console.print("  reachy-mini-app-assistant check .")
     console.print("")
     console.print("To test your app locally:", style="bold")
-    console.print(f"  python src/{app_name}/main.py --gradio")
-    console.print("  # Then open: http://127.0.0.1:7861/")
+    console.print(f"  python src/{app_name}/main.py --ui")
+    console.print("  # Then open: http://127.0.0.1:7860/")
 
     return target_path
 
@@ -361,28 +361,17 @@ def _create_static_files(app_path: Path, app_name: str, display_name: str) -> No
     )
 
 
-def _create_profile(
-    console: Console, app_path: Path, app_name: str, profile_name: str
-) -> None:
-    """Create profile folder with template files."""
-    new_profile_dir = app_path / "src" / app_name / "profiles" / profile_name
+def _create_profile(console: Console, app_path: Path, profile_name: str) -> None:
+    """Create the locked profile document."""
+    new_profile_dir = app_path / "profiles" / profile_name
     new_profile_dir.mkdir(parents=True, exist_ok=True)
 
-    # Render all .j2 templates from profile template directory
     template_dir = CONVERSATION_TEMPLATE_DIR / "profile"
     env = Environment(loader=FileSystemLoader(template_dir))
-    context = {"profile_name": profile_name, "app_name": app_name}
+    profile_path = new_profile_dir / "profile.md"
+    profile_path.write_text(env.get_template("profile.md.j2").render())
 
-    for src_file in template_dir.iterdir():
-        if src_file.is_file() and src_file.suffix == ".j2":
-            # Remove .j2 extension for output filename
-            output_name = src_file.stem
-            template = env.get_template(src_file.name)
-            (new_profile_dir / output_name).write_text(template.render(context))
-
-    console.print("   Created profile with template files:", style="dim")
-    for f in sorted(new_profile_dir.iterdir()):
-        console.print(f"     - {f.name}", style="dim")
+    console.print(f"   Created {profile_path.relative_to(app_path)}", style="dim")
 
 
 def _update_gitignore(app_path: Path, app_name: str) -> None:
@@ -400,7 +389,7 @@ def _update_gitignore(app_path: Path, app_name: str) -> None:
         gitignore_path.write_text(new_content)
 
 
-def _cleanup(app_path: Path, app_name: str, profile_name: str) -> None:
+def _cleanup(app_path: Path, profile_name: str) -> None:
     """Remove files not needed in the forked app."""
     for dir_name in _CLEANUP_DIRS:
         dir_path = app_path / dir_name
@@ -412,8 +401,7 @@ def _cleanup(app_path: Path, app_name: str, profile_name: str) -> None:
         if file_path.exists():
             file_path.unlink()
 
-    # Remove all profile folders except the new locked profile
-    profiles_dir = app_path / "src" / app_name / "profiles"
+    profiles_dir = app_path / "profiles"
     if profiles_dir.exists():
         for profile_dir in profiles_dir.iterdir():
             if profile_dir.is_dir() and profile_dir.name != profile_name:

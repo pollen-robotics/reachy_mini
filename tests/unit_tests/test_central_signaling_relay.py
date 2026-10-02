@@ -186,6 +186,12 @@ def _make_relay(
     return CentralSignalingRelay(robot_name=robot_name, transport=transport)
 
 
+def test_relay_rejects_plaintext_remote_central() -> None:
+    """The relay must not send its bearer token over remote HTTP."""
+    with pytest.raises(ValueError):
+        CentralSignalingRelay(central_uri="http://central.example")
+
+
 def test_meta_carries_robot_name() -> None:
     """The relay carries ``robot_name`` into ``meta.name`` verbatim."""
     relay = _make_relay(robot_name="Sparky")
@@ -630,13 +636,16 @@ class _FakeLock:
         self._acquire = acquire
         self.acquired = 0
         self.released = 0
+        self.handoff_releases = 0
 
     def try_acquire_remote(self, app_name: str) -> bool:
         self.acquired += 1
         return self._acquire
 
-    def release_remote(self) -> None:
+    def release_remote(self, *, expect_handoff: bool = False) -> None:
         self.released += 1
+        if expect_handoff:
+            self.handoff_releases += 1
 
 
 def _make_relay_with_journals(
@@ -756,6 +765,9 @@ def test_central_end_session_cleans_up_and_releases_lock() -> None:
     assert relay._session_to_local_peer == {}
     assert local.sent == [{"type": "endSession", "sessionId": "ls1"}]
     assert lock.released == 1
+    # A deliberate hang-up: flagged as a hand-off so the daemon gives a
+    # successor session time to arrive before sleeping the robot.
+    assert lock.handoff_releases == 1
 
 
 # ---- local -> central direction ----
@@ -832,6 +844,7 @@ def test_local_end_session_forwards_to_central_and_releases_lock() -> None:
     assert relay._central_to_local_session == {}
     assert central.sent == [{"type": "endSession", "sessionId": "cs1"}]
     assert lock.released == 1
+    assert lock.handoff_releases == 1
 
 
 # ---------------------------------------------------------------------------
@@ -923,8 +936,18 @@ class _FakeHTTPSession:
         self.posts: list[tuple[str, Any, Any]] = []
         self.closed = False
 
-    def post(self, url: str, json: Any = None, headers: Any = None) -> _FakeResponse:
+    def post(
+        self,
+        url: str,
+        json: Any = None,
+        headers: Any = None,
+        allow_redirects: bool = True,
+        proxy: Any = None,
+    ) -> _FakeResponse:
         self.posts.append((url, json, headers))
+        return _FakeResponse(self._status)
+
+    def get(self, url: str, **_kwargs: Any) -> _FakeResponse:
         return _FakeResponse(self._status)
 
     async def close(self) -> None:
@@ -1127,3 +1150,94 @@ def test_notify_token_change_forwards_to_instance(
     monkeypatch.setattr(m, "_relay_instance", fake)
     asyncio.run(m.notify_token_change("newtok"))
     assert fake.token == "newtok"
+
+
+def test_relay_recovers_from_an_unauthorized_sse_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 401 mid-session refreshes the credentials and retries without a teardown."""
+    from reachy_mini.apps.sources import hf_auth
+
+    relay = _make_relay()
+    relay.hf_token = "stale"
+    relay._http_session = _FakeHTTPSession(status=401)  # type: ignore[assignment]
+    monkeypatch.setattr(
+        hf_auth,
+        "get_hf_token",
+        lambda force_refresh=False: "fresh",
+    )
+
+    asyncio.run(relay._handle_central_sse())
+
+    assert relay.hf_token == "fresh"
+    assert not relay._token_updated.is_set()
+    assert relay._connection_attempts == 1
+    assert relay.state is not RelayState.ERROR
+
+
+def test_relay_reports_a_401_it_cannot_recover_from(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unrecoverable 401 surfaces as ERROR rather than a silent reconnect loop."""
+    from reachy_mini.apps.sources import hf_auth
+
+    relay = _make_relay()
+    relay.hf_token = "stale"
+    relay._http_session = _FakeHTTPSession(status=401)  # type: ignore[assignment]
+    monkeypatch.setattr(
+        hf_auth,
+        "get_hf_token",
+        lambda force_refresh=False: "stale",
+    )
+
+    asyncio.run(relay._handle_central_sse())
+
+    assert relay.state is RelayState.ERROR
+
+
+def test_relay_backs_off_when_central_rejects_every_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every 401 refreshes, but only the first of a session retries at once."""
+    from reachy_mini.apps.sources import hf_auth
+
+    relay = _make_relay()
+    relay.hf_token = "stale"
+    relay._http_session = _FakeHTTPSession(status=401)  # type: ignore[assignment]
+    refreshes: list[bool] = []
+
+    def _always_new_token(force_refresh: bool = False) -> str:
+        refreshes.append(force_refresh)
+        return f"fresh-{len(refreshes)}"
+
+    monkeypatch.setattr(hf_auth, "get_hf_token", _always_new_token)
+
+    asyncio.run(relay._handle_central_sse())
+    assert relay.state is not RelayState.ERROR
+
+    asyncio.run(relay._handle_central_sse())
+
+    assert refreshes == [True, True]
+    assert relay.state is RelayState.ERROR
+
+
+def test_relay_recovers_after_a_failed_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refresh that failed on one 401 is retried on the next, so the relay recovers."""
+    from reachy_mini.apps.sources import hf_auth
+
+    relay = _make_relay()
+    relay.hf_token = "stale"
+    relay._http_session = _FakeHTTPSession(status=401)  # type: ignore[assignment]
+    tokens = iter(["stale", "fresh"])
+    monkeypatch.setattr(
+        hf_auth, "get_hf_token", lambda force_refresh=False: next(tokens)
+    )
+
+    asyncio.run(relay._handle_central_sse())
+    assert relay.state is RelayState.ERROR
+
+    asyncio.run(relay._handle_central_sse())
+
+    assert relay.hf_token == "fresh"

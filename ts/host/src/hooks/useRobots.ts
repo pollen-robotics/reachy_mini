@@ -42,12 +42,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchRobotsFromCentral } from '../lib/centralRest';
 import {
+  createLogger,
   openCentralListener,
   type CentralListenerHandle,
   type CentralStreamProducer,
-} from '../lib/centralListener';
+} from '@pollen-robotics/reachy-mini-sdk';
 import { resolveSignalingUrl } from '../lib/signalingUrl';
 import type { RobotInfo } from '../lib/sdk-types';
+
+const log = createLogger('host');
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -59,8 +62,6 @@ export interface RobotsState {
   isRefreshing: boolean;
   /** Last error message or null. */
   error: string | null;
-  /** Trigger an immediate REST refresh. */
-  refresh(): void;
 }
 
 export function useRobots(opts: {
@@ -73,6 +74,13 @@ export function useRobots(opts: {
   const [isLoading, setLoading] = useState<boolean>(false);
   const [isRefreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  // True once the first fetch after `enabled` flipped on has settled
+  // (success OR failure). Until then the consumer should read "loading" so the
+  // picker shows its centered spinner from the very first `picking` frame -
+  // otherwise there's a one-frame window (this render commits with the old
+  // `isLoading=false` before the fetch effect runs) where an empty picker
+  // ("No Reachy online") flashes before the spinner. Reset when disabled.
+  const [firstFetchSettled, setFirstFetchSettled] = useState<boolean>(false);
 
   const hasLoadedRef = useRef<boolean>(false);
   const inflightRef = useRef<AbortController | null>(null);
@@ -110,6 +118,10 @@ export function useRobots(opts: {
       if (inflightRef.current === controller) inflightRef.current = null;
       setLoading(false);
       setRefreshing(false);
+      // First fetch of this `enabled` window has now settled either way -
+      // release the "initial loading" floor so the picker can show the list
+      // (or the error / empty state) instead of an endless spinner.
+      setFirstFetchSettled(true);
     }
   }, [cancelInflight, hfToken]);
 
@@ -119,6 +131,7 @@ export function useRobots(opts: {
   useEffect(() => {
     if (!enabled || !hfToken) {
       hasLoadedRef.current = false;
+      setFirstFetchSettled(false);
       setRobots([]);
       setError(null);
       return;
@@ -149,6 +162,7 @@ export function useRobots(opts: {
     const handle: CentralListenerHandle = openCentralListener({
       token: hfToken,
       signalingUrl,
+      appName: 'Reachy Mini Host (picker)',
       onConnect: () => {
         if (droppedAtRef.current !== null) {
           droppedAtRef.current = null;
@@ -158,8 +172,8 @@ export function useRobots(opts: {
       onDisconnect: () => {
         droppedAtRef.current = Date.now();
       },
-      onList: (event) => {
-        setRobots(event.producers.map(producerToRobotInfo));
+      onList: (producers) => {
+        setRobots(producers.map(producerToRobotInfo));
         setError(null);
         hasLoadedRef.current = true;
       },
@@ -183,8 +197,8 @@ export function useRobots(opts: {
         );
       },
       onError: (err) => {
-        console.warn(
-          '[reachy-mini-sdk/host] central listener error:',
+        log.warn(
+          'central listener error:',
           err.message,
         );
       },
@@ -193,12 +207,18 @@ export function useRobots(opts: {
     return () => handle.close();
   }, [doFetch, enabled, hfToken]);
 
-  const refresh = useCallback((): void => {
-    if (!enabled || !hfToken) return;
-    void doFetch();
-  }, [doFetch, enabled, hfToken]);
-
-  return { robots, isLoading, isRefreshing, error, refresh };
+  // Report "loading" for the whole first-fetch window of an `enabled`
+  // session - including the transition frame before the fetch effect has run -
+  // so the picker never flashes its empty state between `picking` and the
+  // first central response. Once settled, defer to the real `isLoading`
+  // (which stays false on background polls, driving only the refresh spinner).
+  const isInitialLoading = enabled && !firstFetchSettled;
+  return {
+    robots,
+    isLoading: isLoading || isInitialLoading,
+    isRefreshing,
+    error,
+  };
 }
 
 function producerToRobotInfo(p: CentralStreamProducer): RobotInfo {

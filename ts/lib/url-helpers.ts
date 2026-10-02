@@ -6,6 +6,10 @@
  * contexts) so the module is import-safe everywhere.
  */
 
+import { createLogger } from './logger.js';
+
+const log = createLogger('sdk');
+
 /**
  * Pick up HuggingFace credentials passed via the URL fragment and move them
  * into `sessionStorage`, where `authenticate()` looks them up.
@@ -66,7 +70,7 @@ export function consumeFragmentCredentials(): void {
         sessionStorage.setItem('hf_username', username);
         sessionStorage.setItem('hf_token_expires', expires);
     } catch (err) {
-        console.warn('[reachy-mini] could not persist pre-seeded HF credentials:', err);
+        log.warn('could not persist pre-seeded HF credentials:', err);
     }
     // Strip the auth keys from the address bar but keep any other hash
     // params the app or SDK might care about (theme, embedded, …).

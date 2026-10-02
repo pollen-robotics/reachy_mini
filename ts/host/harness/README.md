@@ -6,6 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 hf_oauth: true
+hf_oauth_expiration_minutes: 43200
 short_description: Dev harness for the Reachy Mini host shell
 ---
 

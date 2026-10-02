@@ -178,11 +178,6 @@ async def start_startup_app_if_idle(
         return False
 
 
-async def play_awake_startup_cue(backend: Any) -> None:
-    """Play the wake sound without running the full wake-up pose."""
-    backend.play_sound("wake_up.wav")
-
-
 async def wake_or_start_startup_app_if_idle(
     app_manager: AppManager,
     daemon: "Daemon",
@@ -197,18 +192,24 @@ async def wake_or_start_startup_app_if_idle(
         return False
 
     try:
-        if backend.get_motor_control_mode() == MotorControlMode.Disabled:
+        # Decide before touching the motors: enabling them pins the targets
+        # to the measured pose, which for a robot resting at init could flip
+        # the awake predicate and turn the wake below into a silent no-op.
+        if backend.is_awake_at_init_pose():
+            # Already up: just ack the touch with the wake sound.
+            backend.play_sound("wake_up.wav")
+        else:
             logger.info(f"Waking up from antenna touch before starting app: {name}")
             backend.set_motor_control_mode(MotorControlMode.Enabled)
-            await backend.wake_up()
+            # force: the predicate above already ruled a wake is due, and the
+            # set_motor_control_mode may have satisfied wake_up's own check.
+            await backend.wake_up(force=True)
             # wake_up() may fire the daemon-level startup-app callback, which
             # schedules the same app start as a task. Yield once so that task
             # can acquire the app slot before this antenna path checks it.
             await asyncio.sleep(0)
             if not _startup_app_slot_is_free(app_manager, daemon):
                 return True
-        else:
-            await play_awake_startup_cue(backend)
 
         return await start_startup_app_if_idle(app_manager, daemon, name)
     except Exception as e:

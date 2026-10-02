@@ -14,12 +14,14 @@ from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import TYPE_CHECKING, Any, Optional
 
+from reachy_mini.apps.sources import hf_auth
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
 from reachy_mini.daemon.utils import (
     SimulationMode,
     find_serial_port,
     get_ip_address,
 )
+from reachy_mini.io.jsonrpc import JsonRpcError, make_error, parse_request
 from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from reachy_mini.io.ws_server import WSServer
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
@@ -96,6 +98,9 @@ class Daemon:
         # JSON-RPC app relay (apps.* + conversation.* over the DataChannel).
         self.app_manager: "AppManager | None" = None
         self._jsonrpc_relay: "JsonRpcRelay | None" = None
+        # Loop the JSON-RPC relay runs on, set by the FastAPI factory because
+        # `start()` may itself run on a throwaway one (see `set_rpc_loop`).
+        self._jsonrpc_loop: "asyncio.AbstractEventLoop | None" = None
 
         # Single source of truth for which managed app (local Python app or
         # remote WebRTC client) currently holds the robot's app slot. Shared
@@ -168,22 +173,67 @@ class Daemon:
         self._status.media_released = False
         self.logger.info("Media hardware re-acquired.")
 
+    def set_rpc_loop(self, loop: "asyncio.AbstractEventLoop") -> None:
+        """Record the loop the JSON-RPC app relay must run on.
+
+        It has to outlive `start()`. Starting the daemon over HTTP runs it as a
+        background job, and those get a throwaway loop (`asyncio.run` in a
+        thread) that closes the moment the job finishes; a relay scheduled onto
+        it never answers again, so every `rpcCall` from a client times out until
+        the process restarts. The app's own loop lives as long as the process,
+        so the FastAPI factory hands it over here.
+        """
+        self._jsonrpc_loop = loop
+
+    async def start_central_relay_if_running(self) -> None:
+        """Start the relay after a login, but only while RUNNING with media acquired.
+
+        Elsewhere the local signalling server is down and the relay would loop
+        on connection errors; start()/acquire_media() start it themselves.
+        """
+        if self._status.state != DaemonState.RUNNING or self._media_released:
+            self.logger.info("Daemon not running, relay starts with it")
+            return
+        await self._start_central_signaling_relay()
+
     def _setup_jsonrpc_relay(
         self, backend: "Backend", app_manager: "AppManager"
     ) -> None:
         """Create the JSON-RPC app relay and wire it into the backend.
 
         The relay routes ``apps.*`` locally and relays every other namespace
-        (``conversation.*`` ...) to the running app's ``/rpc``. It runs on this
-        loop; the DataChannel handler (which fires on the media thread) hops
-        frames onto it with ``run_coroutine_threadsafe``.
+        (``conversation.*`` ...) to the running app's ``/rpc``. The DataChannel
+        handler fires on the media thread and hops frames onto the relay's loop
+        with ``run_coroutine_threadsafe``.
         """
-        loop = asyncio.get_running_loop()
+        loop = self._jsonrpc_loop or asyncio.get_running_loop()
         relay = JsonRpcRelay(app_manager, backend.broadcast_to_all_clients)
         self._jsonrpc_relay = relay
 
         def handler(raw: str, reply: Callable[[dict[str, Any]], None]) -> None:
-            asyncio.run_coroutine_threadsafe(relay.handle(raw, reply), loop)
+            coro = relay.handle(raw, reply)
+            try:
+                asyncio.run_coroutine_threadsafe(coro, loop)
+                return
+            except RuntimeError:
+                # The loop is closed (shutdown). Checking is_closed() first
+                # would still race with it, so catch the failure instead.
+                coro.close()
+            # Answer rather than drop the frame: a silent drop costs the
+            # caller its whole timeout and reads as an unreachable robot.
+            self.logger.error("JSON-RPC relay loop is closed, refusing %s", raw[:120])
+            try:
+                req = parse_request(raw)
+            except JsonRpcError:
+                return
+            if not req.is_notification:
+                reply(
+                    make_error(
+                        req.id,
+                        message="daemon relay is not available",
+                        reason="relay_unavailable",
+                    )
+                )
 
         backend.set_jsonrpc_handler(handler)
         self.logger.info("JSON-RPC app relay wired to the DataChannel")
@@ -195,14 +245,7 @@ class Daemon:
         if not self._media_server:
             return
 
-        try:
-            from huggingface_hub import get_token
-
-            hf_token = get_token()
-        except Exception as e:
-            self.logger.debug(f"No HF token available, central signaling disabled: {e}")
-            return
-
+        hf_token = hf_auth.get_hf_token()
         if not hf_token:
             self.logger.info("No HF token found, central signaling relay disabled")
             return
@@ -250,7 +293,7 @@ class Daemon:
         except Exception as e:
             self.logger.debug(f"Error stopping central signaling relay: {e}")
 
-    def _on_robot_slot_free(self) -> None:
+    def _on_robot_slot_free(self, expect_handoff: bool) -> None:
         """Return the robot to a clean idle state when the app slot frees.
 
         Wired into ``robot_app_lock`` so that when a remote session ends/drops
@@ -260,14 +303,38 @@ class Daemon:
         threadsafely on the backend's loop. Fires on both graceful and abnormal
         teardown (crash, killed tab, lost Wi-Fi), which is the whole point:
         those paths run no client-side cleanup.
+
+        Args:
+            expect_handoff: True when the session ended on purpose to let a
+                successor take the slot, which buys the incoming session a much
+                longer grace period before the robot is put back to sleep.
+
         """
         backend = self.backend
         if backend is None:
             return
         try:
-            backend.request_idle_reset()
+            backend.request_idle_reset(expect_handoff=expect_handoff)
         except Exception as e:
             self.logger.warning(f"Idle reset request failed: {e}")
+
+    def _on_robot_slot_acquired(self) -> None:
+        """Cancel any pending idle reset when a remote session takes the slot.
+
+        Counterpart of ``_on_robot_slot_free``: the successor now owns the
+        robot, so the previous session's grace timer must not fire under it.
+        Without this, only the successor's first data-channel command cancels
+        the timer - a WebRTC handshake slower than the handoff grace would
+        let the daemon goto_sleep mid-session.
+        """
+        backend = self.backend
+        if backend is None:
+            return
+        try:
+            backend.cancel_idle_reset()
+        except Exception as e:
+            self.logger.warning(f"Idle reset cancel failed: {e}")
+
     def apply_robot_name(self, name: str) -> None:
         """Apply a new robot name to the live daemon without a restart.
 
@@ -415,6 +482,21 @@ class Daemon:
                     self.backend.set_start_update_callback(self._spawn_webrtc_update)
                 self._media_server.start()
 
+            # Reset the robot to a clean idle state whenever the managed app
+            # slot becomes free (remote session end/drop or local app exit), so
+            # no client can leave it parked awake across sessions. Registered
+            # after the backend loop is up (setup_media_server) so
+            # `request_idle_reset()` has a loop to hop onto, and *before* the
+            # relay starts so no remote session can slip through unwired.
+            self.robot_app_lock.set_on_became_free_handler(self._on_robot_slot_free)
+            # Counterpart: a remote successor taking the slot cancels any
+            # pending idle reset right away, instead of relying on its first
+            # data-channel command to do it - a handshake slower than the
+            # handoff grace would otherwise take a goto_sleep mid-session.
+            self.robot_app_lock.set_on_remote_acquired_handler(
+                self._on_robot_slot_acquired
+            )
+
             # Wire the JSON-RPC app relay now that the backend + broadcast
             # paths exist. Runs on this (the main) loop; the DataChannel
             # transport schedules frames onto it.
@@ -423,13 +505,6 @@ class Daemon:
 
                 # Start central signaling relay for remote WebRTC access
                 await self._start_central_signaling_relay()
-
-            # Reset the robot to a clean idle state whenever the managed app
-            # slot becomes free (remote session end/drop or local app exit), so
-            # no client can leave it parked awake across sessions. Registered
-            # after the backend loop is up (setup_media_server) so
-            # `request_idle_reset()` has a loop to hop onto.
-            self.robot_app_lock.set_on_became_free_handler(self._on_robot_slot_free)
 
             # Wire the wake-up hook before any wake can fire (on-start below, or
             # later via button/REST on the wireless unit, which boots asleep).
@@ -501,11 +576,12 @@ class Daemon:
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
 
-            # Unwire the idle-reset hook before tearing down the relay: stopping
+            # Unwire the idle-reset hooks before tearing down the relay: stopping
             # the relay releases the remote hold on `robot_app_lock`, which would
             # otherwise fire `_on_robot_slot_free` and race the explicit
             # goto_sleep below with a second one.
             self.robot_app_lock.set_on_became_free_handler(None)
+            self.robot_app_lock.set_on_remote_acquired_handler(None)
 
             # Close the JSON-RPC app relay (drops the app /rpc connection and
             # fails any in-flight calls) before tearing the backend down.
@@ -524,9 +600,11 @@ class Daemon:
             if goto_sleep_on_stop:
                 try:
                     self.logger.info("Putting Reachy Mini to sleep...")
-                    self.backend.set_motor_control_mode(MotorControlMode.Enabled)
-                    await self.backend.goto_sleep()
-                    self.backend.set_motor_control_mode(MotorControlMode.Disabled)
+                    # Whatever the last app left behind (gravity compensation,
+                    # limp motors, a per-motor torque cut), reset_to_sleep
+                    # re-establishes position control before moving and ends
+                    # limp at the sleep pose - so no explicit disable here.
+                    await self.backend.reset_to_sleep()
                 except Exception as e:
                     self.logger.error(f"Error while putting Reachy Mini to sleep: {e}")
                     self._status.state = DaemonState.ERROR

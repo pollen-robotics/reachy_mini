@@ -5,9 +5,10 @@
 > the repo root. It covers scaffolding, `public/icon.svg`, the host
 > shell, `sdk: static` deploy,
 > `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host
-> ↔ embed contract. **Pin the SDK to
-> `@pollen-robotics/reachy-mini-sdk@1.8.0`** (the stable release
-> validated against the host shell + daemon).
+> ↔ embed contract. **Pin the SDK to the latest release on
+> [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk)**
+> (`npm install @pollen-robotics/reachy-mini-sdk@latest`) — the stable
+> release validated against the host shell + daemon.
 >
 > **This file** is the runtime API surface of the `ReachyMini` class
 > you receive from `handle.reachy` once `connectToHost()` resolves:
@@ -119,7 +120,7 @@ new ReachyMini({
 | `stopSession()` | `Promise` | End session, back to `connected` |
 | `disconnect()` | — | Close signaling (keeps auth) |
 | `logout()` | — | Clear HF credentials |
-| `attachVideo(videoEl)` | `() => void` | Bind video stream to element; returns cleanup function |
+| `attachVideo(videoEl)` | `() => void` | Bind video stream to element; returns cleanup function. **Standalone apps only** — in a host-shell embed the handshake completes before your app mounts, so this silently no-ops; use `handle.media.attachVideo(videoEl)` instead (see the App Creation Guide, §5) |
 | `setTarget({ head?, antennas?, body_yaw? })` | `boolean` | Atomic raw-units update — `head` is `number[16]` (flat 4×4), `antennas` is `[rRad, lRad]`, `body_yaw` is radians |
 | `gotoTarget({ head?, antennas?, body_yaw?, duration })` | `boolean` | Smooth daemon-side interpolation to a target pose over `duration` seconds (same wire units as `setTarget`). Throws `TypeError` on invalid input |
 | `setHeadRpyDeg(roll, pitch, yaw)` | `boolean` | Set head orientation in degrees (wraps `setTarget`) |
@@ -130,8 +131,8 @@ new ReachyMini({
 | `setMotorMode(mode)` | `boolean` | `"enabled"` (position control), `"disabled"` (limp), or `"gravity_compensation"` (float by hand) |
 | `setMotorTorque(on, ids?)` | `boolean` | Toggle torque; per-motor when `ids` is given, else global |
 | `wakeUp(opts?)` / `gotoSleep(opts?)` | `Promise<void>` | Play the wake-up / sleep trajectory; resolves on daemon completion (rejects after `opts.timeoutMs`, default 8000). `wakeUp` enables motors first |
-| `isAwake()` | `boolean` | Awake state derived from the cached `motor_mode` |
-| `ensureAwake(timeoutMs?)` | `Promise<boolean>` | Idempotent wake-up: no-op if already awake; does not await the trajectory |
+| `isAwake()` | `boolean` | Awake state derived from the cached `motor_mode` (`gravity_compensation` counts as awake) |
+| `ensureAwake(timeoutMs?)` | `Promise<boolean>` | Idempotent bring-up to position control: awaits the wake trajectory when asleep, flips `gravity_compensation` back to `enabled` (no emote), no-op when already there. Never rejects |
 | `playSound(filename)` | `boolean` | Play a sound file on the robot |
 | `clearIncomingAudio()` | `boolean` | Drop audio queued for the robot speaker (barge-in) |
 | `sendRaw(data)` | `boolean` | Send arbitrary JSON via data channel |
@@ -202,7 +203,24 @@ Beyond the typed surface above, the runtime object exposes lower-level hooks (no
 
 - `rpcCall(method, params?, { timeoutMs? })` — send a JSON-RPC request over the data channel and await the correlated result (e.g. app-defined methods).
 - `onNotification(method, cb)` — subscribe to one-way JSON-RPC notifications pushed by the robot/app (e.g. `conversation.turn`); returns an unsubscribe fn.
+
+A reply or notification over 64 KiB, the data channel's message limit, is split by the daemon and reassembled by the SDK, so `rpcCall` resolves with the whole result. Older SDKs cannot reassemble and see such a call time out.
 - `startDaemonUpdate({ preRelease?, onProgress? })` — trigger a PyPI update of the daemon. It restarts on success (which tears the session down), so treat a successful reconnect as the "done" signal; `onProgress` fires with `status: "failed"` if the install errors first.
+
+### Debug logging
+
+Every SDK log line is prefixed `[reachy:<ns>]` (`reachy:sdk`, `reachy:session` for auto-reconnect, `reachy:embed` / `reachy:host` for the host shell), so a devtools console filter on `reachy:` isolates the whole stack. The default level is `info`: a handful of lifecycle lines per session (boot phases, wake/sleep steps, reconnects). To see per-message traffic (every command, reply, and SSE event):
+
+```js
+// From the devtools console (persists across reloads):
+localStorage.setItem("reachy-log", "debug"); location.reload();
+
+// Or from code:
+import { setLogLevel } from "@pollen-robotics/reachy-mini-sdk";
+setLogLevel("debug"); // "debug" | "info" | "warn" | "error" | "silent"
+```
+
+Debug lines use `console.debug`, so also enable the "Verbose" level in the devtools console filter to see them.
 
 ## Daemon-side recorded-move playback
 
@@ -289,6 +307,57 @@ stream, so pair every `subscribePose()` with exactly one `unsubscribePose()`
 arrive out of order are dropped (the channel is unordered). Against an older
 daemon that has no pose channel this is a no-op; fall back to `requestState()`
 polling there.
+
+## Handling backgrounded tabs
+
+When the tab is hidden (tab switch, phone lock), the browser pauses
+`requestAnimationFrame` entirely and clamps `setInterval`/`setTimeout` to
+~1 tick per second. Any robot-critical loop clocked by them - pose
+streaming via `setTarget()`, audio gain ramps, stream-health watchdogs,
+reconnect logic - freezes mid-motion until the tab comes back.
+
+Split your loop in two:
+
+- **Logic** (pose computation + `setTarget`, audio, health checks,
+  reconnects): clock it from a **Web Worker**. Worker timers are *not*
+  visibility-throttled, and the `message` events they post are delivered
+  on the main thread even while the tab is hidden.
+- **Visuals** (DOM updates, canvas, meters): keep them on
+  `requestAnimationFrame`. Pausing invisible paints is exactly what you
+  want, and it resumes on its own.
+
+```js
+// pose-heartbeat.worker.js - the whole file:
+setInterval(() => postMessage(0), 25); // ~40 Hz; the main thread down-samples
+```
+
+```js
+// app side
+let worker = null;
+try {
+    worker = new Worker(new URL("./pose-heartbeat.worker.js", import.meta.url), { type: "module" });
+    worker.onmessage = () => stepLogic(performance.now());
+} catch {
+    // Workers unavailable (rare): degrade to a throttled interval.
+    setInterval(() => stepLogic(performance.now()), 25);
+}
+```
+
+Two companion rules make this robust:
+
+- **Clamp your `dt`.** After a long hidden stretch the first tick sees a
+  huge time delta; clamp it (e.g. `Math.min(dt, 100)`) so filters and
+  interpolators don't jump.
+- **Resync on `visibilitychange`.** When the tab returns, call
+  `robot.requestState()` and run one logic step immediately instead of
+  waiting for the next scheduled tick, so the UI repaints from fresh state.
+
+Remember to `worker.terminate()` in your teardown. Full rationale and the
+host-shell variant live in
+[`ts/APP_CREATION_GUIDE.md`](../../../ts/APP_CREATION_GUIDE.md) §14.7; the
+[`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app)
+Space meters the throttling live (Background resilience panel) and clocks
+its own pose editor off a worker.
 
 ## Robot onboarding & management
 

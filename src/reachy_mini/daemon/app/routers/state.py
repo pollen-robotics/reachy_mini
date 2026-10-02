@@ -13,6 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from ....daemon.backend.abstract import Backend
+from ....io.protocol import ImuData
 from ..dependencies import get_backend, ws_get_backend
 from ..models import AnyPose, DoAInfo, FullState, as_any_pose
 
@@ -70,6 +71,20 @@ async def get_doa(
     return backend.read_doa()
 
 
+@router.get("/imu")
+async def get_imu(
+    backend: Backend = Depends(get_backend),
+) -> ImuData | None:
+    """Get the latest IMU reading (accelerometer, gyroscope, quaternion, temperature).
+
+    Accelerations are in m/s², angular rates in rad/s, the quaternion is
+    w-first and the temperature in °C.
+    Returns None on versions without an IMU (Lite, simulation) or when the
+    cached reading has gone stale.
+    """
+    return backend.get_imu_data()
+
+
 @router.get("/full")
 async def get_full_state(
     with_control_mode: bool = True,
@@ -83,6 +98,7 @@ async def get_full_state(
     with_target_antenna_positions: bool = False,
     with_passive_joints: bool = False,
     with_doa: bool = False,
+    with_imu: bool = False,
     use_pose_matrix: bool = False,
     backend: Backend = Depends(get_backend),
 ) -> FullState:
@@ -119,6 +135,8 @@ async def get_full_state(
             result["passive_joints"] = None
     if with_doa:
         result["doa"] = backend.read_doa()
+    if with_imu:
+        result["imu"] = backend.get_imu_data()
 
     result["timestamp"] = datetime.now(timezone.utc)
     return FullState.model_validate(result)
@@ -138,6 +156,7 @@ async def ws_full_state(
     with_target_antenna_positions: bool = False,
     with_passive_joints: bool = False,
     with_doa: bool = False,
+    with_imu: bool = False,
     use_pose_matrix: bool = False,
     backend: Backend = Depends(ws_get_backend),
 ) -> None:
@@ -159,6 +178,7 @@ async def ws_full_state(
                 with_target_antenna_positions=with_target_antenna_positions,
                 with_passive_joints=with_passive_joints,
                 with_doa=with_doa,
+                with_imu=with_imu,
                 use_pose_matrix=use_pose_matrix,
                 backend=backend,
             )

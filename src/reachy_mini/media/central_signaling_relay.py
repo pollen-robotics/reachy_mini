@@ -22,8 +22,11 @@ import aiohttp
 import websockets
 from websockets.asyncio.client import ClientConnection
 
+from reachy_mini.apps.sources import hf_auth
 from reachy_mini.daemon.robot_app_lock import RobotAppLock, RobotAppLockState
 from reachy_mini.utils.hardware_id import get_hardware_id
+from reachy_mini.utils.network import validate_secure_http_url
+from reachy_mini.utils.proxy import proxy_for
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +137,9 @@ class CentralSignalingRelay:
                 active remote session.
 
         """
-        self.central_uri = central_uri
+        self.central_uri = validate_secure_http_url(central_uri, "central_uri").rstrip(
+            "/"
+        )
         self.local_uri = local_uri
         self.hf_token = hf_token
         self.robot_name = robot_name
@@ -560,27 +565,24 @@ class CentralSignalingRelay:
         else:
             self._token_updated.set()
 
-    def _refresh_token(self) -> Optional[str]:
-        """Refresh the HF token from huggingface_hub.
+    def _refresh_token(self, force_refresh: bool = False) -> Optional[str]:
+        """Re-read the daemon-owned credentials, refreshing them when asked."""
+        token = hf_auth.get_hf_token(force_refresh)
+        if token != self.hf_token:
+            if token:
+                logger.info("[Central Relay] HF token detected (user logged in)")
+            else:
+                logger.debug("[Central Relay] No HF token available")
+            self.hf_token = token
+        return token
 
-        Returns:
-            The current HF token, or None if not available
-
-        """
-        try:
-            from huggingface_hub import get_token
-
-            token = get_token()
-            if token != self.hf_token:
-                if token:
-                    logger.info("[Central Relay] HF token detected (user logged in)")
-                else:
-                    logger.debug("[Central Relay] No HF token available")
-                self.hf_token = token
-            return token
-        except Exception as e:
-            logger.debug(f"[Central Relay] Could not get HF token: {e}")
-            return self.hf_token
+    async def _recover_from_unauthorized(self, failed_token: Optional[str]) -> bool:
+        """Refresh after a 401 and report whether a retry is worth attempting."""
+        token = await asyncio.to_thread(self._refresh_token, True)
+        if token and token != failed_token:
+            logger.info("[Central Relay] Refreshed credentials after a 401")
+            return True
+        return False
 
     async def _close_connections(self) -> None:
         """Close all connections.
@@ -705,7 +707,11 @@ class CentralSignalingRelay:
                             f"Connection failed after {self._connection_attempts} attempts: {e}",
                         )
 
-                if self._running and not had_exception and self._state == RelayState.ERROR:
+                if (
+                    self._running
+                    and not had_exception
+                    and self._state == RelayState.ERROR
+                ):
                     # Clean return but ERROR (e.g. 401) - back off like a failure.
                     had_exception = True
                     self._connection_attempts += 1
@@ -754,7 +760,11 @@ class CentralSignalingRelay:
                 logger.debug("[Central Relay] Token check timeout, will re-check")
             return
 
-        # Create HTTP session for central server
+        # Create HTTP session for central server. Explicit proxy resolution
+        # (HTTP_PROXY/HTTPS_PROXY/NO_PROXY) is done per request via
+        # utils.proxy.proxy_for — deliberately NOT trust_env=True, which
+        # would also read ~/.netrc and break the Authorization-header
+        # requests this relay sends (see utils/proxy.py).
         self._http_session = aiohttp.ClientSession()
 
         # Connect to local GStreamer signaling (WebSocket) with timeout
@@ -1053,7 +1063,11 @@ class CentralSignalingRelay:
         timeout = aiohttp.ClientTimeout(total=PRODUCER_HEALTH_CHECK_TIMEOUT)
         try:
             async with self._http_session.get(
-                url, headers=headers, timeout=timeout
+                url,
+                headers=headers,
+                timeout=timeout,
+                allow_redirects=False,
+                proxy=proxy_for(url),
             ) as response:
                 if response.status != 200:
                     logger.debug(
@@ -1166,12 +1180,20 @@ class CentralSignalingRelay:
                 total=None, connect=10, sock_read=SSE_READ_TIMEOUT
             )
             async with self._http_session.get(
-                events_url, headers=headers, timeout=timeout
+                events_url,
+                headers=headers,
+                timeout=timeout,
+                allow_redirects=False,
+                proxy=proxy_for(events_url),
             ) as response:
                 if response.status == 401:
-                    self._set_state(
-                        RelayState.ERROR, "Authentication failed - token may be invalid"
-                    )
+                    # Refresh on every 401 so a failed refresh is retried, but retry
+                    # at once only for the first 401 of a session. Later ones back off.
+                    retry_now = self._connection_attempts == 0
+                    self._connection_attempts += 1
+                    refreshed = await self._recover_from_unauthorized(self.hf_token)
+                    if not (retry_now and refreshed):
+                        self._set_state(RelayState.ERROR, "Authentication failed")
                     return
                 elif response.status != 200:
                     self._set_state(
@@ -1275,7 +1297,11 @@ class CentralSignalingRelay:
         headers = {"Authorization": f"Bearer {self.hf_token}"}
         try:
             async with self._http_session.post(
-                send_url, json=msg, headers=headers
+                send_url,
+                json=msg,
+                headers=headers,
+                allow_redirects=False,
+                proxy=proxy_for(send_url),
             ) as response:
                 if response.status != 200:
                     body = ""
@@ -1471,13 +1497,16 @@ class CentralSignalingRelay:
                 logger.info(
                     f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}"
                 )
-                # If no sessions remain, release the robot lock.
+                # If no sessions remain, release the robot lock. This is the
+                # client hanging up on purpose, so flag it as a hand-off: it may
+                # well be making room for a successor session (mobile app ->
+                # app iframe) rather than walking away from the robot.
                 if (
                     self._robot_app_lock is not None
                     and not self._central_to_local_session
                     and not self._pending_central_sessions
                 ):
-                    self._robot_app_lock.release_remote()
+                    self._robot_app_lock.release_remote(expect_handoff=True)
 
         elif msg_type == "peerStatusChanged":
             # Another peer changed status - ignore for producers
@@ -1604,13 +1633,14 @@ class CentralSignalingRelay:
                 logger.info(
                     f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}"
                 )
-                # If no sessions remain, release the robot lock.
+                # If no sessions remain, release the robot lock. Deliberate
+                # hang-up, so same hand-off treatment as the central-side path.
                 if (
                     self._robot_app_lock is not None
                     and not self._central_to_local_session
                     and not self._pending_central_sessions
                 ):
-                    self._robot_app_lock.release_remote()
+                    self._robot_app_lock.release_remote(expect_handoff=True)
 
 
 # Singleton instance for integration
@@ -1678,12 +1708,7 @@ async def start_central_relay(
 
     # Try to get HF token if not provided
     if hf_token is None:
-        try:
-            from huggingface_hub import get_token
-
-            hf_token = get_token()
-        except Exception:
-            pass
+        hf_token = hf_auth.get_hf_token()
 
     _relay_instance = CentralSignalingRelay(
         central_uri=central_uri,
@@ -1722,12 +1747,7 @@ async def notify_token_change(new_token: Optional[str] = None) -> None:
         return
 
     if new_token is None:
-        try:
-            from huggingface_hub import get_token
-
-            new_token = get_token()
-        except Exception:
-            pass
+        new_token = hf_auth.get_hf_token()
 
     await _relay_instance.update_token(new_token)
 

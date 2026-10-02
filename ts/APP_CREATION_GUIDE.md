@@ -1,20 +1,23 @@
 # App Creation Guide
 
-> ### Use `@pollen-robotics/reachy-mini-sdk@1.8.0` today
+> ### Use the latest `@pollen-robotics/reachy-mini-sdk` release
 >
-> Every reference app pins the same SDK release: **`1.8.0`** (the
-> stable npm release; npm versions are immutable, so this is fully
-> reproducible — no commit suffix needed). The host shell, the embed
+> Install the latest stable release from
+> [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk):
+>
+> ```bash
+> npm install @pollen-robotics/reachy-mini-sdk@latest
+> ```
+>
+> This pins the exact resolved version in your `package.json` (npm
+> versions are immutable, so this is fully reproducible). The minimum
+> supported version is **`1.8.0`** — anything older predates the host
+> shell contract described here. Every
+> reference app pins the same SDK release. The host shell, the embed
 > adapter, the SDK runtime, and the daemon on the robot are validated
 > end-to-end against that release. Mixing versions across these
 > boundaries causes silent protocol drift - see
 > [§10 SDK version pinning](#10-sdk-version-pinning).
->
-> Add this to your `package.json`:
->
-> ```json
-> { "dependencies": { "@pollen-robotics/reachy-mini-sdk": "1.8.0" } }
-> ```
 
 **This is the single source of truth for building a Reachy Mini JS
 app.** [`../AGENTS.md`](../AGENTS.md) at the repo root points here;
@@ -69,6 +72,7 @@ app's UI** and nothing else.
     4. [Standalone exit hooks (`installShutdownHandler`)](#144-standalone-exit-hooks-installshutdownhandler)
     5. [Daemon parity warning](#145-daemon-parity-warning)
     6. [Anti-patterns](#146-anti-patterns)
+    7. [Backgrounded tabs: clock robot logic off a Web Worker](#147-backgrounded-tabs-clock-robot-logic-off-a-web-worker)
 
 ---
 
@@ -126,7 +130,8 @@ npm run dev
 ```
 
 All three reference apps pin `@pollen-robotics/reachy-mini-sdk` to
-the same RC version in their `package.json` - see [§10 SDK version pinning](#10-sdk-version-pinning).
+the same exact version (the latest npm release) in their
+`package.json` - see [§10 SDK version pinning](#10-sdk-version-pinning).
 
 > **Prefer a no-build path?** You can also ship the app as a single
 > `index.html` with the SDK loaded from a CDN. No `package.json`, no
@@ -362,6 +367,7 @@ The resolved `handle` exposes:
 interface ConnectedHandle<TConfig> {
   // Live state at boot
   reachy: ReachyMiniInstance;        // SDK instance, session live, robot awake
+  media: RobotMedia;                 // WebRTC streams - see "Video: use `handle.media`"
   theme: 'dark' | 'light';
   config: TConfig | null;
   appName: string;
@@ -383,6 +389,41 @@ interface ConnectedHandle<TConfig> {
 The API is intentionally minimal. If you need a custom channel
 between host and embed, file a feature request - we'll add it as
 a typed message rather than expose a free-form sink.
+
+### Video: use `handle.media`
+
+`connectToHost()` resolves only *after* the WebRTC handshake is
+complete. By the time your app mounts, the SDK's one-shot
+`videoTrack` event and the underlying `pc.ontrack` have **already
+fired**. So `reachy.attachVideo(el)` installs a listener that never
+fires, and an embed never calls `startSession()` again: the element
+stays black forever, with no error anywhere.
+
+`handle.media` exists for exactly this. It replays the streams from a
+synchronous snapshot of the peer connection's receivers, so a
+late-mounting consumer sees the camera immediately:
+
+```ts
+interface RobotMedia {
+  attachVideo(el: HTMLVideoElement): () => void;  // returns a detach fn
+  readonly robotStream: MediaStream | null;       // robot video + audio
+  readonly micStream: MediaStream | null;         // local mic, if enabled
+}
+
+const handle = await connectToHost();
+const detach = handle.media.attachVideo(videoEl);
+handle.onLeave(() => detach());
+```
+
+There is no equivalent race for the data channel, mute toggles, motor
+commands or state updates: the bridge resolves only once ICE **and**
+the data channel are connected, and state events keep arriving (every
+~500 ms, or ~30 Hz after `subscribePose()`). Keep calling `reachy.setHeadRpyDeg(...)`,
+`reachy.setMicMuted(...)` and `reachy.addEventListener('state', ...)`
+directly.
+
+`reachy.attachVideo()` remains correct in a **standalone** app
+(`mountHost`), where your code runs before the session starts.
 
 ### Typing your config
 
@@ -644,30 +685,31 @@ Pin yours the same way - mixing versions across `@pollen-robotics/reachy-mini-sd
 `@pollen-robotics/reachy-mini-sdk/host`, and the daemon on the robot
 produces hard-to-debug protocol drift.
 
-The current pinned version across all three reference apps:
+Install the latest stable release from
+[npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk):
 
-```json
-{
-  "dependencies": {
-    "@pollen-robotics/reachy-mini-sdk": "1.8.0"
-  }
-}
+```bash
+npm install @pollen-robotics/reachy-mini-sdk@latest
 ```
 
-This is the stable `1.8.0` npm release, validated end-to-end against
-the host shell + daemon. npm versions are immutable, so pinning the
-exact version is fully reproducible — no commit suffix needed. **Use
-the same string in your `package.json`** unless you're explicitly
-tracking a newer release.
+npm writes the exact resolved version into your `package.json`. npm
+versions are immutable, so pinning the exact version is fully
+reproducible — no commit suffix needed. The stable release is
+validated end-to-end against the host shell + daemon. **Use the exact
+version string npm writes** unless you're explicitly tracking a newer
+release. In all cases the version must be **`>= 1.8.0`** — older
+releases predate the host shell + protocol v1 contract and are not
+supported.
 
-> When a newer release is published, the source of truth is whichever
-> string is currently shared by [`reachy_mini_minimal_conversation`'s
+> The source of truth for "what's current" is the
+> [npm package page](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk)
+> (`npm view @pollen-robotics/reachy-mini-sdk version` works too), and
+> whichever string is currently shared by [`reachy_mini_minimal_conversation`'s
 > `package.json`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation/blob/main/package.json),
 > [`reachy_mini_emotions`'s `package.json`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions/blob/main/package.json),
 > and [`reachy_mini_telepresence`'s `package.json`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence/blob/main/package.json).
-> If those three diverge, fall back to whatever this guide says.
 
-### Why pin a specific build (not `^1.8.0` or a major like `@1`)?
+### Why pin a specific build (not `^x.y.z` or a major like `@1`)?
 
 The host shell, the embed adapter (`connectToHost`), the SDK, and the
 robot daemon negotiate over a versioned WebRTC data-channel protocol.
@@ -713,6 +755,7 @@ app_build_command: npm ci && npm run build   # HF runs this on its builder
 app_file: dist/index.html                     # HF serves the build output as entry
 pinned: false
 hf_oauth: true
+hf_oauth_expiration_minutes: 43200   # 30 days (max); default is only 8 h
 short_description: One-line description shown in the mobile catalog.
 tags:
   - reachy_mini
@@ -729,6 +772,21 @@ tags:
   build completes**. For a Vite-built SPA that's `dist/index.html`.
 - `hf_oauth: true` is what triggers `__OAUTH_CLIENT_ID__` substitution
   inside HTML files in the served output (post-build).
+- `hf_oauth_expiration_minutes` sets the OAuth token lifetime. Strongly
+  recommended: the default (8 hours) forces a re-auth round trip several
+  times a day. The host's silent sign-in makes those round trips
+  invisible for logged-in users, but a long-lived token avoids them
+  entirely. Two properties bound the exposure of that long-lived token:
+  - **Scope.** Don't set `hf_oauth_scopes`; the token then carries only
+    `openid profile` - identity (username, avatar) and nothing else. It
+    cannot read private repos, write to the Hub, or call the Inference
+    API, so a leaked token identifies the user but grants no account
+    access.
+  - **Idle window.** The SDK stores the token in `sessionStorage`
+    (tab-scoped, dies with the tab) and additionally drops any token
+    unused for more than 24 h (`TOKEN_MAX_IDLE_MS` in the SDK's token
+    store). A tab resurrected days later via session restore re-auths;
+    a plain reload does not.
 - The **`reachy_mini_js_app` tag is mandatory** for mobile-catalog
   discovery. The catalog API filters on this exact string.
 - Apps in the `pollen-robotics/*` namespace are automatically tagged
@@ -903,16 +961,18 @@ my-bare-app/
 
 **Importing the SDK from a CDN**
 
-Pin to an exact build SHA - **the same string you would use in
-`package.json`** (see [§10 SDK version pinning](#10-sdk-version-pinning)).
-jsDelivr's `/+esm` suffix tells the CDN to bundle the package to ESM at
-the edge:
+Pin to an exact version - **the same string you would use in
+`package.json`**, i.e. the latest release shown on
+[npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk)
+(see [§10 SDK version pinning](#10-sdk-version-pinning)). Substitute it
+for `<version>` below. jsDelivr's `/+esm` suffix tells the CDN to bundle
+the package to ESM at the edge:
 
 ```html
 <script type="module">
-  import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/+esm";
-  import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/host/dist/entry/auto.js";
-  import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/host/dist/entry/embed.js";
+  import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@<version>/+esm";
+  import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@<version>/host/dist/entry/auto.js";
+  import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@<version>/host/dist/entry/embed.js";
 
   window.ReachyMini = ReachyMini;
   window.dispatchEvent(new Event("reachymini:ready"));
@@ -976,9 +1036,10 @@ shell without touching your motion code. The four-step recipe:
    import { ReachyMini } from "https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@v1.7.2/js/reachy-mini.js";
 
    // AFTER (modern host shell, same SDK runtime API)
-   import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/+esm";
-   import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/host/dist/entry/auto.js";
-   import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.8.0/host/dist/entry/embed.js";
+   // <version> = latest release on npm (see §10 SDK version pinning)
+   import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@<version>/+esm";
+   import { mountHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@<version>/host/dist/entry/auto.js";
+   import { connectToHost } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@<version>/host/dist/entry/embed.js";
    ```
 
 2. **Branch on `?embedded=1`.** Wrap your existing app boot in:
@@ -1013,8 +1074,11 @@ shell without touching your motion code. The four-step recipe:
    only exists on the modern SDK; if you weren't using it, nothing
    changes. If you reached into private fields like `robot._pc`
    (RTCPeerConnection), prefer the public alternatives:
-   `robot.attachVideo(videoEl)` for video, `enableMicrophone: true` on
-   `mountHost` for bidirectional audio.
+   `handle.media.attachVideo(videoEl)` for video, `enableMicrophone: true`
+   on `mountHost` for bidirectional audio. Once embedded, use
+   `handle.media.attachVideo()` and **not** `robot.attachVideo()`: the
+   latter silently no-ops because the handshake completed before your
+   app mounted (see [§5 Video](#video-use-handlemedia)).
 
 Your `README.md` frontmatter doesn't need any changes: `sdk: static`
 and `hf_oauth: true` work for both variants. You can still skip
@@ -1450,7 +1514,9 @@ rolled out by the SDK team, not by every app team.
 - App bundles (`index-<hash>.js`): hashed by Vite, cache-busted
   on deploy.
 - `@pollen-robotics/reachy-mini-sdk` in `package.json`: pinned to
-  an **exact version** (today: `1.8.0`), not a range. See
+  an **exact version** (the latest release on
+  [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk)),
+  not a range. See
   [§10 SDK version pinning](#10-sdk-version-pinning).
 - `@pollen-robotics/reachy-mini-sdk/host` subpath imports: same
   pin, same package.
@@ -1504,6 +1570,8 @@ before trusting the payload.
 | host  → embed   | `host:leaving`                | Tear-down request with `timeoutMs`            |
 | embed → host    | `embed:request-leave`         | App requests end-of-session                   |
 | embed → host    | `embed:error`                 | Error report (`{ message, fatal, detail? }`)  |
+| host  → embed   | `host:start-update`           | Run the daemon's PyPI self-update (only the embed holds a data channel) |
+| embed → host    | `embed:update-progress`       | Install progress, plus `rebooting` when the restart kills the session |
 
 Intentionally **not** in the v1 protocol:
 
@@ -1530,6 +1598,31 @@ Intentionally **not** in the v1 protocol:
   every time.
 - `host:init` may arrive twice (rare: bridge re-arm); the embed
   treats the latest as authoritative and re-applies theme / config.
+
+#### Daemon update gate (Mode A only)
+
+The shell checks the robot's daemon version against the latest
+GitHub release and can interrupt the app. App authors don't wire
+anything up - `connectToHost()` reports the version for them - but
+should know the two outcomes exist:
+
+- **Below `MIN_SUPPORTED_DAEMON_VERSION`** (`host/src/lib/daemonRelease.ts`):
+  a full-screen block. Such a daemon predates the OTA command, so
+  the only way out is the desktop app. The app never becomes
+  interactive.
+- **Merely behind the latest release**: a dismissable card once the
+  app is `live`. The app keeps running; the user may start an
+  update, which reboots the robot and drops the session.
+
+This is deliberately softer than the mobile app, which blocks on
+any version behind the latest. A Space is public: applying that
+rule here would make every daemon release a global kill switch for
+robots that were working a minute earlier.
+
+Mode B needs none of this. The mobile app never mounts the shell -
+it points its iframe straight at `?embedded=1` and runs its own
+gate before an app can be opened - so the component simply doesn't
+exist in that path.
 
 ### 13.7 Non-goals
 
@@ -1793,3 +1886,61 @@ strict mode, silently no-op otherwise).
 | `await safelyReturnToPose(...)` expecting the move to complete. | It resolves after **dispatch**, not after motion finishes. `await sleep(plan.duration * 1000)` or subscribe to `state` if you need to wait. |
 | Carry degrees through your motion code. | Convert at the UI boundary; speak radians + magic-mm everywhere below it. |
 | Pass `null` head / antennas / body_yaw to opt a channel out of a `gotoTarget`. | Use `PartialPose` and **omit** the channel. The SDK treats omission as "hold previous target". |
+
+### 14.7 Backgrounded tabs: clock robot logic off a Web Worker
+
+When the user switches tabs (or the phone locks), the browser throttles
+your app hard: `requestAnimationFrame` **pauses entirely** and
+`setInterval`/`setTimeout` are clamped to **~1 tick per second**. If your
+pose streaming, audio pipeline, or stream-health watchdog is clocked by
+either of them, the robot freezes mid-motion and stalls go unnoticed until
+the tab comes back.
+
+The fix is to split your loop in two:
+
+- **Logic** (pose computation + `setTarget`, audio gain, health checks,
+  reconnects): clock it from a **Web Worker**. Worker timers are *not*
+  visibility-throttled, and the `message` events they post are delivered
+  on the main thread even while the tab is hidden.
+- **Visuals** (DOM updates, canvas, meters): keep them on `rAF`. It pauses
+  when hidden - which is exactly what you want for work nobody can see -
+  and resumes on its own.
+
+```ts
+// pose-heartbeat.worker.ts - the whole file:
+const INTERVAL_MS = 25; // ~40 Hz; the main thread down-samples as needed
+setInterval(() => postMessage(0), INTERVAL_MS);
+```
+
+```ts
+// embed.ts
+let worker: Worker | null = null;
+try {
+  worker = new Worker(new URL("./pose-heartbeat.worker.ts", import.meta.url), { type: "module" });
+  worker.onmessage = () => stepLogic(performance.now());
+} catch {
+  // Workers unavailable (rare): degrade to a throttled interval.
+  setInterval(() => stepLogic(performance.now()), 25);
+}
+
+const renderVisuals = () => { /* DOM/canvas only - no robot commands */ };
+const rafLoop = () => { renderVisuals(); requestAnimationFrame(rafLoop); };
+requestAnimationFrame(rafLoop);
+```
+
+Two companion rules make this robust:
+
+- **Clamp your `dt`.** After a long hidden stretch the first tick sees a
+  huge time delta; clamp it (e.g. `Math.min(dt, 100)`) so filters and
+  interpolators don't jump.
+- **Resync on `visibilitychange`.** When the tab returns, call
+  `reachy.requestState()` and run one logic step immediately instead of
+  waiting for the next scheduled tick, so the UI repaints from fresh state.
+
+Remember to `worker.terminate()` in your `onLeave` cleanup. A complete
+reference implementation lives in the `reachy_mini_radio_js` app
+(`src/embed.ts` + `src/pose-heartbeat.worker.ts`), and the
+[`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app)
+Space both applies the pattern to its pose editor and demos the throttling
+live: its **Background resilience** panel meters rAF vs `setInterval` vs a
+worker clock, with a recap of what each delivered while the tab was hidden.

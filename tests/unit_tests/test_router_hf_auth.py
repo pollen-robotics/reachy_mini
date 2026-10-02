@@ -1,11 +1,19 @@
 """Unit tests for the HuggingFace auth router (delegating to apps.sources.hf_auth)."""
 
+import asyncio
+import importlib
+import threading
 import types
+from collections.abc import Callable
+from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastapi import APIRouter
+from fastapi.testclient import TestClient
 
 from reachy_mini.apps.sources import hf_auth as src
 from reachy_mini.daemon.app.routers import hf_auth
+from reachy_mini.media import central_signaling_relay
 
 # The router does ``from reachy_mini.apps.sources import hf_auth`` and calls
 # ``hf_auth.<fn>``, so the delegated functions live on the source module (``src``);
@@ -57,6 +65,24 @@ def test_status(monkeypatch, router_app):
 
     assert resp.status_code == 200
     assert resp.json() == payload
+
+
+def test_status_check_does_not_block_the_event_loop(monkeypatch):
+    """The whoami-backed status check runs off the loop, so other requests proceed."""
+    released = threading.Event()
+
+    def _slow_check():
+        return {"is_logged_in": released.wait(timeout=2), "username": None}
+
+    monkeypatch.setattr(src, "check_token_status", _slow_check)
+
+    async def scenario():
+        status = asyncio.create_task(hf_auth.get_auth_status())
+        await asyncio.sleep(0.05)
+        released.set()
+        return await status
+
+    assert asyncio.run(scenario())["is_logged_in"] is True
 
 
 def test_relay_status_lite_early_return(router_app):
@@ -198,6 +224,78 @@ def test_oauth_session_delete_not_found(monkeypatch, router_app):
     assert resp.status_code == 404
 
 
+def test_device_oauth_start_keeps_mobile_contract(monkeypatch, router_app):
+    """The mobile setup endpoint returns the Hugging Face device-code fields."""
+    payload = {
+        "status": "pending",
+        "session_id": "s1",
+        "user_code": "ABCD-1234",
+        "verification_uri": "https://huggingface.co/oauth/device",
+        "verification_uri_complete": "https://huggingface.co/oauth/device?code",
+        "interval": 5,
+        "expires_in": 900,
+    }
+    monkeypatch.setattr(src, "start_device_code_login", AsyncMock(return_value=payload))
+    client = router_app(hf_auth.router)
+
+    resp = client.post("/hf-auth/oauth/device/start")
+
+    assert resp.status_code == 200
+    assert resp.json() == payload
+
+
+def test_device_oauth_status_keeps_mobile_contract(monkeypatch, router_app):
+    """The mobile setup status endpoint preserves authorized and username."""
+    monkeypatch.setattr(
+        src,
+        "get_device_code_session_status",
+        lambda _sid: {"status": "authorized", "username": "alice"},
+    )
+    monkeypatch.setattr(src, "consume_device_session_relay_pending", lambda _sid: False)
+    client = router_app(hf_auth.router)
+
+    resp = client.get("/hf-auth/oauth/device/status/s1")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "authorized", "username": "alice"}
+
+
+def test_central_status_refuses_an_untrusted_central_before_sending_the_bearer(
+    monkeypatch: pytest.MonkeyPatch,
+    router_app: Callable[[APIRouter], TestClient],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Invalid configuration imports safely and warns once across repeated polls."""
+    monkeypatch.setattr(src, "get_hf_token", lambda: "hf_tok")
+
+    session = Mock(side_effect=AssertionError("must not contact an untrusted central"))
+
+    try:
+        with monkeypatch.context() as config:
+            config.setattr(
+                central_signaling_relay,
+                "CENTRAL_SIGNALING_SERVER",
+                "http://central.example",
+            )
+            config.setattr(hf_auth.aiohttp, "ClientSession", session)
+            importlib.reload(hf_auth)
+            client = router_app(hf_auth.router)
+            for _ in range(3):
+                resp = client.get("/hf-auth/central-robot-status")
+                assert resp.status_code == 200
+                assert resp.json() == {
+                    "available": False,
+                    "robots": [],
+                    "reason": "invalid_configuration",
+                }
+            warnings = [r for r in caplog.records if r.name == hf_auth.__name__]
+            assert len(warnings) == 1
+            assert "REACHY_CENTRAL_URL" in warnings[0].message
+            assert "central.example" not in warnings[0].message
+    finally:
+        importlib.reload(hf_auth)
+
+
 def test_central_robot_status_no_token(monkeypatch, router_app):
     """No stored token -> early return, no aiohttp/network involved."""
     monkeypatch.setattr(src, "get_hf_token", lambda: None)
@@ -213,18 +311,109 @@ def test_central_robot_status_no_token(monkeypatch, router_app):
     }
 
 
-def test_oauth_callback_error_param(monkeypatch, router_app):
+def test_oauth_callback_redacts_provider_text(monkeypatch, router_app):
     """Callback with an OAuth error renders the failure page (no network)."""
-    monkeypatch.setattr(src, "get_session_by_state", lambda state: None)
+    session = types.SimpleNamespace(status="pending", error_message=None)
+    monkeypatch.setattr(src, "get_oauth_session", lambda state: session)
     client = router_app(hf_auth.router)
 
     resp = client.get(
         "/hf-auth/oauth/callback",
-        params={"error": "access_denied", "error_description": "user said no"},
+        params={
+            "state": "state",
+            "error": "access_denied",
+            "error_description": "<script>provider-secret-marker</script>",
+        },
     )
 
     assert resp.status_code == 200
-    assert "user said no" in resp.text
+    assert src.AUTHORIZATION_DENIED_MESSAGE in resp.text
+    assert "provider-secret-marker" not in resp.text
+    assert session.error_message == src.AUTHORIZATION_DENIED_MESSAGE
+
+
+def test_oauth_callback_escapes_username(monkeypatch, router_app):
+    """Escape callback result text before inserting it into HTML."""
+    monkeypatch.setattr(
+        src,
+        "exchange_code_for_token",
+        AsyncMock(return_value={"status": "success", "username": "<script>x</script>"}),
+    )
+
+    response = router_app(hf_auth.router).get(
+        "/hf-auth/oauth/callback", params={"code": "code", "state": "state"}
+    )
+
+    assert response.status_code == 200
+    assert "<script>x</script>" not in response.text
+    assert "&lt;script&gt;x&lt;/script&gt;" in response.text
+
+
+def test_refresh_relay_redacts_response_and_log(monkeypatch, router_app, caplog):
+    """Keep relay failure details out of responses and logs."""
+    monkeypatch.setattr(src, "get_hf_token", lambda: "hf_test")
+    monkeypatch.setattr(
+        central_signaling_relay,
+        "notify_force_reconnect",
+        AsyncMock(side_effect=RuntimeError("provider-secret-marker")),
+    )
+
+    response = router_app(hf_auth.router).post("/hf-auth/refresh-relay")
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Failed to refresh relay"}
+    assert "RuntimeError" in caplog.text
+    assert "provider-secret-marker" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "path", ["/oauth/callback?code=code&state=state", "/oauth/device/status/session"]
+)
+def test_oauth_success_survives_relay_start_failure(
+    monkeypatch, router_app, caplog, path
+):
+    """Keep relay start failures out of successful login responses and logs."""
+    monkeypatch.setattr(
+        src,
+        "exchange_code_for_token",
+        AsyncMock(return_value={"status": "success", "username": "alice"}),
+    )
+    monkeypatch.setattr(
+        src,
+        "get_device_code_session_status",
+        lambda sid: {"status": "authorized", "username": "alice"},
+    )
+    monkeypatch.setattr(src, "consume_device_session_relay_pending", lambda sid: True)
+    start_relay = AsyncMock(side_effect=RuntimeError("provider-secret-marker"))
+    daemon = types.SimpleNamespace(start_central_relay_if_running=start_relay)
+
+    response = router_app(hf_auth.router, daemon=daemon).get("/hf-auth" + path)
+
+    assert response.status_code == 200
+    assert "alice" in response.text
+    start_relay.assert_awaited_once_with()
+    assert "RuntimeError" in caplog.text
+    assert "provider-secret-marker" not in response.text + caplog.text
+
+
+def test_oauth_callback_error_param_is_not_reflected(router_app):
+    """Attacker-controlled error_description must not reach the page at all.
+
+    Since the provider-text redaction, the error path renders a canned
+    message, so the strongest property holds: no reflection, escaped or not.
+    """
+    client = router_app(hf_auth.router)
+
+    payload = "</p><script>alert(1)</script><p>"
+    resp = client.get(
+        "/hf-auth/oauth/callback",
+        params={"error": "access_denied", "error_description": payload},
+    )
+
+    assert resp.status_code == 200
+    assert payload not in resp.text
+    assert "alert(1)" not in resp.text
+    assert src.AUTHORIZATION_DENIED_MESSAGE in resp.text
 
 
 def test_oauth_callback_missing_code(router_app):

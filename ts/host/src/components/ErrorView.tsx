@@ -82,10 +82,12 @@ export function ErrorView({
           </Box>
         )}
         <Stack direction="row" spacing={1.5}>
-          <Button variant="outlined" onClick={onBackToPicker}>
+          {/* "Back to picker" is the primary action: it recovers in
+              place (keeps the OAuth session) where reload starts over. */}
+          <Button variant="contained" onClick={onBackToPicker}>
             Back to picker
           </Button>
-          <Button variant="contained" onClick={onReload}>
+          <Button variant="outlined" onClick={onReload}>
             Reload
           </Button>
         </Stack>

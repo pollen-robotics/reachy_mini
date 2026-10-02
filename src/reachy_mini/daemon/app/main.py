@@ -10,6 +10,7 @@ managing the robot's state.
 import argparse
 import asyncio
 import logging
+import sys
 import types
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -23,7 +24,10 @@ from fastapi.responses import HTMLResponse
 
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon import startup_app_config
-from reachy_mini.daemon.app.middleware import MaxBodySizeMiddleware
+from reachy_mini.daemon.app.middleware import (
+    LocalNetworkGuardMiddleware,
+    MaxBodySizeMiddleware,
+)
 from reachy_mini.daemon.app.routers import (
     apps,
     audio_config,
@@ -53,11 +57,7 @@ from reachy_mini.media.audio_utils import (
 from reachy_mini.motion.recorded_move import preload_default_datasets
 from reachy_mini.utils.discovery import MdnsServiceRegistration
 from reachy_mini.utils.wireless_version.startup_check import (
-    check_and_fix_restore_venv,
-    check_and_fix_venvs_ownership,
-    check_and_sync_apps_venv_sdk,
-    check_and_update_bluetooth_service,
-    check_and_update_wireless_launcher,
+    run_wireless_startup_checks,
 )
 
 logger = logging.getLogger(__name__)
@@ -126,6 +126,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
+        # The JSON-RPC app relay must not be scheduled onto whichever loop
+        # `Daemon.start` runs on: over HTTP that is a background job's
+        # throwaway loop. This one owns the app and lives as long as the
+        # process.
+        app.state.daemon.set_rpc_loop(asyncio.get_running_loop())
         dataset_updater_task: asyncio.Task[None] | None = None
         # Held on app.state so the /apps/startup-app endpoint can re-arm it live.
         app.state.startup_app_antenna_watcher_task = None
@@ -142,7 +147,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         def preload_with_logging() -> None:
             """Download datasets with logging."""
             try:
-                preload_default_datasets()
+                preload_default_datasets(token=False)
                 logger.info("Recorded move datasets pre-loaded successfully")
             except Exception as e:
                 logger.warning(f"Failed to pre-load some datasets: {e}")
@@ -354,6 +359,13 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         paths={"/api/media/sounds/upload"},
     )
 
+    # Block DNS rebinding and preflight-free cross-site writes against the
+    # unauthenticated API (CAN-2026-2032024): validates the Host header on all
+    # requests and the Origin header on state-changing ones. Added before CORS
+    # so CORS stays outermost and rejections for allowed origins carry its
+    # headers; requests without an Origin (curl, SDK, native apps) pass through.
+    app.add_middleware(LocalNetworkGuardMiddleware)
+
     # Restrict cross-origin access to local browser tooling and the native app
     # webviews (see CORS_ORIGIN_REGEX); everything else is same-origin or WebRTC.
     app.add_middleware(
@@ -486,20 +498,79 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     return app
 
 
-def run_app(args: Args) -> None:
-    """Run the FastAPI app with Uvicorn."""
-    # Configure logging to ensure all logs go to stderr (captured by systemd)
-    import sys
+def configure_root_logging(log_level: str, log_file: str | None = None) -> None:
+    """Install the daemon's log handlers on the root logger.
+
+    Call this before anything that logs, in particular before the wireless
+    startup checks: an unconfigured root logger sits at its WARNING default
+    with no handlers, so every INFO emitted before this point is discarded
+    and every WARNING falls back to logging.lastResort.
+
+    stderr is what systemd captures into the journal. A log file, when asked
+    for, is added alongside rather than instead.
+    """
+    formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
 
     root_logger = logging.getLogger()
-    root_logger.setLevel(args.log_level)
-
-    # Create handler that writes to stderr with immediate flush
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setLevel(args.log_level)
-    handler.setFormatter(logging.Formatter("%(name)s - %(levelname)s - %(message)s"))
+    root_logger.setLevel(log_level)
+    # Drop anything a library installed at import time, then own the config.
     root_logger.handlers.clear()
+
+    logging.getLogger("uvicorn.access").addFilter(access_log_filter)
+    logging.getLogger("huggingface_hub.utils._auth").addFilter(_hub_auth_log_filter)
+
+    # Handler that writes to stderr with immediate flush
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setLevel(log_level)
+    handler.setFormatter(formatter)
     root_logger.addHandler(handler)
+
+    if log_file:
+        file_handler = logging.FileHandler(log_file, mode="a")
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+
+
+_POLLING_PATHS = ("/health-check", "/api/hf-auth/relay-status")
+_OAUTH_CALLBACK_PATH = "/api/hf-auth/oauth/callback"
+
+# Hub embeds provider text or stored token lines in these messages.
+_HUB_AUTH_REDACTIONS = {
+    "_refresh_oauth_token_if_needed": "Hugging Face credential refresh failed",
+    "_warn_refresh_failure_once": "Hugging Face credential refresh failed",
+    "_read_stored_tokens_full": "Could not parse the stored Hugging Face tokens file",
+}
+
+
+def _hub_auth_log_filter(record: logging.LogRecord) -> bool:
+    message = _HUB_AUTH_REDACTIONS.get(record.funcName)
+    if record.levelno >= logging.WARNING and message:
+        record.msg = message
+        record.args = ()
+        record.exc_info = record.exc_text = record.stack_info = None
+    return True
+
+
+def access_log_filter(record: logging.LogRecord) -> bool:
+    """Redact OAuth codes and lower polling log levels."""
+    args = record.args
+    if not isinstance(args, tuple) or len(args) < 3 or not isinstance(args[2], str):
+        return True
+    path, separator, _ = args[2].partition("?")
+    normalized_path = path.rstrip("/")
+    if normalized_path == _OAUTH_CALLBACK_PATH and separator:
+        record.args = (*args[:2], path + "?<redacted>", *args[3:])
+    if normalized_path in _POLLING_PATHS:
+        record.levelno = logging.DEBUG
+        record.levelname = "DEBUG"
+    return True
+
+
+def run_app(args: Args) -> None:
+    """Run the FastAPI app with Uvicorn."""
+    # Handlers are installed by configure_root_logging() in main(), before the
+    # startup checks; this is only the handle used by the hooks below.
+    root_logger = logging.getLogger()
 
     # Surface a persisted rename so an operator isn't puzzled when the
     # advertised name differs from the --robot-name they passed.
@@ -516,19 +587,6 @@ def run_app(args: Args) -> None:
     apps_logger = logging.getLogger("reachy_mini.apps.manager")
     apps_logger.setLevel(args.log_level)
     apps_logger.propagate = True  # Ensure it propagates to root logger
-
-    # Downgrade noisy polling routes to DEBUG in uvicorn access logs
-    class AccessLogFilter(logging.Filter):
-        _POLLING_PATHS = {"/health-check", "/api/hf-auth/relay-status"}
-
-        def filter(self, record: logging.LogRecord) -> bool:
-            msg = record.getMessage()
-            if any(path in msg for path in self._POLLING_PATHS):
-                record.levelno = logging.DEBUG
-                record.levelname = "DEBUG"
-            return True
-
-    logging.getLogger("uvicorn.access").addFilter(AccessLogFilter())
 
     # Install exception hook to catch uncaught exceptions
     def exception_hook(
@@ -824,29 +882,17 @@ def main() -> None:
     if persisted_robot_name:
         args.robot_name = persisted_robot_name
 
-    if args.log_file:
-        file_handler = logging.FileHandler(args.log_file, mode="a")
-        file_handler.setFormatter(
-            logging.Formatter("%(name)s - %(levelname)s - %(message)s")
-        )
-        logging.getLogger().addHandler(file_handler)
-        logging.getLogger().setLevel(args.log_level)
+    # Before the startup checks, not after: run_app() used to be the first
+    # thing to configure logging, which left everything logged here going to
+    # an unconfigured root logger (WARNING, no handlers) and silently dropped.
+    configure_root_logging(args.log_level, args.log_file)
 
     if args.wireless_version:
-        # Check and fix ownership of /venvs directory
-        check_and_fix_venvs_ownership(custom_logger=logging.getLogger())
-
-        # Check and update bluetooth service if needed
-        check_and_update_bluetooth_service()
-
-        # Check and update wireless launcher if needed
-        check_and_update_wireless_launcher()
-
-        # Check and sync apps_venv SDK version with daemon
-        check_and_sync_apps_venv_sdk()
-
-        # Check and fix restore venv if it has legacy editable install
-        check_and_fix_restore_venv()
+        # Startup checks. The expensive ones (full /venvs ownership scan,
+        # apps_venv SDK sync probe, restore-venv pip check) are skipped when
+        # the startup stamp proves nothing changed since the last full run;
+        # the cheap file checks (bluetooth, systemd units) run on every boot.
+        run_wireless_startup_checks()
 
         if check_reachymini_asoundrc():
             logging.getLogger().info(

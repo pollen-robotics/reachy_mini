@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
@@ -65,6 +66,7 @@ def get_hardware_id() -> str | None:
     if raw is None:
         return None
     return hashlib.sha256(raw.encode("ascii")).hexdigest()[:16]
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -314,7 +316,9 @@ class Characteristic(dbus.service.Object):
 class CommandCharacteristic(Characteristic):
     """Command Characteristic."""
 
-    def __init__(self, bus, index, service, command_handler: Callable[[bytes], str]):
+    def __init__(
+        self, bus, index, service, command_handler: Callable[[bytes, "str | None"], str]
+    ):
         """Initialize the Command Characteristic."""
         super().__init__(bus, index, COMMAND_CHAR_UUID, ["write"], service)
         self.command_handler = command_handler
@@ -322,7 +326,12 @@ class CommandCharacteristic(Characteristic):
     def WriteValue(self, value, options):
         """Handle write to the Command Characteristic."""
         command_bytes = bytes(value)
-        response = self.command_handler(command_bytes)
+        # BlueZ passes the connecting central's Device1 object path in
+        # `options["device"]` — the only per-connection identity we get.
+        # Thread it to the handler so auth stays bound to the caller that
+        # entered the PIN (see GHSA-993g-hgjh-whmf).
+        device = options.get("device") if options else None
+        response = self.command_handler(command_bytes, device)
         self.service.response_char.value = [
             dbus.Byte(b) for b in response.encode("utf-8")
         ]
@@ -351,7 +360,7 @@ class ResponseCharacteristic(Characteristic):
         self.notifying = False
         logger.info("Response notifications disabled")
         # Stop journal streaming if running (client disconnected without JOURNAL_STOP)
-        if hasattr(self.service, '_bt_service') and self.service._bt_service:
+        if hasattr(self.service, "_bt_service") and self.service._bt_service:
             self.service._bt_service._stop_journal()
 
     def send_notification(self, text: str):
@@ -374,7 +383,12 @@ class Service(dbus.service.Object):
     PATH_BASE = "/org/bluez/service"
 
     def __init__(
-        self, bus, index, uuid, primary, command_handler: Callable[[bytes], str]
+        self,
+        bus,
+        index,
+        uuid,
+        primary,
+        command_handler: Callable[[bytes, "str | None"], str],
     ):
         """Initialize the GATT Service."""
         self.path = self.PATH_BASE + str(index)
@@ -628,7 +642,7 @@ class ReachyStatusService(dbus.service.Object):
 class Application(dbus.service.Object):
     """GATT Application."""
 
-    def __init__(self, bus, command_handler: Callable[[bytes], str]):
+    def __init__(self, bus, command_handler: Callable[[bytes, "str | None"], str]):
         """Initialize the GATT Application."""
         self.path = "/"
         self.services = []
@@ -690,6 +704,10 @@ class BluetoothCommandService:
         self.connected = False
         # monotonic deadline for the TTL-bounded WiFi session (see _is_authed).
         self._authed_until = 0.0
+        # BlueZ Device1 path of the central that entered the PIN. Auth is bound
+        # to it so a second nearby central can't inherit the session (the race
+        # in GHSA-993g-hgjh-whmf). Cleared on TTL expiry and on disconnect.
+        self._authed_device = None
         # Wrong-PIN throttle state (see PIN_* constants and _handle_command).
         # Both deliberately persist across disconnects so reconnecting does
         # not reset an in-progress lockout.
@@ -717,7 +735,17 @@ class BluetoothCommandService:
         try:
             self._journal_buffer = ""
             self._journal_proc = subprocess.Popen(
-                ["stdbuf", "-oL", "journalctl", "-f", "-n", "20", "--no-pager", "-u", "reachy-mini-daemon"],
+                [
+                    "stdbuf",
+                    "-oL",
+                    "journalctl",
+                    "-f",
+                    "-n",
+                    "20",
+                    "--no-pager",
+                    "-u",
+                    "reachy-mini-daemon",
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
             )
@@ -746,7 +774,9 @@ class BluetoothCommandService:
                 if data:
                     text = data.decode("utf-8", errors="replace")
                     self._journal_buffer += text
-                    logger.info(f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}")
+                    logger.info(
+                        f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}"
+                    )
                     # Cap buffer to ~32KB to avoid unbounded growth
                     if len(self._journal_buffer) > 32768:
                         self._journal_buffer = self._journal_buffer[-32768:]
@@ -787,9 +817,22 @@ class BluetoothCommandService:
             self._journal_buffer = ""
             logger.info("Journal streaming stopped")
 
-    def _is_authed(self) -> bool:
-        """Return whether the TTL-bounded authenticated session is still valid."""
-        return self._authed_until > time.monotonic()
+    def _is_authed(self, device) -> bool:
+        """Whether the caller holds a live authenticated session.
+
+        Bound to the device that entered the PIN: the TTL must be unexpired AND
+        the write must come from that same central. `device` is the BlueZ
+        Device1 path from `options["device"]`; a write with no identifiable
+        device (None) is untrusted and fails closed. Closes the auth-bypass
+        race in GHSA-993g-hgjh-whmf.
+        """
+        if device is None:
+            # BlueZ supplies "device" for server-side writes, so this should not
+            # happen; log it because the gate fails closed and would otherwise
+            # look like an unexplained "Not connected" in the field.
+            logger.warning("BLE write with no device path in options; refusing auth")
+            return False
+        return self._authed_until > time.monotonic() and device == self._authed_device
 
     def _pin_lockout_remaining(self) -> float:
         """Seconds left on the wrong-PIN lockout (0.0 if not locked).
@@ -852,7 +895,7 @@ class BluetoothCommandService:
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _handle_command(self, value: bytes) -> str:
+    def _handle_command(self, value: bytes, device: "str | None" = None) -> str:
         command_str = value.decode("utf-8").strip()
         upper = command_str.upper()
         # WIFI_STATUS and JOURNAL_READ are polled by clients; don't spam logs.
@@ -882,13 +925,14 @@ class BluetoothCommandService:
                 # Locked out: reject WITHOUT comparing the PIN, so a correct
                 # guess landed mid-spree doesn't win and the lockout window is
                 # the real bottleneck. int()+1 rounds up so we never show "0s".
-                return (
-                    f"ERROR: Too many attempts. Try again in {int(remaining) + 1}s."
-                )
+                return f"ERROR: Too many attempts. Try again in {int(remaining) + 1}s."
             pin = command_str[4:].strip()
             if pin == self.pin_code:
                 self._reset_pin_throttle()
                 self.connected = True
+                # Bind the session to the central that authenticated so no
+                # other nearby central can ride it (GHSA-993g-hgjh-whmf).
+                self._authed_device = device
                 # Open a TTL-bounded session for the WiFi commands so the
                 # client can chain scan → connect → status without re-auth.
                 self._authed_until = time.monotonic() + self.SESSION_TTL_S
@@ -912,18 +956,26 @@ class BluetoothCommandService:
         # terminal DONE — it tails off into "Daemon unreachable" / "Unknown
         # job". Clients infer success by reconnecting and re-running
         # UPDATE_CHECK (current_version == latest), not by polling to the end.
-        elif upper == "UPDATE_CHECK":
-            if not self._is_authed():
+        # Both commands take an optional "PRE" argument (e.g. "UPDATE_CHECK
+        # PRE") that opts into pre-release builds — the BLE mirror of the
+        # `pre_release` flag the WebRTC `start_update` message already
+        # carries, so dev clients can track the RC channel over BLE too.
+        # Daemons that predate this argument ECHO the command back, which
+        # clients treat as "retry without PRE".
+        elif upper in ("UPDATE_CHECK", "UPDATE_CHECK PRE"):
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
-            self._run_async(_update_check)
+            pre_release = upper.endswith(" PRE")
+            self._run_async(lambda: _update_check(pre_release))
             return "OK: working"
-        elif upper == "UPDATE_START":
-            if not self._is_authed():
+        elif upper in ("UPDATE_START", "UPDATE_START PRE"):
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
-            self._run_async(_update_start)
+            pre_release = upper.endswith(" PRE")
+            self._run_async(lambda: _update_start(pre_release))
             return "OK: working"
         elif upper.startswith("UPDATE_INFO "):
-            if not self._is_authed():
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             job_id = command_str[len("UPDATE_INFO ") :].strip()
             self._run_async(lambda: _update_info(job_id))
@@ -939,22 +991,22 @@ class BluetoothCommandService:
             self._run_async(_wifi_keyex)
             return "OK: working"
         elif upper == "WIFI_STATUS":
-            authed = self._is_authed()
+            authed = self._is_authed(device)
             self._run_async(lambda: _wifi_status(authed))
             return "OK: working"
         elif upper == "WIFI_SCAN":
-            if not self._is_authed():
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             self._run_async(_wifi_scan)
             return "OK: working"
         elif upper.startswith("WIFI_CONNECT_ENC "):
-            if not self._is_authed():
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             blob = command_str[len("WIFI_CONNECT_ENC ") :]
             self._run_async(lambda: _wifi_connect_sealed(blob))
             return "OK: working"
         elif upper.startswith("WIFI_FORGET "):
-            if not self._is_authed():
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             ssid = command_str[len("WIFI_FORGET ") :]
             self._run_async(lambda: _wifi_forget(ssid))
@@ -963,7 +1015,7 @@ class BluetoothCommandService:
         # so it requires a live TTL session like the WiFi commands. The name can
         # contain spaces, so everything after "SET_NAME " is the raw value.
         elif upper.startswith("SET_NAME "):
-            if not self._is_authed():
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             name = command_str[len("SET_NAME ") :].strip()
             self._run_async(lambda: _set_robot_name(name))
@@ -971,10 +1023,18 @@ class BluetoothCommandService:
 
         # else if command starts with "CMD_xxxxx" check if  commands directory contains the said named script command xxxx.sh and run its, show output or/and send to read
         elif command_str.startswith("CMD_"):
-            if not self.connected:
+            # Bound to the authenticated central: the one-shot `connected` flag
+            # is not enough on its own — a second central racing in would ride
+            # it (GHSA-993g-hgjh-whmf). Require the write to come from the
+            # device that entered the PIN.
+            if not self.connected or device is None or device != self._authed_device:
                 return "ERROR: Not connected. Please authenticate first."
             try:
-                script_name = command_str[4:].strip() + ".sh"
+                # Constrain to a bare filename so it cannot escape commands/.
+                raw_name = command_str[4:].strip().split("/")[-1]
+                if not re.fullmatch(r"[A-Za-z0-9_-]+", raw_name):
+                    return f"ERROR: Invalid command '{raw_name}'"
+                script_name = raw_name + ".sh"
                 script_path = os.path.join("commands", script_name)
                 if os.path.isfile(script_path):
                     try:
@@ -1077,10 +1137,16 @@ class BluetoothCommandService:
             logger.info(f"BLE central connected: {path}")
         else:
             logger.info(f"BLE central disconnected: {path}")
-            # Only act on the device we tracked as connected, so a stale
+            # Only untrack the device we tracked as connected, so a stale
             # disconnect signal can't clobber a client that just reconnected.
-            if self._connected_device_path in (None, path):
+            is_tracked = self._connected_device_path in (None, path)
+            if is_tracked:
                 self._connected_device_path = None
+            # Clear the session when the AUTHENTICATED central drops, even if
+            # another central has since become the tracked one — otherwise its
+            # session outlives it for the rest of SESSION_TTL_S and a reconnect
+            # spoofing its address inherits it (the Device1 path is MAC-derived).
+            if is_tracked or path == self._authed_device:
                 self._on_central_disconnected()
 
     def _on_central_disconnected(self):
@@ -1097,6 +1163,7 @@ class BluetoothCommandService:
         """
         self.connected = False
         self._authed_until = 0.0
+        self._authed_device = None
         self._stop_journal()
         self._reassert_advertising()
 
@@ -1118,7 +1185,9 @@ class BluetoothCommandService:
             self._ad_manager.RegisterAdvertisement(
                 self.adv.get_path(),
                 {},
-                reply_handler=lambda: logger.info("Advertisement re-asserted after disconnect"),
+                reply_handler=lambda: logger.info(
+                    "Advertisement re-asserted after disconnect"
+                ),
                 error_handler=lambda e: logger.warning(
                     f"Re-assert advertisement failed (non-fatal): {e}"
                 ),
@@ -1294,13 +1363,17 @@ _UPDATE_HTTP_TIMEOUT_S = 30.0
 _UPDATE_MTU_BUDGET = 180
 
 
-def _update_check() -> str:
-    """Report whether a daemon update is available (compact JSON for BLE)."""
+def _update_check(pre_release: bool = False) -> str:
+    """Report whether a daemon update is available (compact JSON for BLE).
+
+    `pre_release` widens the reference to pre-release builds (RC channel);
+    set by the optional "PRE" argument of the UPDATE_CHECK command.
+    """
     try:
         data = _daemon_request(
             "GET",
             "/update/available",
-            {"pre_release": "false"},
+            {"pre_release": "true" if pre_release else "false"},
             timeout=_UPDATE_HTTP_TIMEOUT_S,
         )
         rm = (data or {}).get("update", {}).get("reachy_mini", {})
@@ -1365,13 +1438,17 @@ def _wifi_keyex() -> str:
         return f"ERROR: {e}"
 
 
-def _update_start() -> str:
-    """Trigger the daemon update (latest published release). Returns the job id."""
+def _update_start(pre_release: bool = False) -> str:
+    """Trigger the daemon update (latest published release). Returns the job id.
+
+    `pre_release` opts the install into pre-release builds (RC channel);
+    set by the optional "PRE" argument of the UPDATE_START command.
+    """
     try:
         data = _daemon_request(
             "POST",
             "/update/start",
-            {"pre_release": "false"},
+            {"pre_release": "true" if pre_release else "false"},
             timeout=_UPDATE_HTTP_TIMEOUT_S,
         )
         job_id = (data or {}).get("job_id") if isinstance(data, dict) else None

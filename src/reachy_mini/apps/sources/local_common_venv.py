@@ -489,7 +489,7 @@ async def install_package(
 
         # Check if this is a private space installation
         is_private = app.extra.get("private", False)
-        token = None
+        token: str | bool | None = False
 
         if is_private:
             # Get token for private spaces

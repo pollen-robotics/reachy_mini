@@ -12,17 +12,23 @@
  *
  * Storage rules (APP_CREATION_GUIDE §13.5.2 hash-only creds):
  *  - HF token + user name live in `sessionStorage` (tab-scoped,
- *    wiped on close). The Reachy Mini SDK reads them from
- *    `hf_token` / `hf_username` / `hf_token_expires`.
+ *    dies with the tab). The Reachy Mini SDK owns those keys via its
+ *    token-store (`hf_token` / `hf_username` / `hf_token_expires` /
+ *    `hf_token_last_seen`), which bounds their lifetime with the OAuth
+ *    expiry plus a sliding idle window.
  *  - Persistent flags (`hf_oauth_client_id`, `oauth-pending`,
- *    `signed-out`) live in `localStorage`.
- *  - Tokens have a 15 min TTL by default; the SDK refreshes
- *    on demand if a real OAuth refresh flow is wired.
+ *    `signed-out`) live in `localStorage`; the one-shot silent-auth
+ *    attempt flag lives in `sessionStorage` (must survive the OAuth
+ *    redirect round trip but reset with a fresh tab).
  */
 
 const STORAGE_KEY_CLIENT_ID = 'reachy_mini_oauth_client_id';
 const STORAGE_KEY_OAUTH_PENDING = 'reachy_mini_oauth_pending';
 const STORAGE_KEY_SIGNED_OUT = 'reachy_mini_signed_out';
+// sessionStorage on purpose: the flag must survive the silent-auth
+// redirect round trip (same tab) but reset with a fresh tab, so every
+// new tab gets exactly one silent attempt.
+const SESSION_KEY_SILENT_AUTH = 'reachy_mini_silent_auth_attempted';
 
 const SESSION_KEY_TOKEN = 'hf_token';
 const SESSION_KEY_USER = 'hf_username';
@@ -179,6 +185,38 @@ export function isUserSignedOut(): boolean {
   }
 }
 
+/* ─────────────────── Silent-auth attempt flag ─────────────────── */
+
+/** Mark that this tab already attempted a silent sign-in
+ *  (`login({ prompt: 'none' })`), successful or not. Read before
+ *  auto-redirecting so a declined silent auth can never loop. */
+export function markSilentAuthAttempted(): void {
+  try {
+    window.sessionStorage.setItem(SESSION_KEY_SILENT_AUTH, '1');
+  } catch {
+    /* ignore */
+  }
+}
+
+/** `true` if this tab already attempted a silent sign-in. */
+export function hasSilentAuthAttempted(): boolean {
+  try {
+    return window.sessionStorage.getItem(SESSION_KEY_SILENT_AUTH) === '1';
+  } catch {
+    return true; // storage broken → never auto-redirect
+  }
+}
+
+/** Re-arm the silent attempt (explicit "Sign in" click), so a future
+ *  boot in this tab may try silently again. */
+export function clearSilentAuthAttempted(): void {
+  try {
+    window.sessionStorage.removeItem(SESSION_KEY_SILENT_AUTH);
+  } catch {
+    /* ignore */
+  }
+}
+
 /* ─────────────────── Token hygiene ─────────────────── */
 
 /** Wipe HF token keys from sessionStorage. Called by the embed
@@ -189,6 +227,7 @@ export function wipeHfSessionStorage(): void {
     window.sessionStorage.removeItem(SESSION_KEY_TOKEN);
     window.sessionStorage.removeItem(SESSION_KEY_USER);
     window.sessionStorage.removeItem(SESSION_KEY_EXPIRES);
+    window.sessionStorage.removeItem('hf_token_last_seen');
   } catch {
     /* ignore */
   }

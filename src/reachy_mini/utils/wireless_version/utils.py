@@ -79,7 +79,9 @@ def build_install_command(
         git_url = f"git+https://github.com/{GITHUB_REPO}.git@{git_ref}"
         git_package = f"reachy-mini[{extras}] @ {git_url}"
         # Step 1: force reinstall the package without the dependencies
-        step1 = shlex.join(base + [git_package, "--force-reinstall", "--no-deps", "--no-cache-dir"])
+        step1 = shlex.join(
+            base + [git_package, "--force-reinstall", "--no-deps", "--no-cache-dir"]
+        )
         # Step 2: check if dependencies need to be updated
         check_base = [arg if arg != "install" else "check" for arg in base]
         step2 = shlex.join(check_base)
@@ -88,12 +90,15 @@ def build_install_command(
         if not _check_uv_available():
             step3_args += ["--upgrade-strategy", "only-if-needed"]
         step3 = shlex.join(step3_args)
-        cmd = f"{step1} && {step2} || {step3}"
+        # Grouped: a failed step1 must not fall through to step3.
+        cmd = f"{step1} && ( {step2} || {step3} )"
         logger.info(f"Git ref install: {cmd}")
         extra_env: dict[str, str] = {"GIT_LFS_SKIP_SMUDGE": "1"}
         return cmd, extra_env
 
-    logger.info(f"Installing from PyPI: {version if version else 'latest pre-release' if pre_release else 'latest stable'}")
+    logger.info(
+        f"Installing from PyPI: {version if version else 'latest pre-release' if pre_release else 'latest stable'}"
+    )
     package = f"reachy-mini[{extras}]"
     if version:
         package = f"{package}=={version}"
@@ -113,6 +118,7 @@ async def call_logger_wrapper(
     command: str,
     logger: logging.Logger,
     env: dict[str, str] | None = None,
+    ok_returncodes: tuple[int, ...] = (0,),
 ) -> None:
     """Run a shell command asynchronously, streaming stdout and stderr to logger in real time.
 
@@ -120,6 +126,11 @@ async def call_logger_wrapper(
         command: Shell command string.
         logger: logger object with .info and .error methods
         env: Optional environment variables dict. If None, inherits current environment.
+        ok_returncodes: Exit codes treated as success. Only the daemon restart
+            needs more than ``(0,)`` - see ``update_reachy_mini``.
+
+    Raises:
+        RuntimeError: If the command exits with a code outside *ok_returncodes*.
 
     """
     logger.info(f"Running: {command}")
@@ -148,4 +159,6 @@ async def call_logger_wrapper(
         tasks.append(asyncio.create_task(stream_output(process.stderr, logger.error)))
 
     await asyncio.gather(*tasks)
-    await process.wait()
+    returncode = await process.wait()
+    if returncode not in ok_returncodes:
+        raise RuntimeError(f"Command failed with exit code {returncode}: {command}")

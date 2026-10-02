@@ -55,6 +55,7 @@ from reachy_mini.media.camera_constants import (
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
 from reachy_mini.media.gstreamer_utils import handle_default_bus_message
+from reachy_mini.media.webrtc_utils import TurnCredentials, split_for_data_channel
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
@@ -177,6 +178,7 @@ class GstMediaServer:
         self,
         log_level: str = "INFO",
         sim_mode: SimulationMode = SimulationMode.NONE,
+        enable_turn: Optional[bool] = None,
     ) -> None:
         """Initialize the GStreamer WebRTC pipeline.
 
@@ -184,6 +186,11 @@ class GstMediaServer:
             log_level: Logging level for WebRTC daemon operations.
             sim_mode: Simulation mode. MUJOCO receives video via UDP,
                 MOCKUP uses autovideosrc, NONE detects a physical camera.
+            enable_turn: offer TURN relay candidates to consumers, so a
+                remote one behind a restrictive NAT can still reach us.
+                Costs one background thread refreshing credentials. None
+                (the default) reads ``turn_enabled`` from the daemon
+                config file, falling back to True when it is unset.
 
         Raises:
             RuntimeError: If no camera is detected (unless in simulation mode)
@@ -279,6 +286,25 @@ class GstMediaServer:
         self._aec_enabled = False
         self._webrtcechoprobe: Optional[Gst.Element] = None
 
+        if enable_turn is None:
+            # Deferred like the speaker-EQ lookup in audio_utils, so this
+            # module doesn't pull in the daemon package at import time.
+            from reachy_mini.daemon.startup_app_config import get_turn_enabled
+
+            configured = get_turn_enabled()
+            enable_turn = True if configured is None else configured
+        # Refreshed off-thread so `_consumer_added` can read credentials
+        # without doing I/O on the thread that builds the SDP offer.
+        # None when relay candidates are disabled.
+        self._turn: TurnCredentials | None = None
+        if enable_turn:
+            try:
+                self._turn = TurnCredentials()
+            except ValueError as error:
+                self._logger.warning("TURN disabled: %s", error)
+        if self._turn is not None:
+            self._turn.start()
+
         self._build_pipeline()
 
     def _build_pipeline(self) -> None:
@@ -305,6 +331,9 @@ class GstMediaServer:
         bury that real error under an unraisable `AttributeError`.
         """
         self._logger.debug("Cleaning up GstMediaServer")
+        turn = getattr(self, "_turn", None)
+        if turn is not None:
+            turn.stop()
         # A non-None source id implies a completed `__init__`, hence a lock.
         if getattr(self, "_pose_push_source_id", None) is not None:
             with self._pose_lock:
@@ -395,6 +424,12 @@ class GstMediaServer:
         #     self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
         # )
 
+        # Add TURN relay servers to this consumer's webrtcbin BEFORE the
+        # offer is generated, so our offer advertises a relay candidate.
+        # Without it we only offer host/srflx and a NAT-restricted remote
+        # consumer (e.g. a cloud backend) can't reach us.
+        self._apply_turn_servers(webrtcbin)
+
         GLib.timeout_add_seconds(5, self._dump_latency)
 
         self._setup_data_channel(peer_id, webrtcbin)
@@ -417,6 +452,29 @@ class GstMediaServer:
         # and report it (instead of letting the JS client spin
         # forever). See `ICE_NEGOTIATION_DEADLINE_S`.
         self._install_negotiation_watchdog(peer_id, webrtcbin)
+
+    def _apply_turn_servers(self, webrtcbin: Gst.Element) -> None:
+        """Add the currently held TURN relay servers to this webrtcbin.
+
+        Must run before the SDP offer is generated so the offer carries a
+        ``relay`` candidate. Reads cached credentials only and never does
+        I/O: this runs on the thread that builds the offer, so blocking
+        here would delay the connection for every consumer, including LAN
+        ones that will never use a relay. Credentials are never logged.
+        """
+        if self._turn is None:
+            return
+        uris = self._turn.turn_uris()
+        if not uris:
+            # Normal right after boot, or when the proxy is unreachable.
+            self._logger.info("No TURN servers held; offering host/srflx only")
+            return
+        for uri in uris:
+            try:
+                webrtcbin.emit("add-turn-server", uri)
+            except Exception as e:  # noqa: BLE001 - never break negotiation
+                self._logger.warning("add-turn-server failed: %r", e)
+        self._logger.debug("Configured %d TURN server(s) on webrtcbin", len(uris))
 
     # GstWebRTCRTPTransceiverDirection enum values
     _WEBRTC_DIRECTION_SENDRECV = 4
@@ -796,11 +854,23 @@ class GstMediaServer:
         pipeline.add(queue_webrtc)
         tee.link(queue_webrtc)
 
-        if is_rpi:
-            # RPi: use hardware H264 encoder (webrtcsink doesn't have v4l2h264enc)
+        if is_rpi and not self._webrtcsink_handles_rpi_encoder():
+            # Old OS image: webrtcsink can't drive v4l2h264enc, encode explicitly
             self._build_rpi_encoder_branch(queue_webrtc, pipeline, webrtcsink)
         else:
-            # All other platforms: feed raw video, let webrtcsink handle encoding
+            if is_rpi:
+                # Force H264 so webrtcsink picks v4l2h264enc, not software vp8/vp9
+                webrtcsink.set_property(
+                    "video-caps", Gst.Caps.from_string("video/x-h264")
+                )
+                self._logger.info("webrtcsink drives v4l2h264enc itself")
+                if Gst.ElementFactory.find("rtpgccbwe") is None:
+                    # webrtcsink needs this element (gstrsrtp plugin) to adapt
+                    # the encoder bitrate to network conditions
+                    self._logger.warning(
+                        "rtpgccbwe not found: webrtcsink congestion control disabled"
+                    )
+            # Feed raw video, let webrtcsink handle encoding
             queue_webrtc.link(webrtcsink)
 
     def _build_sim_source(self) -> list[Gst.Element]:
@@ -1050,6 +1120,18 @@ class GstMediaServer:
             videoconvert_ipc.link(capsfilter_ipc)
             capsfilter_ipc.link(ipc_sink)
 
+    @staticmethod
+    def _webrtcsink_handles_rpi_encoder() -> bool:
+        """Check whether webrtcsink can drive the RPi hardware encoder itself.
+
+        Recent OS images (reachy-mini-os#65) ship a patched v4l2h264enc that
+        exposes a runtime-changeable `bitrate` property, which webrtcsink's
+        congestion control drives. Old images lack it, so we must build the
+        encoder branch explicitly.
+        """
+        enc = Gst.ElementFactory.make("v4l2h264enc")
+        return enc is not None and enc.find_property("bitrate") is not None
+
     def _build_rpi_encoder_branch(
         self,
         queue_webrtc: Gst.Element,
@@ -1058,7 +1140,8 @@ class GstMediaServer:
     ) -> None:
         """Build the RPi hardware H264 encoder branch.
 
-        webrtcsink does not have v4l2h264enc, so we encode explicitly on RPi.
+        Fallback for old OS images whose webrtcsink can't drive v4l2h264enc:
+        encode explicitly and feed H264 to webrtcsink.
         """
         v4l2h264enc = Gst.ElementFactory.make("v4l2h264enc")
         extra_controls_structure = Gst.Structure.new_empty("extra-controls")
@@ -1756,15 +1839,21 @@ class GstMediaServer:
             peer_id: If specified, send only to this peer. Otherwise broadcast to all.
 
         """
+        # A message over the channel's limit would be dropped silently;
+        # large ones go out as ordered chunks the client reassembles.
+        frames = split_for_data_channel(message)
         if peer_id:
-            if peer_id in self._data_channels:
-                self._data_channels[peer_id].emit("send-string", message)
-            else:
+            channel = self._data_channels.get(peer_id)
+            if channel is None:
                 self._logger.warning(f"No data channel for peer {peer_id}")
+                return
+            channels = [channel]
         else:
             # Broadcast to all connected peers
-            for channel in self._data_channels.values():
-                channel.emit("send-string", message)
+            channels = list(self._data_channels.values())
+        for channel in channels:
+            for frame in frames:
+                channel.emit("send-string", frame)
 
     def _setup_data_channel(self, peer_id: str, webrtcbin: Gst.Element) -> None:
         self._logger.debug(f"Setting up data channel for peer {peer_id}")

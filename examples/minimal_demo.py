@@ -26,6 +26,7 @@ with ReachyMini(media_backend="no_media") as mini:
                 mm=False,
             )
             mini.set_target(head=head_pose, antennas=[antennas_offset, antennas_offset])
+            time.sleep(0.01)  # 100 Hz
     except KeyboardInterrupt:
         pass
 

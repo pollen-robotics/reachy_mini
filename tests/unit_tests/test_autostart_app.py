@@ -16,7 +16,6 @@ from reachy_mini.daemon.app.startup_app import (
     _antennas_in_commanded_motion,
     ensure_startup_app_installed,
     make_startup_app_launcher,
-    play_awake_startup_cue,
     rearm_startup_app_watcher,
     start_startup_app,
     start_startup_app_if_idle,
@@ -72,7 +71,9 @@ class StubBackend:
         self.present = [0.0, 0.0]
         self.target_antenna_joint_positions: list[float] | None = [0.0, 0.0]
         self.motor_control_mode = MotorControlMode.Enabled
+        self.at_init_pose = True
         self.wake_up_calls = 0
+        self.wake_up_forces: list[bool] = []
         self.played_sounds: list[str] = []
         self.goto_target_calls = 0
         self.on_wake_up_callback: Callable[[], None] | None = None
@@ -86,11 +87,15 @@ class StubBackend:
     def set_motor_control_mode(self, mode: MotorControlMode) -> None:
         self.motor_control_mode = mode
 
+    def is_awake_at_init_pose(self) -> bool:
+        return self.motor_control_mode == MotorControlMode.Enabled and self.at_init_pose
+
     def set_on_wake_up_callback(self, callback: Callable[[], None]) -> None:
         self.on_wake_up_callback = callback
 
-    async def wake_up(self) -> None:
+    async def wake_up(self, *, force: bool = False) -> None:
         self.wake_up_calls += 1
+        self.wake_up_forces.append(force)
         if self.on_wake_up_callback is not None:
             self.on_wake_up_callback()
 
@@ -211,6 +216,10 @@ async def test_antenna_touch_wakes_sleeping_robot_before_starting_app() -> None:
 
     assert daemon.backend.motor_control_mode == MotorControlMode.Enabled
     assert daemon.backend.wake_up_calls == 1
+    # force=True: the touch path enables the motors right before waking, which
+    # would otherwise satisfy wake_up's own stand-down and swallow the emote.
+    # Note the stub rests at the init pose, so this is the exact trap case.
+    assert daemon.backend.wake_up_forces == [True]
     assert daemon.backend.played_sounds == []
     assert daemon.backend.goto_target_calls == 0
     assert mgr.started == ["foo"]
@@ -250,13 +259,23 @@ async def test_antenna_touch_plays_awake_sound_before_starting_app() -> None:
 
 
 @pytest.mark.asyncio
-async def test_awake_startup_cue_only_plays_sound() -> None:
-    backend = StubBackend()
+async def test_antenna_touch_full_wake_when_enabled_but_off_pose() -> None:
+    """Motors on but parked off init (e.g. crashed app): full wake, not cue.
 
-    await play_awake_startup_cue(backend)
+    Locks the behavior change that came with routing this path through
+    ``is_awake_at_init_pose``: the old ``motor_mode == Disabled`` branch would
+    have played the cue and left the robot askew for the whole session.
+    """
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    daemon = StubDaemon()
+    daemon.backend.at_init_pose = False
 
-    assert backend.played_sounds == ["wake_up.wav"]
-    assert backend.goto_target_calls == 0
+    assert await wake_or_start_startup_app_if_idle(mgr, daemon, "foo") is True  # type: ignore[arg-type]
+
+    assert daemon.backend.wake_up_calls == 1
+    assert daemon.backend.wake_up_forces == [True]
+    assert daemon.backend.played_sounds == []
+    assert mgr.started == ["foo"]
 
 
 @pytest.mark.asyncio
