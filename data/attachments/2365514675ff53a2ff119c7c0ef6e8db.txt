@@ -1,0 +1,3 @@
+INFO     reachy_mini.daemon.daemon:daemon.py:72 Daemon version: 1.11.0
+INFO     reachy_mini.daemon.daemon:daemon.py:127 Media disabled (--no-media). No camera, audio, or media server.
+INFO     reachy_mini.daemon.daemon:daemon.py:228 JSON-RPC app relay wired to the DataChannel

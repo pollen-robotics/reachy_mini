@@ -1,0 +1,1 @@
+{"id":"e3f185c192314d9ee98978e469a7ee27.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_jsonrpc_relay_loop#test_a_closed_loop_is_refused_instead_of_dropped","name":"test_a_closed_loop_is_refused_instead_of_dropped","status":"passed","testResultsByEnv":{"default":"a8d2d05f82ee3907351bb315a6805784"}}
