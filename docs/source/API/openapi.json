@@ -2259,6 +2259,45 @@
         }
       }
     },
+    "/api/nfc/enabled": {
+      "post": {
+        "summary": "Set Enabled",
+        "description": "Switch the NFC reader on or off, and remember it across restarts.\n\nOff, the reader thread stops and the serial port is released; on, it goes\nback to looking for the board. Answers with the status right after the\nswitch: when switching on, the board is usually not connected yet.\n\nNot available when the daemon was started with ``--no-nfc``.",
+        "operationId": "set_enabled_api_nfc_enabled_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NfcEnableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NfcStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/nfc/dump": {
       "get": {
         "summary": "Dump Tag",
@@ -2320,7 +2359,7 @@
     "/api/nfc/write": {
       "post": {
         "summary": "Write Tag",
-        "description": "Write text or a URI onto the next tag presented to the reader.\n\nExactly one of ``text`` or ``uri``. Blocks until the reader reports the\noutcome (or a timeout), retrying meanwhile so the tag can be presented\nafter the request is posted. Returns the result rather than raising, except\nwhen the reader itself is unavailable.\n\nThe tag's own declared capacity is authoritative: 144 bytes of NDEF on an\nNTAG213, 496 on an NTAG215, 872 on an NTAG216. A message that does not fit\ncomes back as ``TOO_LONG`` without anything having been written.",
+        "description": "Write text or a URI onto the next tag presented to the reader.\n\nExactly one of ``text`` or ``uri``. Blocks until the reader reports the\noutcome (or a timeout), retrying meanwhile so the tag can be presented\nafter the request is posted. Failures come back as an error code in the\nresult; only a reader switched off answers 503.\n\nThe tag's own declared capacity is authoritative: 144 bytes of NDEF on an\nNTAG213, 496 on an NTAG215, 872 on an NTAG216. A message that does not fit\ncomes back as ``TOO_LONG`` without anything having been written.",
         "operationId": "write_tag_api_nfc_write_post",
         "requestBody": {
           "content": {
@@ -3933,7 +3972,21 @@
           "present"
         ],
         "title": "NfcDump",
-        "description": "The raw user memory of a tag, for tags that carry no NDEF message.\n\nReading it costs a full transfer (~130 ms on an NTAG215), so it is served\non demand rather than on every poll."
+        "description": "The raw user memory of a tag (see ``GET /api/nfc/dump``)."
+      },
+      "NfcEnableRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "NfcEnableRequest",
+        "description": "Switch the reader on or off."
       },
       "NfcEraseRequest": {
         "properties": {
@@ -3945,7 +3998,7 @@
         },
         "type": "object",
         "title": "NfcEraseRequest",
-        "description": "Request body to make the tag blank again.\n\n``full`` also zeroes the whole user memory, which is what it takes to\nremove a payload that is not NDEF \u2014 a bare code written straight into\npage 4. Slower: one write per page."
+        "description": "Request body to make the tag blank again (see ``POST /api/nfc/erase``)."
       },
       "NfcRecord": {
         "properties": {
@@ -3999,6 +4052,10 @@
           "connected": {
             "type": "boolean",
             "title": "Connected"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
           },
           "chip_detected": {
             "type": "boolean",
@@ -4057,6 +4114,7 @@
         "type": "object",
         "required": [
           "connected",
+          "enabled",
           "chip_detected",
           "driver_available"
         ],

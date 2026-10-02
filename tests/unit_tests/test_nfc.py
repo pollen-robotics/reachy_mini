@@ -168,6 +168,12 @@ def driver_installed(monkeypatch):
     monkeypatch.setattr("reachy_mini.nfc.reader.driver_available", lambda: True)
 
 
+@pytest.fixture
+def no_board(monkeypatch):
+    """Make auto-detection find no reader board."""
+    monkeypatch.setattr("reachy_mini.nfc.reader.find_nfc_port", lambda **kw: None)
+
+
 def started(reader):
     """Start a reader and wait until it reports being connected."""
     reader.start()
@@ -194,7 +200,6 @@ def make_reader(session, port="/dev/ttyACM0", **kwargs):
         poll_interval=0.01,
         retry_interval=0.01,
         session_factory=lambda p: session,
-        port_resolver=lambda: port,
         **kwargs,
     )
 
@@ -361,13 +366,11 @@ def test_a_definitive_refusal_is_not_retried(driver_installed):
         reader.stop()
 
 
-def test_write_without_a_link_answers_instead_of_blocking(driver_installed):
+def test_write_without_a_link_answers_instead_of_blocking(driver_installed, no_board):
     reader = NfcReader(
-        port="/dev/ttyACM0",
         poll_interval=0.01,
         retry_interval=0.01,
         session_factory=lambda p: FakeSession(),
-        port_resolver=lambda: None,  # no board found
     )
     reader.start()
     try:
@@ -395,7 +398,6 @@ def test_the_reader_reconnects_after_a_link_loss(driver_installed):
         poll_interval=0.01,
         retry_interval=0.01,
         session_factory=factory,
-        port_resolver=lambda: "/dev/ttyACM0",
     )
     reader.start()
     try:
@@ -491,13 +493,11 @@ def test_dump_goes_through_the_reader_thread(driver_installed):
         reader.stop()
 
 
-def test_dump_without_a_link_answers_instead_of_blocking(driver_installed):
+def test_dump_without_a_link_answers_instead_of_blocking(driver_installed, no_board):
     reader = NfcReader(
-        port="/dev/ttyACM0",
         poll_interval=0.01,
         retry_interval=0.01,
         session_factory=lambda p: FakeSession(),
-        port_resolver=lambda: None,
     )
     reader.start()
     try:
@@ -548,13 +548,11 @@ def test_erase_on_a_locked_tag_is_not_retried(driver_installed):
         reader.stop()
 
 
-def test_erase_without_a_link_answers_instead_of_blocking(driver_installed):
+def test_erase_without_a_link_answers_instead_of_blocking(driver_installed, no_board):
     reader = NfcReader(
-        port="/dev/ttyACM0",
         poll_interval=0.01,
         retry_interval=0.01,
         session_factory=lambda p: FakeSession(),
-        port_resolver=lambda: None,
     )
     reader.start()
     try:

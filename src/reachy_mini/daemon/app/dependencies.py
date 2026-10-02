@@ -33,7 +33,9 @@ def get_app_manager(request: Request) -> "AppManager":
 
 def get_nfc_reader(request: Request) -> NfcReader | None:
     """Get the NFC reader as request dependency (None if disabled)."""
-    return getattr(request.app.state, "nfc_reader", None)
+    reader = request.app.state.nfc_reader
+    assert reader is None or isinstance(reader, NfcReader)
+    return reader
 
 
 def ws_get_backend(websocket: WebSocket) -> Backend:

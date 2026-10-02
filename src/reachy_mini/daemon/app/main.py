@@ -280,7 +280,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             mdns.unregister()
 
             # Stop the NFC reader if it was started
-            if getattr(app.state, "nfc_reader", None) is not None:
+            if app.state.nfc_reader is not None:
                 try:
                     app.state.nfc_reader.stop()
                 except Exception as e:
@@ -330,10 +330,8 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     # wire the JSON-RPC app relay (apps.* + conversation.* over the DataChannel).
     app.state.daemon.app_manager = app.state.app_manager
 
-    # The reader board bridges USB with a CH343, which exposes the very same
-    # USB ids as the motor controller: auto-detection has to probe candidate
-    # ports (see reachy_mini.nfc.ports). Handing it an explicitly configured
-    # motor port spares a probe, and any chance of poking at the robot's link.
+    # The NFC board shares the motor controller's USB ids (see
+    # reachy_mini.nfc.ports): never probe an explicitly configured motor port.
     app.state.nfc_reader = (
         NfcReader(
             port=args.nfc_port,
@@ -744,11 +742,7 @@ def main() -> None:
         "--nfc-port",
         type=str,
         default=default_args.nfc_port,
-        help=(
-            "Serial port for the NFC reader (default: auto-detect by probing "
-            "candidate ports for a CLRC663; its USB ids are the same as the "
-            "motor controller's)."
-        ),
+        help="Serial port for the NFC reader (default: auto-detect).",
     )
     # Simulation mode
     parser.add_argument(

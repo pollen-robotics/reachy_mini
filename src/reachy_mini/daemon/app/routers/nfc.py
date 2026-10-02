@@ -2,9 +2,9 @@
 
 Exposes the optional CLRC663 reader board as simple HTTP endpoints. These
 routes never depend on the robot backend, so they work even when the robot is
-not started — and they degrade gracefully when the reader is disabled, absent,
-or its driver is not installed (no error, just a "not connected / no tag"
-state).
+not started. ``/tag`` and ``/status`` always answer, whatever the state of the
+reader; the routes that talk to a tag answer 503 while the reader is switched
+off, and report any other failure inside their result.
 """
 
 import asyncio
@@ -27,6 +27,13 @@ from ....nfc import (
 from ..dependencies import get_nfc_reader
 
 router = APIRouter(prefix="/nfc")
+
+
+def _enabled_reader(reader: NfcReader | None = Depends(get_nfc_reader)) -> NfcReader:
+    """Get the NFC reader, or answer 503 when it is off or was never created."""
+    if reader is None or not reader.is_enabled():
+        raise HTTPException(status_code=503, detail="NFC reader disabled")
+    return reader
 
 
 @router.get("/tag")
@@ -78,15 +85,12 @@ async def set_enabled(
     set_nfc_enabled(request.enabled)
     # stop() joins the reader thread, which can take up to a poll's worth of
     # serial I/O: keep it off the event loop.
-    action = reader.start if request.enabled else reader.stop
-    await asyncio.get_event_loop().run_in_executor(None, action)
+    await asyncio.to_thread(reader.start if request.enabled else reader.stop)
     return reader.get_status()
 
 
 @router.get("/dump")
-async def dump_tag(
-    reader: NfcReader | None = Depends(get_nfc_reader),
-) -> NfcDump:
+async def dump_tag(reader: NfcReader = Depends(_enabled_reader)) -> NfcDump:
     """Read the whole user memory of the tag on the reader, as hex.
 
     For tags that carry a bare code rather than an NDEF message — a badge
@@ -96,15 +100,13 @@ async def dump_tag(
     Costs a full transfer (~130 ms on an NTAG215), hence a separate endpoint
     instead of a field served on every poll.
     """
-    if reader is None or not reader.is_enabled():
-        return NfcDump(present=False, error="NFC reader disabled")
-    return await asyncio.get_event_loop().run_in_executor(None, reader.dump)
+    return await asyncio.to_thread(reader.dump)
 
 
 @router.post("/erase")
 async def erase_tag(
     request: NfcEraseRequest,
-    reader: NfcReader | None = Depends(get_nfc_reader),
+    reader: NfcReader = Depends(_enabled_reader),
 ) -> NfcWriteResult:
     """Make the next tag presented to the reader blank again.
 
@@ -119,35 +121,24 @@ async def erase_tag(
     Neither restores the capability container, the lock bytes or a password:
     those pages are one-time programmable. A formatted tag stays formatted.
     """
-    if reader is None or not reader.is_enabled():
-        raise HTTPException(status_code=503, detail="NFC reader disabled")
-    if not reader.is_connected():
-        raise HTTPException(status_code=503, detail="NFC reader not connected")
-
-    return await asyncio.get_event_loop().run_in_executor(None, reader.erase, request)
+    return await asyncio.to_thread(reader.erase, request)
 
 
 @router.post("/write")
 async def write_tag(
     request: NfcWriteRequest,
-    reader: NfcReader | None = Depends(get_nfc_reader),
+    reader: NfcReader = Depends(_enabled_reader),
 ) -> NfcWriteResult:
     """Write text or a URI onto the next tag presented to the reader.
 
     Exactly one of ``text`` or ``uri``. Blocks until the reader reports the
     outcome (or a timeout), retrying meanwhile so the tag can be presented
-    after the request is posted. Returns the result rather than raising, except
-    when the reader itself is unavailable.
+    after the request is posted. Failures come back as an error code in the
+    result; only a reader switched off answers 503.
 
     The tag's own declared capacity is authoritative: 144 bytes of NDEF on an
     NTAG213, 496 on an NTAG215, 872 on an NTAG216. A message that does not fit
     comes back as ``TOO_LONG`` without anything having been written.
     """
-    if reader is None or not reader.is_enabled():
-        raise HTTPException(status_code=503, detail="NFC reader disabled")
-    if not reader.is_connected():
-        raise HTTPException(status_code=503, detail="NFC reader not connected")
-
-    # write() blocks (it waits for a tag to be presented), so run it off the
-    # event loop to avoid stalling other requests.
-    return await asyncio.get_event_loop().run_in_executor(None, reader.write, request)
+    # write() blocks until a tag is presented: keep it off the event loop.
+    return await asyncio.to_thread(reader.write, request)
