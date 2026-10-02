@@ -24,7 +24,10 @@ from fastapi.responses import HTMLResponse
 
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon import startup_app_config
-from reachy_mini.daemon.app.middleware import MaxBodySizeMiddleware
+from reachy_mini.daemon.app.middleware import (
+    LocalNetworkGuardMiddleware,
+    MaxBodySizeMiddleware,
+)
 from reachy_mini.daemon.app.routers import (
     apps,
     audio_config,
@@ -123,6 +126,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
+        # The JSON-RPC app relay must not be scheduled onto whichever loop
+        # `Daemon.start` runs on: over HTTP that is a background job's
+        # throwaway loop. This one owns the app and lives as long as the
+        # process.
+        app.state.daemon.set_rpc_loop(asyncio.get_running_loop())
         dataset_updater_task: asyncio.Task[None] | None = None
         # Held on app.state so the /apps/startup-app endpoint can re-arm it live.
         app.state.startup_app_antenna_watcher_task = None
@@ -350,6 +358,13 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         max_body_size=media.MAX_SOUND_UPLOAD_BYTES,
         paths={"/api/media/sounds/upload"},
     )
+
+    # Block DNS rebinding and preflight-free cross-site writes against the
+    # unauthenticated API (CAN-2026-2032024): validates the Host header on all
+    # requests and the Origin header on state-changing ones. Added before CORS
+    # so CORS stays outermost and rejections for allowed origins carry its
+    # headers; requests without an Origin (curl, SDK, native apps) pass through.
+    app.add_middleware(LocalNetworkGuardMiddleware)
 
     # Restrict cross-origin access to local browser tooling and the native app
     # webviews (see CORS_ORIGIN_REGEX); everything else is same-origin or WebRTC.

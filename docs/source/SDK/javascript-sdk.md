@@ -5,9 +5,10 @@
 > the repo root. It covers scaffolding, `public/icon.svg`, the host
 > shell, `sdk: static` deploy,
 > `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host
-> ↔ embed contract. **Pin the SDK to
-> `@pollen-robotics/reachy-mini-sdk@1.8.0`** (the stable release
-> validated against the host shell + daemon).
+> ↔ embed contract. **Pin the SDK to the latest release on
+> [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk)**
+> (`npm install @pollen-robotics/reachy-mini-sdk@latest`) — the stable
+> release validated against the host shell + daemon.
 >
 > **This file** is the runtime API surface of the `ReachyMini` class
 > you receive from `handle.reachy` once `connectToHost()` resolves:
@@ -119,7 +120,7 @@ new ReachyMini({
 | `stopSession()` | `Promise` | End session, back to `connected` |
 | `disconnect()` | — | Close signaling (keeps auth) |
 | `logout()` | — | Clear HF credentials |
-| `attachVideo(videoEl)` | `() => void` | Bind video stream to element; returns cleanup function |
+| `attachVideo(videoEl)` | `() => void` | Bind video stream to element; returns cleanup function. **Standalone apps only** — in a host-shell embed the handshake completes before your app mounts, so this silently no-ops; use `handle.media.attachVideo(videoEl)` instead (see the App Creation Guide, §5) |
 | `setTarget({ head?, antennas?, body_yaw? })` | `boolean` | Atomic raw-units update — `head` is `number[16]` (flat 4×4), `antennas` is `[rRad, lRad]`, `body_yaw` is radians |
 | `gotoTarget({ head?, antennas?, body_yaw?, duration })` | `boolean` | Smooth daemon-side interpolation to a target pose over `duration` seconds (same wire units as `setTarget`). Throws `TypeError` on invalid input |
 | `setHeadRpyDeg(roll, pitch, yaw)` | `boolean` | Set head orientation in degrees (wraps `setTarget`) |
@@ -202,6 +203,8 @@ Beyond the typed surface above, the runtime object exposes lower-level hooks (no
 
 - `rpcCall(method, params?, { timeoutMs? })` — send a JSON-RPC request over the data channel and await the correlated result (e.g. app-defined methods).
 - `onNotification(method, cb)` — subscribe to one-way JSON-RPC notifications pushed by the robot/app (e.g. `conversation.turn`); returns an unsubscribe fn.
+
+A reply or notification over 64 KiB, the data channel's message limit, is split by the daemon and reassembled by the SDK, so `rpcCall` resolves with the whole result. Older SDKs cannot reassemble and see such a call time out.
 - `startDaemonUpdate({ preRelease?, onProgress? })` — trigger a PyPI update of the daemon. It restarts on success (which tears the session down), so treat a successful reconnect as the "done" signal; `onProgress` fires with `status: "failed"` if the install errors first.
 
 ### Debug logging

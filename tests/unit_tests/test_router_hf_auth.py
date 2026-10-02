@@ -385,7 +385,7 @@ def test_oauth_success_survives_relay_start_failure(
     )
     monkeypatch.setattr(src, "consume_device_session_relay_pending", lambda sid: True)
     start_relay = AsyncMock(side_effect=RuntimeError("provider-secret-marker"))
-    daemon = types.SimpleNamespace(_start_central_signaling_relay=start_relay)
+    daemon = types.SimpleNamespace(start_central_relay_if_running=start_relay)
 
     response = router_app(hf_auth.router, daemon=daemon).get("/hf-auth" + path)
 
@@ -394,6 +394,26 @@ def test_oauth_success_survives_relay_start_failure(
     start_relay.assert_awaited_once_with()
     assert "RuntimeError" in caplog.text
     assert "provider-secret-marker" not in response.text + caplog.text
+
+
+def test_oauth_callback_error_param_is_not_reflected(router_app):
+    """Attacker-controlled error_description must not reach the page at all.
+
+    Since the provider-text redaction, the error path renders a canned
+    message, so the strongest property holds: no reflection, escaped or not.
+    """
+    client = router_app(hf_auth.router)
+
+    payload = "</p><script>alert(1)</script><p>"
+    resp = client.get(
+        "/hf-auth/oauth/callback",
+        params={"error": "access_denied", "error_description": payload},
+    )
+
+    assert resp.status_code == 200
+    assert payload not in resp.text
+    assert "alert(1)" not in resp.text
+    assert src.AUTHORIZATION_DENIED_MESSAGE in resp.text
 
 
 def test_oauth_callback_missing_code(router_app):

@@ -1,8 +1,10 @@
 """Custom ASGI middleware for the daemon HTTP app."""
 
+import ipaddress
 import json
 import logging
 from collections.abc import Iterable
+from urllib.parse import urlsplit
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -94,6 +96,182 @@ class MaxBodySizeMiddleware:
             {
                 "type": "http.response.start",
                 "status": 413,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode()),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
+
+
+# ---------------------------------------------------------------------------
+# Local-network request guard (CAN-2026-2032024)
+# ---------------------------------------------------------------------------
+
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+_LOCAL_HOSTNAMES = frozenset({"localhost", "tauri.localhost"})
+_WEBVIEW_SCHEMES = frozenset({"tauri", "capacitor"})
+
+
+def _parse_ip(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    try:
+        return ipaddress.ip_address(host)
+    except ValueError:
+        return None
+
+
+def _hostname_of(netloc: str) -> str | None:
+    """Extract the hostname (no port, no brackets) from a netloc string."""
+    try:
+        return urlsplit(f"//{netloc}").hostname
+    except ValueError:
+        return None
+
+
+def _is_local_name(host: str) -> bool:
+    # Normalize case and the trailing-dot FQDN form ("reachy-mini.local.")
+    # browsers may send. ".local" is never delegated in the public DNS root
+    # (RFC 6762), so the suffix check alone is sound for this threat model.
+    host = host.lower().rstrip(".")
+    return host in _LOCAL_HOSTNAMES or host.endswith(".local")
+
+
+def is_trusted_host(host: str | None) -> bool:
+    """Check a request ``Host`` header hostname.
+
+    IP literals are trusted (direct LAN access by IP); DNS names only if they
+    are local names. A DNS-rebinding attack necessarily arrives under the
+    attacker's public DNS name, which is neither.
+    """
+    if not host:
+        return False
+    if _parse_ip(host) is not None:
+        return True
+    return _is_local_name(host)
+
+
+def is_trusted_origin(origin: str) -> bool:
+    """Check the ``Origin`` header of a state-changing request.
+
+    Note there is deliberately no "same as the request Host" shortcut: it
+    would let a public-IP origin through whenever the robot is reached at
+    that same public IP, and every legitimate origin already matches the
+    local-name or loopback/private/link-local branches below.
+    """
+    try:
+        parts = urlsplit(origin)
+    except ValueError:
+        return False
+    if parts.scheme in _WEBVIEW_SCHEMES:
+        # The Tauri/Capacitor webviews only ever emit <scheme>://localhost.
+        return parts.hostname == "localhost"
+    if parts.scheme not in ("http", "https"):
+        return False
+    host = parts.hostname
+    if not host:
+        return False
+    if _is_local_name(host):
+        return True
+    ip = _parse_ip(host)
+    if ip is not None:
+        return ip.is_loopback or ip.is_private or ip.is_link_local
+    return False
+
+
+class LocalNetworkGuardMiddleware:
+    """Reject browser-borne cross-site attacks on the unauthenticated API.
+
+    The API relies on network locality instead of authentication. Two browser
+    tricks let an internet page reach it anyway (CAN-2026-2032024):
+
+    - DNS rebinding: the attacker's domain re-resolves to the robot's LAN IP,
+      making the page same-origin with the API. Blocked by requiring the
+      ``Host`` header to be an IP literal, ``localhost``, or a ``.local``
+      mDNS name -- a rebound request arrives under a public DNS name.
+    - Cross-site request forgery: CORS (see ``CORS_ORIGIN_REGEX``) only stops
+      the page from *reading* responses; a preflight-free "simple" POST still
+      executes server-side. Blocked by rejecting state-changing requests
+      whose ``Origin`` is not the robot itself, a local/private-network
+      origin, or a native webview scheme (Tauri/Capacitor).
+
+    WebSocket handshakes get both checks too, and are never treated as a
+    "safe" method: browsers apply no CORS to WebSockets, so a cross-site
+    page would otherwise get read *and* write access to the WS endpoints.
+
+    Requests without an ``Origin`` header (curl, the Python SDK, native apps)
+    pass untouched: this guards against browsers acting as confused deputies,
+    not against direct LAN clients.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        """Wrap *app* with Host and Origin validation."""
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Validate the Host and Origin headers of HTTP and WebSocket requests."""
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        # Collect ALL Host/Origin occurrences: uvicorn/h11 forwards requests
+        # carrying duplicate Host headers (RFC 9112 mandates rejecting them),
+        # and trusting "the first one" becomes a smuggling seam if a proxy
+        # that picks the other one ever fronts the daemon. Browsers can't
+        # emit duplicates (forbidden headers), so denying them costs nothing.
+        host_headers: list[str] = []
+        origin_headers: list[str] = []
+        for name, value in scope.get("headers", []):
+            if name == b"host":
+                host_headers.append(value.decode("latin-1"))
+            elif name == b"origin":
+                origin_headers.append(value.decode("latin-1"))
+
+        if len(host_headers) > 1 or len(origin_headers) > 1:
+            await self._deny(scope, send, 400, "Duplicate Host or Origin header")
+            return
+        origin = origin_headers[0] if origin_headers else None
+
+        host = _hostname_of(host_headers[0]) if host_headers else None
+        if not is_trusted_host(host):
+            await self._deny(scope, send, 400, "Untrusted Host header")
+            return
+
+        # A WebSocket handshake is never "safe": the socket is readable
+        # cross-origin, unlike a fetch() response blocked by CORS.
+        method = (
+            "POST"
+            if scope["type"] == "websocket"
+            else str(scope.get("method", "GET")).upper()
+        )
+        if (
+            method not in _SAFE_METHODS
+            and origin is not None
+            and not is_trusted_origin(origin)
+        ):
+            await self._deny(scope, send, 403, "Cross-origin request rejected")
+            return
+
+        await self.app(scope, receive, send)
+
+    async def _deny(
+        self, scope: Scope, send: Send, status: int, detail: str
+    ) -> None:
+        if scope["type"] == "websocket":
+            # 1008 = policy violation. Starlette turns this into a rejected
+            # handshake (HTTP 403) for clients that never complete the upgrade.
+            await send(
+                {"type": "websocket.close", "code": 1008, "reason": detail}
+            )
+            return
+        await self._reject(send, status, detail)
+
+    async def _reject(self, send: Send, status: int, detail: str) -> None:
+        body = json.dumps({"detail": detail}).encode()
+        await send(
+            {
+                "type": "http.response.start",
+                "status": status,
                 "headers": [
                     (b"content-type", b"application/json"),
                     (b"content-length", str(len(body)).encode()),
