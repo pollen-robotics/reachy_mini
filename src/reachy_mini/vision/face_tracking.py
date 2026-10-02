@@ -1,9 +1,34 @@
-"""Face tracking: a YuNet detector thread feeding the daemon the latest observation."""
+"""Face tracking: a detector thread publishing the absolute head orientation to aim at.
+
+Detection runs in a low-priority daemon thread. Its cost is bounded by a
+wall-clock rate cap (``_DETECTION_FPS``) applied before the frame copy and the
+inference, so a faster camera feed cannot drag it up; the inference itself
+runs in onnxruntime with the GIL released. The exchange with the daemon is
+two fixed-size "latest value" mailboxes, deliberately without timestamps or
+queues:
+
+- daemon -> detector: the current head orientation (a 3x3 rotation), so the
+  detector can turn a face pixel into an *absolute* target orientation in the
+  robot frame;
+- detector -> daemon: "looking at the face means this absolute head
+  orientation" (plus the normalized face position as telemetry for
+  ``get_tracked_face``).
+
+Both mailboxes carry plain rotation matrices, so the detector needs no Euler
+conversion and no rotation library; the daemon converts the target to angles
+for its servo.
+
+The daemon treats the latest published target as where the person is *now* and
+servos toward it with a small bounded step per control tick. Re-applying a
+stale absolute target converges toward it and stops; this is what makes the
+no-timestamp design safe (a stale *delta* would instead be integrated over and
+over and overshoot).
+"""
 
 import logging
+import math
 import os
 import platform
-import queue
 import threading
 import time
 from dataclasses import dataclass
@@ -16,6 +41,7 @@ from reachy_mini.daemon.utils import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
 from reachy_mini.media.camera_constants import CameraSpecs
 from reachy_mini.media.camera_utils import intrinsics_for_size
 from reachy_mini.vision.face_detector import Face, FaceDetector
+from reachy_mini.vision.look_at import look_at_image_pose
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
@@ -27,54 +53,65 @@ logger = logging.getLogger(__name__)
 # Detector input width; smaller trades recall for CPU.
 _TRACKING_WIDTH = 320
 
+# The detector's own detection-rate cap. The local IPC feed is itself capped at
+# 10 FPS today, so this is redundant until the feed rate becomes configurable
+# (https://github.com/pollen-robotics/reachy_mini/issues/1263); at that point
+# this constant should read the configured rate instead of being hardcoded.
+_DETECTION_FPS = 10
 
-@dataclass
-class FaceObservation:
-    """A face target in ``set_tracking_face`` form (face center normalized to [-1, 1])."""
-
-    center: tuple[float, float] | None
-    roll: float | None
-    width: int
-    height: int
-    camera_matrix: NDArray[np.float64]
-    distortion: NDArray[np.float64]
-    timestamp: float
+# Target mailbox layout (detector -> daemon), all doubles:
+# [seq, detected, R00 .. R22 (row-major 3x3 rotation), x_norm, y_norm, face_roll]
+_TARGET_SLOTS = 14
+# Head-pose mailbox layout (daemon -> detector): [valid, R00 .. R22]
+_POSE_SLOTS = 10
 
 
-class _AdaptiveCenterFilter:
-    """Internal face-center smoother with fixed tracking parameters."""
+class _RateGate:
+    """Time-based frame gate allowing at most ``fps`` detections per second.
 
-    _ALPHA = 0.3
-    _FAST_ALPHA = 0.6
-    _MOVEMENT_THRESHOLD = 0.15
-    _DEAD_ZONE = 0.02
+    The cap must live here, in the consumer loop, not in a GStreamer
+    ``videorate``: buffers cross the unixfd IPC boundary with PTS 0 (verified
+    on wireless hardware), so any timestamp-based dropping passes the first
+    frame and then drops every one after it, silently disabling tracking.
+    """
 
-    def __init__(self) -> None:
-        self._value: NDArray[np.float64] | None = None
-        self._previous_input: NDArray[np.float64] | None = None
+    def __init__(self, fps: float) -> None:
+        self._interval = 1.0 / fps
+        self._next: float | None = None
 
-    def update(self, center: tuple[float, float]) -> tuple[float, float]:
-        """Consume one raw center and return the filtered center."""
-        current = np.asarray(center, dtype=np.float64)
-        if self._value is None or self._previous_input is None:
-            self._value = current.copy()
-            self._previous_input = current.copy()
-            return center
+    def ready(self, now: float) -> bool:
+        """Whether a frame arriving at ``now`` should be processed."""
+        if self._next is None:
+            self._next = now + self._interval
+            return True
+        # Quarter-interval tolerance so feed jitter at exactly the cap rate
+        # does not drop every other frame.
+        if now < self._next - 0.25 * self._interval:
+            return False
+        # Advance by whole intervals so a fast feed settles at the cap and a
+        # slow feed passes straight through.
+        self._next = max(self._next + self._interval, now)
+        return True
 
-        movement = float(np.linalg.norm(current - self._previous_input))
-        self._previous_input = current.copy()
-        delta = current - self._value
-        if float(np.linalg.norm(delta)) < self._DEAD_ZONE:
-            return (float(self._value[0]), float(self._value[1]))
 
-        alpha = self._FAST_ALPHA if movement > self._MOVEMENT_THRESHOLD else self._ALPHA
-        self._value += alpha * delta
-        return (float(self._value[0]), float(self._value[1]))
+@dataclass(frozen=True)
+class TrackingTarget:
+    """One published aim target: absolute head orientation plus face telemetry.
 
-    def reset(self) -> None:
-        """Forget filter history so the next observation is accepted immediately."""
-        self._value = None
-        self._previous_input = None
+    ``seq`` increments on every processed frame; the daemon uses it to tell a
+    fresh publication from the previous one. ``rotation`` is the 3x3 world
+    orientation the head should take to look at the face (identity on a
+    miss). ``x``/``y``/``face_roll`` are telemetry for ``get_tracked_face``
+    (normalized face center in [-1, 1] and the eye-line roll), None when no
+    face is detected.
+    """
+
+    seq: int
+    detected: bool
+    rotation: NDArray[np.float64]
+    x: float | None
+    y: float | None
+    face_roll: float | None
 
 
 def _area(face: Face) -> float:
@@ -140,87 +177,83 @@ class Tracker:
         return self._center is not None
 
 
-def to_observation(
-    face: Face | None,
-    width: int,
-    height: int,
-    camera_matrix: NDArray[np.float64],
-    distortion: NDArray[np.float64],
-    timestamp: float,
-) -> FaceObservation:
-    """Reduce the tracked face (or its absence) to one normalized observation."""
-    if face is None:
-        return FaceObservation(
-            None, None, width, height, camera_matrix, distortion, timestamp
-        )
-    roll = float(
-        np.arctan2(
-            face.left_eye[1] - face.right_eye[1],
-            face.left_eye[0] - face.right_eye[0],
-        )
-    )
-    return FaceObservation(
-        _center(face, width, height),
-        roll,
-        width,
-        height,
-        camera_matrix,
-        distortion,
-        timestamp,
-    )
+class _Mailbox:
+    """Fixed-size slot of floats shared between the daemon and detector threads.
+
+    ``get_lock()`` returns the lock guarding the slot; readers and writers hold
+    it for the few assignments a mailbox exchange takes.
+    """
+
+    def __init__(self, size: int) -> None:
+        self._values = [0.0] * size
+        self._lock = threading.Lock()
+
+    def get_lock(self) -> threading.Lock:
+        """Return the lock guarding the slot."""
+        return self._lock
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+    def __iter__(self):  # type: ignore[no-untyped-def]
+        return iter(self._values)
+
+    def __getitem__(self, index: int) -> float:
+        return self._values[index]
+
+    def __setitem__(self, index: int, value: float) -> None:
+        self._values[index] = float(value)
 
 
-class FaceTracker:
-    """Run the face detector in a daemon thread and expose the latest observation."""
+class _DetectionWorker:
+    """Detector-side pipeline, detection, selection, and target publication."""
 
-    def __init__(self) -> None:
-        """Initialize the tracker; no thread is started until ``start``."""
-        self._thread: threading.Thread | None = None
-        self._stop = threading.Event()
-        self._active = threading.Event()
-        self._observations: queue.SimpleQueue[FaceObservation] = queue.SimpleQueue()
+    def __init__(
+        self,
+        camera_specs: CameraSpecs,
+        target_mailbox: _Mailbox,
+        pose_mailbox: _Mailbox,
+        active: threading.Event,
+        stop: threading.Event,
+    ) -> None:
+        """Wire the worker to its camera specs, mailboxes, and control events."""
+        self._camera_specs = camera_specs
+        self._target_mailbox = target_mailbox
+        self._pose_mailbox = pose_mailbox
+        self._active = active
+        self._stop = stop
         self._selector = Tracker()
-        self._center_filter = _AdaptiveCenterFilter()
+        self._seq = 0
 
-    def start(self, camera_specs: CameraSpecs) -> None:
-        """Start the detector thread if it is not already running."""
-        if self._thread is not None and self._thread.is_alive():
-            return
-        self._stop.clear()
-        # Drop observations left over from a previous run.
-        self._observations = queue.SimpleQueue()
-        self._selector = Tracker()
-        self._center_filter.reset()
-        self._thread = threading.Thread(
-            target=self._run, args=(camera_specs,), daemon=True, name="face-tracker"
-        )
-        self._thread.start()
+    def _current_head_pose(self) -> NDArray[np.float64] | None:
+        """Rebuild the daemon's last published head pose, or None if none yet."""
+        with self._pose_mailbox.get_lock():
+            values = [self._pose_mailbox[i] for i in range(_POSE_SLOTS)]
+        if values[0] == 0.0:
+            return None
+        pose = np.eye(4, dtype=np.float64)
+        pose[:3, :3] = np.asarray(values[1:10], dtype=np.float64).reshape(3, 3)
+        return pose
 
-    def set_active(self, active: bool) -> None:
-        """Pause or resume detection; a paused tracker disconnects from the camera feed."""
-        if active:
-            self._active.set()
-        else:
-            self._active.clear()
-
-    def latest(self) -> FaceObservation | None:
-        """Return the most recent observation, draining any backlog."""
-        obs: FaceObservation | None = None
-        while not self._observations.empty():
-            obs = self._observations.get_nowait()
-        return obs
-
-    def stop(self) -> None:
-        """Stop the detector thread."""
-        self._stop.set()
-        if self._thread is None:
-            return
-        self._thread.join(timeout=2.0)
-        if self._thread.is_alive():
-            # Keep the handle: forgetting a live thread lets start() clear its stop flag and double-run.
-            logger.warning("Face tracker thread did not stop in time.")
-        else:
-            self._thread = None
+    def _publish(
+        self,
+        detected: bool,
+        rotation: NDArray[np.float64] | None = None,
+        x: float = math.nan,
+        y: float = math.nan,
+        face_roll: float = math.nan,
+    ) -> None:
+        """Publish one target to the mailbox (latest value wins)."""
+        self._seq += 1
+        flat = (np.eye(3) if rotation is None else np.asarray(rotation)).reshape(-1)
+        with self._target_mailbox.get_lock():
+            self._target_mailbox[0] = float(self._seq)
+            self._target_mailbox[1] = 1.0 if detected else 0.0
+            for i, value in enumerate(flat):
+                self._target_mailbox[2 + i] = float(value)
+            self._target_mailbox[11] = x
+            self._target_mailbox[12] = y
+            self._target_mailbox[13] = face_roll
 
     def _process_detections(
         self,
@@ -229,23 +262,49 @@ class FaceTracker:
         height: int,
         camera_matrix: NDArray[np.float64],
         distortion: NDArray[np.float64],
-        timestamp: float,
+        head_pose: NDArray[np.float64] | None = None,
     ) -> None:
-        """Select, filter, and emit one observation from a detection frame."""
-        face = self._selector.select(faces, width, height)
-        if face is None and not self._selector.has_target:
-            self._center_filter.reset()
-        observation = to_observation(
-            face, width, height, camera_matrix, distortion, timestamp
-        )
-        if observation.center is not None:
-            observation.center = self._center_filter.update(observation.center)
-        self._observations.put(observation)
+        """Select a face and publish the absolute head orientation that aims at it.
 
-    def _run(self, camera_specs: CameraSpecs) -> None:
-        # Lowest priority (Linux-only per-thread nice) so the detector yields CPU to the rest of the daemon.
-        if platform.system() == "Linux":
-            os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 19)
+        ``head_pose`` is the daemon's head orientation sampled when the frame
+        arrived (before inference), the closest we get to capture time without
+        timestamps; it defaults to the latest published pose.
+        """
+        face = self._selector.select(faces, width, height)
+        if face is None:
+            self._publish(detected=False)
+            return
+        if head_pose is None:
+            head_pose = self._current_head_pose()
+        if head_pose is None:
+            # The daemon has not published its head pose yet; without it a
+            # pixel cannot become an absolute angle, so report a miss.
+            self._publish(detected=False)
+            return
+        target_pose = look_at_image_pose(
+            u=face.nose[0],
+            v=face.nose[1],
+            K=camera_matrix,
+            D=distortion,
+            T_world_head=head_pose,
+        )
+        face_roll = float(
+            np.arctan2(
+                face.left_eye[1] - face.right_eye[1],
+                face.left_eye[0] - face.right_eye[0],
+            )
+        )
+        x, y = _center(face, width, height)
+        self._publish(
+            detected=True,
+            rotation=target_pose[:3, :3],
+            x=x,
+            y=y,
+            face_roll=face_roll,
+        )
+
+    def run(self) -> None:
+        """Consume the camera feed and publish aim targets until stopped."""
         Gst.init([])
         windows = platform.system() == "Windows"
         source = Gst.ElementFactory.make("win32ipcvideosrc" if windows else "unixfdsrc")
@@ -271,7 +330,7 @@ class FaceTracker:
             source.set_property("socket-path", CAMERA_SOCKET_PATH)
         queue_frames.set_property("leaky", 2)
         queue_frames.set_property("max-size-buffers", 1)
-        src_w, src_h = camera_specs.default_resolution.value[:2]
+        src_w, src_h = self._camera_specs.default_resolution.value[:2]
         width = min(_TRACKING_WIDTH, src_w)
         height = max(2, round(width * src_h / src_w / 2) * 2)
         capsfilter.set_property(
@@ -296,15 +355,16 @@ class FaceTracker:
                 )
                 return
 
-        crop_scale = camera_specs.default_resolution.value[3]
+        crop_scale = self._camera_specs.default_resolution.value[3]
         camera_matrix: NDArray[np.float64] | None = None
+        bus = pipeline.get_bus()
+        rate_gate = _RateGate(_DETECTION_FPS)
         playing = False
         feed_lost = False
         try:
             detector = FaceDetector()
             while not self._stop.is_set():
                 if not self._active.is_set():
-                    self._center_filter.reset()
                     if playing:
                         # Disconnect while paused so the daemon serves nothing to this client.
                         pipeline.set_state(Gst.State.NULL)
@@ -329,6 +389,24 @@ class FaceTracker:
                     playing = True
                 sample = appsink.try_pull_sample(200 * Gst.MSECOND)
                 if sample is None:
+                    # A pipeline error (lost feed, failed negotiation) leaves the
+                    # appsink returning None forever; surface it and reconnect
+                    # instead of dying silently.
+                    message = bus.timed_pop_filtered(0, Gst.MessageType.ERROR)
+                    if message is not None:
+                        error, _ = message.parse_error()
+                        logger.warning(
+                            "Face tracking pipeline error: %s; reconnecting.",
+                            error.message,
+                        )
+                        pipeline.set_state(Gst.State.NULL)
+                        playing = False
+                        self._stop.wait(1.0)
+                    continue
+                # Cap the detection rate before the frame copy and inference.
+                # The conversion upstream still runs per frame, but on the RPi
+                # that is offloaded to the ISP; the CPU cost lives below here.
+                if not rate_gate.ready(time.monotonic()):
                     continue
                 structure = sample.get_caps().get_structure(0)
                 frame_width = structure.get_value("width")
@@ -339,18 +417,115 @@ class FaceTracker:
                 ).reshape((frame_height, frame_width, 3))
                 if camera_matrix is None:
                     camera_matrix = intrinsics_for_size(
-                        camera_specs.K, crop_scale, (frame_width, frame_height)
+                        self._camera_specs.K, crop_scale, (frame_width, frame_height)
                     )
+                # Sample the head pose now, not after the ~35 ms inference.
+                head_pose = self._current_head_pose()
                 self._process_detections(
                     detector.detect(frame),
                     frame_width,
                     frame_height,
                     camera_matrix,
-                    camera_specs.D,
-                    time.monotonic(),
+                    self._camera_specs.D,
+                    head_pose,
                 )
         except Exception:
-            # With no process boundary left, this is the only place a detector crash gets reported.
             logger.exception("Face tracker crashed.")
         finally:
             pipeline.set_state(Gst.State.NULL)
+
+
+def _worker_entry(
+    camera_specs: CameraSpecs,
+    target_mailbox: _Mailbox,
+    pose_mailbox: _Mailbox,
+    active: threading.Event,
+    stop: threading.Event,
+) -> None:
+    """Run the detection worker; entry point of the detector thread."""
+    if platform.system() == "Linux":
+        # Per-thread nice so the detector yields CPU to the control loop.
+        os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 19)
+    _DetectionWorker(camera_specs, target_mailbox, pose_mailbox, active, stop).run()
+
+
+class FaceTracker:
+    """Run the face detector in a daemon thread and expose the latest aim target."""
+
+    def __init__(self) -> None:
+        """Initialize the tracker; no thread is started until ``start``."""
+        self._thread: threading.Thread | None = None
+        self._target_mailbox = _Mailbox(_TARGET_SLOTS)
+        self._pose_mailbox = _Mailbox(_POSE_SLOTS)
+        self._active = threading.Event()
+        self._stop = threading.Event()
+
+    def start(self, camera_specs: CameraSpecs) -> None:
+        """Start the detector thread if it is not already running."""
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop = threading.Event()
+        # Zero the mailboxes so stale targets from a previous run are dropped.
+        with self._target_mailbox.get_lock():
+            for i in range(_TARGET_SLOTS):
+                self._target_mailbox[i] = 0.0
+        with self._pose_mailbox.get_lock():
+            for i in range(_POSE_SLOTS):
+                self._pose_mailbox[i] = 0.0
+        self._thread = threading.Thread(
+            target=_worker_entry,
+            args=(
+                camera_specs,
+                self._target_mailbox,
+                self._pose_mailbox,
+                self._active,
+                self._stop,
+            ),
+            daemon=True,
+            name="face-tracker",
+        )
+        self._thread.start()
+
+    def set_active(self, active: bool) -> None:
+        """Pause or resume detection; a paused tracker disconnects from the camera feed."""
+        if active:
+            self._active.set()
+        else:
+            self._active.clear()
+
+    def publish_head_pose(self, rotation: NDArray[np.float64]) -> None:
+        """Share the daemon's current head orientation (3x3) with the detector."""
+        flat = np.asarray(rotation, dtype=np.float64).reshape(-1)
+        with self._pose_mailbox.get_lock():
+            self._pose_mailbox[0] = 1.0
+            for i, value in enumerate(flat):
+                self._pose_mailbox[1 + i] = float(value)
+
+    def latest(self) -> TrackingTarget | None:
+        """Return the latest published aim target, or None before the first one."""
+        with self._target_mailbox.get_lock():
+            values = list(self._target_mailbox)
+        seq = int(values[0])
+        if seq == 0:
+            return None
+        detected = values[1] != 0.0
+        return TrackingTarget(
+            seq=seq,
+            detected=detected,
+            rotation=np.asarray(values[2:11], dtype=np.float64).reshape(3, 3),
+            x=values[11] if detected else None,
+            y=values[12] if detected else None,
+            face_roll=values[13] if detected else None,
+        )
+
+    def stop(self) -> None:
+        """Stop the detector thread."""
+        self._stop.set()
+        if self._thread is None:
+            return
+        self._thread.join(timeout=2.0)
+        if self._thread.is_alive():
+            # Keep the handle: forgetting a live thread lets start() clear its stop flag and double-run.
+            logger.warning("Face tracker thread did not stop in time.")
+        else:
+            self._thread = None
