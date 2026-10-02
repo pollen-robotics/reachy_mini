@@ -1,1 +1,1 @@
-{"id":"d732092d907cc3da79232b2d71ab74a8.08483c84d96fc3bb070e3d9a35784ee8","fullName":"tests.unit_tests.test_daemon_utils#test_is_localhost_true","name":"test_is_localhost_true[0.0.0.0]","status":"passed","testResultsByEnv":{"default":"db897e98c72156e1ac0980071e30b81b"}}
+{"id":"d732092d907cc3da79232b2d71ab74a8.08483c84d96fc3bb070e3d9a35784ee8","fullName":"tests.unit_tests.test_daemon_utils#test_is_localhost_true","name":"test_is_localhost_true[0.0.0.0]","status":"passed","testResultsByEnv":{"default":"7f766aba921218c869042b5b944a118f"}}
