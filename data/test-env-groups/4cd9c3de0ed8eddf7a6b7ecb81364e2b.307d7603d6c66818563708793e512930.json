@@ -1,0 +1,1 @@
+{"id":"4cd9c3de0ed8eddf7a6b7ecb81364e2b.307d7603d6c66818563708793e512930","fullName":"tests.unit_tests.test_request_guard#test_ws_cross_site_hijack_rejected","name":"test_ws_cross_site_hijack_rejected[https://evil.example.com]","status":"passed","testResultsByEnv":{"default":"bf0c52098cbab1597cca21f0443b8296"}}
