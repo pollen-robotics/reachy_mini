@@ -651,6 +651,8 @@ python -c "from my_app.main import MyApp"
 
 For more debugging tips (viewing logs, common pitfalls), see [Debugging Apps](./SDK/apps.md#debugging-apps).
 
+If *every* app fails the same way while head movements still work, check the camera rather than the app: see "The camera is not detected" below.
+
 </details>
 
 <details><summary><strong>Is installing apps directly from Reachy Mini Control supported?</strong></summary>
@@ -897,6 +899,26 @@ Performance relies heavily on lighting conditions. Ensure the face is well-lit. 
 When running the [look_at example](https://huggingface.co/docs/reachy_mini/examples/look_at), it's easy to see whether the camera is focusing by putting your hand in front of it. If it isn't, the camera may be physically blocked. It is held to the black part by 4 screws — loosen them very slightly, about 1/8 of a turn.
 
 ![camera_focus](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/troubleshooting_screw_focus_camera.png)
+
+</details>
+
+<details>
+<summary><strong>The camera is not detected (and every app fails to start)</strong></summary>
+
+Head and body movements work, but every app fails to start, often with a refused connection rather than any error mentioning the camera. The daemon needs the camera at startup, so a camera that is not seen takes the whole media stack down with it.
+
+Check the camera ribbon cable first: that it is fully seated at both ends, and that it is the right way up. Same rule as the microphone cable — the blue side up, or the side with "Main Board" written on it up. Power the robot off before reseating it, then power it back on.
+
+To confirm on a Wireless:
+
+```bash
+rpicam-hello --list-cameras     # lists imx708_wide when the camera is seen
+dmesg | grep "camera module ID" # one line per detected sensor
+```
+
+A healthy robot prints something like `imx708 0-001a: camera module ID 0x0302`. If neither command reports a sensor, the camera is really not seen and the cable is the first suspect.
+
+> **💡 Note:** a `failed to read chip id 708, with error -5` line in `dmesg` is **normal** and not a symptom. The CM4 exposes two CSI ports and Reachy Mini only uses one, so the unused port always fails to probe at boot. Only the absence of a `camera module ID` line means the camera is missing.
 
 </details>
 
