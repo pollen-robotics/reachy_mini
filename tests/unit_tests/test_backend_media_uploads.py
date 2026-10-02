@@ -133,9 +133,7 @@ def test_move_chunk_index_exceeds_total_drops_slot(sim_backend):
 
 def test_move_finish_count_mismatch_stores_nothing(sim_backend):
     """Finishing with fewer chunks than declared stores no move."""
-    sim_backend._handle_upload_start(
-        UploadMoveStartCmd(upload_id="mm", total_chunks=2)
-    )
+    sim_backend._handle_upload_start(UploadMoveStartCmd(upload_id="mm", total_chunks=2))
     sim_backend._handle_upload_chunk(
         UploadMoveChunkCmd(upload_id="mm", chunk_index=0, chunk="{}")
     )
@@ -168,7 +166,9 @@ def test_move_start_too_many_active_slots_refused(sim_backend):
 
 def test_move_evict_stale_uploads(sim_backend):
     """Slots older than the TTL are evicted."""
-    sim_backend._handle_upload_start(UploadMoveStartCmd(upload_id="old", total_chunks=1))
+    sim_backend._handle_upload_start(
+        UploadMoveStartCmd(upload_id="old", total_chunks=1)
+    )
     sim_backend._upload_ts["old"] = 0.0  # epoch -> ancient
     sim_backend._upload_ttl_s = 1.0
     sim_backend._evict_stale_uploads()
@@ -201,6 +201,38 @@ def test_audio_upload_happy(sim_backend, tmp_path):
     assert path.endswith(".wav")
     with open(path, "rb") as f:
         assert f.read() == raw
+
+
+def test_audio_upload_rejects_unsafe_upload_id(sim_backend, tmp_path):
+    """Traversal / absolute / oversized upload_ids can't open a slot.
+
+    upload_id reaches os.path.join(self._audio_temp_dir, ...) at finish
+    time; without this guard a ``..``-segment or absolute id escapes the
+    audio temp dir (GHSA-q5c4-34xp-mvw9). Finish on a never-opened slot
+    must be a no-op, and nothing may land in the temp dir either.
+    """
+    sim_backend._audio_temp_dir = str(tmp_path)
+    payload = base64.b64encode(b"RIFF").decode()
+    for bad_id in ("../escape", "/etc/cron.d/evil", "a/b", "a\\b", "..", "x" * 65):
+        sim_backend._handle_audio_start(
+            UploadAudioStartCmd(upload_id=bad_id, total_chunks=1)
+        )
+        assert bad_id not in sim_backend._audio_chunks, bad_id
+    # One full cycle on a refused id stays a no-op end to end.
+    sim_backend._handle_audio_chunk(
+        UploadAudioChunkCmd(upload_id="..", chunk_index=0, chunk=payload)
+    )
+    sim_backend._handle_audio_finish(UploadAudioFinishCmd(upload_id=".."))
+    assert os.listdir(tmp_path) == []
+
+
+def test_audio_upload_accepts_sdk_style_ids(sim_backend):
+    """Ids the JS SDK generates (base36, dashes, underscores) still open slots."""
+    good_id = "uk3f9z1a_mZx9-Lw7p"
+    sim_backend._handle_audio_start(
+        UploadAudioStartCmd(upload_id=good_id, total_chunks=1)
+    )
+    assert good_id in sim_backend._audio_chunks
 
 
 def test_audio_chunk_no_slot_dropped(sim_backend):
@@ -236,12 +268,31 @@ def test_audio_chunk_index_exceeds_total_drops_slot(sim_backend):
     assert "ovf" not in sim_backend._audio_chunks
 
 
+def test_audio_chunk_over_size_cap_drops_slot(sim_backend):
+    """A slot whose assembled payload passes the wire-byte cap is dropped.
+
+    The cap mirrors the HTTP sound-upload route's 25 MiB budget so the
+    WS channel can't write more per upload than the REST one does
+    (GHSA-q5c4-34xp-mvw9 disk-exhaustion primitive).
+    """
+    sim_backend._MAX_AUDIO_UPLOAD_WIRE_BYTES = 8  # tiny cap for the test
+    sim_backend._handle_audio_start(
+        UploadAudioStartCmd(upload_id="big", total_chunks=3)
+    )
+    sim_backend._handle_audio_chunk(
+        UploadAudioChunkCmd(upload_id="big", chunk_index=0, chunk="x" * 5)
+    )
+    assert "big" in sim_backend._audio_chunks
+    sim_backend._handle_audio_chunk(
+        UploadAudioChunkCmd(upload_id="big", chunk_index=1, chunk="x" * 5)
+    )
+    assert "big" not in sim_backend._audio_chunks
+
+
 def test_audio_finish_count_mismatch_writes_nothing(sim_backend, tmp_path):
     """Audio finish with the wrong chunk count writes no file."""
     sim_backend._audio_temp_dir = str(tmp_path)
-    sim_backend._handle_audio_start(
-        UploadAudioStartCmd(upload_id="mm", total_chunks=2)
-    )
+    sim_backend._handle_audio_start(UploadAudioStartCmd(upload_id="mm", total_chunks=2))
     sim_backend._handle_audio_chunk(
         UploadAudioChunkCmd(upload_id="mm", chunk_index=0, chunk="AA==")
     )

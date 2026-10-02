@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import threading
+import uuid
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
@@ -156,9 +157,10 @@ class TurnCredentials:
         """
         period = self._ttl * _TURN_REFRESH_RATIO
         try:
-            from huggingface_hub import get_token
+            # Lazy: the SDK imports this module and must not pull in aiohttp.
+            from reachy_mini.apps.sources.hf_auth import get_hf_token
 
-            token = get_token()
+            token = get_hf_token()
             if not token:
                 # Steady state on a robot nobody has logged in; say so once.
                 if not self._warned_no_token:
@@ -197,6 +199,43 @@ class TurnCredentials:
         self._uris = uris
         logger.info("Refreshed %d TURN server(s): %s", len(uris), _turn_hosts(uris))
         return period
+
+
+# The data channel drops any message over 64 KiB without an error the
+# sender can see (measured on a Wireless robot: 63,996 bytes arrive,
+# 81,569 do not). Messages over the threshold are split, with margin.
+DATA_CHANNEL_MAX_MESSAGE_BYTES = 60_000
+# Characters of the original message per chunk. The chunk envelope is
+# ASCII-escaped JSON, where one character costs at most 12 bytes (an astral
+# code point as a surrogate pair), so a chunk stays under 49,152 + envelope.
+DATA_CHANNEL_CHUNK_CHARS = 4096
+
+
+def split_for_data_channel(message: str) -> List[str]:
+    """Return ``message`` as data channel frames, split when too large.
+
+    A message that fits is returned as is. A larger one becomes ordered
+    ``message_chunk`` frames; the client joins their ``data`` fields back
+    into the original text. The control channel is ordered, so no
+    reordering is handled on either side.
+    """
+    if len(message.encode("utf-8")) <= DATA_CHANNEL_MAX_MESSAGE_BYTES:
+        return [message]
+    message_id = uuid.uuid4().hex
+    size = DATA_CHANNEL_CHUNK_CHARS
+    count = -(-len(message) // size)
+    return [
+        json.dumps(
+            {
+                "type": "message_chunk",
+                "id": message_id,
+                "index": index,
+                "count": count,
+                "data": message[index * size : (index + 1) * size],
+            }
+        )
+        for index in range(count)
+    ]
 
 
 def get_producer_list(host: str, port: int) -> Dict[str, Dict[str, str]]:

@@ -25,7 +25,11 @@ async def endpoint_server(
 ) -> AsyncIterator[EndpointServer]:
     monkeypatch.setenv("NO_PROXY", "127.0.0.1")
     monkeypatch.setenv("no_proxy", "127.0.0.1")
-    monkeypatch.setattr("huggingface_hub.get_token", lambda: "hf_test")
+    monkeypatch.setattr(
+        auth_source,
+        "get_hf_credential",
+        lambda force_refresh=False: auth_source.HfCredential("hf_test", 0),
+    )
     requests: list[web.Request] = []
     responses: dict[str, tuple[int, object]] = {}
     finished = asyncio.Event()

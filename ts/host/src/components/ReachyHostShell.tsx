@@ -675,11 +675,6 @@ function ReachyHostShellNormal({
       appName,
     };
     const hash = encodeCredsToHash(bundle);
-    // Debug-only: the hash carries the user's HF token, so don't print
-    // it in default console output.
-    log.debug(
-      `iframeUrl = ${window.location.origin}/?embedded=1#${hash}`,
-    );
     // Hash creds carry the same data as host:init; the iframe
     // wipes the hash on its first tick (APP_CREATION_GUIDE §13.5.2). The
     // postMessage init is the canonical source once the bridge
