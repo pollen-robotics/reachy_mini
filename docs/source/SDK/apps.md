@@ -173,7 +173,9 @@ class MyApp(ReachyMiniApp):
         # Your main loop...
 ```
 
-When `custom_app_url` is set, the app automatically starts a FastAPI web server that serves files from the `static/` directory inside your package. The dashboard shows a settings icon to open this UI. The page can be accessed from `http://localhost:8042` with a lite or `http://reachy-mini.local:8042` with a wireless.
+When `custom_app_url` is set, the app automatically starts a FastAPI web server that serves files from the `static/` directory inside your package. Reachy Mini Control opens this UI as soon as the server answers. The page can be accessed from `http://localhost:8042` with a lite or `http://reachy-mini.local:8042` with a wireless.
+
+Routes defined in `run()` only exist once `run()` starts: `wrapped_run()` starts the web server first, then connects to the robot, then calls `run()`. The page itself is served, and opened by Reachy Mini Control, from the start. If your page calls its routes as soon as it loads, retry until they respond: the [conversation app](https://github.com/pollen-robotics/reachy_mini_conversation_app/blob/main/src/reachy_mini_conversation_app/static/js/api.js) does this with `untilReady`.
 
 Set `custom_app_url = None` if your app doesn't need a web UI.
 
