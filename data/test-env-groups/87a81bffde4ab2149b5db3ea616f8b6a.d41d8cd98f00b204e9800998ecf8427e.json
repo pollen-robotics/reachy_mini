@@ -1,1 +1,1 @@
-{"id":"87a81bffde4ab2149b5db3ea616f8b6a.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_device_detection.TestParser#test_pulseaudio_device_count","name":"test_pulseaudio_device_count","status":"passed","testResultsByEnv":{"default":"ce2fd419958c129adca6883fb15d0a3e"}}
+{"id":"87a81bffde4ab2149b5db3ea616f8b6a.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_device_detection.TestParser#test_pulseaudio_device_count","name":"test_pulseaudio_device_count","status":"passed","testResultsByEnv":{"default":"7a3385ea13f4baf023efb23b8b616f64"}}

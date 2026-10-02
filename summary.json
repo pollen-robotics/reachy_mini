@@ -2,30 +2,25 @@
   "stats": {
     "total": 1089,
     "passed": 1074,
-    "skipped": 15,
-    "new": 3
+    "skipped": 15
   },
   "status": "passed",
-  "newTests": [
-    "fce79af2147720809f9540c8d4c029a3",
-    "f8799b6aeeec30e5bf5bee3d95a163a1",
-    "de8f227bec705e7554911f71a2621382"
-  ],
+  "newTests": [],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 120869,
-  "createdAt": 1790953019329,
+  "duration": 121228,
+  "createdAt": 1790954340258,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "125687bd-d681-4263-98e4-8d60147199ad",
+    "reportId": "0b8edaac-2a92-455b-b425-3e8834fbc5a2",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/37023011669",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/37025617823",
   "href": "awesome/",
   "coverage": 58
 }
