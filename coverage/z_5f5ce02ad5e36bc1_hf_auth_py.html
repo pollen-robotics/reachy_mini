@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_5f5ce02ad5e36bc1_kinematics_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-10-02 10:10 +0000
+            created at 2026-10-02 11:29 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -431,7 +431,7 @@
     <p class="run"><span class="n"><a id="t349" href="#t349">349</a></span><span class="t">        <span class="nam">daemon</span> <span class="op">=</span> <span class="nam">getattr</span><span class="op">(</span><span class="nam">request</span><span class="op">.</span><span class="nam">app</span><span class="op">.</span><span class="nam">state</span><span class="op">,</span> <span class="str">&quot;daemon&quot;</span><span class="op">,</span> <span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t350" href="#t350">350</a></span><span class="t">        <span class="key">if</span> <span class="nam">daemon</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t351" href="#t351">351</a></span><span class="t">            <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t352" href="#t352">352</a></span><span class="t">                <span class="key">await</span> <span class="nam">daemon</span><span class="op">.</span><span class="nam">_start_central_signaling_relay</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t352" href="#t352">352</a></span><span class="t">                <span class="key">await</span> <span class="nam">daemon</span><span class="op">.</span><span class="nam">start_central_relay_if_running</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t353" href="#t353">353</a></span><span class="t">            <span class="key">except</span> <span class="nam">Exception</span> <span class="key">as</span> <span class="nam">error</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t354" href="#t354">354</a></span><span class="t">                <span class="nam">logger</span><span class="op">.</span><span class="nam">warning</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t355" href="#t355">355</a></span><span class="t">                    <span class="str">&quot;[oauth/device] relay start failed (%s)&quot;</span><span class="op">,</span> <span class="nam">type</span><span class="op">(</span><span class="nam">error</span><span class="op">)</span><span class="op">.</span><span class="nam">__name__</span>&nbsp;</span><span class="r"></span></p>
@@ -497,7 +497,7 @@
     <p class="run"><span class="n"><a id="t415" href="#t415">415</a></span><span class="t">        <span class="nam">daemon</span> <span class="op">=</span> <span class="nam">getattr</span><span class="op">(</span><span class="nam">request</span><span class="op">.</span><span class="nam">app</span><span class="op">.</span><span class="nam">state</span><span class="op">,</span> <span class="str">&quot;daemon&quot;</span><span class="op">,</span> <span class="key">None</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t416" href="#t416">416</a></span><span class="t">        <span class="key">if</span> <span class="nam">daemon</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t417" href="#t417">417</a></span><span class="t">            <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t418" href="#t418">418</a></span><span class="t">                <span class="key">await</span> <span class="nam">daemon</span><span class="op">.</span><span class="nam">_start_central_signaling_relay</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t418" href="#t418">418</a></span><span class="t">                <span class="key">await</span> <span class="nam">daemon</span><span class="op">.</span><span class="nam">start_central_relay_if_running</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t419" href="#t419">419</a></span><span class="t">            <span class="key">except</span> <span class="nam">Exception</span> <span class="key">as</span> <span class="nam">error</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t420" href="#t420">420</a></span><span class="t">                <span class="nam">logger</span><span class="op">.</span><span class="nam">warning</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t421" href="#t421">421</a></span><span class="t">                    <span class="str">&quot;[oauth/callback] relay start failed (%s)&quot;</span><span class="op">,</span> <span class="nam">type</span><span class="op">(</span><span class="nam">error</span><span class="op">)</span><span class="op">.</span><span class="nam">__name__</span>&nbsp;</span><span class="r"></span></p>
@@ -594,7 +594,7 @@
             <a class="nav" href="z_5f5ce02ad5e36bc1_kinematics_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-10-02 10:10 +0000
+            created at 2026-10-02 11:29 +0000
         </p>
     </div>
 </footer>
