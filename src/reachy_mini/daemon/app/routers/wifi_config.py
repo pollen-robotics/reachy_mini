@@ -24,6 +24,15 @@ from reachy_mini.utils.hardware_id import get_pin
 
 HOTSPOT_SSID = "reachy-mini-ap"
 HOTSPOT_PASSWORD = "reachy-mini"
+NMCLI_LOCALE = "C.UTF-8"
+
+
+def _configure_nmcli_locale() -> None:
+    """Keep nmcli output in English without replacing non-ASCII SSIDs."""
+    nmcli.set_lang(NMCLI_LOCALE)
+
+
+_configure_nmcli_locale()
 
 
 router = APIRouter(
