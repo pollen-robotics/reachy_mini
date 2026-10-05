@@ -10,7 +10,7 @@ This exposes:
 import logging
 from collections.abc import Callable
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from reachy_mini.daemon.app.dependencies import get_backend
@@ -87,29 +87,16 @@ async def get_volume() -> VolumeResponse:
 
 
 @router.post("/set")
-async def set_volume(
-    volume_req: VolumeRequest,
-    request: Request,
-) -> VolumeResponse:
-    """Set the output volume level and play a test sound."""
+async def set_volume(volume_req: VolumeRequest) -> VolumeResponse:
+    """Set the output volume level without starting audio playback."""
     vc = _get_volume_control()
-    response = _write_volume(
+    return _write_volume(
         vc.set_output_volume,
         volume_req.volume,
         vc,
         vc.output_device.name,
         "Failed to set volume",
     )
-
-    daemon = getattr(request.app.state, "daemon", None)
-    backend: Backend | None = daemon.backend if daemon is not None else None
-    if backend is not None and backend.ready.is_set():
-        try:
-            backend.play_sound("impatient1.wav")
-        except Exception as e:
-            logger.warning("Failed to play test sound: %s", e)
-
-    return response
 
 
 @router.post("/test-sound")
