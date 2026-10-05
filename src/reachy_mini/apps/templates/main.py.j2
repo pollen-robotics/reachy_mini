@@ -11,7 +11,7 @@ class {{ class_name }}(ReachyMiniApp):
     # eg. "http://localhost:8042"
     custom_app_url: str | None = "http://0.0.0.0:8042"
     # Optional: specify a media backend ("gstreamer", "gstreamer_no_video", "default", etc.)
-    # On the wireless, use gstreamer_no_video to optimise CPU usage if the app does not use video streaming
+    # On the wireless, use gstreamer_no_video to optimise CPU usage if the app does not use video streaming
     request_media_backend: str | None = None
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
@@ -21,7 +21,9 @@ class {{ class_name }}(ReachyMiniApp):
         sound_play_requested = False
 
         # You can ignore this part if you don't want to add settings to your app. If you set custom_app_url to None, you have to remove this part as well.
-        # === vvv ===
+        # === vvv ===
+        # The web server starts before run(), so the page in static/ can load
+        # before these routes exist. If it calls them on load, it should retry.
         class AntennaState(BaseModel):
             enabled: bool
 
