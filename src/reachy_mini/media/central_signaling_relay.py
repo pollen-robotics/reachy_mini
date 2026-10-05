@@ -158,15 +158,13 @@ class CentralSignalingRelay:
         self._http_session: Optional[aiohttp.ClientSession] = None
         self._connection_attempts = 0
         # Reentrancy guard for `_close_connections`. A teardown can be
-        # triggered from three converging paths on the same event loop:
-        #   1. `_reconnect()` scheduled by `force_reconnect()` /
-        #      `update_token()` (via run_coroutine_threadsafe);
-        #   2. `_watch_for_token_update` woken by `_token_updated.set()`
-        #      (which the same `_reconnect()` set);
-        #   3. `_connect_and_relay`'s `finally:` block, fired when
+        # triggered from two converging paths on the same event loop:
+        #   1. `_watch_for_token_update` woken by `_token_updated.set()`,
+        #      which `force_reconnect()` / `update_token()` signal;
+        #   2. `_connect_and_relay`'s `finally:` block, fired when
         #      `_producer_health_loop` ends after its self-triggered
         #      `force_reconnect()` and wins the FIRST_COMPLETED race.
-        # All three call `_close_connections()`. The function used to
+        # Both call `_close_connections()`. The function used to
         # be idempotent only by accident (each `await close()` happens
         # to swallow the "already closed" error); making the invariant
         # explicit so future state cleanup additions can't regress it.
@@ -543,11 +541,8 @@ class CentralSignalingRelay:
         """Shared core of token-change and force-reconnect paths.
 
         Transitions the relay into the right state and signals the run
-        loop to tear down the current connection and try connecting
-        again. Safe to call from any thread - if we have a running
-        thread loop we schedule the close/set there, otherwise we set
-        the event directly (covers the case where the relay has not
-        started its background thread yet).
+        loop, whose active attempt tears its own connection down before
+        the next attempt starts. Safe to call from any thread.
         """
         if token:
             self._set_state(RelayState.RECONNECTING, reason)
@@ -556,12 +551,8 @@ class CentralSignalingRelay:
             self._set_state(RelayState.WAITING_FOR_TOKEN, "Logged out from HuggingFace")
 
         if self._thread_loop and self._thread_loop.is_running():
-
-            async def _reconnect() -> None:
-                await self._close_connections()
-                self._token_updated.set()
-
-            asyncio.run_coroutine_threadsafe(_reconnect(), self._thread_loop)
+            # Closing here would race the next attempt for the shared session.
+            self._thread_loop.call_soon_threadsafe(self._token_updated.set)
         else:
             self._token_updated.set()
 
@@ -587,12 +578,11 @@ class CentralSignalingRelay:
     async def _close_connections(self) -> None:
         """Close all connections.
 
-        Reentrant-safe: three converging paths can call this on the
+        Reentrant-safe: two converging paths can call this on the
         same event loop in quick succession (see ``self._closing`` in
-        ``__init__`` for the full triad). The guard short-circuits the
-        second and third calls so a single teardown can't double-close
-        an already-closing aiohttp session or interleave halfway
-        through the dict clears.
+        ``__init__``). The guard short-circuits the second call so a
+        single teardown can't double-close an already-closing aiohttp
+        session or interleave halfway through the dict clears.
         """
         if self._closing:
             return
@@ -655,6 +645,8 @@ class CentralSignalingRelay:
 
             while self._running:
                 had_exception = False
+                # A signal from before this attempt is already reflected in it.
+                self._token_updated.clear()
                 try:
                     await self._connect_and_relay()
                 except asyncio.CancelledError:
@@ -748,7 +740,6 @@ class CentralSignalingRelay:
                 "Login to HuggingFace to enable remote access",
             )
             # Wait longer when no token - user needs to log in
-            self._token_updated.clear()
             try:
                 await asyncio.wait_for(
                     self._token_updated.wait(), timeout=TOKEN_CHECK_INTERVAL
