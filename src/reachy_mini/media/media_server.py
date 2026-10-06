@@ -301,6 +301,7 @@ class GstMediaServer:
         # reused across per-peer playback pipelines (see _on_consumer_pad_added).
         self._aec_enabled = False
         self._webrtcechoprobe: Optional[Gst.Element] = None
+
         if enable_turn is None:
             # Deferred like the speaker-EQ lookup in audio_utils, so this
             # module doesn't pull in the daemon package at import time.
