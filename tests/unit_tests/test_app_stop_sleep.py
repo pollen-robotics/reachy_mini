@@ -27,6 +27,8 @@ def _manager_with_head_pose(head_pose: np.ndarray) -> tuple[AppManager, AsyncMoc
         SLEEP_HEAD_POSE=Backend.SLEEP_HEAD_POSE,
         goto_target=goto_target,
         set_motor_control_mode=MagicMock(),
+        is_move_running=False,
+        request_stop_move=MagicMock(return_value=False),
     )
     mngr = AppManager(daemon=SimpleNamespace(backend=backend))
     mngr.current_app = _fake_current_app()  # type: ignore[assignment]
@@ -35,6 +37,7 @@ def _manager_with_head_pose(head_pose: np.ndarray) -> tuple[AppManager, AsyncMoc
 
 @pytest.mark.asyncio
 async def test_stop_leaves_robot_asleep_when_in_sleep_pose() -> None:
+    """Leave a sleep-pose robot limp; do not call goto_target."""
     mngr, goto_target = _manager_with_head_pose(Backend.SLEEP_HEAD_POSE.copy())
     await mngr.stop_current_app()
     goto_target.assert_not_awaited()
@@ -47,6 +50,7 @@ async def test_stop_leaves_robot_asleep_when_in_sleep_pose() -> None:
 
 @pytest.mark.asyncio
 async def test_stop_returns_to_zero_when_awake() -> None:
+    """Return an awake robot to the zero pose on stop."""
     mngr, goto_target = _manager_with_head_pose(np.eye(4))
     await mngr.stop_current_app()
     goto_target.assert_awaited_once()
