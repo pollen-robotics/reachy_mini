@@ -117,6 +117,7 @@ Pick the reference closest to your needs and clone its repo from Hugging Face:
 | [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | **Vanilla TS + Vite**       | Smallest bundled runtime, no framework      |
 | [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions)               | React 19 + MUI 7 + Vite     | UI-rich app with rich components / theming  |
 | [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence)       | React 19 + MUI 7 + Vite     | App with camera / media streams             |
+| [`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app) | Vanilla TS + Vite           | Tour of every SDK primitive                 |
 
 ```bash
 # Example: start from the vanilla TS template
@@ -129,7 +130,7 @@ npm run dev
 # → http://localhost:5173
 ```
 
-All three reference apps pin `@pollen-robotics/reachy-mini-sdk` to
+All reference apps pin `@pollen-robotics/reachy-mini-sdk` to
 the same exact version (the latest npm release) in their
 `package.json` - see [§10 SDK version pinning](#10-sdk-version-pinning).
 

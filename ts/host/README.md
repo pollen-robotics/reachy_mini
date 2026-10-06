@@ -125,7 +125,7 @@ for the detailed walk-through and reference apps.
 
 ## Reference apps
 
-Three open-source apps live alongside this package and are kept in lockstep
+These open-source apps live alongside this package and are kept in lockstep
 with every release:
 
 | App | Stack | What it shows |
@@ -133,6 +133,7 @@ with every release:
 | [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | Vanilla TypeScript | Smallest possible app. Tech-freedom proof. |
 | [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions) | React + MUI | Plutchik emotion wheel + dance triggers. |
 | [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence) | React + MUI | Live video + head / body teleop. |
+| [`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app) | Vanilla TypeScript | Tour of every SDK primitive: camera, 3D pose view, moves, conversation. |
 
 App authors are free to use any UI framework they want inside the iframe; the
 host doesn't care. This is a hard design rule, not an accident
