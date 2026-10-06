@@ -598,14 +598,8 @@ def set_microphones_muted(muted: bool) -> bool:
     respeaker = init_respeaker_usb()
     if respeaker is None:
         return False
-    try:
-        respeaker.write("GPO_WRITE_VALUE", [MIC_MUTE_PIN, int(muted)])
-        for channel in OUTPUT_CHANNELS:
-            if muted:
-                respeaker.write(channel, list(SILENT_OUTPUT))
-            elif respeaker.read_values(channel) == SILENT_OUTPUT:
-                respeaker.write(channel, list(DEFAULT_OUTPUT))
-        time.sleep(WRITE_SETTLE_SECONDS)
+
+    def in_requested_state() -> bool:
         pins = respeaker.read_values("GPO_READ_VALUES")
         silent = [respeaker.read_values(c) == SILENT_OUTPUT for c in OUTPUT_CHANNELS]
         return (
@@ -613,6 +607,19 @@ def set_microphones_muted(muted: bool) -> bool:
             and pins[MIC_MUTE_PIN_READ_INDEX] == int(muted)
             and (all(silent) if muted else not any(silent))
         )
+
+    try:
+        # The usual case at daemon start: nothing to change, nothing to wait for.
+        if in_requested_state():
+            return True
+        respeaker.write("GPO_WRITE_VALUE", [MIC_MUTE_PIN, int(muted)])
+        for channel in OUTPUT_CHANNELS:
+            if muted:
+                respeaker.write(channel, list(SILENT_OUTPUT))
+            elif respeaker.read_values(channel) == SILENT_OUTPUT:
+                respeaker.write(channel, list(DEFAULT_OUTPUT))
+        time.sleep(WRITE_SETTLE_SECONDS)
+        return in_requested_state()
     except Exception as e:  # noqa: BLE001 - a USB error is a failed mute
         logger.warning("Could not mute or unmute the microphones: %s", e)
         return False

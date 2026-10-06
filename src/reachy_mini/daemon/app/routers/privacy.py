@@ -5,6 +5,8 @@ Privacy mode cuts the camera and the microphones for every consumer (see
 NFC privacy hat is a second, independent one.
 """
 
+import asyncio
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -42,5 +44,6 @@ async def set_privacy(
     Switching it off only withdraws this API's request: the answer still says
     ``enabled`` while a privacy hat is on the robot's head.
     """
-    daemon.privacy.set("api", request.enabled)
+    # Muting the microphones is a USB round trip: keep it off the event loop.
+    await asyncio.to_thread(daemon.privacy.set, "api", request.enabled)
     return PrivacyStatus(enabled=daemon.privacy.enabled, sources=daemon.privacy.sources)
