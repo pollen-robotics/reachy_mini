@@ -20,11 +20,12 @@ from gi.repository import Gst  # noqa: E402
 
 from reachy_mini.daemon.app.dependencies import get_daemon  # noqa: E402
 from reachy_mini.daemon.app.routers import media, privacy  # noqa: E402
-from reachy_mini.daemon.privacy import PrivacyMode  # noqa: E402
+from reachy_mini.daemon.privacy import PrivacyMode, is_privacy_tag  # noqa: E402
 from reachy_mini.io.protocol import SetPrivacyCmd  # noqa: E402
 from reachy_mini.media import audio_control_utils  # noqa: E402
 from reachy_mini.media.camera_constants import CameraResolution  # noqa: E402
 from reachy_mini.media.media_server import GstMediaServer  # noqa: E402
+from reachy_mini.nfc.reader import NfcTag  # noqa: E402
 
 Gst.init([])
 
@@ -146,6 +147,15 @@ def test_privacy_works_without_a_media_server(tmp_path: Path) -> None:
 
     assert mode.set("api", True) is True
     assert mutes == [False, True]
+
+
+# ------------------------------------------------------------------ the hat
+
+
+def test_only_a_tag_carrying_the_privacy_text_is_a_privacy_hat() -> None:
+    assert is_privacy_tag(NfcTag(present=True, uid="04", content="privacy"))
+    assert not is_privacy_tag(NfcTag(present=True, uid="04", content="hf_pirate"))
+    assert not is_privacy_tag(NfcTag(present=False))
 
 
 # ----------------------------------------------------------- the microphones

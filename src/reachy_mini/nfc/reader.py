@@ -524,6 +524,7 @@ class NfcReader:
         retry_interval: float = RETRY_INTERVAL,
         session_factory: Callable[[str], NfcSession] | None = None,
         absence_polls: int = ABSENCE_POLLS,
+        on_tag_change: Callable[[NfcTag], None] | None = None,
     ) -> None:
         """Create the reader (does not open the serial link yet).
 
@@ -536,6 +537,10 @@ class NfcReader:
             absence_polls: consecutive polls without an answer before a tag is
                 declared gone. Detection misses a poll now and then, so a
                 single miss must not read as a removal.
+            on_tag_change: called from the reader thread each time a tag is
+                put on the reader, swapped or confirmed gone. It is not called
+                when the reader itself is lost or switched off: losing the
+                reader says nothing about the tag.
 
         """
         self._port_setting = port
@@ -544,6 +549,7 @@ class NfcReader:
         self._retry_interval = retry_interval
         self._absence_polls = max(1, absence_polls)
         self._session_factory = session_factory or Clrc663Session
+        self._on_tag_change = on_tag_change
 
         self._thread: threading.Thread | None = None
         self._should_stop = threading.Event()
@@ -770,17 +776,28 @@ class NfcReader:
             self._chip_detected = True
             self._last_seen_at = _now()
             self._error = None
+            previous = self._tag
 
             if tag.present:
                 self._misses = 0
                 self._tag = tag
-                return
+            else:
+                # No answer. Keep the last known tag until absence is
+                # confirmed, so one missed detection does not read as a removal.
+                self._misses += 1
+                if self._misses >= self._absence_polls or not self._tag.present:
+                    self._tag = tag
+            current = self._tag
 
-            # No answer. Keep the last known tag until absence is confirmed,
-            # so one missed detection does not read as a removal.
-            self._misses += 1
-            if self._misses >= self._absence_polls or not self._tag.present:
-                self._tag = tag
+        if self._on_tag_change is not None and (
+            current.present,
+            current.uid,
+            current.content,
+        ) != (previous.present, previous.uid, previous.content):
+            try:
+                self._on_tag_change(current.model_copy(deep=True))
+            except Exception as e:  # noqa: BLE001 - a listener must not stop the reader
+                logger.warning("NFC tag listener failed: %s", e)
 
     def _close(self, session: NfcSession | None) -> None:
         if session is None:

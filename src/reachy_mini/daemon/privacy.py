@@ -23,17 +23,28 @@ import json
 import logging
 import threading
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from reachy_mini.media.audio_control_utils import set_microphones_muted
 
+if TYPE_CHECKING:
+    from reachy_mini.nfc import NfcTag
+
 logger = logging.getLogger(__name__)
+
+# Text carried by the NFC tag of a privacy hat.
+PRIVACY_TAG_CONTENT = "privacy"
 
 # The only source that survives a daemon restart: a hat still on the head is
 # reported again by the reader within one poll.
 PERSISTED_SOURCE = "api"
 
 _STATE_PATH = Path.home() / ".config" / "reachy_mini" / "privacy.json"
+
+
+def is_privacy_tag(tag: NfcTag) -> bool:
+    """Whether the tag on the reader is a privacy hat."""
+    return tag.present and tag.content == PRIVACY_TAG_CONTENT
 
 
 class PrivacyMode:

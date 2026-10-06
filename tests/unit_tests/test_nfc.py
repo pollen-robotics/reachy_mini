@@ -813,3 +813,41 @@ def test_a_successful_write_reports_success(fake_ntag_reader):
     assert session.write("badge", None).success
     assert session.write(None, "https://pollen-robotics.com").success
     assert session.chip_version == "0x1A"
+
+
+# ------------------------------------------------------------ tag listener
+
+
+def test_reader_reports_a_tag_once_when_it_appears_and_once_when_it_leaves(
+    driver_installed,
+):
+    hat = NfcTag(present=True, uid="04A1", readable=True, content="privacy")
+    session = FakeSession(tag=hat)
+    seen = []
+    reader = make_reader(session, on_tag_change=seen.append, absence_polls=2)
+    started(reader)
+    try:
+        assert wait_until(lambda: len(seen) == 1)
+        polls = session.polls
+        assert wait_until(lambda: session.polls > polls + 5)
+        assert len(seen) == 1 and seen[0].content == "privacy"
+
+        session.tag = NfcTag(present=False)
+        assert wait_until(lambda: len(seen) == 2)
+        assert seen[1].present is False
+    finally:
+        reader.stop()
+
+
+def test_losing_the_reader_does_not_report_the_hat_as_removed(
+    driver_installed,
+):
+    hat = NfcTag(present=True, uid="04A1", readable=True, content="privacy")
+    seen = []
+    reader = make_reader(FakeSession(tag=hat), on_tag_change=seen.append)
+    started(reader)
+    assert wait_until(lambda: len(seen) == 1)
+
+    reader.stop()
+
+    assert [tag.present for tag in seen] == [True]
