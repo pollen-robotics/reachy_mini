@@ -133,7 +133,7 @@ See and run `examples/minimal_demo.py` - demonstrates connection, head motion, a
 >
 > That guide is the **single source of truth** for building a Reachy Mini JS app: scaffolding, `public/icon.svg`, host shell, `sdk: static` deploy, `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host ↔ embed architecture reference. Everything that used to live in `SPEC.md` and `APP_AUTHOR_GUIDE.md` is folded in.
 >
-> **SDK pin**: all three reference apps pin the latest stable `@pollen-robotics/reachy-mini-sdk` release from [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk). Install with `npm install @pollen-robotics/reachy-mini-sdk@latest`. See [§10 SDK version pinning](ts/APP_CREATION_GUIDE.md#10-sdk-version-pinning).
+> **SDK pin**: all reference apps pin the latest stable `@pollen-robotics/reachy-mini-sdk` release from [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk). Install with `npm install @pollen-robotics/reachy-mini-sdk@latest`. See [§10 SDK version pinning](ts/APP_CREATION_GUIDE.md#10-sdk-version-pinning).
 
 Browser apps that drive a Reachy Mini over WebRTC, deployed as Hugging Face Spaces. Any HF-authenticated user opens the Space URL from anywhere and reaches any robot they have access to, through the central signaling server.
 
@@ -150,9 +150,10 @@ Browser apps that drive a Reachy Mini over WebRTC, deployed as Hugging Face Spac
 
 | Reference app | Stack | Use it for |
 |---|---|---|
-| [`pollen-robotics/reachy_mini_minimal_conversation`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation) | **Vanilla TS + Vite** | Smallest runtime, zero framework. |
-| [`pollen-robotics/reachy_mini_emotions`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions) | React 19 + MUI 7 + Vite | UI-rich apps (rich components, theming, deep links). |
-| [`pollen-robotics/reachy_mini_telepresence`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence) | React 19 + MUI 7 + Vite | Camera / media-stream apps. |
+| [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | **Vanilla TS + Vite** | Smallest runtime, zero framework. |
+| [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions) | React 19 + MUI 7 + Vite | UI-rich apps (rich components, theming, deep links). |
+| [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence) | React 19 + MUI 7 + Vite | Camera / media-stream apps. |
+| [`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app) | Vanilla TS + Vite | Tour of every SDK primitive (camera, 3D pose view, moves, conversation). |
 
 These are kept in lockstep with every SDK release. **Mimicking them is the fastest path to a working app.** The 3-file contract, deploy steps, gotchas, and SDK pin all live in [`ts/APP_CREATION_GUIDE.md`](ts/APP_CREATION_GUIDE.md) - read it before scaffolding anything non-trivial.
 
