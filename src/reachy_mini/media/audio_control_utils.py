@@ -563,6 +563,63 @@ def init_respeaker_usb() -> Optional[ReSpeaker]:
         return None
 
 
+# Microphone mute pin (X0D30): its number for GPO_WRITE_VALUE and its position
+# in GPO_READ_VALUES.
+MIC_MUTE_PIN = 30
+MIC_MUTE_PIN_READ_INDEX = 1
+# AUDIO_MGR_OP_L / AUDIO_MGR_OP_R values: (category, source). Category 0 is
+# silence; (8, 0) is the firmware default, the auto-selected beam.
+SILENT_OUTPUT = (0, 0)
+DEFAULT_OUTPUT = (8, 0)
+OUTPUT_CHANNELS = ("AUDIO_MGR_OP_L", "AUDIO_MGR_OP_R")
+
+
+def set_microphones_muted(muted: bool) -> bool:
+    """Mute or unmute the microphones inside the audio chip.
+
+    The mute happens upstream of everything that records: the daemon's WebRTC
+    stream, on-device apps, and any other program reading the sound card.
+    Two things are set:
+
+    - the chip's mute pin, which cuts the microphones themselves;
+    - the output routing, set to silence. With the pin alone the output still
+      carries a faint residue of the echo canceller whenever the speaker
+      plays; with the routing it is exact zeros.
+
+    Unmuting only undoes that: an output channel that is not silent is left as
+    it is, and a silent one goes back to the firmware default. Both settings
+    are volatile, so a chip reset unmutes the microphones.
+
+    Returns:
+        bool: True when the chip reports the requested state, False when it
+        does not or when there is no Reachy Mini Audio board.
+
+    """
+    respeaker = init_respeaker_usb()
+    if respeaker is None:
+        return False
+    try:
+        respeaker.write("GPO_WRITE_VALUE", [MIC_MUTE_PIN, int(muted)])
+        for channel in OUTPUT_CHANNELS:
+            if muted:
+                respeaker.write(channel, list(SILENT_OUTPUT))
+            elif respeaker.read_values(channel) == SILENT_OUTPUT:
+                respeaker.write(channel, list(DEFAULT_OUTPUT))
+        time.sleep(WRITE_SETTLE_SECONDS)
+        pins = respeaker.read_values("GPO_READ_VALUES")
+        silent = [respeaker.read_values(c) == SILENT_OUTPUT for c in OUTPUT_CHANNELS]
+        return (
+            pins is not None
+            and pins[MIC_MUTE_PIN_READ_INDEX] == int(muted)
+            and (all(silent) if muted else not any(silent))
+        )
+    except Exception as e:  # noqa: BLE001 - a USB error is a failed mute
+        logger.warning("Could not mute or unmute the microphones: %s", e)
+        return False
+    finally:
+        respeaker.close()
+
+
 def main() -> None:
     """Parse arguments and execute read/write commands."""
     parser = argparse.ArgumentParser(

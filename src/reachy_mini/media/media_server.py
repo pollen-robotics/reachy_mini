@@ -174,6 +174,13 @@ class GstMediaServer:
     # both when building the pipeline and when flushing it (clear_incoming_audio).
     INCOMING_AUDIO_SRC_NAME = "audio_in"
 
+    # Privacy mode (see set_privacy). The flag outlives the elements, which
+    # are re-created each time the pipeline is rebuilt.
+    _privacy = False
+    _privacy_black: Optional[Gst.Element] = None
+    _privacy_label: Optional[Gst.Element] = None
+    _privacy_mute: Optional[Gst.Element] = None
+
     def __init__(
         self,
         log_level: str = "INFO",
@@ -285,7 +292,6 @@ class GstMediaServer:
         # reused across per-peer playback pipelines (see _on_consumer_pad_added).
         self._aec_enabled = False
         self._webrtcechoprobe: Optional[Gst.Element] = None
-
         if enable_turn is None:
             # Deferred like the speaker-EQ lookup in audio_utils, so this
             # module doesn't pull in the daemon package at import time.
@@ -841,6 +847,9 @@ class GstMediaServer:
             last_source.link(capsfilter_raw)
             last_source = capsfilter_raw
 
+        # Privacy filter, before the tee so that no branch can be missed.
+        last_source = self._add_privacy_filter(pipeline, last_source)
+
         # --- Tee: split into IPC + WebRTC branches ---
         tee = Gst.ElementFactory.make("tee")
         pipeline.add(tee)
@@ -1225,10 +1234,10 @@ class GstMediaServer:
             for upstream, downstream in zip(chain, chain[1:]):
                 upstream.link(downstream)
             chain[-1].link(webrtcdsp)
-            webrtcdsp.link(queue)
+            self._add_privacy_mute(pipeline, webrtcdsp).link(queue)
             self._logger.info("No hardware AEC; enabled software echo cancellation.")
         else:
-            audiosrc.link(queue)
+            self._add_privacy_mute(pipeline, audiosrc).link(queue)
 
         # Link into webrtcsink last, once the full upstream chain exists, so its
         # request pad / stream discovery sees a fully-linked input.
@@ -1340,6 +1349,84 @@ class GstMediaServer:
         """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
         self._pipeline_sender.set_state(Gst.State.NULL)
+
+    def set_privacy(self, enabled: bool) -> None:
+        """Black out the camera and silence the streamed microphone, or restore them.
+
+        Nothing is stopped: every consumer keeps receiving frames and audio,
+        so no app or remote session has to reconnect. The frames are black
+        with a "privacy mode" label, the audio is silence.
+
+        This only covers what flows through this pipeline. On-device apps
+        read the sound card directly: for them the microphones are muted in
+        the audio chip (see ``audio_control_utils.set_microphones_muted``).
+        """
+        self._privacy = enabled
+        self._apply_privacy()
+
+    def _apply_privacy(self) -> None:
+        if self._privacy_black is not None:
+            # Neutral values put videobalance in passthrough.
+            self._privacy_black.set_property(
+                "brightness", -1.0 if self._privacy else 0.0
+            )
+            self._privacy_black.set_property("contrast", 0.0 if self._privacy else 1.0)
+            self._privacy_black.set_property(
+                "saturation", 0.0 if self._privacy else 1.0
+            )
+        if self._privacy_label is not None:
+            self._privacy_label.set_property("alpha", 1.0 if self._privacy else 0.0)
+        if self._privacy_mute is not None:
+            self._privacy_mute.set_property("mute", self._privacy)
+
+    def _add_privacy_filter(
+        self, pipeline: Gst.Pipeline, upstream: Gst.Element
+    ) -> Gst.Element:
+        """Add the camera privacy filter after ``upstream`` and return its last element.
+
+        Both elements work in place on the camera's own buffers, so the
+        FD-backed buffers the IPC branch needs on the wireless are preserved.
+        The black-out is what privacy relies on; the label only tells a viewer
+        why the picture is black, and is skipped where its plugin is missing.
+        """
+        black = Gst.ElementFactory.make("videobalance", "privacy_black")
+        if black is None:
+            raise RuntimeError("Failed to create the privacy filter (videobalance)")
+        pipeline.add(black)
+        upstream.link(black)
+        last = black
+
+        label = Gst.ElementFactory.make("gdkpixbufoverlay", "privacy_label")
+        if label is not None:
+            width = int(self.resolution[0] * 0.6)
+            label.set_property("location", f"{ASSETS_ROOT_PATH}/privacy_mode.png")
+            label.set_property("overlay-width", width)
+            label.set_property("overlay-height", width // 4)  # the image is 4:1
+            # Centre the image on the frame.
+            label.set_property("positioning-mode", "pixels-absolute")
+            for axis in ("x", "y"):
+                label.set_property(f"coef-{axis}", 0.5)
+                label.set_property(f"relative-{axis}", -0.5)
+            pipeline.add(label)
+            black.link(label)
+            last = label
+
+        self._privacy_black, self._privacy_label = black, label
+        self._apply_privacy()
+        return last
+
+    def _add_privacy_mute(
+        self, pipeline: Gst.Pipeline, upstream: Gst.Element
+    ) -> Gst.Element:
+        """Add the microphone privacy mute after ``upstream`` and return it."""
+        mute = Gst.ElementFactory.make("volume", "privacy_mute")
+        if mute is None:
+            raise RuntimeError("Failed to create the privacy mute (volume)")
+        pipeline.add(mute)
+        upstream.link(mute)
+        self._privacy_mute = mute
+        self._apply_privacy()
+        return mute
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker.

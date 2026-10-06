@@ -37,6 +37,7 @@ from reachy_mini.daemon.app.routers import (
     motors,
     move,
     nfc,
+    privacy,
     sdk_ws,
     state,
     volume,
@@ -352,6 +353,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(motors.router)
     router.include_router(move.router)
     router.include_router(nfc.router)
+    router.include_router(privacy.router)
     router.include_router(state.router)
     router.include_router(volume.router)
 
