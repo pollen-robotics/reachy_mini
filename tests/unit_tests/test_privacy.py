@@ -298,6 +298,37 @@ def test_privacy_blacks_out_camera_frames_and_restores_them() -> None:
         pipeline.set_state(Gst.State.NULL)
 
 
+def test_an_unusable_label_image_does_not_break_the_camera(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # The image is stored with Git LFS: an install that skipped LFS gets a
+    # text pointer, which the overlay element refuses with a pipeline error.
+    (tmp_path / "privacy_mode.png").write_text("version https://git-lfs.github.com")
+    monkeypatch.setattr(
+        "reachy_mini.media.media_server.ASSETS_ROOT_PATH", str(tmp_path)
+    )
+    server = _make_server()
+    server.set_privacy(True)
+    pipeline = Gst.Pipeline.new("privacy_no_label_test")
+    source = Gst.ElementFactory.make("videotestsrc")
+    caps = Gst.ElementFactory.make("capsfilter")
+    caps.set_property(
+        "caps", Gst.Caps.from_string("video/x-raw,format=I420,width=1280,height=720")
+    )
+    appsink = Gst.ElementFactory.make("appsink")
+    for element in (source, caps, appsink):
+        pipeline.add(element)
+    source.link(caps)
+    server._add_privacy_filter(pipeline, caps).link(appsink)
+
+    pipeline.set_state(Gst.State.PLAYING)
+    try:
+        frame = np.frombuffer(_pull(appsink, 2), dtype=np.uint8)
+        assert frame[: 1280 * 720].max() == 0  # black, simply without the label
+    finally:
+        pipeline.set_state(Gst.State.NULL)
+
+
 def test_privacy_silences_the_streamed_microphone() -> None:
     server = _make_server()
     pipeline = Gst.Pipeline.new("privacy_audio_test")

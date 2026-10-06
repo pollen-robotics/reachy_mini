@@ -92,6 +92,15 @@ SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 IPC_FPS = 10
 
 
+def _is_png(path: str) -> bool:
+    """Whether ``path`` is a readable PNG file."""
+    try:
+        with open(path, "rb") as f:
+            return f.read(8) == b"\x89PNG\r\n\x1a\n"
+    except OSError:
+        return False
+
+
 @dataclass
 class _PeerWebRTCState:
     """Live state of a single WebRTC peer's negotiation.
@@ -1387,7 +1396,8 @@ class GstMediaServer:
         Both elements work in place on the camera's own buffers, so the
         FD-backed buffers the IPC branch needs on the wireless are preserved.
         The black-out is what privacy relies on; the label only tells a viewer
-        why the picture is black, and is skipped where its plugin is missing.
+        why the picture is black, and is skipped where its plugin or its image
+        is missing.
         """
         black = Gst.ElementFactory.make("videobalance", "privacy_black")
         if black is None:
@@ -1396,10 +1406,15 @@ class GstMediaServer:
         upstream.link(black)
         last = black
 
-        label = Gst.ElementFactory.make("gdkpixbufoverlay", "privacy_label")
+        # The element fails the whole pipeline on an image it cannot load,
+        # such as the text pointer left by an install that skipped Git LFS.
+        image = f"{ASSETS_ROOT_PATH}/privacy_mode.png"
+        label = None
+        if _is_png(image):
+            label = Gst.ElementFactory.make("gdkpixbufoverlay", "privacy_label")
         if label is not None:
             width = int(self.resolution[0] * 0.6)
-            label.set_property("location", f"{ASSETS_ROOT_PATH}/privacy_mode.png")
+            label.set_property("location", image)
             label.set_property("overlay-width", width)
             label.set_property("overlay-height", width // 4)  # the image is 4:1
             # Centre the image on the frame.
