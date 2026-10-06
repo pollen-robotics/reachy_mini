@@ -1,17 +1,20 @@
 import time
+from unittest.mock import MagicMock
 
 import numpy as np
 import numpy.typing as npt
 import pytest
 
 from reachy_mini.daemon.utils import is_local_camera_available
+from reachy_mini.media import camera_gstreamer
+from reachy_mini.media.camera_base import CameraBase
 from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
+from reachy_mini.media.camera_gstreamer import GStreamerCamera
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
-from reachy_mini.media.camera_base import CameraBase
 
 SIGNALING_HOST = "reachy-mini.local"
 
@@ -20,6 +23,31 @@ VIDEO_BACKENDS = [
     pytest.param(MediaBackend.LOCAL),
     pytest.param(MediaBackend.WEBRTC, marks=pytest.mark.wireless),
 ]
+
+
+@pytest.mark.video
+def test_open_close_open_defers_initial_frame_wait_until_first_read(
+    ipc_video_source: CameraSpecs,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Camera readiness waits on first use instead of startup."""
+    get_sample = MagicMock(return_value=None)
+    monkeypatch.setattr(camera_gstreamer, "get_sample", get_sample)
+    camera = GStreamerCamera(camera_specs=ipc_video_source)
+
+    try:
+        camera.open()
+        camera.close()
+        camera.open()
+        get_sample.assert_not_called()
+        assert camera.read() is None
+        assert camera.read() is None
+    finally:
+        camera.close()
+
+    first_call, second_call = get_sample.call_args_list
+    assert first_call.kwargs == {"timeout_ns": 2 * camera_gstreamer.Gst.SECOND}
+    assert second_call.kwargs == {}
 
 
 @pytest.mark.video
@@ -124,7 +152,7 @@ def test_change_resolution_errors(backend: MediaBackend) -> None:
     with pytest.raises(RuntimeError):
         media.camera.set_resolution(CameraResolution.R1280x720at30fps)
 
-    # TODO: uncomment this when we actually support resolution change for Mujoco cameras. 
+    # TODO: uncomment this when we actually support resolution change for Mujoco cameras.
     # We currently only log a warning to avoid raising an error when the camera is initialized in `init_camera()`
     # media.camera.camera_specs = MujocoCameraSpecs()
     # with pytest.raises(RuntimeError):
