@@ -1458,7 +1458,7 @@
     "/api/media/release": {
       "post": {
         "summary": "Release Media",
-        "description": "Release camera and audio hardware for direct client access.",
+        "description": "Release camera and audio hardware for direct client access.\n\nRefused while privacy mode is on: releasing hands the live camera and\nsound card to the caller.",
         "operationId": "release_media_api_media_release_post",
         "responses": {
           "200": {
@@ -2395,6 +2395,62 @@
         }
       }
     },
+    "/api/privacy": {
+      "get": {
+        "summary": "Get Privacy",
+        "description": "Get the privacy mode status.",
+        "operationId": "get_privacy_api_privacy_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacyStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Set Privacy",
+        "description": "Switch privacy mode on or off.\n\nSwitching it off only withdraws this API's request: the answer still says\n``enabled`` while a privacy hat is on the robot's head.",
+        "operationId": "set_privacy_api_privacy_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrivacyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacyStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/state/present_head_pose": {
       "get": {
         "summary": "Get Head Pose",
@@ -3197,6 +3253,11 @@
           "media_released": {
             "type": "boolean",
             "title": "Media Released",
+            "default": false
+          },
+          "privacy": {
+            "type": "boolean",
+            "title": "Privacy",
             "default": false
           },
           "camera_specs_name": {
@@ -4314,6 +4375,42 @@
         ],
         "title": "PlaySoundRequest",
         "description": "Request body for the play_sound endpoint."
+      },
+      "PrivacyRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "PrivacyRequest",
+        "description": "Request body to switch privacy mode on or off."
+      },
+      "PrivacyStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "sources"
+        ],
+        "title": "PrivacyStatus",
+        "description": "Whether privacy mode is on, and who is asking for it."
       },
       "PrivateSpaceInstallRequest": {
         "properties": {
