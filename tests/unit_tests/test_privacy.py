@@ -298,6 +298,57 @@ def test_privacy_blacks_out_camera_frames_and_restores_them() -> None:
         pipeline.set_state(Gst.State.NULL)
 
 
+def _filter_on_wireless(
+    monkeypatch: pytest.MonkeyPatch, sensor_confirms: bool
+) -> tuple[GstMediaServer, list[bool]]:
+    """Build the privacy filter as on the wireless, with a fake camera sensor."""
+    asked: list[bool] = []
+
+    def fake_sensor(enabled: bool) -> bool:
+        asked.append(enabled)
+        return sensor_confirms
+
+    monkeypatch.setattr(
+        "reachy_mini.media.media_server._set_sensor_test_pattern", fake_sensor
+    )
+    server = _make_server()
+    pipeline = Gst.Pipeline.new("privacy_sensor_test")
+    source = Gst.ElementFactory.make("videotestsrc")
+    pipeline.add(source)
+    server._add_privacy_filter(pipeline, source, sensor_pattern=True)
+    return server, asked
+
+
+def test_on_the_wireless_the_sensor_blanks_the_picture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Blacking frames out in software takes about 200 ms per frame there.
+    server, asked = _filter_on_wireless(monkeypatch, sensor_confirms=True)
+
+    server.set_privacy(True)
+    assert asked[-1] is True
+    assert server._privacy_black.get_property("brightness") == 0.0  # left idle
+
+    server.set_privacy(False)
+    assert asked[-1] is False
+
+
+def test_frames_are_blacked_out_when_the_sensor_does_not_confirm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    server, _ = _filter_on_wireless(monkeypatch, sensor_confirms=False)
+
+    server.set_privacy(True)
+
+    assert server._privacy_black.get_property("brightness") == -1.0
+
+
+def test_the_sensor_pattern_is_unavailable_without_the_wireless_camera() -> None:
+    from reachy_mini.media.media_server import _set_sensor_test_pattern
+
+    assert _set_sensor_test_pattern(True) is False
+
+
 def test_an_unusable_label_image_does_not_break_the_camera(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
