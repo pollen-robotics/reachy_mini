@@ -806,6 +806,29 @@ def test_erase_shares_the_write_error_map(fake_ntag_reader):
     assert fake_ntag_reader.erased == [True]
 
 
+def test_a_write_is_seen_without_lifting_the_tag(fake_ntag_reader):
+    # The session only re-reads a tag when its UID changes; a write keeps the
+    # UID, so it must drop the cached content itself.
+    from reachy_mini.nfc.reader import Clrc663Session
+
+    session = Clrc663Session("/dev/null")
+    reads = []
+
+    def read_tag():
+        reads.append(1)
+        return reading(records=[{"type": "text", "value": f"v{len(reads)}"}])
+
+    session._reader.uid = lambda: b"\x04\xa1"
+    session._reader.read_tag = read_tag
+
+    assert session.read_tag().records[0].value == "v1"
+    assert session.read_tag().records[0].value == "v1"  # cached
+    assert session.write("v2", None).success
+    assert session.read_tag().records[0].value == "v2"
+    assert session.erase(full=False).success
+    assert session.read_tag().records[0].value == "v3"
+
+
 def test_a_successful_write_reports_success(fake_ntag_reader):
     from reachy_mini.nfc.reader import Clrc663Session
 

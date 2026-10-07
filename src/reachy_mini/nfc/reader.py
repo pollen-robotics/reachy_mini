@@ -354,6 +354,10 @@ class Clrc663Session:
         from winnie_nfc import ndef, type2
         from winnie_nfc.core import CollisionError, NoTagError, TagError
 
+        # The tag keeps its UID across a write, so the cached read would
+        # otherwise be served until the tag is lifted off. Dropped whatever
+        # the outcome: a failed write may still have changed some pages.
+        self._forget()
         try:
             operation(self._reader)
         except NoTagError as e:
