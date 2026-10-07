@@ -151,9 +151,13 @@ class FullState(BaseModel):
 
     control_mode: MotorControlMode | None = None
     head_pose: AnyPose | None = None
+    target_head_pose: AnyPose | None = None
     head_joints: list[float] | None = None
+    target_head_joints: list[float] | None = None
     body_yaw: float | None = None
+    target_body_yaw: float | None = None
     antennas_position: list[float] | None = None
+    target_antennas_position: list[float] | None = None
     timestamp: datetime | None = None
     passive_joints: list[float] | None = None
     doa: DoAInfo | None = None
