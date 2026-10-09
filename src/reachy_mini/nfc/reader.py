@@ -55,6 +55,13 @@ RETRY_INTERVAL = 2.0
 # touched, so absence has to be confirmed (~0.6 s at 5 Hz).
 ABSENCE_POLLS = 3
 
+# Polls a tag whose content could not be read gets re-read before the failure
+# is kept for as long as the tag stays on (~1 s at 5 Hz). A failed read is most
+# often a weak coupling of the moment, and the next poll gets through; a tag
+# this driver cannot read at all — a MIFARE Classic — would otherwise be paid
+# for at full price on every poll.
+CONTENT_READ_POLLS = 5
+
 # Attempts a dump gets before reporting no tag, for the same reason.
 DUMP_ATTEMPTS = 3
 
@@ -249,9 +256,12 @@ class Clrc663Session:
         self.chip_version = self._chip_version()
         # Last full read, kept so that a tag sitting on the antenna is not
         # re-read at every poll: a detection costs ~35 ms, a full NDEF read
-        # ~130. Polling only detects, and reads content when the UID changes.
+        # ~130. Polling only detects, and reads content when the UID changes
+        # or while the content has not been read yet.
         self._last_uid: str | None = None
         self._last_tag: NfcTag | None = None
+        self._failed_reads = 0  # content reads that failed on _last_uid
+        self._misses = 0  # consecutive polls with no tag
 
     def _chip_version(self) -> str | None:
         try:
@@ -271,25 +281,40 @@ class Clrc663Session:
         ~35 ms against ~130 for a full memory transfer, and re-reading an
         unchanged tag five times a second would buy nothing.
 
+        Only a read that succeeded is kept. A failed one is published as it is
+        — the UID with ``readable`` false — and the content is read again on
+        the next polls, up to ``CONTENT_READ_POLLS``: keeping the first failure
+        would leave a perfectly good tag unreadable until it is lifted off.
+
+        The cache also outlives a missed detection, up to ``ABSENCE_POLLS`` in
+        a row, so a tag that flickers at the RF level is not re-read — and
+        exposed to another failed read — every time it answers again.
+
         Transport failures propagate: they mean the link is gone, and the
         reader thread reconnects. Tag-level failures do not — they are
         reported inside the snapshot, because "a tag is there but I cannot
         read it" is information, not an outage.
         """
-        from winnie_nfc.core import NoTagError, TagError
+        from winnie_nfc.core import CollisionError, TagError
 
         try:
             uid = self._reader.uid().hex().upper()
-        except NoTagError:
-            self._forget()
-            return NfcTag(present=False)
-        except TagError as e:
-            # A collision or a malformed frame: something is on the antenna,
-            # but nothing usable came back.
+        except CollisionError as e:
+            # Several tags on the antenna: something is there, but nothing
+            # usable came back.
             self._forget()
             return NfcTag(present=True, error=str(e), last_read_at=_now())
+        except TagError:
+            # No answer, or a malformed frame: a missed detection either way.
+            # A tag that is really there answers properly on the next poll.
+            return self._missed()
+        self._misses = 0
 
-        if uid == self._last_uid and self._last_tag is not None:
+        if uid != self._last_uid:
+            self._forget()
+        elif self._last_tag is not None and (
+            self._last_tag.readable or self._failed_reads >= CONTENT_READ_POLLS
+        ):
             # Same tag as last time: refresh when it was last seen, keep what
             # was read from it.
             fresh = self._last_tag.model_copy(deep=True)
@@ -298,22 +323,27 @@ class Clrc663Session:
 
         try:
             read = self._reader.read_tag()
-        except NoTagError:
+        except TagError:
             # Removed between the detection and the read.
-            self._forget()
-            return NfcTag(present=False)
-        except TagError as e:
-            self._forget()
-            return NfcTag(present=True, uid=uid, error=str(e), last_read_at=_now())
+            return self._missed()
 
         tag = _snapshot(read)
         self._last_uid = tag.uid
         self._last_tag = tag
+        self._failed_reads = 0 if tag.readable else self._failed_reads + 1
         return tag
+
+    def _missed(self) -> NfcTag:
+        """Report an empty antenna, forgetting the tag once absence is confirmed."""
+        self._misses += 1
+        if self._misses >= ABSENCE_POLLS:
+            self._forget()
+        return NfcTag(present=False)
 
     def _forget(self) -> None:
         self._last_uid = None
         self._last_tag = None
+        self._failed_reads = 0
 
     def dump(self) -> NfcDump:
         """Read the whole user memory of the tag on the antenna."""

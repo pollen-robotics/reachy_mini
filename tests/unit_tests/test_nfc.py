@@ -829,6 +829,114 @@ def test_a_write_is_seen_without_lifting_the_tag(fake_ntag_reader):
     assert session.read_tag().records[0].value == "v3"
 
 
+def _session_reading(results):
+    """Build a session whose tag answers the UID and gives `results` in turn.
+
+    Each item is a TagRead, or an exception for the UID detection to raise.
+    """
+    from reachy_mini.nfc.reader import Clrc663Session
+
+    session = Clrc663Session("/dev/null")
+    pending = list(results)
+    session.reads = 0
+
+    def uid():
+        if pending and isinstance(pending[0], Exception):
+            raise pending.pop(0)
+        return b"\x04\xa1"
+
+    def read_tag():
+        session.reads += 1
+        return pending.pop(0)
+
+    session._reader.uid = uid
+    session._reader.read_tag = read_tag
+    return session
+
+
+def test_a_failed_content_read_is_not_kept(fake_ntag_reader):
+    # The UID came through but not the memory: keeping that read would leave
+    # the tag unreadable until it is lifted off, however well it reads next.
+    good = reading(records=[{"type": "text", "value": "hf_pirate"}])
+    session = _session_reading([reading(error="cannot read: no answer"), good])
+
+    first = session.read_tag()
+    assert first.present and first.uid == "04A1"
+    assert not first.readable and not first.blank
+
+    assert session.read_tag().content == "hf_pirate"
+    assert session.read_tag().content == "hf_pirate"  # now cached
+    assert session.reads == 2
+
+
+def test_a_tag_that_never_reads_stops_being_re_read(fake_ntag_reader):
+    from reachy_mini.nfc.reader import CONTENT_READ_POLLS
+
+    failed = reading(info=None, error="unusable tag: NAK")
+    session = _session_reading([failed] * CONTENT_READ_POLLS)
+
+    for _ in range(CONTENT_READ_POLLS + 3):
+        tag = session.read_tag()
+        assert tag.present and not tag.readable
+    assert session.reads == CONTENT_READ_POLLS
+
+
+def test_a_missed_detection_keeps_the_content_read(fake_ntag_reader):
+    # Detection flickers on a mediocre coupling: re-reading the tag every time
+    # it answers again would expose its content to another failed read.
+    from winnie_nfc.core import NoTagError
+
+    from reachy_mini.nfc.reader import ABSENCE_POLLS
+
+    good = reading(records=[{"type": "text", "value": "hf_pirate"}])
+    misses = [NoTagError("no answer")] * (ABSENCE_POLLS - 1)
+    session = _session_reading([good, *misses, good])
+
+    assert session.read_tag().content == "hf_pirate"
+    for _ in misses:
+        assert not session.read_tag().present
+    assert session.read_tag().content == "hf_pirate"
+    assert session.reads == 1
+
+
+def test_a_confirmed_absence_drops_the_content_read(fake_ntag_reader):
+    from winnie_nfc.core import NoTagError
+
+    from reachy_mini.nfc.reader import ABSENCE_POLLS
+
+    first = reading(records=[{"type": "text", "value": "v1"}])
+    second = reading(records=[{"type": "text", "value": "v2"}])
+    misses = [NoTagError("no answer")] * ABSENCE_POLLS
+    session = _session_reading([first, *misses, second])
+
+    assert session.read_tag().content == "v1"
+    for _ in misses:
+        session.read_tag()
+    assert session.read_tag().content == "v2"
+
+
+def test_a_malformed_frame_at_detection_is_a_miss_not_a_tag(fake_ntag_reader):
+    # Reported as a present tag with nothing on it, it read as a blank
+    # accessory to the clients.
+    from winnie_nfc.iso14443a import MalformedResponseError
+
+    good = reading(records=[{"type": "text", "value": "hf_pirate"}])
+    session = _session_reading([good, MalformedResponseError("bad BCC"), good])
+
+    assert session.read_tag().content == "hf_pirate"
+    assert not session.read_tag().present
+    assert session.read_tag().content == "hf_pirate"
+    assert session.reads == 1
+
+
+def test_a_collision_is_still_reported_as_a_present_tag(fake_ntag_reader):
+    from winnie_nfc.core import CollisionError
+
+    session = _session_reading([CollisionError("two tags")])
+    tag = session.read_tag()
+    assert tag.present and tag.error == "two tags"
+
+
 def test_a_successful_write_reports_success(fake_ntag_reader):
     from reachy_mini.nfc.reader import Clrc663Session
 
