@@ -40,7 +40,13 @@ MAX_SOUND_UPLOAD_BYTES = 25 * 1024 * 1024
 
 @router.post("/release")
 async def release_media(daemon: Daemon = Depends(get_daemon)) -> dict[str, str]:
-    """Release camera and audio hardware for direct client access."""
+    """Release camera and audio hardware for direct client access.
+
+    Refused while privacy mode is on: releasing hands the live camera and
+    sound card to the caller.
+    """
+    if daemon.privacy.enabled:
+        raise HTTPException(status_code=409, detail="Privacy mode is on")
     await daemon.release_media()
     return {"status": "ok"}
 

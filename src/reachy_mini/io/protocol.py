@@ -173,6 +173,7 @@ class DaemonStatus(BaseModel):
     mockup_sim_enabled: Optional[bool]
     no_media: bool = False
     media_released: bool = False
+    privacy: bool = False  # camera and microphones are cut (see daemon/privacy.py)
     camera_specs_name: str = ""
     backend_status: Optional[
         RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus
@@ -577,6 +578,18 @@ class ReadAudioParameterCmd(BaseModel):
 # ------------------------------------------------------------------
 
 
+class SetPrivacyCmd(BaseModel):
+    """Switch privacy mode on or off (camera and microphones cut).
+
+    Same request as ``POST /api/privacy``, for clients that only have the
+    data channel, such as the mobile app. The reply carries ``enabled``: it
+    stays true after a switch-off while a privacy hat is on the robot's head.
+    """
+
+    type: Literal["set_privacy"] = "set_privacy"
+    enabled: bool
+
+
 class RestartDaemonCmd(BaseModel):
     """Restart the daemon (rebuilds backend, motor controller, media server).
 
@@ -965,6 +978,7 @@ AnyCommand = Annotated[
     | UnsubscribeLogsCmd
     | SubscribePoseCmd
     | UnsubscribePoseCmd
+    | SetPrivacyCmd
     | RestartDaemonCmd
     | StartUpdateCmd
     | UploadMoveStartCmd

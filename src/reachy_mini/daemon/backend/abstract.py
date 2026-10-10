@@ -72,6 +72,7 @@ from reachy_mini.io.protocol import (
     SetHeadTrackingCmd,
     SetMicrophoneVolumeCmd,
     SetMotorModeCmd,
+    SetPrivacyCmd,
     SetRobotNameCmd,
     SetSpeechOffsetsCmd,
     SetTargetCmd,
@@ -409,6 +410,9 @@ class Backend:
         # Returns immediately - the actual restart runs on a fresh
         # thread so the data channel can flush its ack first.
         self._restart_daemon_callback: Optional[Callable[[], None]] = None
+        # Set by `Daemon`: records a privacy request from this transport and
+        # returns whether privacy mode is on afterwards.
+        self._privacy_callback: Optional[Callable[[bool], bool]] = None
 
         # Synchronous callback that triggers a PyPI update of the daemon
         # followed by a restart. Wired in by `Daemon`, same fire-and-ack
@@ -2064,6 +2068,20 @@ class Backend:
             self._set_pose_subscription(peer_id, False)
             send_response({"status": "ok", "command": "unsubscribe_pose"})
 
+        elif isinstance(cmd, SetPrivacyCmd):
+            if self._privacy_callback is None:
+                send_response(
+                    {
+                        "error": "set_privacy not supported by this backend host",
+                        "command": "set_privacy",
+                    }
+                )
+                return
+            enabled = self._privacy_callback(cmd.enabled)
+            send_response(
+                {"status": "ok", "command": "set_privacy", "enabled": enabled}
+            )
+
         elif isinstance(cmd, RestartDaemonCmd):
             # Ack BEFORE triggering the restart: the WebRTC transport
             # is torn down by `daemon.stop()` so any later send on
@@ -2930,6 +2948,10 @@ class Backend:
     # ------------------------------------------------------------------
     # WebRTC data channel interface (delegates to process_command)
     # ------------------------------------------------------------------
+
+    def set_privacy_callback(self, callback: Callable[[bool], bool]) -> None:
+        """Wire the handler of the ``set_privacy`` cmd (see ``daemon/privacy.py``)."""
+        self._privacy_callback = callback
 
     def set_restart_daemon_callback(self, callback: Callable[[], None]) -> None:
         """Wire the synchronous trigger used by the ``restart_daemon`` cmd.
