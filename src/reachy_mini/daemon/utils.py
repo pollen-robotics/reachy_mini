@@ -167,14 +167,15 @@ def find_serial_port(
     vid = vid.upper()
     pid = pid.upper()
 
-    candidates = [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
+    # The NFC reader board can share these USB ids: tell it apart by its USB
+    # product string (see reachy_mini.nfc.ports).
+    from ..nfc import is_nfc_board
 
-    if len(candidates) > 1:
-        # The NFC reader board shares these USB ids: tell it apart by probing,
-        # only in this ambiguous case (see reachy_mini.nfc.ports).
-        from ..nfc import exclude_nfc_boards
-
-        candidates = exclude_nfc_boards(candidates)
+    candidates = [
+        p.device
+        for p in ports
+        if f"USB VID:PID={vid}:{pid}" in p.hwid and not is_nfc_board(p)
+    ]
 
     return candidates
 

@@ -1,48 +1,79 @@
 """Serial port discovery for the NFC reader board.
 
-The NFC reader (the Winnie board, a CLRC663 driven by ``winnie_nfc``) bridges
-USB with a CH343, which exposes **exactly the same USB vendor and product ids
-as the Reachy Mini motor controller** — ``1a86:55d3`` for both. USB metadata
-alone therefore cannot tell the two apart, and neither board can be found by
-id only.
+The NFC reader (the Winnie board, a CLRC663 driven by ``winnie_nfc``) is
+recognised by its USB product string alone: ``Winnie NFC <version>``. The
+version is read from it at the same time, at no cost: the OS has it already,
+nothing is sent to the board.
 
-The discriminator used here is the chip itself: a soft reset followed by a read
-of the CLRC663 version register answers ``0x1A`` on the NFC board and on
-nothing else. Probing costs two bytes written and one read per candidate, and
-is only ever done on ports matching the shared USB id.
+pyserial reports the product string on Linux and macOS. On Windows it does not,
+so it is read from the device's bus-reported description through SetupAPI.
 
 This module is imported by ``daemon.utils.find_serial_port`` as well, to keep
-the NFC board out of the motor controller's candidate list: without it, simply
-plugging the reader into a Lite robot would make the daemon refuse to start
-with "Multiple Reachy Mini serial ports found".
+the NFC board out of the motor controller's candidate list.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Iterable, Sequence
+import sys
+from dataclasses import dataclass
+from typing import Any, Iterable, Sequence
 
 logger = logging.getLogger(__name__)
 
-# CH343 USB-serial bridge. Shared with the motor controller — see module
-# docstring; this is why every lookup here ends with a protocol probe.
-NFC_VID = 0x1A86
-NFC_PID = 0x55D3
-
-# CLRC663 version register value. 0x18 is a CLRC66301/02, which this driver
-# does not support.
-CLRC663_VERSION = 0x1A
-
-# Probe timeout. Short on purpose: the probe runs on the daemon's startup path
-# when several candidate ports exist, and a missing answer is itself the answer.
-PROBE_TIMEOUT = 0.2
+# USB product string of the NFC board, followed by its version: "Winnie NFC 1.0".
+NFC_PRODUCT_PREFIX = "Winnie NFC"
 
 
-def candidate_ports(
+@dataclass(frozen=True)
+class NfcBoard:
+    """An NFC reader board found on a serial port."""
+
+    port: str
+    version: str | None  # from the USB product string; None if it has none
+
+
+def parse_product(product: str | None) -> tuple[bool, str | None]:
+    """Tell whether a USB product string is the NFC board's, and its version.
+
+    Returns ``(is_nfc_board, version)``. The version is whatever follows the
+    prefix, brackets and surrounding blanks removed: ``"Winnie NFC 1.2"`` and
+    ``"Winnie NFC [1.2]"`` both give ``"1.2"``; a bare ``"Winnie NFC"`` is the
+    board with no version.
+    """
+    if not product:
+        return False, None
+    product = product.strip()
+    if not product.casefold().startswith(NFC_PRODUCT_PREFIX.casefold()):
+        return False, None
+    version = product[len(NFC_PRODUCT_PREFIX) :].strip().strip("[]()").strip()
+    return True, version or None
+
+
+def port_product(comport: Any) -> str | None:
+    """Return the USB product string of a ``comports()`` entry, if the OS reports it."""
+    product: str | None = getattr(comport, "product", None)
+    if product is None and sys.platform == "win32" and getattr(comport, "vid", None):
+        product = _windows_product(comport.device)
+    return product
+
+
+def is_nfc_board(comport: Any) -> bool:
+    """Whether a ``comports()`` entry is an NFC reader board."""
+    return parse_product(port_product(comport))[0]
+
+
+def _comports() -> list[Any]:
+    import serial.tools.list_ports
+
+    return list(serial.tools.list_ports.comports())
+
+
+def find_nfc_board(
     comports: Sequence[Any] | None = None,
     exclude: Iterable[str] = (),
-) -> list[str]:
-    """Return serial ports whose USB ids match the NFC reader board.
+) -> NfcBoard | None:
+    """Return the NFC reader board, or ``None`` if there is none.
 
     Args:
         comports: optional list of ports (for testing); defaults to the live
@@ -51,88 +82,188 @@ def candidate_ports(
             when it is known explicitly).
 
     """
-    if comports is None:
-        import serial.tools.list_ports
-
-        comports = serial.tools.list_ports.comports()
-
     excluded = set(exclude)
-    return [
-        p.device
-        for p in comports
-        if p.vid == NFC_VID and p.pid == NFC_PID and p.device not in excluded
-    ]
-
-
-def probe_clrc663(port: str) -> bool | None:
-    """Whether ``port`` is an NFC reader board.
-
-    Returns ``True`` when the CLRC663 answers its version register, ``False``
-    when the port opens but nothing answers (a motor controller, say), and
-    ``None`` when the port cannot be opened at all — most often because the
-    reader thread or the robot backend already holds it. The three cases must
-    stay distinct: a port that cannot be opened is not a port that answered
-    "not me".
-    """
-    try:
-        from winnie_nfc.core import CLRC663
-        from winnie_nfc.transport import Transport
-    except ImportError:
-        logger.debug("winnie_nfc not installed; cannot probe %s.", port)
-        return None
-
-    transport = Transport(port=port, timeout=PROBE_TIMEOUT)
-    try:
-        transport.open()
-    except Exception as e:  # noqa: BLE001 - absent, busy or forbidden
-        logger.debug("Cannot open %s to probe for an NFC reader: %s", port, e)
-        return None
-
-    try:
-        chip = CLRC663(transport)
-        chip.soft_reset()
-        return bool(chip.version() == CLRC663_VERSION)
-    except Exception as e:  # noqa: BLE001 - silence is a valid answer here
-        logger.debug("No CLRC663 on %s: %s", port, e)
-        return False
-    finally:
-        transport.close()
-
-
-def find_nfc_port(
-    comports: Sequence[Any] | None = None,
-    exclude: Iterable[str] = (),
-    probe: Callable[[str], bool | None] = probe_clrc663,
-) -> str | None:
-    """Return the port of the NFC reader board, or ``None`` if there is none."""
-    for port in candidate_ports(comports=comports, exclude=exclude):
-        if probe(port) is True:
-            return port
+    for p in _comports() if comports is None else comports:
+        if p.device in excluded:
+            continue
+        found, version = parse_product(port_product(p))
+        if found:
+            return NfcBoard(port=p.device, version=version)
     return None
 
 
-def exclude_nfc_boards(
-    ports: list[str],
-    probe: Callable[[str], bool | None] = probe_clrc663,
-) -> list[str]:
-    """Drop NFC reader boards from a list of motor controller candidates.
+def describe_port(port: str, comports: Sequence[Any] | None = None) -> NfcBoard:
+    """Describe an explicitly configured port, reading its version if it has one.
 
-    Only ports that positively answer "no CLRC663 here" are kept: a port that
-    cannot even be opened is dropped too, since the motor controller needs to
-    open it anyway, and a busy port is most likely the NFC reader already being
-    served by its own thread.
-
-    Falls back to the untouched list when that would leave nothing — better to
-    let the caller report its own "no port found" than to silently claim the
-    hardware is absent.
+    Used when the port is given rather than looked up: the board is trusted to
+    be there, and only its version is wanted.
     """
-    kept = [port for port in ports if probe(port) is False]
-    if not kept:
-        logger.debug("Probing left no motor candidate among %s.", ports)
-        return ports
-    if len(kept) != len(ports):
-        logger.info(
-            "Ignoring NFC reader board(s) %s when looking for the motor controller.",
-            sorted(set(ports) - set(kept)),
+    for p in _comports() if comports is None else comports:
+        if p.device == port:
+            return NfcBoard(port=port, version=parse_product(port_product(p))[1])
+    return NfcBoard(port=port, version=None)
+
+
+def _windows_product(device: str) -> str | None:
+    """Read the USB product string of the device behind a COM port, on Windows.
+
+    pyserial leaves ``product`` empty there: Windows names ports after their
+    driver ("USB Serial Device (COM5)"), and keeps what the device itself
+    reported as its bus-reported description. That is the product string on
+    the USB device node; with the inbox CDC driver the COM port sits on an
+    interface node below it, so the parents are looked at too.
+    """
+    try:
+        return _windows_product_unsafe(device)
+    except Exception as e:  # noqa: BLE001 - a missing name is not worth a crash
+        logger.debug("Cannot read the USB product string of %s: %s", device, e)
+        return None
+
+
+def _windows_product_unsafe(device: str) -> str | None:
+    import ctypes
+    import uuid
+    from ctypes import wintypes
+
+    class GUID(ctypes.Structure):
+        _fields_ = [
+            ("Data1", wintypes.DWORD),
+            ("Data2", wintypes.WORD),
+            ("Data3", wintypes.WORD),
+            ("Data4", wintypes.BYTE * 8),
+        ]
+
+    class SP_DEVINFO_DATA(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.DWORD),
+            ("ClassGuid", GUID),
+            ("DevInst", wintypes.DWORD),
+            ("Reserved", ctypes.c_void_p),
+        ]
+
+    class DEVPROPKEY(ctypes.Structure):
+        _fields_ = [("fmtid", GUID), ("pid", wintypes.ULONG)]
+
+    def guid(text: str) -> GUID:
+        return GUID.from_buffer_copy(uuid.UUID(text).bytes_le)
+
+    ports_class = guid("4d36e978-e325-11ce-bfc1-08002be10318")  # GUID_DEVCLASS_PORTS
+    bus_reported_desc = DEVPROPKEY(  # DEVPKEY_Device_BusReportedDeviceDesc
+        guid("540b947e-8b40-45bc-a8a2-6a0b894cbda2"), 4
+    )
+    DIGCF_PRESENT = 0x2
+    DICS_FLAG_GLOBAL = 0x1
+    DIREG_DEV = 0x1
+    KEY_READ = 0x20019
+    INVALID_HANDLE = ctypes.c_void_p(-1).value
+
+    setupapi = ctypes.WinDLL("setupapi")  # type: ignore[attr-defined]
+    cfgmgr = ctypes.WinDLL("cfgmgr32")  # type: ignore[attr-defined]
+    advapi = ctypes.WinDLL("advapi32")  # type: ignore[attr-defined]
+    setupapi.SetupDiGetClassDevsW.restype = ctypes.c_void_p
+    setupapi.SetupDiGetClassDevsW.argtypes = [
+        ctypes.POINTER(GUID),
+        wintypes.LPCWSTR,
+        wintypes.HWND,
+        wintypes.DWORD,
+    ]
+    setupapi.SetupDiEnumDeviceInfo.argtypes = [
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(SP_DEVINFO_DATA),
+    ]
+    setupapi.SetupDiOpenDevRegKey.restype = ctypes.c_void_p
+    setupapi.SetupDiOpenDevRegKey.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SP_DEVINFO_DATA),
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.DWORD,
+    ]
+    setupapi.SetupDiDestroyDeviceInfoList.argtypes = [ctypes.c_void_p]
+    advapi.RegQueryValueExW.argtypes = [
+        ctypes.c_void_p,
+        wintypes.LPCWSTR,
+        ctypes.c_void_p,
+        ctypes.POINTER(wintypes.DWORD),
+        ctypes.c_void_p,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    advapi.RegCloseKey.argtypes = [ctypes.c_void_p]
+    cfgmgr.CM_Get_DevNode_PropertyW.argtypes = [
+        wintypes.DWORD,
+        ctypes.POINTER(DEVPROPKEY),
+        ctypes.POINTER(wintypes.ULONG),
+        ctypes.c_void_p,
+        ctypes.POINTER(wintypes.ULONG),
+        wintypes.ULONG,
+    ]
+    cfgmgr.CM_Get_Parent.argtypes = [
+        ctypes.POINTER(wintypes.DWORD),
+        wintypes.DWORD,
+        wintypes.ULONG,
+    ]
+
+    def port_name(devices: int, info: SP_DEVINFO_DATA) -> str | None:
+        key = setupapi.SetupDiOpenDevRegKey(
+            devices, ctypes.byref(info), DICS_FLAG_GLOBAL, 0, DIREG_DEV, KEY_READ
         )
-    return kept
+        if key in (None, INVALID_HANDLE):
+            return None
+        try:
+            buf = ctypes.create_unicode_buffer(64)
+            size = wintypes.DWORD(ctypes.sizeof(buf))
+            if advapi.RegQueryValueExW(
+                key, "PortName", None, None, buf, ctypes.byref(size)
+            ):
+                return None
+            return buf.value
+        finally:
+            advapi.RegCloseKey(key)
+
+    def description(devinst: int) -> str | None:
+        buf = ctypes.create_unicode_buffer(256)
+        size = wintypes.ULONG(ctypes.sizeof(buf))
+        prop_type = wintypes.ULONG()
+        if cfgmgr.CM_Get_DevNode_PropertyW(
+            devinst,
+            ctypes.byref(bus_reported_desc),
+            ctypes.byref(prop_type),
+            buf,
+            ctypes.byref(size),
+            0,
+        ):
+            return None
+        return buf.value or None
+
+    devices = setupapi.SetupDiGetClassDevsW(
+        ctypes.byref(ports_class), None, None, DIGCF_PRESENT
+    )
+    if devices in (None, INVALID_HANDLE):
+        return None
+    try:
+        info = SP_DEVINFO_DATA()
+        info.cbSize = ctypes.sizeof(SP_DEVINFO_DATA)
+        index = 0
+        while setupapi.SetupDiEnumDeviceInfo(devices, index, ctypes.byref(info)):
+            index += 1
+            if port_name(devices, info) != device:
+                continue
+            # The COM port's own node, then up to the USB device node: the
+            # first description that is the board's wins, else the first one.
+            first: str | None = None
+            devinst = info.DevInst
+            for _ in range(3):
+                found = description(devinst)
+                if parse_product(found)[0]:
+                    return found
+                first = first or found
+                parent = wintypes.DWORD()
+                if cfgmgr.CM_Get_Parent(ctypes.byref(parent), devinst, 0):
+                    break
+                devinst = parent.value
+            return first
+        return None
+    finally:
+        setupapi.SetupDiDestroyDeviceInfoList(devices)

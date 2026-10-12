@@ -1,6 +1,6 @@
 """Unit tests for the optional NFC reader accessory.
 
-No hardware and no ``winnie_nfc`` install needed: the serial-port probe and the
+No hardware and no ``winnie_nfc`` install needed: the serial ports and the
 reader session are both injected. What is under test is the part that has to
 be right whatever the tag — port disambiguation against the motor controller,
 and the reader thread's state machine.
@@ -24,72 +24,64 @@ from reachy_mini.nfc.reader import (
 )
 
 
-def comport(device, vid=ports.NFC_VID, pid=ports.NFC_PID):
+def comport(device, product=None):
     """A fake entry of serial.tools.list_ports.comports()."""
-    return SimpleNamespace(device=device, vid=vid, pid=pid)
+    return SimpleNamespace(device=device, product=product)
 
 
 # --------------------------------------------------------------- port lookup
 
 
-def test_candidate_ports_matches_the_shared_usb_ids():
-    found = ports.candidate_ports(
+@pytest.mark.parametrize(
+    "product, expected",
+    [
+        ("Winnie NFC 1.2", (True, "1.2")),
+        ("Winnie NFC [1.2]", (True, "1.2")),
+        ("  winnie nfc v2 ", (True, "v2")),
+        ("Winnie NFC", (True, None)),
+        ("USB Single Serial", (False, None)),
+        ("", (False, None)),
+        (None, (False, None)),
+    ],
+)
+def test_parse_product(product, expected):
+    assert ports.parse_product(product) == expected
+
+
+def test_find_nfc_board_goes_by_the_product_string():
+    # Only the product string identifies the board, and it carries its version.
+    found = ports.find_nfc_board(
         comports=[
-            comport("/dev/ttyACM0"),
-            comport("/dev/ttyUSB0", vid=0x2886, pid=0x001A),  # ReSpeaker
-            comport("/dev/ttyACM1"),
+            comport("/dev/ttyACM0", product="USB Single Serial"),  # motors
+            comport("/dev/ttyUSB0", product="ReSpeaker 4 Mic Array"),
+            comport("/dev/ttyACM1", product="Winnie NFC 1.0"),
         ]
     )
-    assert found == ["/dev/ttyACM0", "/dev/ttyACM1"]
+    assert found == ports.NfcBoard(port="/dev/ttyACM1", version="1.0")
 
 
-def test_candidate_ports_honours_exclusions():
-    found = ports.candidate_ports(
-        comports=[comport("/dev/ttyACM0"), comport("/dev/ttyACM1")],
+def test_find_nfc_board_honours_exclusions():
+    found = ports.find_nfc_board(
+        comports=[
+            comport("/dev/ttyACM0", product="Winnie NFC 1.0"),
+            comport("/dev/ttyACM1", product="Winnie NFC 2.0"),
+        ],
         exclude=["/dev/ttyACM0"],
     )
-    assert found == ["/dev/ttyACM1"]
+    assert found == ports.NfcBoard(port="/dev/ttyACM1", version="2.0")
 
 
-def test_find_nfc_port_returns_the_port_that_answers():
-    # Both boards share their USB ids, so only the chip's own answer tells
-    # them apart: the motor controller stays silent.
-    answers = {"/dev/ttyACM0": False, "/dev/ttyACM1": True}
-    found = ports.find_nfc_port(
-        comports=[comport("/dev/ttyACM0"), comport("/dev/ttyACM1")],
-        probe=answers.get,
+def test_find_nfc_board_returns_none_without_the_product_string():
+    # A port without the board's product string is not taken for the reader.
+    assert ports.find_nfc_board(comports=[comport("/dev/ttyACM0")]) is None
+
+
+def test_describe_port_reads_the_version_of_a_configured_port():
+    comports = [comport("/dev/ttyACM1", product="Winnie NFC 1.3")]
+    assert ports.describe_port("/dev/ttyACM1", comports=comports).version == "1.3"
+    assert ports.describe_port("/dev/ttyACM9", comports=comports) == ports.NfcBoard(
+        port="/dev/ttyACM9", version=None
     )
-    assert found == "/dev/ttyACM1"
-
-
-def test_find_nfc_port_returns_none_when_nothing_answers():
-    assert (
-        ports.find_nfc_port(
-            comports=[comport("/dev/ttyACM0")], probe=lambda port: False
-        )
-        is None
-    )
-
-
-def test_exclude_nfc_boards_keeps_the_motor_controller():
-    answers = {"/dev/ttyACM0": True, "/dev/ttyACM1": False}
-    kept = ports.exclude_nfc_boards(["/dev/ttyACM0", "/dev/ttyACM1"], probe=answers.get)
-    assert kept == ["/dev/ttyACM1"]
-
-
-def test_exclude_nfc_boards_drops_a_port_it_cannot_open():
-    # None means "could not even open": most likely the reader thread already
-    # holds it. Keeping it would offer the accessory to the motor controller.
-    answers = {"/dev/ttyACM0": None, "/dev/ttyACM1": False}
-    kept = ports.exclude_nfc_boards(["/dev/ttyACM0", "/dev/ttyACM1"], probe=answers.get)
-    assert kept == ["/dev/ttyACM1"]
-
-
-def test_exclude_nfc_boards_falls_back_rather_than_claiming_nothing():
-    # Probing left no candidate: better to hand the list back untouched and
-    # let the caller report its own error than to pretend the robot is absent.
-    kept = ports.exclude_nfc_boards(["/dev/ttyACM0"], probe=lambda port: True)
-    assert kept == ["/dev/ttyACM0"]
 
 
 # ------------------------------------------------------------- fake session
@@ -171,7 +163,7 @@ def driver_installed(monkeypatch):
 @pytest.fixture
 def no_board(monkeypatch):
     """Make auto-detection find no reader board."""
-    monkeypatch.setattr("reachy_mini.nfc.reader.find_nfc_port", lambda **kw: None)
+    monkeypatch.setattr("reachy_mini.nfc.reader.find_nfc_board", lambda **kw: None)
 
 
 def started(reader):
@@ -221,6 +213,20 @@ def test_reader_publishes_the_polled_tag(driver_installed):
         assert status.connected and status.chip_detected
         assert status.chip_version == "0x1A"
         assert status.port == "/dev/ttyACM0"
+    finally:
+        reader.stop()
+
+
+def test_reader_reports_the_board_version(driver_installed, monkeypatch):
+    monkeypatch.setattr(
+        "reachy_mini.nfc.reader.find_nfc_board",
+        lambda **kw: ports.NfcBoard(port="/dev/ttyACM1", version="1.2"),
+    )
+    reader = make_reader(FakeSession(), port="auto")
+    started(reader)
+    try:
+        status = reader.get_status()
+        assert (status.port, status.board_version) == ("/dev/ttyACM1", "1.2")
     finally:
         reader.stop()
 

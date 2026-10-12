@@ -331,7 +331,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     app.state.daemon.app_manager = app.state.app_manager
 
     # The NFC board shares the motor controller's USB ids (see
-    # reachy_mini.nfc.ports): never probe an explicitly configured motor port.
+    # reachy_mini.nfc.ports): never take an explicitly configured motor port.
     app.state.nfc_reader = (
         NfcReader(
             port=args.nfc_port,

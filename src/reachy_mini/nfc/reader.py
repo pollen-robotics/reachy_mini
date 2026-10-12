@@ -36,7 +36,7 @@ from typing import Any, Callable, Iterable, Protocol
 
 from pydantic import BaseModel, model_validator
 
-from .ports import find_nfc_port
+from .ports import NfcBoard, describe_port, find_nfc_board
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +127,7 @@ class NfcStatus(BaseModel):
     chip_detected: bool  # the CLRC663 answered its version register
     driver_available: bool  # the winnie_nfc package is installed
     port: str | None = None
+    board_version: str | None = None  # from the USB product string
     chip_version: str | None = None
     error: str | None = None
     last_seen_at: datetime | None = None
@@ -562,8 +563,9 @@ class NfcReader:
         """Create the reader (does not open the serial link yet).
 
         Args:
-            port: serial port path, or ``"auto"`` to probe for the board.
-            exclude_ports: ports never to probe (see ``ports.py``).
+            port: serial port path, or ``"auto"`` to look the board up by its
+                USB product string.
+            exclude_ports: ports never to take for the board (see ``ports.py``).
             poll_interval: seconds between two antenna polls.
             retry_interval: seconds before retrying after a failure.
             session_factory: opens a session on a port (injectable for tests).
@@ -590,6 +592,7 @@ class NfcReader:
         self._connected = False
         self._chip_detected = False
         self._port: str | None = None
+        self._board_version: str | None = None
         self._chip_version: str | None = None
         self._error: str | None = None
         self._last_seen_at: datetime | None = None
@@ -657,6 +660,7 @@ class NfcReader:
                 chip_detected=self._chip_detected,
                 driver_available=driver_available(),
                 port=self._port,
+                board_version=self._board_version,
                 chip_version=self._chip_version,
                 error=self._error if self._enabled else "NFC reader disabled",
                 last_seen_at=self._last_seen_at,
@@ -741,21 +745,25 @@ class NfcReader:
 
     # -- background loop ---------------------------------------------------
 
-    def _resolve_port(self) -> str | None:
+    def _resolve_board(self) -> NfcBoard | None:
         if self._port_setting != "auto":
-            return self._port_setting
-        return find_nfc_port(exclude=self._exclude_ports)
+            return describe_port(self._port_setting)
+        return find_nfc_board(exclude=self._exclude_ports)
 
     def _run(self) -> None:
         while not self._should_stop.is_set():
             session: NfcSession | None = None
             try:
-                port = self._resolve_port()
-                if port is None:
+                board = self._resolve_board()
+                if board is None:
                     raise RuntimeError("no NFC reader board found")
-                session = self._session_factory(port)
-                self._set_connected(port, session.chip_version)
-                logger.info("NFC reader connected on %s.", port)
+                session = self._session_factory(board.port)
+                self._set_connected(board, session.chip_version)
+                logger.info(
+                    "NFC reader connected on %s (board version %s).",
+                    board.port,
+                    board.version or "unknown",
+                )
             except Exception as e:  # noqa: BLE001 - the board may be absent
                 self._set_disconnected(str(e))
                 logger.debug("NFC reader not available: %s", e)
@@ -824,7 +832,7 @@ class NfcReader:
         except Exception as e:  # noqa: BLE001 - closing must never raise
             logger.debug("Error while closing the NFC session: %s", e)
 
-    def _set_connected(self, port: str, chip_version: str | None) -> None:
+    def _set_connected(self, board: NfcBoard, chip_version: str | None) -> None:
         with self._lock:
             self._connected = True
             self._chip_detected = True
@@ -832,7 +840,8 @@ class NfcReader:
             # it has been seen just now — leaving this null until the first
             # poll would read as "never answered".
             self._last_seen_at = _now()
-            self._port = port
+            self._port = board.port
+            self._board_version = board.version
             self._chip_version = chip_version
             self._error = None
 

@@ -4076,6 +4076,17 @@
             ],
             "title": "Port"
           },
+          "board_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Board Version"
+          },
           "chip_version": {
             "anyOf": [
               {
