@@ -433,6 +433,13 @@ class GstWebRTCClient(CameraBase, AudioBase):
         silence = Gst.ElementFactory.make("audiotestsrc", "send_silence")
         silence.set_property("is-live", True)
         silence.set_property("wave", 4)  # silence
+        # Keep the silence buffers at one Opus frame (10 ms). The mixer
+        # waits for this source's latency only while the appsrc is empty,
+        # so with the default 1024 samples (64 ms) the send time vs PTS
+        # jumps by ~64 ms whenever speech is queued. The daemon's jitter
+        # buffer reads that as skew and its audio sink resyncs, dropping
+        # ~50 ms of speech (#1459).
+        silence.set_property("samplesperbuffer", self.SAMPLE_RATE // 100)
         silence_queue = Gst.ElementFactory.make("queue", "send_silence_queue")
 
         audiomixer = Gst.ElementFactory.make("audiomixer", "send_mixer")
