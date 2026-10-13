@@ -155,6 +155,13 @@ class GstMediaServer:
     # end-to-end latency is the metric we watch closest.
     RX_JITTER_LATENCY_MS = 300
 
+    # For this long (ms) after a peer's playback pipeline starts, the speaker
+    # sink resyncs at once on any timestamp discontinuity above
+    # SPEAKER_SETTLE_ALIGNMENT_NS, so it drops the connection-setup backlog
+    # instead of later speech. See `_settle_speaker_sink`.
+    SPEAKER_SETTLE_MS = 1500
+    SPEAKER_SETTLE_ALIGNMENT_NS = 10_000_000
+
     # Pose push cadence (ms) over the unreliable/unordered `pose` data
     # channel. ~30 Hz gives the 3D mirror fresh targets to interpolate
     # without flooding the SCTP send queue; because the channel drops
@@ -590,6 +597,7 @@ class GstMediaServer:
             self._logger.error("Failed to create audio sink element")
             return
         audiosink.set_property("sync", True)
+        self._settle_speaker_sink(audiosink)
 
         # Per-branch audioconvert+audioresample so the wobbler appsink's
         # F32LE/2/16000 caps don't drag the audiosink branch into a rate
@@ -1439,6 +1447,38 @@ class GstMediaServer:
             return audiosink
 
         return Gst.ElementFactory.make("autoaudiosink")
+
+    def _settle_speaker_sink(self, audiosink: Gst.Element) -> None:
+        """Make the speaker sink drop the connection-setup backlog right away.
+
+        A new peer's first RTP packets arrive ~0.4 s late, queued while the
+        connection was being set up. The jitter buffer anchors its timeline
+        on them, then holds timestamps still while it converges, so the sink
+        receives 0.4-1 s more samples than timeline. With the default 1 s
+        ``discont-wait`` it only resyncs after that, discarding whatever is
+        playing then: typically the first words of a greeting (#1459).
+
+        Resyncing at once during the first ``SPEAKER_SETTLE_MS`` drops the
+        backlog (silence) as it arrives. The tight threshold leaves less
+        than 10 ms of misalignment behind, so the later timing shift when
+        speech starts stays under the default 40 ms threshold. The defaults
+        then come back so transient jitter mid-stream doesn't cause resyncs.
+        """
+        if audiosink.find_property("discont-wait") is None:
+            return  # e.g. autoaudiosink, a bin
+        defaults = {
+            name: audiosink.get_property(name)
+            for name in ("discont-wait", "alignment-threshold")
+        }
+        audiosink.set_property("discont-wait", 0)
+        audiosink.set_property("alignment-threshold", self.SPEAKER_SETTLE_ALIGNMENT_NS)
+
+        def _restore() -> bool:
+            for name, value in defaults.items():
+                audiosink.set_property(name, value)
+            return False
+
+        GLib.timeout_add(self.SPEAKER_SETTLE_MS, _restore)
 
     def _make_wobbler_appsink(self) -> Gst.Element:
         """Create a sync=True appsink that feeds audio to the head wobbler.
