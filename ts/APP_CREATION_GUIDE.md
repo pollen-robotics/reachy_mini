@@ -114,13 +114,14 @@ Pick the reference closest to your needs and clone its repo from Hugging Face:
 
 | Reference app                       | Stack                       | Use it for                                  |
 |-------------------------------------|-----------------------------|---------------------------------------------|
-| [`pollen-robotics/reachy_mini_minimal_conversation`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation) | **Vanilla TS + Vite**       | Smallest bundled runtime, no framework      |
-| [`pollen-robotics/reachy_mini_emotions`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions)                         | React 19 + MUI 7 + Vite     | UI-rich app with rich components / theming  |
-| [`pollen-robotics/reachy_mini_telepresence`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence)                 | React 19 + MUI 7 + Vite     | App with camera / media streams             |
+| [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | **Vanilla TS + Vite**       | Smallest bundled runtime, no framework      |
+| [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions)               | React 19 + MUI 7 + Vite     | UI-rich app with rich components / theming  |
+| [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence)       | React 19 + MUI 7 + Vite     | App with camera / media streams             |
+| [`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app) | Vanilla TS + Vite           | Tour of every SDK primitive                 |
 
 ```bash
 # Example: start from the vanilla TS template
-git clone https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation my_new_app
+git clone https://huggingface.co/spaces/tfrere/minimal-conversation my_new_app
 cd my_new_app
 # Edit package.json `name`, README frontmatter (`title`, `emoji`,
 # `short_description`), public/icon.svg, and src/embed.ts to your app.
@@ -129,7 +130,7 @@ npm run dev
 # → http://localhost:5173
 ```
 
-All three reference apps pin `@pollen-robotics/reachy-mini-sdk` to
+All reference apps pin `@pollen-robotics/reachy-mini-sdk` to
 the same exact version (the latest npm release) in their
 `package.json` - see [§10 SDK version pinning](#10-sdk-version-pinning).
 
@@ -704,10 +705,10 @@ supported.
 > The source of truth for "what's current" is the
 > [npm package page](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk)
 > (`npm view @pollen-robotics/reachy-mini-sdk version` works too), and
-> whichever string is currently shared by [`reachy_mini_minimal_conversation`'s
-> `package.json`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation/blob/main/package.json),
-> [`reachy_mini_emotions`'s `package.json`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions/blob/main/package.json),
-> and [`reachy_mini_telepresence`'s `package.json`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence/blob/main/package.json).
+> whichever string is currently shared by [`minimal-conversation`'s
+> `package.json`](https://huggingface.co/spaces/tfrere/minimal-conversation/blob/main/package.json),
+> [`emotions`'s `package.json`](https://huggingface.co/spaces/pollen-robotics/emotions/blob/main/package.json),
+> and [`telepresence`'s `package.json`](https://huggingface.co/spaces/pollen-robotics/telepresence/blob/main/package.json).
 
 ### Why pin a specific build (not `^x.y.z` or a major like `@1`)?
 
