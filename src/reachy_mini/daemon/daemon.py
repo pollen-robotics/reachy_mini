@@ -22,12 +22,14 @@ from reachy_mini.daemon.utils import (
 )
 from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from reachy_mini.io.ws_server import WSServer
+from reachy_mini.media.audio_control_utils import set_microphones_muted
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
 from .backend.mockup_sim import MockupSimBackend
 from .backend.mujoco import MujocoBackend
 from .backend.robot import RobotBackend
 from .jsonrpc_relay import JsonRpcRelay
+from .privacy import PrivacyMode
 
 if TYPE_CHECKING:
     from reachy_mini.apps.manager import AppManager
@@ -122,6 +124,16 @@ class Daemon:
             self.logger.info(
                 "Media disabled (--no-media). No camera, audio, or media server."
             )
+
+        # Simulations have no audio chip to mute.
+        self.privacy = PrivacyMode(
+            self._media_server,
+            mute_microphones=(
+                set_microphones_muted
+                if sim_mode == SimulationMode.NONE
+                else lambda muted: False
+            ),
+        )
 
     def __del__(self) -> None:
         """Destructor to ensure proper cleanup."""
@@ -397,6 +409,9 @@ class Daemon:
                 headless=headless,
                 use_audio=effective_use_audio,
                 hardware_config_filepath=hardware_config_filepath,
+            )
+            self.backend.set_privacy_callback(
+                lambda enabled: self.privacy.set("api", enabled)
             )
 
             self.ws_server = WSServer(backend=self.backend)
@@ -810,6 +825,7 @@ class Daemon:
 
     def status(self) -> "DaemonStatus":
         """Get the current status of the Reachy Mini daemon."""
+        self._status.privacy = self.privacy.enabled
         if self.backend is not None:
             self._status.backend_status = self.backend.get_status()
             self._status.face_target = self.backend.get_tracked_face()

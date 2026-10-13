@@ -37,6 +37,7 @@ from reachy_mini.daemon.app.routers import (
     motors,
     move,
     nfc,
+    privacy,
     sdk_ws,
     state,
     volume,
@@ -47,6 +48,7 @@ from reachy_mini.daemon.app.startup_app import (
     watch_antennas_for_startup_app,
 )
 from reachy_mini.daemon.daemon import Daemon
+from reachy_mini.daemon.privacy import is_privacy_tag
 from reachy_mini.daemon.utils import SimulationMode
 from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
@@ -336,6 +338,10 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         NfcReader(
             port=args.nfc_port,
             exclude_ports=(() if args.serialport == "auto" else (args.serialport,)),
+            # The privacy hat acts in the daemon itself, with no app involved.
+            on_tag_change=lambda tag: app.state.daemon.privacy.set(
+                "hat", is_privacy_tag(tag)
+            ),
         )
         if args.nfc_enabled
         else None
@@ -352,6 +358,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(motors.router)
     router.include_router(move.router)
     router.include_router(nfc.router)
+    router.include_router(privacy.router)
     router.include_router(state.router)
     router.include_router(volume.router)
 
