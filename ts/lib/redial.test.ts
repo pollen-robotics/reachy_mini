@@ -28,6 +28,7 @@ import type { SessionSupervisor } from './session-supervisor.js';
 interface RedialInternals {
     _state: 'disconnected' | 'connected' | 'streaming';
     _selectedRobotId: string | null;
+    _robots: Array<{ id: string; meta?: Record<string, string> }>;
     _sessionId: string | null;
     _sessionResolve: (() => void) | null;
     _sessionReject: ((err: Error) => void) | null;
@@ -157,6 +158,58 @@ describe('auto-reconnect success path', () => {
         expect(dials).toHaveBeenCalledTimes(3);
         expect(reconnecting.map((d) => d.attempt)).toEqual([1, 2, 3]);
         expect(reconnected).toEqual([{ attempt: 3 }]);
+    });
+});
+
+describe('auto-reconnect target re-resolution', () => {
+    it('dials the robot under its new peer id once it re-registered', async () => {
+        const { internals, dials } = makeStreamingInstance();
+        internals._robots = [{ id: 'robot-1', meta: { hardware_id: 'hw-A' } }];
+        dials.mockImplementationOnce(async () => {
+            // The relay dropped and came back: central lists the same
+            // robot under a fresh peer id.
+            internals._robots = [{ id: 'robot-2', meta: { hardware_id: 'hw-A' } }];
+            throw new Error('dial timed out');
+        });
+
+        internals._supervisor.maybeBeginRedial('ICE connection failed');
+        await vi.runAllTimersAsync();
+
+        expect(dials.mock.calls.map((c) => c[0])).toEqual(['robot-1', 'robot-2']);
+    });
+
+    it('never jumps to another robot that only shares the name', async () => {
+        const { internals, dials } = makeStreamingInstance();
+        internals._robots = [
+            { id: 'robot-1', meta: { name: 'reachy_mini', hardware_id: 'hw-A' } },
+            { id: 'robot-9', meta: { name: 'reachy_mini', hardware_id: 'hw-B' } },
+        ];
+        dials.mockRejectedValueOnce(new Error('dial timed out'));
+
+        internals._supervisor.maybeBeginRedial('ICE connection failed');
+        await vi.runAllTimersAsync();
+
+        expect(dials.mock.calls.map((c) => c[0])).toEqual(['robot-1', 'robot-1']);
+    });
+});
+
+describe('placeholder audio release', () => {
+    it('closes the placeholder AudioContext when the transport is torn down', () => {
+        const { internals } = makeStreamingInstance();
+        const ctx = { state: 'running', close: vi.fn().mockResolvedValue(undefined) };
+        const track = { stop: vi.fn() };
+        const holder = internals as unknown as {
+            _micCtx: typeof ctx | null;
+            _micStream: { getTracks: () => Array<typeof track> } | null;
+        };
+        holder._micCtx = ctx;
+        holder._micStream = { getTracks: () => [track] };
+
+        internals._teardownForRedial();
+
+        expect(track.stop).toHaveBeenCalledOnce();
+        expect(ctx.close).toHaveBeenCalledOnce();
+        expect(holder._micCtx).toBeNull();
     });
 });
 
