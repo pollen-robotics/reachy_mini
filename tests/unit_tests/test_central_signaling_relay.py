@@ -1285,3 +1285,86 @@ def test_relay_recovers_after_a_failed_refresh(
     asyncio.run(relay._handle_central_sse())
 
     assert relay.hf_token == "fresh"
+
+
+# ---------------------------------------------------------------------------
+# Central-only drop: established sessions survive peer-to-peer
+# ---------------------------------------------------------------------------
+
+
+def _relay_with_live_session(
+    lock: RobotAppLock,
+) -> tuple[CentralSignalingRelay, _SendJournal, _SendJournal]:
+    """Relay holding one established session (s1 <-> local-1) and the lock."""
+    relay, central, local = _relay_with_lock(lock)
+    _start_session(relay)
+    asyncio.run(
+        relay._process_local_message({"type": "sessionStarted", "sessionId": "local-1"})
+    )
+    local.sent.clear()
+    central.sent.clear()
+    return relay, central, local
+
+
+def test_central_loss_keeps_established_sessions_and_the_lock() -> None:
+    """Losing central doesn't end a live session or free the robot."""
+    lock = RobotAppLock()
+    relay, _central, local = _relay_with_live_session(lock)
+    relay._pending_central_sessions.append("s2")
+    relay._session_to_local_peer["s2"] = "p2"
+
+    relay._keep_sessions_on_central_loss()
+
+    assert relay._local_to_central_session == {"local-1": "s1"}
+    assert relay._orphaned_local_sessions == {"local-1"}
+    assert relay._pending_central_sessions == []
+    assert "s2" not in relay._session_to_local_peer
+    assert local.sent == []  # nothing ended locally
+    assert lock.status().state == RobotAppLockState.REMOTE_SESSION
+
+
+def test_central_loss_with_only_pending_sessions_frees_the_robot() -> None:
+    """A session that never got past central can't complete: drop it and its lock."""
+    lock = RobotAppLock()
+    relay, _central, _local = _relay_with_lock(lock)
+    _start_session(relay)  # pending only, lock taken
+
+    relay._keep_sessions_on_central_loss()
+
+    assert relay._pending_central_sessions == []
+    assert lock.status().state == RobotAppLockState.FREE
+
+
+def test_new_session_supersedes_orphaned_ones() -> None:
+    """A fresh request (e.g. the phone re-dialing) replaces a kept session."""
+    lock = RobotAppLock()
+    relay, central, local = _relay_with_live_session(lock)
+    relay._keep_sessions_on_central_loss()
+
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s9"}
+        )
+    )
+
+    assert {"type": "endSession", "sessionId": "local-1"} in local.sent
+    assert relay._orphaned_local_sessions == set()
+    assert "local-1" not in relay._local_to_central_session
+    assert relay._pending_central_sessions == ["s9"]
+    assert not any(m.get("reason", "").startswith("robot_busy") for m in central.sent)
+    assert lock.status().state == RobotAppLockState.REMOTE_SESSION
+
+
+def test_orphan_ending_locally_frees_the_robot() -> None:
+    """When WebRTC drops the kept session (peer gone), the robot is released."""
+    lock = RobotAppLock()
+    relay, _central, _local = _relay_with_live_session(lock)
+    relay._keep_sessions_on_central_loss()
+
+    asyncio.run(
+        relay._process_local_message({"type": "endSession", "sessionId": "local-1"})
+    )
+
+    assert relay._orphaned_local_sessions == set()
+    assert relay._local_to_central_session == {}
+    assert lock.status().state == RobotAppLockState.FREE

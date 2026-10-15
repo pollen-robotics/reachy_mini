@@ -190,6 +190,15 @@ class CentralSignalingRelay:
             str, str
         ] = {}  # central_session_id -> local_session_id
 
+        # Local sessions kept alive across a central-only drop (see
+        # `_keep_sessions_on_central_loss`). Their media is peer-to-peer
+        # and doesn't need central; their central session ids are stale.
+        self._orphaned_local_sessions: set[str] = set()
+        # Handler of the local GStreamer websocket. Outlives a central
+        # reconnect so the sessions it carries survive (closing the
+        # websocket makes webrtcsink drop every consumer on it).
+        self._local_task: Optional[asyncio.Task[None]] = None
+
         # Cadence at which `_heartbeat_loop` re-emits setPeerStatus
         # to refresh central's peer lease. Negotiated from the SSE
         # `welcome` message every reconnect; falls back to
@@ -338,6 +347,7 @@ class CentralSignalingRelay:
                 )
 
         # Clear all session bookkeeping.
+        self._orphaned_local_sessions.clear()
         self._pending_central_sessions.clear()
         self._local_to_central_session.clear()
         self._central_to_local_session.clear()
@@ -546,6 +556,7 @@ class CentralSignalingRelay:
         self._local_to_central_session.pop(local_session_id, None)
         self._central_to_local_session.pop(central_session_id, None)
         self._session_to_local_peer.pop(central_session_id, None)
+        self._orphaned_local_sessions.discard(local_session_id)
         if central_session_id in self._pending_central_sessions:
             self._pending_central_sessions.remove(central_session_id)
         if (
@@ -648,6 +659,8 @@ class CentralSignalingRelay:
                 self._local_ws = None
 
             # Clear session state
+            self._local_task = None
+            self._orphaned_local_sessions.clear()
             self._central_peer_id = None
             self._local_peer_id = None
             self._session_to_local_peer.clear()
@@ -802,7 +815,105 @@ class CentralSignalingRelay:
         # requests this relay sends (see utils/proxy.py).
         self._http_session = aiohttp.ClientSession()
 
-        # Connect to local GStreamer signaling (WebSocket) with timeout
+        # The local websocket survives a central-only reconnect (see
+        # `_close_central`): only (re)connect it when it's actually gone.
+        if (
+            self._local_ws is None
+            or self._local_task is None
+            or self._local_task.done()
+        ):
+            await self._connect_local()
+        else:
+            logger.info(
+                "[Central Relay] Reusing the local WebRTC connection (%d session(s) kept)",
+                len(self._local_to_central_session),
+            )
+
+        local_task = self._local_task
+        assert local_task is not None
+        # Full teardown unless the race below proves only central went away.
+        central_only = False
+        try:
+            # Now connect to central server and run all handlers.
+            # Use wait with FIRST_COMPLETED so we can reconnect if any
+            # handler exits. The mapping documents one-to-one why each
+            # task is part of the race; adding a new reconnect trigger
+            # is a one-line change.
+            self._set_state(RelayState.CONNECTING, "Connecting to central server...")
+            token_task = asyncio.create_task(self._watch_for_token_update())
+            relay_tasks: dict[asyncio.Task[None], str] = {
+                asyncio.create_task(
+                    self._handle_central_sse()
+                ): "Central SSE handler exited, will reconnect",
+                local_task: "Local WebSocket handler exited, will reconnect",
+                token_task: "Token update triggered reconnect",
+                asyncio.create_task(
+                    self._producer_health_loop()
+                ): "Producer health check triggered reconnect",
+                asyncio.create_task(
+                    self._heartbeat_loop()
+                ): "Heartbeat loop exited unexpectedly, will reconnect",
+            }
+
+            try:
+                done, pending = await asyncio.wait(
+                    relay_tasks.keys(), return_when=asyncio.FIRST_COMPLETED
+                )
+
+                for task in done:
+                    logger.info("[Central Relay] %s", relay_tasks[task])
+                    if task.exception():
+                        logger.warning(
+                            "[Central Relay] Task %s raised: %s",
+                            task.get_name(),
+                            task.exception(),
+                        )
+
+                # Only the central leg went away (SSE drop, split brain,
+                # heartbeat failure): keep the local side and its sessions.
+                # A token change or a dead local websocket still tears
+                # everything down.
+                central_only = (
+                    self._running
+                    and local_task not in done
+                    and token_task not in done
+                    and not self._token_updated.is_set()
+                )
+
+                # Cancel remaining tasks (the local handler survives a
+                # central-only reconnect).
+                for task in pending:
+                    if central_only and task is local_task:
+                        continue
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+
+                # Update state to show we're reconnecting (unless already set)
+                if self._state == RelayState.CONNECTED:
+                    self._set_state(
+                        RelayState.RECONNECTING, "Connection lost, reconnecting..."
+                    )
+            except asyncio.CancelledError:
+                # Cancel all tasks if we're cancelled
+                for task in relay_tasks:
+                    task.cancel()
+                raise
+        finally:
+            if central_only:
+                await self._close_central()
+            else:
+                await self._close_connections()
+
+    async def _connect_local(self) -> None:
+        """Connect to local GStreamer signaling and wait for its welcome.
+
+        Starts `self._local_task` on success. On failure the HTTP session
+        is closed and the error propagates to `_run_loop` (backoff).
+        """
+        assert self._http_session is not None
         self._set_state(RelayState.CONNECTING, "Connecting to local WebRTC...")
         logger.info(
             f"[Central Relay] Attempting to connect to local websocket: {self.local_uri}"
@@ -835,96 +946,36 @@ class CentralSignalingRelay:
             self._http_session = None
             raise
 
-        # Wait for welcome message from local websocket to verify connection is working
+        # Wait for welcome message from local GStreamer to verify connection
         self._local_welcome_received = asyncio.Event()
         logger.info(
             "[Central Relay] Waiting for welcome message from local websocket..."
         )
+        self._local_task = asyncio.create_task(self._handle_local_messages())
+        logger.info("[Central Relay] Local message handler task started")
         try:
-            # Start reading local messages in background to receive welcome
-            local_task = asyncio.create_task(self._handle_local_messages())
-            logger.info("[Central Relay] Local message handler task started")
-
-            # Wait for welcome with timeout
+            await asyncio.wait_for(
+                self._local_welcome_received.wait(),
+                timeout=LOCAL_WS_WELCOME_TIMEOUT,
+            )
+            logger.info(
+                "[Central Relay] Local WebRTC connection verified (welcome received)"
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                f"[Central Relay] Welcome message timeout after {LOCAL_WS_WELCOME_TIMEOUT}s"
+            )
+            self._local_task.cancel()
             try:
-                await asyncio.wait_for(
-                    self._local_welcome_received.wait(),
-                    timeout=LOCAL_WS_WELCOME_TIMEOUT,
-                )
-                logger.info(
-                    "[Central Relay] Local WebRTC connection verified (welcome received)"
-                )
-            except asyncio.TimeoutError:
-                logger.error(
-                    f"[Central Relay] Welcome message timeout after {LOCAL_WS_WELCOME_TIMEOUT}s"
-                )
-                local_task.cancel()
-                try:
-                    await local_task
-                except asyncio.CancelledError:
-                    pass
-                self._set_state(
-                    RelayState.ERROR,
-                    f"Local WebRTC did not respond within {LOCAL_WS_WELCOME_TIMEOUT}s",
-                )
-                raise
-
-            # Now connect to central server and run all handlers.
-            # Use wait with FIRST_COMPLETED so we can reconnect if any
-            # handler exits. The mapping documents one-to-one why each
-            # task is part of the race; adding a new reconnect trigger
-            # is a one-line change.
-            self._set_state(RelayState.CONNECTING, "Connecting to central server...")
-            relay_tasks: dict[asyncio.Task[None], str] = {
-                asyncio.create_task(
-                    self._handle_central_sse()
-                ): "Central SSE handler exited, will reconnect",
-                local_task: "Local WebSocket handler exited, will reconnect",
-                asyncio.create_task(
-                    self._watch_for_token_update()
-                ): "Token update triggered reconnect",
-                asyncio.create_task(
-                    self._producer_health_loop()
-                ): "Producer health check triggered reconnect",
-                asyncio.create_task(
-                    self._heartbeat_loop()
-                ): "Heartbeat loop exited unexpectedly, will reconnect",
-            }
-
-            try:
-                done, pending = await asyncio.wait(
-                    relay_tasks.keys(), return_when=asyncio.FIRST_COMPLETED
-                )
-
-                for task in done:
-                    logger.info("[Central Relay] %s", relay_tasks[task])
-                    if task.exception():
-                        logger.warning(
-                            "[Central Relay] Task %s raised: %s",
-                            task.get_name(),
-                            task.exception(),
-                        )
-
-                # Cancel remaining tasks
-                for task in pending:
-                    task.cancel()
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
-
-                # Update state to show we're reconnecting (unless already set)
-                if self._state == RelayState.CONNECTED:
-                    self._set_state(
-                        RelayState.RECONNECTING, "Connection lost, reconnecting..."
-                    )
+                await self._local_task
             except asyncio.CancelledError:
-                # Cancel all tasks if we're cancelled
-                for task in relay_tasks:
-                    task.cancel()
-                raise
-        finally:
+                pass
+            self._set_state(
+                RelayState.ERROR,
+                f"Local WebRTC did not respond within {LOCAL_WS_WELCOME_TIMEOUT}s",
+            )
             await self._close_connections()
+            raise
 
     async def _watch_for_token_update(self) -> None:
         """Watch for token updates and close connections to trigger reconnect."""
@@ -1192,11 +1243,10 @@ class CentralSignalingRelay:
                 logger.warning(
                     "[Central Relay] split-brain detected, forcing reconnect"
                 )
-                # `force_reconnect` schedules a teardown via the thread
-                # loop; this task gets cancelled by the FIRST_COMPLETED
-                # race in `_connect_and_relay` and the next iteration
-                # of `_run_loop` re-spawns us with a fresh peer_id.
-                await self.force_reconnect()
+                # Returning ends this task, which wins the FIRST_COMPLETED
+                # race in `_connect_and_relay`: a central-only reconnect
+                # (fresh peer_id) that keeps established local sessions,
+                # unlike `force_reconnect`'s full teardown.
                 return
 
     async def _handle_central_sse(self) -> None:
@@ -1281,15 +1331,91 @@ class CentralSignalingRelay:
         except Exception as e:
             logger.error(f"[Central Relay] Error in central SSE: {e}")
         finally:
-            # Clean up all sessions when central connection drops
-            if self._local_to_central_session:
+            self._keep_sessions_on_central_loss()
+
+    def _keep_sessions_on_central_loss(self) -> None:
+        """Keep established sessions alive while central is unreachable.
+
+        Losing central (SSE timeout, Wi-Fi/WAN hiccup on the robot side)
+        says nothing about the phone <-> robot link: once a session is up
+        its media and data channel are peer-to-peer. Ending it here used
+        to drop perfectly healthy sessions whenever the robot's Internet
+        path blinked.
+
+        Sessions still waiting for central (pending, no local session
+        yet) can't complete and are dropped. Mapped sessions become
+        orphans: they live on and end the usual ways - the client hangs
+        up, WebRTC consent freshness detects a vanished peer (webrtcsink
+        then ends the session locally), the negotiation watchdog catches
+        one that was mid-handshake, or a new session request supersedes
+        them (`_end_orphaned_sessions`). So the robot is never held by a
+        dead session for more than the WebRTC timeouts.
+        """
+        for central_session_id in self._pending_central_sessions:
+            self._session_to_local_peer.pop(central_session_id, None)
+        self._pending_central_sessions.clear()
+        if self._local_to_central_session:
+            newly_kept = (
+                set(self._local_to_central_session) - self._orphaned_local_sessions
+            )
+            self._orphaned_local_sessions.update(newly_kept)
+            if newly_kept:
                 logger.info(
-                    f"[Central Relay] Central connection lost, cleaning up {len(self._local_to_central_session)} sessions"
+                    "[Central Relay] Central connection lost; keeping %d established "
+                    "session(s) alive peer-to-peer",
+                    len(newly_kept),
                 )
-                for local_session_id in list(self._local_to_central_session.keys()):
-                    await self._send_to_local(
-                        {"type": "endSession", "sessionId": local_session_id}
-                    )
+        elif self._robot_app_lock is not None:
+            # Only pending sessions held the lock; they're gone.
+            self._robot_app_lock.release_remote()
+
+    async def _end_orphaned_sessions(self, reason: str) -> None:
+        """End sessions kept across a central drop (see above)."""
+        for local_session_id in list(self._orphaned_local_sessions):
+            logger.info(
+                "[Central Relay] Ending orphaned session %s (%s)",
+                local_session_id,
+                reason,
+            )
+            central_session_id = self._local_to_central_session.pop(
+                local_session_id, None
+            )
+            if central_session_id is not None:
+                self._central_to_local_session.pop(central_session_id, None)
+                self._session_to_local_peer.pop(central_session_id, None)
+            try:
+                await self._send_to_local(
+                    {"type": "endSession", "sessionId": local_session_id}
+                )
+            except Exception:
+                logger.warning(
+                    "[Central Relay] Failed to end orphaned session locally",
+                    exc_info=True,
+                )
+        self._orphaned_local_sessions.clear()
+        if (
+            self._robot_app_lock is not None
+            and not self._central_to_local_session
+            and not self._pending_central_sessions
+        ):
+            self._robot_app_lock.release_remote()
+
+    async def _close_central(self) -> None:
+        """Tear down the central leg only; local sessions are kept.
+
+        Used when only the central side went away (SSE dropped, split
+        brain, heartbeat failure). Everything that needs a fresh
+        central handshake is reset; the local websocket, its sessions
+        and the robot lock stay.
+        """
+        if self._http_session:
+            try:
+                await self._http_session.close()
+            except Exception:
+                pass
+            self._http_session = None
+        self._central_peer_id = None
+        self._keep_sessions_on_central_loss()
 
     async def _handle_local_messages(self) -> None:
         """Handle messages from local GStreamer signaling."""
@@ -1409,6 +1535,12 @@ class CentralSignalingRelay:
             logger.info(
                 f"[Central Relay] Received session request from remote client peer_id={client_peer_id} session_id={session_id}"
             )
+
+            # Sessions kept across a central drop are best-effort: a fresh
+            # request (typically the same phone re-dialing because its side
+            # gave up) takes over instead of being refused as busy.
+            if self._orphaned_local_sessions:
+                await self._end_orphaned_sessions("superseded by a new session")
 
             # Safety net: the central server is supposed to gate concurrent sessions,
             # but if one slips through (e.g. older central without the gate), enforce
@@ -1649,6 +1781,7 @@ class CentralSignalingRelay:
         elif msg_type == "endSession":
             local_session_id_end: Optional[str] = msg.get("sessionId")
             if local_session_id_end:
+                self._orphaned_local_sessions.discard(local_session_id_end)
                 logger.info(
                     f"[Central Relay] Session ended from local: local_session_id={local_session_id_end}"
                 )
