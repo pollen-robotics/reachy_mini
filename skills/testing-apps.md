@@ -39,7 +39,7 @@ Wait for user to confirm they're ready.
 
 ## Step 2: Run the App
 
-Run it the same way the dashboard will launch it:
+Run it directly through its app entry point:
 
 ```bash
 cd ~/reachy_mini_apps/my_app
