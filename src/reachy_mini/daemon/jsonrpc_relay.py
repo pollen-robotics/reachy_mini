@@ -3,9 +3,11 @@
 Incoming JSON-RPC frames from any client transport (WebRTC DataChannel,
 ``/ws/sdk``) are routed here by namespace:
 
-* ``apps.*`` — handled locally against the :class:`AppManager` (start / stop /
-  status of the single running app). This *is* the "apps API" exposed over
-  WebRTC.
+* ``apps.*`` — handled locally against the :class:`AppManager`: lifecycle of
+  the single running app (start / stop / restart / status) and the installed
+  set (list / install / remove / update, as background jobs whose progress is
+  pushed as ``apps.job_progress`` notifications). This *is* the "apps API"
+  exposed over WebRTC, for clients that can't reach the LAN-only REST API.
 * anything else (e.g. ``conversation.*``) — relayed to the running app's
   ``/rpc`` WebSocket. The relay holds one persistent connection to that
   endpoint, which doubles as the daemon's subscription to the app's event
@@ -19,13 +21,18 @@ app WS client live); transports schedule :meth:`handle` onto it.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import Any, Callable, Optional
 from urllib.parse import urlparse
 
 from websockets.asyncio.client import ClientConnection, connect
 
+from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.apps.sources.hf_space import get_python_app_info
+from reachy_mini.daemon import startup_app_config
+from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.startup_app import ensure_startup_app_installed
 from reachy_mini.io.jsonrpc import (
     JsonRpcError,
@@ -34,6 +41,7 @@ from reachy_mini.io.jsonrpc import (
     RpcSuccess,
     error_from_exc,
     make_error,
+    make_notification,
     make_result,
     parse_inbound,
     parse_request,
@@ -42,6 +50,10 @@ from reachy_mini.io.jsonrpc import (
 Reply = Callable[[dict[str, Any]], None]
 
 _CONNECT_TIMEOUT_S = 5.0
+
+# Notification pushed for every line / the end of an install, remove or update
+# job: {job_id, command, status, line, final}.
+JOB_PROGRESS_METHOD = "apps.job_progress"
 
 
 class JsonRpcRelay:
@@ -75,6 +87,8 @@ class JsonRpcRelay:
         self._pending: dict[str, Reply] = {}
         self._pending_original_id: dict[str, Any] = {}
         self._counter = 0
+        # Legacy `apps.install` calls running inline (outside the job register).
+        self._inline_installs = 0
 
     # -- entry point -------------------------------------------------------
 
@@ -122,9 +136,46 @@ class JsonRpcRelay:
                 raise JsonRpcError(str(e), reason="already_running") from e
             result: Any = _status_dict(status)
         elif verb == "stop":
-            await self._apps.stop_current_app()
+            try:
+                await self._apps.stop_current_app()
+            except RuntimeError as e:
+                # stop_current_app raises when nothing is running.
+                raise JsonRpcError(str(e), reason="not_running") from e
             result = {"stopped": True}
+        elif verb == "restart":
+            if not self._apps.is_app_running():
+                raise JsonRpcError("No app is currently running", reason="not_running")
+            try:
+                status = await self._apps.restart_current_app(keep_remote=True)
+            except RuntimeError as e:
+                # The stop went through but the start did not (another client
+                # took the slot meanwhile): the app is now stopped.
+                raise JsonRpcError(str(e), reason="already_running") from e
+            result = _status_dict(status)
+        elif verb == "list_installed":
+            installed = await self._apps.list_available_apps(SourceKind.INSTALLED)
+            result = {"apps": [_installed_dict(a) for a in installed]}
+        elif verb == "install_space":
+            result = await self._start_install_job(_required_str(req, "space_id"))
+        elif verb == "remove":
+            result = await self._start_remove_job(_required_str(req, "name"))
+        elif verb == "update":
+            name = _required_str(req, "name")
+            self._ensure_no_active_job()
+            await self._ensure_not_running(name)
+            job_id = bg_job_register.run_command(
+                "update", self._apps.update_app, name, on_event=self._on_job_event
+            )
+            result = {"job_id": job_id}
+        elif verb == "job_status":
+            job_id = _required_str(req, "job_id")
+            try:
+                info = bg_job_register.get_info(job_id)
+            except ValueError as e:
+                raise JsonRpcError(str(e), reason="unknown_job") from e
+            result = {"job_id": job_id, **_job_dict(info)}
         elif verb == "install":
+            self._ensure_no_active_job()
             name = req.params.get("name")
             if not isinstance(name, str) or not name:
                 raise JsonRpcError(
@@ -136,7 +187,12 @@ class JsonRpcRelay:
             # installed). Can take minutes on a first install — callers
             # should use a generous timeout. Runs as its own task, so
             # other RPCs (apps.status polling, ...) keep answering.
-            if not await ensure_startup_app_installed(self._apps, name):
+            self._inline_installs += 1
+            try:
+                installed_ok = await ensure_startup_app_installed(self._apps, name)
+            finally:
+                self._inline_installs -= 1
+            if not installed_ok:
                 raise JsonRpcError(
                     f"could not install app {name!r} (not in the catalog, "
                     "or the install failed — see the daemon logs)",
@@ -153,6 +209,81 @@ class JsonRpcRelay:
             )
         if not req.is_notification:
             reply(make_result(req.id, result))
+
+    async def _start_install_job(self, space_id: str) -> dict[str, Any]:
+        if space_id.count("/") != 1 or not all(space_id.split("/")):
+            raise JsonRpcError(
+                "space_id must look like 'owner/repo'",
+                reason="invalid_params",
+                code=-32602,
+            )
+        self._ensure_no_active_job()
+        app = await get_python_app_info(space_id)
+        if app is None:
+            raise JsonRpcError(
+                f"{space_id!r} is not a reachable Reachy Mini Python app",
+                reason="not_found",
+            )
+        # Again: another install may have started during the Hub lookup.
+        self._ensure_no_active_job()
+        job_id = bg_job_register.run_command(
+            "install", self._apps.install_new_app, app, on_event=self._on_job_event
+        )
+        return {"job_id": job_id, "name": app.name}
+
+    async def _start_remove_job(self, name: str) -> dict[str, Any]:
+        self._ensure_no_active_job()
+        await self._ensure_not_running(name)
+        if startup_app_config.get_startup_app() == name:
+            # The REST route clears it and re-arms the antenna watcher, which
+            # needs the FastAPI app state; refuse rather than leave a watcher
+            # that would reinstall the app on the next wake-up.
+            raise JsonRpcError(
+                f"{name!r} is the startup app; unset it before removing it",
+                reason="startup_app",
+            )
+        job_id = bg_job_register.run_command(
+            "remove", self._apps.remove_app, name, on_event=self._on_job_event
+        )
+        return {"job_id": job_id}
+
+    def _ensure_no_active_job(self) -> None:
+        # Two uv/pip runs in the shared apps venv at once can corrupt it. The
+        # register also holds jobs started over REST, so an RPC job never
+        # overlaps one (the REST routes themselves do not check), and the
+        # legacy inline `apps.install` is counted separately.
+        if bg_job_register.has_active_job() or self._inline_installs:
+            raise JsonRpcError(
+                "another install/remove/update is in progress", reason="busy"
+            )
+
+    async def _ensure_not_running(self, name: str) -> None:
+        app = self._apps.current_app
+        if app is None or not self._apps.is_app_running():
+            return
+        if app.status.info.name != name:
+            return
+        if str(getattr(app.status.state, "value", app.status.state)) == "error":
+            # Crashed: no process left, but it still holds the slot (and
+            # update_app refuses while it does). Clear it instead of leaving
+            # the user stuck between "stop it first" and nothing to stop.
+            await self._apps.stop_current_app()
+            return
+        raise JsonRpcError(f"{name!r} is running; stop it first", reason="app_running")
+
+    def _on_job_event(
+        self, job_id: str, info: bg_job_register.JobInfo, line: str | None
+    ) -> None:
+        # Called from the job thread; broadcast_to_all_clients is thread-safe
+        # (the WebRTC self-update streams its progress the same way).
+        params = {
+            "job_id": job_id,
+            "command": info.command,
+            "status": info.status.value,
+            "line": line,
+            "final": line is None,
+        }
+        self._broadcast(json.dumps(make_notification(JOB_PROGRESS_METHOD, params)))
 
     def _current_status_dict(self) -> dict[str, Any]:
         app = self._apps.current_app
@@ -279,6 +410,37 @@ def _rpc_ws_url(app_url: str) -> str:
     scheme = "wss" if p.scheme == "https" else "ws"
     port = f":{p.port}" if p.port else ""
     return f"{scheme}://{host}{port}/rpc"
+
+
+def _required_str(req: RpcRequest, key: str) -> str:
+    value = req.params.get(key)
+    if not isinstance(value, str) or not value:
+        raise JsonRpcError(
+            f"{req.method} requires a '{key}'", reason="invalid_params", code=-32602
+        )
+    return value
+
+
+def _installed_dict(app: AppInfo) -> dict[str, Any]:
+    """Serialize an installed app, without the bulky raw Space metadata."""
+    extra = app.extra or {}
+    card = extra.get("cardData")
+    card = card if isinstance(card, dict) else {}
+    space_id = extra.get("id")
+    return {
+        "name": app.name,
+        "description": app.description or card.get("short_description") or "",
+        "url": app.url,
+        "space_id": space_id if isinstance(space_id, str) else None,
+        "title": card.get("title"),
+        "emoji": card.get("emoji"),
+        "private": bool(extra.get("private")),
+        "custom_app_url": extra.get("custom_app_url"),
+    }
+
+
+def _job_dict(info: bg_job_register.JobInfo) -> dict[str, Any]:
+    return {"command": info.command, "status": info.status.value, "logs": info.logs}
 
 
 def _status_dict(status: Any) -> dict[str, Any]:

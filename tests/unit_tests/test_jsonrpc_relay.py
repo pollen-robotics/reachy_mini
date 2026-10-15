@@ -299,7 +299,9 @@ async def test_apps_install(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_original_id_recorded_before_send(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_original_id_recorded_before_send(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The caller's id must be recorded before the frame leaves the relay.
 
     Regression: the reader task runs on this loop and can deliver the app's
@@ -329,3 +331,238 @@ async def test_original_id_recorded_before_send(monkeypatch: pytest.MonkeyPatch)
     )
     assert snapshot["present"] is True
     await relay.aclose()
+
+
+# ------------------------------------------------------- apps.* management
+
+
+class FakeManagerWithInstalled(FakeAppManager):
+    """FakeAppManager plus an installed list and job coroutines."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.installed = [
+            jsonrpc_relay.AppInfo(
+                name="conv",
+                source_kind=jsonrpc_relay.SourceKind.INSTALLED,
+                url="https://huggingface.co/spaces/pollen/conv",
+                extra={
+                    "id": "pollen/conv",
+                    "cardData": {
+                        "title": "Conv",
+                        "emoji": "🎤",
+                        "short_description": "Talk",
+                    },
+                    "custom_app_url": "http://0.0.0.0:7860/",
+                    "siblings": ["huge", "payload"],
+                },
+            )
+        ]
+        self.restarted_keep_remote: bool | None = None
+
+    async def list_available_apps(self, source: Any) -> list[Any]:
+        return self.installed
+
+    async def restart_current_app(self, keep_remote: bool = False) -> Any:
+        if self.current_app is None:
+            raise RuntimeError("No app is currently running")
+        self.restarted_keep_remote = keep_remote
+        return self.current_app.status
+
+    async def install_new_app(self, app: Any, logger: Any) -> None:
+        logger.info(f"installing {app.name}")
+
+    async def remove_app(self, name: str, logger: Any) -> None:
+        raise RuntimeError("uninstall failed")
+
+
+async def _call(
+    relay: JsonRpcRelay, method: str, params: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    replies: list[dict[str, Any]] = []
+    frame: dict[str, Any] = {"jsonrpc": "2.0", "id": "x", "method": method}
+    if params is not None:
+        frame["params"] = params
+    await relay.handle(json.dumps(frame), replies.append)
+    return replies[0]
+
+
+@pytest.mark.asyncio
+async def test_apps_list_installed_is_trimmed() -> None:
+    relay = JsonRpcRelay(FakeManagerWithInstalled(), broadcast=lambda _: None)
+    reply = await _call(relay, "apps.list_installed")
+    assert reply["result"]["apps"] == [
+        {
+            "name": "conv",
+            "description": "Talk",
+            "url": "https://huggingface.co/spaces/pollen/conv",
+            "space_id": "pollen/conv",
+            "title": "Conv",
+            "emoji": "🎤",
+            "private": False,
+            "custom_app_url": "http://0.0.0.0:7860/",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_apps_stop_and_restart_when_idle_report_not_running() -> None:
+    relay = JsonRpcRelay(FakeManagerWithInstalled(), broadcast=lambda _: None)
+
+    async def stop_raises() -> None:
+        raise RuntimeError("No app is currently running")
+
+    relay._apps.stop_current_app = stop_raises  # type: ignore[method-assign]
+    assert (await _call(relay, "apps.stop"))["error"]["data"]["reason"] == "not_running"
+    assert (await _call(relay, "apps.restart"))["error"]["data"][
+        "reason"
+    ] == "not_running"
+
+
+@pytest.mark.asyncio
+async def test_apps_restart_keeps_remote() -> None:
+    apps = FakeManagerWithInstalled()
+    relay = JsonRpcRelay(apps, broadcast=lambda _: None)
+    await _call(relay, "apps.start", {"name": "conv"})
+    reply = await _call(relay, "apps.restart")
+    assert reply["result"]["info"]["name"] == "conv"
+    assert apps.restarted_keep_remote is True
+
+
+async def _wait_final(events: list[dict[str, Any]], timeout: float = 2.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not any(e["params"]["final"] for e in events):
+        assert asyncio.get_running_loop().time() < deadline, "job never finished"
+        await asyncio.sleep(0.01)
+
+
+@pytest.mark.asyncio
+async def test_apps_install_space_runs_a_job_and_streams_progress(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_resolve(space_id: str) -> Any:
+        if space_id != "pollen/conv":
+            return None
+        return jsonrpc_relay.AppInfo(
+            name="conv", source_kind=jsonrpc_relay.SourceKind.HF_SPACE
+        )
+
+    monkeypatch.setattr(jsonrpc_relay, "get_python_app_info", fake_resolve)
+    events: list[dict[str, Any]] = []
+    relay = JsonRpcRelay(
+        FakeManagerWithInstalled(), broadcast=lambda s: events.append(json.loads(s))
+    )
+
+    reply = await _call(relay, "apps.install_space", {"space_id": "pollen/conv"})
+    job_id = reply["result"]["job_id"]
+    assert reply["result"]["name"] == "conv"
+    await _wait_final(events)
+
+    assert all(e["method"] == "apps.job_progress" for e in events)
+    assert all(e["params"]["job_id"] == job_id for e in events)
+    assert any(e["params"]["line"] == "installing conv" for e in events)
+    assert events[-1]["params"]["final"] is True
+    assert events[-1]["params"]["status"] == "done"
+
+    status = await _call(relay, "apps.job_status", {"job_id": job_id})
+    assert status["result"]["status"] == "done"
+    assert "installing conv" in status["result"]["logs"]
+
+    assert (await _call(relay, "apps.install_space", {"space_id": "pollen/nope"}))[
+        "error"
+    ]["data"]["reason"] == "not_found"
+    assert (await _call(relay, "apps.install_space", {"space_id": "bad"}))["error"][
+        "data"
+    ]["reason"] == "invalid_params"
+    assert (await _call(relay, "apps.job_status", {"job_id": "nope"}))["error"]["data"][
+        "reason"
+    ] == "unknown_job"
+
+
+@pytest.mark.asyncio
+async def test_apps_remove_guards_and_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    apps = FakeManagerWithInstalled()
+    events: list[dict[str, Any]] = []
+    relay = JsonRpcRelay(apps, broadcast=lambda s: events.append(json.loads(s)))
+
+    # Refused while running.
+    await _call(relay, "apps.start", {"name": "conv"})
+    reply = await _call(relay, "apps.remove", {"name": "conv"})
+    assert reply["error"]["data"]["reason"] == "app_running"
+    apps.current_app = None
+
+    # Refused for the startup app.
+    monkeypatch.setattr(
+        jsonrpc_relay.startup_app_config, "get_startup_app", lambda: "conv"
+    )
+    reply = await _call(relay, "apps.remove", {"name": "conv"})
+    assert reply["error"]["data"]["reason"] == "startup_app"
+    monkeypatch.setattr(
+        jsonrpc_relay.startup_app_config, "get_startup_app", lambda: None
+    )
+
+    # Busy while another job runs.
+    monkeypatch.setattr(jsonrpc_relay.bg_job_register, "has_active_job", lambda: True)
+    reply = await _call(relay, "apps.remove", {"name": "conv"})
+    assert reply["error"]["data"]["reason"] == "busy"
+    monkeypatch.undo()
+    monkeypatch.setattr(
+        jsonrpc_relay.startup_app_config, "get_startup_app", lambda: None
+    )
+
+    # A failing job ends with a final `failed` event.
+    reply = await _call(relay, "apps.remove", {"name": "conv"})
+    assert "job_id" in reply["result"]
+    await _wait_final(events)
+    assert events[-1]["params"]["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_apps_remove_clears_a_crashed_app_first() -> None:
+    apps = FakeManagerWithInstalled()
+    events: list[dict[str, Any]] = []
+    relay = JsonRpcRelay(apps, broadcast=lambda s: events.append(json.loads(s)))
+    await _call(relay, "apps.start", {"name": "conv"})
+    apps.current_app.status.state = "error"
+
+    reply = await _call(relay, "apps.remove", {"name": "conv"})
+
+    assert "job_id" in reply["result"]
+    assert apps.stopped == 1
+    await _wait_final(events)
+
+
+@pytest.mark.asyncio
+async def test_apps_restart_start_failure_is_not_reported_as_idle() -> None:
+    apps = FakeManagerWithInstalled()
+    relay = JsonRpcRelay(apps, broadcast=lambda _: None)
+    await _call(relay, "apps.start", {"name": "conv"})
+
+    async def restart_fails(keep_remote: bool = False) -> Any:
+        raise RuntimeError("An app is already running")
+
+    apps.restart_current_app = restart_fails  # type: ignore[method-assign]
+    reply = await _call(relay, "apps.restart")
+    assert reply["error"]["data"]["reason"] == "already_running"
+
+
+@pytest.mark.asyncio
+async def test_inline_install_blocks_install_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release = asyncio.Event()
+
+    async def slow_ensure(apps: Any, name: str) -> bool:
+        await release.wait()
+        return True
+
+    monkeypatch.setattr(jsonrpc_relay, "ensure_startup_app_installed", slow_ensure)
+    relay = JsonRpcRelay(FakeManagerWithInstalled(), broadcast=lambda _: None)
+
+    legacy = asyncio.create_task(_call(relay, "apps.install", {"name": "conv"}))
+    await asyncio.sleep(0)
+    reply = await _call(relay, "apps.install_space", {"space_id": "pollen/other"})
+    assert reply["error"]["data"]["reason"] == "busy"
+
+    release.set()
+    assert (await legacy)["result"] == {"installed": True}
