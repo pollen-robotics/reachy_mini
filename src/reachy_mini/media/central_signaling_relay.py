@@ -431,14 +431,13 @@ class CentralSignalingRelay:
         never blocks on aiohttp.
 
         ``peer_id`` is the identifier surfaced by ``webrtcsink``'s
-        ``consumer-added`` signal. ``webrtcsink`` uses the same UUID
-        for the WebRTC consumer and the local GStreamer signaling
-        session, so ``peer_id`` is also the ``local_session_id`` we
-        use for the central <-> local session mapping.
+        ``consumer-added`` signal: the consumer's signalling peer id,
+        which for relayed sessions is this relay's own local peer id,
+        NOT the session id. ``_resolve_failed_local_session`` maps it
+        back to the session that failed.
 
         Args:
-            peer_id: ``webrtcbin`` consumer id == local GStreamer
-                session id.
+            peer_id: ``webrtcsink`` consumer id (see above).
             reason: Wire-level reason carried in the ``endSession``
                 envelope; matched against
                 ``SESSION_FAILED_REASON_*`` constants in
@@ -472,22 +471,24 @@ class CentralSignalingRelay:
     ) -> None:
         """Inner coroutine for ``notify_peer_session_failed``.
 
-        Runs on the relay's own thread loop. Looks up the mapping,
-        emits ``endSession`` to central, and clears the bookkeeping
-        for this session. Local GStreamer is intentionally NOT
-        notified here: ``webrtcbin`` already considers the peer dead
-        (that's what triggered the watchdog) and emitting
-        ``endSession`` to local would race ``consumer-removed``,
-        producing a confusing pair of "session ended" log lines for
-        the same UUID.
+        Runs on the relay's own thread loop. Resolves the failed
+        session, emits ``endSession`` to central AND to local GStreamer,
+        and clears the bookkeeping for this session. Ending it locally
+        matters for the watchdog's case: a session stuck before ICE never
+        fails on its own, so without it ``consumer-removed`` would only
+        come with the next relay reconnect.
         """
         # Walk the mapping in one pass and capture the central id
         # before mutating the dicts, so we can log a single coherent
         # line even if a concurrent ``endSession`` from the other
         # direction is racing us.
-        local_session_id = peer_id
-        central_session_id = self._local_to_central_session.get(local_session_id)
-        if central_session_id is None:
+        local_session_id = self._resolve_failed_local_session(peer_id)
+        central_session_id = (
+            self._local_to_central_session.get(local_session_id)
+            if local_session_id is not None
+            else None
+        )
+        if local_session_id is None or central_session_id is None:
             logger.warning(
                 "[Central Relay] notify_peer_session_failed: no central session "
                 "mapped for peer_id=%s (reason=%s, diagnostic=%s); session may "
@@ -521,6 +522,21 @@ class CentralSignalingRelay:
                 exc_info=True,
             )
 
+        # A session stuck mid-negotiation never fails on its own:
+        # webrtcbin sits in `new` and webrtcsink keeps the consumer (and
+        # the robot lock) until something ends it - observed dangling
+        # ~50 s until the next central reconnect. End it locally too so
+        # `consumer-removed` frees it now.
+        try:
+            await self._send_to_local(
+                {"type": "endSession", "sessionId": local_session_id}
+            )
+        except Exception:
+            logger.warning(
+                "[Central Relay] Failed to end the failed session locally",
+                exc_info=True,
+            )
+
         # Clean up our half of the bookkeeping. ``_consumer_removed``
         # on the GStreamer side will run shortly after and clean up
         # the local-side mappings too, but we drop our entries
@@ -538,6 +554,25 @@ class CentralSignalingRelay:
             and not self._pending_central_sessions
         ):
             self._robot_app_lock.release_remote()
+
+    def _resolve_failed_local_session(self, peer_id: str) -> Optional[str]:
+        """Map a ``webrtcsink`` consumer id to the local session that failed.
+
+        ``consumer-added`` reports the consumer's *signalling peer id*,
+        not the session id. Every session relayed from central goes
+        through this relay's single local websocket, so they all share
+        one consumer id: the relay's own ``_local_peer_id``. In that case
+        the failing session is the newest one - it's the one still
+        negotiating; earlier ones already got past ICE (or were ended).
+        A consumer id that IS a mapped session id (direct local
+        consumers) is used as-is.
+        """
+        if peer_id in self._local_to_central_session:
+            return peer_id
+        if peer_id == self._local_peer_id and self._local_to_central_session:
+            # dicts keep insertion order: last key = most recent session.
+            return next(reversed(self._local_to_central_session))
+        return None
 
     async def _reconnect_now(self, token: Optional[str], reason: str) -> None:
         """Shared core of token-change and force-reconnect paths.

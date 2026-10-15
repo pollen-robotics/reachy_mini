@@ -355,6 +355,7 @@ def _make_relay_with_session(
     relay = _make_relay()
     journal = _SendJournal()
     relay._send_to_central = journal  # type: ignore[method-assign]
+    relay._send_to_local = _SendJournal()  # type: ignore[method-assign]
     relay._local_to_central_session[local_session_id] = central_session_id
     relay._central_to_local_session[central_session_id] = local_session_id
     relay._session_to_local_peer[central_session_id] = client_peer_id
@@ -407,6 +408,49 @@ def test_notify_peer_session_failed_drops_pending_central_session() -> None:
 
     assert "central-p" not in relay._pending_central_sessions
     assert journal.sent[0]["sessionId"] == "central-p"
+
+
+def test_notify_peer_session_failed_resolves_relay_consumer_id_to_newest_session() -> (
+    None
+):
+    """Relayed sessions all share the relay's own consumer id.
+
+    webrtcsink reports the consumer's signalling peer id, which is the
+    relay's local peer id for every relayed session - so the failure is
+    pinned on the newest session, the one still negotiating.
+    """
+    relay, journal = _make_relay_with_session(
+        local_session_id="local-old", central_session_id="central-old"
+    )
+    relay._local_peer_id = "relay-consumer"
+    relay._local_to_central_session["local-new"] = "central-new"
+    relay._central_to_local_session["central-new"] = "local-new"
+
+    asyncio.run(
+        relay._notify_peer_session_failed(
+            "relay-consumer", "ice_negotiation_timeout", {}
+        )
+    )
+
+    assert journal.sent == [
+        {
+            "type": "endSession",
+            "sessionId": "central-new",
+            "reason": "ice_negotiation_timeout",
+        }
+    ]
+    assert "local-new" not in relay._local_to_central_session
+    assert relay._local_to_central_session == {"local-old": "central-old"}
+
+
+def test_notify_peer_session_failed_ends_the_session_locally() -> None:
+    """A session stuck before ICE is ended on the GStreamer side too."""
+    relay, _journal = _make_relay_with_session()
+    local = relay._send_to_local
+
+    asyncio.run(relay._notify_peer_session_failed("local-1", "any", {}))
+
+    assert local.sent == [{"type": "endSession", "sessionId": "local-1"}]  # type: ignore[attr-defined]
 
 
 def test_notify_peer_session_failed_no_op_when_session_unknown() -> None:
