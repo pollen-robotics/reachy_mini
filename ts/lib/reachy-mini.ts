@@ -177,6 +177,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     _micStream: MediaStream | null = null;
     private _robotAudioTrack: MediaStreamTrack | null = null;
     private _outgoingAudioTrack: MediaStreamTrack | null = null;
+    /** Context driving the silent placeholder track; closed with it. */
+    private _micCtx: AudioContext | null = null;
     private _micMuted = true;
     private _audioMuted = true;
     private _micSupported = false;
@@ -252,6 +254,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             // The private dial skips the public startSession()'s
             // cancelRedial, so the loop's own attempts don't cancel it.
             dial: (robotId) => this._startSessionInternal(robotId),
+            redialTargetResolver: (robotId) => this._redialTargetResolver(robotId),
             teardownForRedial: () => this._teardownForRedial(),
             nudgeState: () => { this.requestState(); },
             emit: (name, detail) => this._emit(name, detail),
@@ -647,7 +650,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             };
             const Ctx = w.AudioContext ?? w.webkitAudioContext;
             if (!Ctx) throw new Error('AudioContext not supported');
+            // A dial can follow a teardown that skipped the release
+            // (e.g. a rejected attempt): never keep two contexts alive.
+            this._releaseMicPlaceholder();
             const ctx = new Ctx();
+            this._micCtx = ctx;
             const dst = ctx.createMediaStreamDestination();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
@@ -812,7 +819,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._supervisor.stopDcWatchdog();
         if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
         if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
-        if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
+        this._releaseMicPlaceholder();
         this._robotAudioTrack = null;
         this._micMuted = true;
         this._micSupported = false;
@@ -916,6 +923,41 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * armed, and a late signaling reply could otherwise settle them
      * against a closed pc).
      */
+    /**
+     * Resolver for the redial loop. Matches on the robot's stable
+     * identity (`install_id`, else `hardware_id`; never the name, which
+     * users often leave at the default and share across robots). A
+     * listed robot with that identity under a NEW id is the same robot,
+     * re-registered; otherwise keep dialing the original id.
+     */
+    private _redialTargetResolver(robotId: string): () => string {
+        const identity = (r: RobotInfo | undefined): string | null => {
+            const meta = r?.meta as { install_id?: string; hardware_id?: string } | undefined;
+            return meta?.install_id ?? meta?.hardware_id ?? null;
+        };
+        const key = identity(this._robots.find((r) => r.id === robotId));
+        if (!key) return () => robotId;
+        return () =>
+            this._robots.find((r) => r.id !== robotId && identity(r) === key)?.id ?? robotId;
+    }
+
+    /**
+     * Stop the placeholder sender track AND close its AudioContext.
+     * Stopping the track alone left the context (and its oscillator)
+     * running: one leaked context per dial, and browsers cap open audio
+     * outputs (Chromium: 10 per page), so after a few re-dials every
+     * new AudioContext in the host app fails silently.
+     */
+    private _releaseMicPlaceholder(): void {
+        if (this._micStream) {
+            this._micStream.getTracks().forEach((t) => t.stop());
+            this._micStream = null;
+        }
+        const ctx = this._micCtx;
+        this._micCtx = null;
+        if (ctx && ctx.state !== 'closed') void ctx.close().catch(() => {});
+    }
+
     private _teardownForRedial(): void {
         const sessionId = this._closeTransport(new Error('Session reconnecting'));
         // Free the robot-side slot: the relay refuses a second session
@@ -1983,7 +2025,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._supervisor.clearIceGrace();
             this._supervisor.uninstallNetworkListeners();
             if (this._pc) { this._pc.close(); this._pc = null; }
-            if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
+            this._releaseMicPlaceholder();
             this._robotAudioTrack = null;
             this._iceConnected = false;
             this._dcOpen = false;
