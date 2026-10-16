@@ -201,7 +201,20 @@ You can run your app's `main.py` directly for quick iteration (make sure the dae
 python -m my_app.main
 ```
 
-### 3. Make an app start on wake-up or antenna touch
+### 3. Run it through the daemon
+
+Install your app locally and start it the way the daemon does for users (as a subprocess, stopped with `SIGINT`):
+
+```bash
+# Install in development mode
+uv pip install -e /path/to/my_app
+
+# Start, then stop it (<HOST> as in "Via the REST API" below)
+curl -X POST http://<HOST>/api/apps/start-app/my_app
+curl -X POST http://<HOST>/api/apps/stop-current-app
+```
+
+### 4. Make an app start on wake-up or antenna touch
 
 Use the daemon's existing `--startup-app` option when you want one installed
 app to be the default experience:
