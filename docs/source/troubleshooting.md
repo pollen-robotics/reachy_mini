@@ -386,8 +386,8 @@ export HTTPS_PROXY=http://proxy.example.com:3128
 export NO_PROXY=localhost,127.0.0.1,reachy-mini.local
 ```
 
-Keep local addresses in `NO_PROXY` so the daemon, mDNS discovery and the
-dashboard stay reachable without going through the proxy.
+Keep local addresses in `NO_PROXY` so the daemon API (used by Reachy Mini
+Control) and mDNS discovery stay reachable without going through the proxy.
 
 For the Wireless version the variables must be visible to the daemon service,
 not just to your shell. Add them to the unit and restart it:
