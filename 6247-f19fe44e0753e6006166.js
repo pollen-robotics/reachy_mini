@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunk_allurereport_web_awesome=self.webpackChunk_allurereport_web_awesome||[]).push([[6247],{6247:function(e,r,u){u.d(r,{createPieServices:function(){return a.f}});var a=u(2512);u(3915)}}]);
