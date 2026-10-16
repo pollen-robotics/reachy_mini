@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import signal
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
@@ -13,6 +14,7 @@ import psutil
 from pydantic import BaseModel
 
 from reachy_mini.daemon.backend.robot import RobotBackend
+from reachy_mini.daemon.telemetry import app_id_for, telemetry
 from reachy_mini.io.protocol import MotorControlMode
 from reachy_mini.utils.interpolation import distance_between_poses
 
@@ -234,6 +236,9 @@ class AppManager:
             state=AppState.STARTING,
             error=None,
         )
+        app_id = app_id_for(local_common_venv._load_app_metadata(app_name))
+        started_at = time.monotonic()
+        telemetry.capture("robot_app_started", app_id=app_id)
 
         async def monitor_process() -> None:
             """Monitor the subprocess and update status."""
@@ -298,6 +303,15 @@ class AppManager:
                 # release is fine too.
                 if self.daemon is not None:
                     self.daemon.robot_app_lock.release_local(app_name)
+                exit_code = process.returncode
+                telemetry.capture(
+                    "robot_app_stopped",
+                    app_id=app_id,
+                    duration_s=int(time.monotonic() - started_at),
+                    exit_code=exit_code,
+                    crashed=exit_code not in (0, None)
+                    and status.state != AppState.STOPPING,
+                )
 
         monitor_task = asyncio.create_task(monitor_process())
 
@@ -460,23 +474,37 @@ class AppManager:
 
     async def install_new_app(self, app: AppInfo, logger: logging.Logger) -> None:
         """Install a new app by name."""
-        success = await local_common_venv.install_package(
-            app,
-            logger,
-            wireless_version=self.wireless_version,
-            desktop_app_daemon=self.desktop_app_daemon,
-        )
+        success = -1
+        try:
+            success = await local_common_venv.install_package(
+                app,
+                logger,
+                wireless_version=self.wireless_version,
+                desktop_app_daemon=self.desktop_app_daemon,
+            )
+        finally:
+            telemetry.capture(
+                "robot_app_installed",
+                app_id=app_id_for(app.extra),
+                success=success == 0,
+            )
         if success != 0:
             raise RuntimeError(f"Failed to install app '{app.name}'")
 
     async def remove_app(self, app_name: str, logger: logging.Logger) -> None:
         """Remove an installed app by name."""
-        success = await local_common_venv.uninstall_package(
-            app_name,
-            logger,
-            wireless_version=self.wireless_version,
-            desktop_app_daemon=self.desktop_app_daemon,
-        )
+        # Read before uninstalling, which may delete the metadata.
+        app_id = app_id_for(local_common_venv._load_app_metadata(app_name))
+        success = -1
+        try:
+            success = await local_common_venv.uninstall_package(
+                app_name,
+                logger,
+                wireless_version=self.wireless_version,
+                desktop_app_daemon=self.desktop_app_daemon,
+            )
+        finally:
+            telemetry.capture("robot_app_removed", app_id=app_id, success=success == 0)
         if success != 0:
             raise RuntimeError(f"Failed to uninstall app '{app_name}'")
 
