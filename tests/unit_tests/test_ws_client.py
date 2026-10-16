@@ -7,7 +7,7 @@ connecting to a loopback host and leaves the library default (deflate)
 untouched for any other host.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -56,7 +56,9 @@ def test_connect_disables_compression_for_localhost(mock_connect: MagicMock) -> 
     client = WSClient(host="localhost", port=1234)
     client.disconnect()
 
-    mock_connect.assert_called_once_with("ws://localhost:1234/ws/sdk", compression=None)
+    mock_connect.assert_called_once_with(
+        "ws://localhost:1234/ws/sdk", compression=None, additional_headers=ANY
+    )
 
 
 @patch("reachy_mini.io.ws_client.ws_sync.connect")
@@ -67,7 +69,9 @@ def test_connect_disables_compression_for_127_0_0_1(mock_connect: MagicMock) -> 
     client = WSClient(host="127.0.0.1", port=1234)
     client.disconnect()
 
-    mock_connect.assert_called_once_with("ws://127.0.0.1:1234/ws/sdk", compression=None)
+    mock_connect.assert_called_once_with(
+        "ws://127.0.0.1:1234/ws/sdk", compression=None, additional_headers=ANY
+    )
 
 
 @patch("reachy_mini.io.ws_client.ws_sync.connect")
@@ -81,5 +85,5 @@ def test_connect_keeps_default_compression_for_remote_host(
     client.disconnect()
 
     mock_connect.assert_called_once_with(
-        "ws://192.168.1.50:1234/ws/sdk", compression="deflate"
+        "ws://192.168.1.50:1234/ws/sdk", compression="deflate", additional_headers=ANY
     )
