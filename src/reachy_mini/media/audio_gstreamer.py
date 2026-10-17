@@ -375,6 +375,7 @@ class GStreamerAudio(AudioBase):
         self._appsrc.set_property("caps", caps)
 
         mixer = Gst.ElementFactory.make("audiomixer")
+        self._mixer = mixer
         appsrc_queue = Gst.ElementFactory.make("queue")
 
         silence = Gst.ElementFactory.make("audiotestsrc")
@@ -504,14 +505,28 @@ class GStreamerAudio(AudioBase):
             self._playbin = None
 
     def clear_player(self) -> None:
-        """Flush the player's appsrc to drop any queued audio immediately."""
+        """Drop all queued playback audio immediately (barge-in).
+
+        A flush sent into the appsrc stops at the audiomixer, which doesn't
+        forward a flush arriving on a single sink pad. So the appsrc branch
+        and everything after the mixer (queue, speaker EQ, the sink's ring
+        buffer) are flushed separately; otherwise the speech already past
+        the mixer plays out after the pipeline resumes.
+
+        The pipeline is paused meanwhile so the live sources and the mixer
+        stop pushing: a buffer pushed into the flush would return FLUSHING,
+        which stops the mixer's output task for good.
+        """
         if self._head_wobbler is not None:
             self._head_wobbler.reset()
         if self._appsrc is not None:
             self._appsrc_pts = -1
             self._pipeline.set_state(Gst.State.PAUSED)
             self._appsrc.send_event(Gst.Event.new_flush_start())
-            self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=True))
+            self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=False))
+            mixer_src = self._mixer.get_static_pad("src")
+            mixer_src.push_event(Gst.Event.new_flush_start())
+            mixer_src.push_event(Gst.Event.new_flush_stop(reset_time=False))
             self._pipeline.set_state(Gst.State.PLAYING)
             self.logger.info("Cleared player queue")
         else:
