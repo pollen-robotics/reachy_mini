@@ -2535,6 +2535,62 @@
         }
       }
     },
+    "/api/telemetry": {
+      "get": {
+        "summary": "Get Telemetry",
+        "description": "Get the telemetry choice. Nothing is sent while ``disabled_by_env``.",
+        "operationId": "get_telemetry_api_telemetry_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set Telemetry",
+        "description": "Enable or disable telemetry. Disabling also forgets the robot id.",
+        "operationId": "set_telemetry_api_telemetry_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelemetrySettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/volume/current": {
       "get": {
         "summary": "Get Volume",
@@ -3971,6 +4027,39 @@
         "type": "object",
         "title": "StartupApp",
         "description": "The app configured to auto-start on the robot's first wake-up."
+      },
+      "TelemetrySettings": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "TelemetrySettings",
+        "description": "User's telemetry choice."
+      },
+      "TelemetryStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "disabled_by_env": {
+            "type": "boolean",
+            "title": "Disabled By Env"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "disabled_by_env"
+        ],
+        "title": "TelemetryStatus",
+        "description": "User's choice plus whether an environment variable overrides it."
       },
       "TestSoundResponse": {
         "properties": {

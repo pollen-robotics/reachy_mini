@@ -6,10 +6,12 @@ fire-and-forget commands, and task request/progress tracking.
 
 import ipaddress
 import logging
+import platform
 import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from importlib.metadata import version
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
@@ -45,6 +47,13 @@ def _is_loopback_host(host: str) -> bool:
         return ipaddress.ip_address(normalized_host).is_loopback
     except ValueError:
         return False
+
+
+def _client_header() -> str:
+    """Identify this SDK to the daemon's anonymous telemetry."""
+    system = platform.system().lower()
+    os_name = "macos" if system == "darwin" else system
+    return f"python_sdk/{version('reachy_mini')} ({os_name})"
 
 
 class WSClient(AbstractClient):
@@ -87,7 +96,11 @@ class WSClient(AbstractClient):
         # bandwidth on) and costs CPU at the daemon's 50 Hz state stream rate.
         compression = None if _is_loopback_host(host) else "deflate"
         try:
-            self._ws = ws_sync.connect(uri, compression=compression)
+            self._ws = ws_sync.connect(
+                uri,
+                compression=compression,
+                additional_headers={"X-Reachy-Client": _client_header()},
+            )
         except (OSError, websockets.exceptions.InvalidHandshake, TimeoutError) as e:
             raise ConnectionError(f"Failed to connect to {uri}: {e}") from e
 

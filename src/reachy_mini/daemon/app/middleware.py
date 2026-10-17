@@ -8,7 +8,28 @@ from urllib.parse import urlsplit
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from reachy_mini.daemon.telemetry import CLIENT_HEADER, telemetry
+
 logger = logging.getLogger(__name__)
+
+_CLIENT_HEADER_NAME = CLIENT_HEADER.lower().encode()
+
+
+class ClientTelemetryMiddleware:
+    """Report which kinds of client talk to the daemon, from ``X-Reachy-Client``."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        """Wrap *app*."""
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Note the client header, then pass the request through."""
+        if scope["type"] in ("http", "websocket") and telemetry.active:
+            for name, value in scope.get("headers", []):
+                if name == _CLIENT_HEADER_NAME:
+                    telemetry.note_client(value.decode("latin-1"))
+                    break
+        await self.app(scope, receive, send)
 
 
 class _BodyTooLarge(Exception):
