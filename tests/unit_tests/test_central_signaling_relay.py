@@ -535,6 +535,42 @@ def test_run_loop_backs_off_when_connect_returns_in_error_state(
     assert elapsed >= 0.1
 
 
+def test_forced_reconnect_starts_the_next_attempt_without_a_backoff() -> None:
+    """A forced reconnect lets the active attempt tear down, then retries at once."""
+    relay = _make_relay()
+    relay.hf_token = "tok"
+    relay._running = True
+    closes_from_reconnect = 0
+    attempt_starts: list[float] = []
+    stale_signal_on_retry: list[bool] = []
+
+    async def count_close() -> None:
+        nonlocal closes_from_reconnect
+        closes_from_reconnect += 1
+
+    async def fake_connect_and_relay() -> None:
+        attempt_starts.append(time.monotonic())
+        relay._set_state(RelayState.CONNECTED, "connected")
+        if len(attempt_starts) == 1:
+            relay._thread_loop = asyncio.get_running_loop()
+            relay._close_connections = count_close  # type: ignore[method-assign]
+            await relay.force_reconnect()
+            # The active attempt's watcher wakes on the signal and returns.
+            await asyncio.wait_for(relay._token_updated.wait(), timeout=1)
+            return
+        stale_signal_on_retry.append(relay._token_updated.is_set())
+        relay._running = False
+
+    relay._connect_and_relay = fake_connect_and_relay  # type: ignore[method-assign]
+
+    asyncio.run(relay._run_loop())
+
+    assert len(attempt_starts) == 2
+    assert attempt_starts[1] - attempt_starts[0] < 1.0
+    assert stale_signal_on_retry == [False]
+    assert closes_from_reconnect == 0
+
+
 def test_reconnect_delay_grows_and_is_capped() -> None:
     """``_reconnect_delay`` backs off exponentially and stays under the cap."""
     relay = _make_relay()
