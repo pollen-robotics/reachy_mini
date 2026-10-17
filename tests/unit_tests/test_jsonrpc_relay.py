@@ -8,6 +8,7 @@ Covers the three things the relay must get right:
 
 import asyncio
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -106,6 +107,12 @@ class FakeAppManager:
         self.current_app: Any = None
         self.started: list[str] = []
         self.stopped = 0
+        self.installed = ["conv"]
+        self.wireless_version = True
+        self.desktop_app_daemon = False
+        self.updated: list[str] = []
+        self.update_gate: asyncio.Event | None = None
+        self.update_error: str | None = None
 
     def is_app_running(self) -> bool:
         return self.current_app is not None
@@ -128,6 +135,18 @@ class FakeAppManager:
     async def stop_current_app(self) -> None:
         self.stopped += 1
         self.current_app = None
+
+    async def list_available_apps(self, kind: Any) -> list[Any]:
+        return [SimpleNamespace(name=n) for n in self.installed]
+
+    async def update_app(self, name: str, logger: Any) -> None:
+        if self.is_app_running() and self.current_app.status.info.name == name:
+            raise RuntimeError("Cannot update while it is running")
+        if self.update_gate is not None:
+            await self.update_gate.wait()
+        if self.update_error:
+            raise RuntimeError(self.update_error)
+        self.updated.append(name)
 
 
 class FakeAppWs:
@@ -329,3 +348,104 @@ async def test_original_id_recorded_before_send(monkeypatch: pytest.MonkeyPatch)
     )
     assert snapshot["present"] is True
     await relay.aclose()
+
+
+async def _call(relay: JsonRpcRelay, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    replies: list[dict[str, Any]] = []
+    await relay.handle(
+        json.dumps({"jsonrpc": "2.0", "id": "1", "method": method, "params": params}),
+        replies.append,
+    )
+    return replies[-1]
+
+
+@pytest.mark.asyncio
+async def test_apps_check_update(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """apps.check_update reports the version and HF check of an installed app only."""
+    checked: list[str] = []
+
+    async def fake_check(app: Any, **kwargs: Any) -> Any:
+        checked.append(app.name)
+        return SimpleNamespace(update_available=True)
+
+    monkeypatch.setattr(jsonrpc_relay.app_update_checker, "check_app_update", fake_check)
+    (tmp_path / "conv-1.1.0.dist-info").mkdir()
+    (tmp_path / "conv-1.1.0.dist-info" / "METADATA").write_text(
+        "Name: conv\nVersion: 1.1.0\n"
+    )
+    monkeypatch.setattr(
+        jsonrpc_relay.local_common_venv,
+        "get_app_site_packages",
+        lambda *_: tmp_path,
+    )
+    relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None)
+
+    reply = await _call(relay, "apps.check_update", {"name": "conv"})
+    assert reply["result"] == {
+        "installed": True,
+        "version": "1.1.0",
+        "update_available": True,
+        "updating": False,
+        "error": None,
+    }
+    reply = await _call(relay, "apps.check_update", {"name": "other"})
+    assert reply["result"]["installed"] is False
+    assert reply["result"]["update_available"] is False
+    assert checked == ["conv"]
+    reply = await _call(relay, "apps.check_update", {})
+    assert reply["error"]["data"]["reason"] == "invalid_params"
+
+
+@pytest.mark.asyncio
+async def test_apps_update_stops_the_app_and_runs_in_background(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """apps.update returns at once; check_update shows progress, then the result."""
+
+    async def no_update(app: Any, **kwargs: Any) -> Any:
+        return SimpleNamespace(update_available=False)
+
+    monkeypatch.setattr(jsonrpc_relay.app_update_checker, "check_app_update", no_update)
+    apps = FakeAppManager()
+    apps.update_gate = asyncio.Event()
+    relay = JsonRpcRelay(apps, broadcast=lambda _: None)
+    await _call(relay, "apps.start", {"name": "conv"})
+
+    reply = await _call(relay, "apps.update", {"name": "conv"})
+    assert reply["result"] == {"started": True}
+    assert apps.stopped == 1  # the manager refuses to update a running app
+    assert (await _call(relay, "apps.update", {"name": "conv"}))["result"] == {
+        "started": False
+    }
+    assert (await _call(relay, "apps.check_update", {"name": "conv"}))["result"][
+        "updating"
+    ] is True
+
+    apps.update_gate.set()
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    result = (await _call(relay, "apps.check_update", {"name": "conv"}))["result"]
+    assert result["updating"] is False
+    assert result["error"] is None
+    assert apps.updated == ["conv"]
+
+
+@pytest.mark.asyncio
+async def test_apps_update_failure_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed background update surfaces through apps.check_update."""
+
+    async def no_update(app: Any, **kwargs: Any) -> Any:
+        return None  # source can't be checked
+
+    monkeypatch.setattr(jsonrpc_relay.app_update_checker, "check_app_update", no_update)
+    apps = FakeAppManager()
+    apps.update_error = "space not found"
+    relay = JsonRpcRelay(apps, broadcast=lambda _: None)
+
+    await _call(relay, "apps.update", {"name": "conv"})
+    await asyncio.sleep(0)
+    result = (await _call(relay, "apps.check_update", {"name": "conv"}))["result"]
+    assert result["error"] == "space not found"
+    assert result["update_available"] is False
