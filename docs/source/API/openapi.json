@@ -3305,6 +3305,20 @@
             ],
             "title": "Head Pose"
           },
+          "target_head_pose": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/XYZRPYPose"
+              },
+              {
+                "$ref": "#/components/schemas/Matrix4x4Pose"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Head Pose"
+          },
           "head_joints": {
             "anyOf": [
               {
@@ -3319,6 +3333,20 @@
             ],
             "title": "Head Joints"
           },
+          "target_head_joints": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Head Joints"
+          },
           "body_yaw": {
             "anyOf": [
               {
@@ -3329,6 +3357,17 @@
               }
             ],
             "title": "Body Yaw"
+          },
+          "target_body_yaw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Body Yaw"
           },
           "antennas_position": {
             "anyOf": [
@@ -3343,6 +3382,20 @@
               }
             ],
             "title": "Antennas Position"
+          },
+          "target_antennas_position": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Antennas Position"
           },
           "timestamp": {
             "anyOf": [
