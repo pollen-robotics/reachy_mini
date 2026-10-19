@@ -1,10 +1,10 @@
 """Utilities for local common venv apps source."""
 
+import ast
 import asyncio
 import logging
 import os
 import platform
-import re
 import shutil
 import subprocess
 import sys
@@ -202,6 +202,38 @@ def _find_app_main_file(
     return None
 
 
+def _find_static_custom_app_url(scope: ast.Module | ast.ClassDef) -> str | None:
+    """Find the first literal custom_app_url assignment in source order."""
+    for statement in scope.body:
+        value_node: ast.expr | None = None
+        if isinstance(statement, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "custom_app_url"
+            for target in statement.targets
+        ):
+            value_node = statement.value
+        elif (
+            isinstance(statement, ast.AnnAssign)
+            and isinstance(statement.target, ast.Name)
+            and statement.target.id == "custom_app_url"
+        ):
+            value_node = statement.value
+
+        if value_node is not None:
+            try:
+                value = ast.literal_eval(value_node)
+            except (ValueError, TypeError):
+                pass
+            else:
+                if isinstance(value, str):
+                    return value
+
+        if isinstance(statement, ast.ClassDef):
+            value = _find_static_custom_app_url(statement)
+            if value is not None:
+                return value
+    return None
+
+
 def _get_custom_app_url_from_file(
     app_name: str,
     wireless_version: bool = False,
@@ -210,7 +242,7 @@ def _get_custom_app_url_from_file(
     """Get custom_app_url by reading it from the app's main.py file.
 
     This is much faster than subprocess and avoids sys.path pollution.
-    Looks for patterns like: custom_app_url: str | None = "http://..."
+    Looks for a statically assigned string on a module or class attribute.
     """
     main_file = _find_app_main_file(app_name, wireless_version, desktop_app_daemon)
     if main_file is None:
@@ -218,17 +250,8 @@ def _get_custom_app_url_from_file(
 
     try:
         content = main_file.read_text(encoding="utf-8")
-
-        # Match patterns like:
-        # custom_app_url: str | None = "http://..."
-        # custom_app_url = "http://..."
-        # custom_app_url: str = "http://..."
-        pattern = r'custom_app_url\s*(?::\s*[^=]+)?\s*=\s*["\']([^"\']+)["\']'
-        match = re.search(pattern, content)
-
-        if match:
-            return match.group(1)
-        return None
+        module = ast.parse(content, filename=str(main_file))
+        return _find_static_custom_app_url(module)
     except Exception as e:
         logging.getLogger("reachy_mini.apps").warning(
             f"Could not read custom_app_url from '{app_name}/main.py': {e}"
