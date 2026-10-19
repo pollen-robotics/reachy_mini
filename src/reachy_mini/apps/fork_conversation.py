@@ -2,6 +2,7 @@
 
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 from pathlib import Path
@@ -161,7 +162,13 @@ def _clone_repo(console: Console, target_path: Path) -> None:
         # Remove .git folder
         git_dir = tmp_clone / ".git"
         if git_dir.exists():
-            shutil.rmtree(git_dir)
+                def _make_writable_and_retry(
+                    function: object, path: str, _: object
+                ) -> None:
+                    Path(path).chmod(stat.S_IWRITE)
+                    function(path)
+
+                shutil.rmtree(git_dir, onerror=_make_writable_and_retry)
 
         # Copy to target
         shutil.copytree(tmp_clone, target_path)
@@ -196,7 +203,7 @@ def _rename_package(console: Console, app_path: Path, app_name: str) -> None:
         if not py_dir.exists():
             continue
         for py_file in py_dir.rglob("*.py"):
-            content = py_file.read_text()
+            content = py_file.read_text(encoding="utf-8")
             # Replace imports like "from reachy_mini_conversation_app" and "import reachy_mini_conversation_app"
             new_content = re.sub(
                 rf"\b{CONVERSATION_APP_PACKAGE}\b",
@@ -208,7 +215,7 @@ def _rename_package(console: Console, app_path: Path, app_name: str) -> None:
                 "ReachyMiniConversationApp", new_class_name
             )
             if new_content != content:
-                py_file.write_text(new_content)
+                py_file.write_text(new_content, encoding="utf-8")
 
 
 def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
@@ -226,7 +233,7 @@ def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
         )
         exit(1)
 
-    with open(pyproject_path, "r") as f:
+    with open(pyproject_path, "r", encoding="utf-8") as f:
         data = toml.load(f)
 
     # Update project name
@@ -257,7 +264,7 @@ def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
                 for folder in isort_config["known-local-folder"]
             ]
 
-    with open(pyproject_path, "w") as f:
+    with open(pyproject_path, "w", encoding="utf-8") as f:
         toml.dump(data, f)
 
 
@@ -278,7 +285,7 @@ def _update_config(
         )
         exit(1)
 
-    content = config_path.read_text()
+    content = config_path.read_text(encoding="utf-8")
 
     # Replace the LOCKED_PROFILE line
     old_line = "LOCKED_PROFILE: str | None = None"
@@ -300,7 +307,7 @@ def _update_config(
         exit(1)
 
     content = content.replace(old_line, new_line)
-    config_path.write_text(content)
+    config_path.write_text(content, encoding="utf-8")
 
 
 def _update_readme(
@@ -323,7 +330,8 @@ def _update_readme(
     readme_path.write_text(
         template.render(
             app_name=app_name, display_name=display_name, profile_name=profile_name
-        )
+        ),
+        encoding="utf-8",
     )
 
 
@@ -335,11 +343,11 @@ def _create_landing_page(app_path: Path, app_name: str, display_name: str) -> No
 
     # Render and write index.html
     index_template = env.get_template("index.html.j2")
-    (app_path / "index.html").write_text(index_template.render(context))
+    (app_path / "index.html").write_text(index_template.render(context), encoding="utf-8")
 
     # Render and write style.css
     style_template = env.get_template("style.css.j2")
-    (app_path / "style.css").write_text(style_template.render(context))
+    (app_path / "style.css").write_text(style_template.render(context), encoding="utf-8")
 
 
 def _create_static_files(app_path: Path, app_name: str, display_name: str) -> None:
@@ -353,11 +361,13 @@ def _create_static_files(app_path: Path, app_name: str, display_name: str) -> No
 
     # Render and write simplified static files
     (static_dir / "index.html").write_text(
-        env.get_template("index.html.j2").render(context)
+        env.get_template("index.html.j2").render(context), encoding="utf-8"
     )
-    (static_dir / "main.js").write_text(env.get_template("main.js.j2").render(context))
+    (static_dir / "main.js").write_text(
+        env.get_template("main.js.j2").render(context), encoding="utf-8"
+    )
     (static_dir / "style.css").write_text(
-        env.get_template("style.css.j2").render(context)
+        env.get_template("style.css.j2").render(context), encoding="utf-8"
     )
 
 
@@ -369,7 +379,9 @@ def _create_profile(console: Console, app_path: Path, profile_name: str) -> None
     template_dir = CONVERSATION_TEMPLATE_DIR / "profile"
     env = Environment(loader=FileSystemLoader(template_dir))
     profile_path = new_profile_dir / "profile.md"
-    profile_path.write_text(env.get_template("profile.md.j2").render())
+    profile_path.write_text(
+        env.get_template("profile.md.j2").render(), encoding="utf-8"
+    )
 
     console.print(f"   Created {profile_path.relative_to(app_path)}", style="dim")
 
@@ -380,13 +392,13 @@ def _update_gitignore(app_path: Path, app_name: str) -> None:
     if not gitignore_path.exists():
         return
 
-    content = gitignore_path.read_text()
+    content = gitignore_path.read_text(encoding="utf-8")
     new_content = content.replace(
         f"src/{CONVERSATION_APP_PACKAGE}/",
         f"src/{app_name}/",
     )
     if new_content != content:
-        gitignore_path.write_text(new_content)
+        gitignore_path.write_text(new_content, encoding="utf-8")
 
 
 def _cleanup(app_path: Path, profile_name: str) -> None:
