@@ -2,7 +2,6 @@
 
 import re
 import shutil
-import stat
 import subprocess
 import tempfile
 from pathlib import Path
@@ -159,19 +158,8 @@ def _clone_repo(console: Console, target_path: Path) -> None:
             )
             exit(1)
 
-        # Remove .git folder
-        git_dir = tmp_clone / ".git"
-        if git_dir.exists():
-                def _make_writable_and_retry(
-                    function: object, path: str, _: object
-                ) -> None:
-                    Path(path).chmod(stat.S_IWRITE)
-                    function(path)
-
-                shutil.rmtree(git_dir, onerror=_make_writable_and_retry)
-
         # Copy to target
-        shutil.copytree(tmp_clone, target_path)
+        shutil.copytree(tmp_clone, target_path, ignore=shutil.ignore_patterns(".git"))
 
 
 def _to_pascal_case(name: str) -> str:
