@@ -536,6 +536,23 @@ export interface ReachyMiniInstance extends EventTarget {
         opts?: { dataset?: string; initialGotoDuration?: number },
     ): boolean;
     /**
+     * Like `playRecordedMove()`, but resolves once the daemon acks the
+     * dispatch, i.e. when the move was loaded and handed to the player.
+     * `true` on success, `false` when the daemon couldn't load the move
+     * (unknown name, missing dataset), `null` on the fail-open timeout
+     * (`timeoutMs` defaults to 120 s: the ack may sit behind a cold
+     * dataset download). Rejects when the channel isn't open. `true`
+     * doesn't mean the robot is moving - see the implementation notes.
+     */
+    playRecordedMoveAndWait(
+        moveName: string,
+        opts?: {
+            dataset?: string;
+            initialGotoDuration?: number;
+            timeoutMs?: number;
+        },
+    ): Promise<boolean | null>;
+    /**
      * Stop whatever move is currently playing on the daemon (recorded move,
      * uploaded move, goto), silencing its bundled sound too. Fire-and-forget
      * and idempotent: a stop with no move running is acked as a no-op, not
