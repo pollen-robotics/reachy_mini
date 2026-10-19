@@ -331,11 +331,15 @@ def _create_landing_page(app_path: Path, app_name: str, display_name: str) -> No
 
     # Render and write index.html
     index_template = env.get_template("index.html.j2")
-    (app_path / "index.html").write_text(index_template.render(context), encoding="utf-8")
+    (app_path / "index.html").write_text(
+        index_template.render(context), encoding="utf-8"
+    )
 
     # Render and write style.css
     style_template = env.get_template("style.css.j2")
-    (app_path / "style.css").write_text(style_template.render(context), encoding="utf-8")
+    (app_path / "style.css").write_text(
+        style_template.render(context), encoding="utf-8"
+    )
 
 
 def _create_static_files(app_path: Path, app_name: str, display_name: str) -> None:
