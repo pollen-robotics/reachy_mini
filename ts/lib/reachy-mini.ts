@@ -127,6 +127,16 @@ const POSE_STREAM_FRESH_MS = 750;
 const PEER_LINK_LIVE_MS = 2500;
 
 /**
+ * A robot's stable identity across central re-registrations (its peer id
+ * changes each time): `install_id`, else `hardware_id`. Never the name,
+ * which users often leave at the default and share across robots.
+ */
+function robotIdentity(r: RobotInfo | undefined): string | null {
+    const meta = r?.meta as { install_id?: string; hardware_id?: string } | undefined;
+    return meta?.install_id ?? meta?.hardware_id ?? null;
+}
+
+/**
  * Upper bound on how long `ensureAwake()` waits for the wake trajectory to
  * complete. The emote itself takes ~2-3 s on hardware; the extra headroom
  * covers a cold trajectory player. Deliberately shorter than `wakeUp()`'s
@@ -186,6 +196,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _outgoingAudioTrack: MediaStreamTrack | null = null;
     /** Context driving the silent placeholder track; closed with it. */
     private _micCtx: AudioContext | null = null;
+    /** Robot dialed last and its stable identity (see `_redialTargetResolver`). */
+    private _dialedRobotId: string | null = null;
+    private _dialedRobotIdentity: string | null = null;
     /** Signaling (SSE) dropped while streaming; reconnecting in the background. */
     private _signalingDown = false;
     private _signalingRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -667,6 +680,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private async _startSessionInternal(robotId: string): Promise<void> {
         if (this._state !== 'connected') throw new Error('Not connected');
         this._selectedRobotId = robotId;
+        // Remember who this is while it is surely listed (see
+        // `_redialTargetResolver`). Kept across redial attempts that dial
+        // the same robot under a fresh id.
+        const dialedIdentity = robotIdentity(this._robots.find((r) => r.id === robotId));
+        if (dialedIdentity) this._dialedRobotIdentity = dialedIdentity;
+        else if (this._dialedRobotId !== robotId) this._dialedRobotIdentity = null;
+        this._dialedRobotId = robotId;
         this._iceConnected = false;
         this._dcOpen = false;
         this._micSupported = false;
@@ -993,14 +1013,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * re-registered; otherwise keep dialing the original id.
      */
     private _redialTargetResolver(robotId: string): () => string {
-        const identity = (r: RobotInfo | undefined): string | null => {
-            const meta = r?.meta as { install_id?: string; hardware_id?: string } | undefined;
-            return meta?.install_id ?? meta?.hardware_id ?? null;
-        };
-        const key = identity(this._robots.find((r) => r.id === robotId));
+        // Prefer the identity recorded when the session was dialed: by the
+        // time a redial starts, central may already have dropped the old
+        // entry from the list (it evicts a robot whose signaling went
+        // silent), leaving nothing to match against.
+        const key = (this._dialedRobotId === robotId ? this._dialedRobotIdentity : null)
+            ?? robotIdentity(this._robots.find((r) => r.id === robotId));
         if (!key) return () => robotId;
         return () =>
-            this._robots.find((r) => r.id !== robotId && identity(r) === key)?.id ?? robotId;
+            this._robots.find((r) => r.id !== robotId && robotIdentity(r) === key)?.id ?? robotId;
     }
 
     /**

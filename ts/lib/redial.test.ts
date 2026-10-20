@@ -181,6 +181,28 @@ describe('auto-reconnect target re-resolution', () => {
         expect(dials.mock.calls.map((c) => c[0])).toEqual(['robot-1', 'robot-2']);
     });
 
+    it('still follows the robot when central dropped its old entry first', async () => {
+        const { internals, dials } = makeStreamingInstance();
+        // Identity recorded at dial time, as _startSessionInternal does.
+        const rec = internals as unknown as {
+            _dialedRobotId: string | null;
+            _dialedRobotIdentity: string | null;
+        };
+        rec._dialedRobotId = 'robot-1';
+        rec._dialedRobotIdentity = 'hw-A';
+        // Central evicted the robot (its signaling went silent): gone from the list.
+        internals._robots = [];
+        dials.mockImplementationOnce(async () => {
+            internals._robots = [{ id: 'robot-2', meta: { hardware_id: 'hw-A' } }];
+            throw new Error('dial timed out');
+        });
+
+        internals._supervisor.maybeBeginRedial('ICE connection failed');
+        await vi.runAllTimersAsync();
+
+        expect(dials.mock.calls.map((c) => c[0])).toEqual(['robot-1', 'robot-2']);
+    });
+
     it('never jumps to another robot that only shares the name', async () => {
         const { internals, dials } = makeStreamingInstance();
         internals._robots = [
