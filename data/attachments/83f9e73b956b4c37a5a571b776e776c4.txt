@@ -1,0 +1,1 @@
+ERROR    reachy_mini.apps.manager.runner:manager.py:298 App fake_app exited with code 3. Last stderr output:

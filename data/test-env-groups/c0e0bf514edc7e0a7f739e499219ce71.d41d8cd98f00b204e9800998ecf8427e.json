@@ -1,1 +1,1 @@
-{"id":"c0e0bf514edc7e0a7f739e499219ce71.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_jsonrpc_relay#test_apps_list_installed_is_trimmed","name":"test_apps_list_installed_is_trimmed","status":"passed","testResultsByEnv":{"default":"82143f8c2cbaeebb2bb30a6c3e6a0984"}}
+{"id":"c0e0bf514edc7e0a7f739e499219ce71.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_jsonrpc_relay#test_apps_list_installed_is_trimmed","name":"test_apps_list_installed_is_trimmed","status":"passed","testResultsByEnv":{"default":"c8420b9f10af61b9d76bf01e47bf4a5a"}}

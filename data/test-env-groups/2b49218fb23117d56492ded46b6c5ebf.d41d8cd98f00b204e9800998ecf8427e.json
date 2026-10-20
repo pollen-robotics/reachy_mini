@@ -1,0 +1,1 @@
+{"id":"2b49218fb23117d56492ded46b6c5ebf.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_telemetry#test_opt_out_during_failing_send_drops_the_batch","name":"test_opt_out_during_failing_send_drops_the_batch","status":"passed","testResultsByEnv":{"default":"22ec5656cb80269a9b6df8e11e5f65d7"}}
