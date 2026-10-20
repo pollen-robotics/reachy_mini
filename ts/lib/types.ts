@@ -406,6 +406,21 @@ export interface ReachyMiniEventMap {
      * replaced audio sender track, …) must be re-asserted by the app.
      */
     sessionReconnected: CustomEvent<{ attempt: number }>;
+    /**
+     * The signaling channel (central SSE) dropped while a session is
+     * streaming. The session is NOT affected: once up, its media and data
+     * channel are peer-to-peer. The SDK reconnects signaling in the
+     * background (`signalingRestored`); `state` stays `streaming`.
+     */
+    signalingLost: CustomEvent<{ reason: string }>;
+    /** Background signaling reconnect succeeded while streaming. */
+    signalingRestored: CustomEvent<{ peerId: string }>;
+    /**
+     * Central ended the session on its side (typically after this
+     * client's signaling timed out) while the peer link was still live,
+     * so the session was kept. Informational; the robot decides.
+     */
+    signalingSessionEnded: CustomEvent<{ reason: string | null }>;
 }
 
 /** Public surface of a ReachyMini SDK instance. */

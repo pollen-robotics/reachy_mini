@@ -137,9 +137,12 @@ describe('auto-reconnect success path', () => {
         await vi.runAllTimersAsync();
 
         expect(pc.close).toHaveBeenCalled();
+        // Tagged as a deliberate end, so the robot frees the old session
+        // (a reason-less endSession is advisory while its link is live).
         expect(internals._sendToServer).toHaveBeenCalledWith({
             type: 'endSession',
             sessionId: 'session-1',
+            reason: 'client_redial',
         });
     });
 

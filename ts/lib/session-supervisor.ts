@@ -160,6 +160,11 @@ export class SessionSupervisor {
     }
 
     /** True while the re-dial loop is running. */
+    /** Milliseconds since the last inbound data-channel message. */
+    get dcInboundAgeMs(): number {
+        return Date.now() - this._lastDcInboundAt;
+    }
+
     get redialing(): boolean {
         return this._redialing;
     }
