@@ -16,25 +16,22 @@ SDK or data-channel request) or ``"hat"`` (the NFC privacy hat is on the head,
 wired up together with the NFC module).
 A request from one source never clears another's, so software cannot switch
 off a hat that is still on the head.
+
+Nothing is saved: the daemon always starts with privacy mode off, so a
+forgotten request can never leave a robot without camera or microphones after
+a reboot or an update. A hat still on the head is reported again by the NFC
+reader on its first read.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
-from pathlib import Path
 from typing import Any, Callable
 
 from reachy_mini.media.audio_control_utils import set_microphones_muted
 
 logger = logging.getLogger(__name__)
-
-# The only source that survives a daemon restart: a hat still on the head is
-# reported again by the reader within one poll.
-PERSISTED_SOURCE = "api"
-
-_STATE_PATH = Path.home() / ".config" / "reachy_mini" / "privacy.json"
 
 
 class PrivacyMode:
@@ -43,30 +40,25 @@ class PrivacyMode:
     def __init__(
         self,
         media_server: Any | None,
-        state_path: Path = _STATE_PATH,
         mute_microphones: Callable[[bool], bool] = set_microphones_muted,
     ) -> None:
-        """Restore the saved state and apply it, without any sound.
+        """Start with privacy mode off and apply that, without any sound.
 
-        Applying it even when privacy mode is off is deliberate: a daemon that
-        crashed while private must not leave the microphones muted for ever.
+        Applying it is deliberate: a daemon that crashed while private must
+        not leave the microphones muted for ever.
 
         Args:
             media_server: the daemon's ``GstMediaServer``, or None when the
                 daemon runs without media.
-            state_path: where an API request is remembered across restarts.
             mute_microphones: mutes or unmutes the microphones, and returns
                 whether the audio chip confirmed it (injectable for tests).
 
         """
         self._media_server = media_server
-        self._state_path = state_path
         self._mute_microphones = mute_microphones
         self._lock = threading.Lock()
         self._sources: set[str] = set()
-        if self._load():
-            self._sources.add(PERSISTED_SOURCE)
-        self._apply(self.enabled)
+        self._apply(False)
 
     @property
     def enabled(self) -> bool:
@@ -90,8 +82,6 @@ class PrivacyMode:
                 self._sources.add(source)
             else:
                 self._sources.discard(source)
-            if source == PERSISTED_SOURCE:
-                self._save(enabled)
 
             if self.enabled != was_enabled:
                 self._apply(self.enabled)
@@ -113,19 +103,3 @@ class PrivacyMode:
             )
         if self._media_server is not None:
             self._media_server.set_privacy(enabled)
-
-    def _load(self) -> bool:
-        try:
-            return json.loads(self._state_path.read_text()).get("enabled") is True
-        except FileNotFoundError:
-            return False
-        except Exception as e:  # noqa: BLE001 - never stop the daemon over this
-            logger.warning("Could not read the privacy setting: %s", e)
-            return False
-
-    def _save(self, enabled: bool) -> None:
-        try:
-            self._state_path.parent.mkdir(parents=True, exist_ok=True)
-            self._state_path.write_text(json.dumps({"enabled": enabled}))
-        except Exception as e:  # noqa: BLE001 - never stop the daemon over this
-            logger.warning("Could not write the privacy setting: %s", e)

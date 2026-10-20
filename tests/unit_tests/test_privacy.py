@@ -49,17 +49,16 @@ class FakeRobot:
         self.events.append(("sound", sound_file))
 
 
-def make_privacy(robot: FakeRobot, tmp_path: Path) -> PrivacyMode:
+def make_privacy(robot: FakeRobot) -> PrivacyMode:
     return PrivacyMode(
         robot,
-        state_path=tmp_path / "privacy.json",
         mute_microphones=robot.mute_microphones,
     )
 
 
-def test_enabling_cuts_microphones_and_camera_before_the_sound(tmp_path: Path) -> None:
+def test_enabling_cuts_microphones_and_camera_before_the_sound() -> None:
     robot = FakeRobot()
-    mode = make_privacy(robot, tmp_path)
+    mode = make_privacy(robot)
     robot.events.clear()
 
     assert mode.set("api", True) is True
@@ -72,9 +71,9 @@ def test_enabling_cuts_microphones_and_camera_before_the_sound(tmp_path: Path) -
     ]
 
 
-def test_disabling_restores_microphones_and_camera(tmp_path: Path) -> None:
+def test_disabling_restores_microphones_and_camera() -> None:
     robot = FakeRobot()
-    mode = make_privacy(robot, tmp_path)
+    mode = make_privacy(robot)
     mode.set("api", True)
     robot.events.clear()
 
@@ -87,9 +86,9 @@ def test_disabling_restores_microphones_and_camera(tmp_path: Path) -> None:
     ]
 
 
-def test_privacy_stays_on_until_every_source_clears(tmp_path: Path) -> None:
+def test_privacy_stays_on_until_every_source_clears() -> None:
     robot = FakeRobot()
-    mode = make_privacy(robot, tmp_path)
+    mode = make_privacy(robot)
     mode.set("hat", True)
     mode.set("api", True)
     robot.events.clear()
@@ -103,9 +102,9 @@ def test_privacy_stays_on_until_every_source_clears(tmp_path: Path) -> None:
     assert ("mic_muted", False) in robot.events
 
 
-def test_repeating_a_request_does_not_replay_the_sound(tmp_path: Path) -> None:
+def test_repeating_a_request_does_not_replay_the_sound() -> None:
     robot = FakeRobot()
-    mode = make_privacy(robot, tmp_path)
+    mode = make_privacy(robot)
     mode.set("api", True)
     robot.events.clear()
 
@@ -114,33 +113,24 @@ def test_repeating_a_request_does_not_replay_the_sound(tmp_path: Path) -> None:
     assert robot.events == []
 
 
-def test_an_api_request_survives_a_restart_silently(tmp_path: Path) -> None:
-    make_privacy(FakeRobot(), tmp_path).set("api", True)
+@pytest.mark.parametrize("source", ["api", "hat"])
+def test_a_restart_always_starts_with_privacy_off(source: str) -> None:
+    # Nothing is remembered: a forgotten request must never leave a robot
+    # without camera or microphones after a reboot or a version change.
+    make_privacy(FakeRobot()).set(source, True)
 
     robot = FakeRobot()
-    restarted = make_privacy(robot, tmp_path)
-
-    assert restarted.enabled
-    assert robot.events == [("mic_muted", True), ("media_privacy", True)]
-
-
-def test_a_hat_request_is_not_restored_after_a_restart(tmp_path: Path) -> None:
-    # The reader reports the hat again within one poll if it is still there.
-    make_privacy(FakeRobot(), tmp_path).set("hat", True)
-
-    robot = FakeRobot()
-    restarted = make_privacy(robot, tmp_path)
+    restarted = make_privacy(robot)
 
     assert not restarted.enabled
     # A crash while private must not leave the microphones muted for ever.
     assert robot.events == [("mic_muted", False), ("media_privacy", False)]
 
 
-def test_privacy_works_without_a_media_server(tmp_path: Path) -> None:
+def test_privacy_works_without_a_media_server() -> None:
     mutes: list[bool] = []
     mode = PrivacyMode(
         None,
-        state_path=tmp_path / "privacy.json",
         mute_microphones=lambda muted: mutes.append(muted) or True,
     )
 
@@ -415,10 +405,10 @@ def test_a_rebuilt_pipeline_starts_private() -> None:
 
 
 @pytest.fixture
-def api(tmp_path: Path) -> tuple[TestClient, FakeRobot]:
+def api() -> tuple[TestClient, FakeRobot]:
     robot = FakeRobot()
     daemon = MagicMock()
-    daemon.privacy = make_privacy(robot, tmp_path)
+    daemon.privacy = make_privacy(robot)
     app = FastAPI()
     app.include_router(privacy.router)
     app.include_router(media.router)
