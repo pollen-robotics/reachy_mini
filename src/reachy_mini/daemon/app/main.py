@@ -132,8 +132,6 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         # process.
         app.state.daemon.set_rpc_loop(asyncio.get_running_loop())
         dataset_updater_task: asyncio.Task[None] | None = None
-        # Held on app.state so the /apps/startup-app endpoint can re-arm it live.
-        app.state.startup_app_antenna_watcher_task = None
 
         mdns = MdnsServiceRegistration(
             args.robot_name,
@@ -220,7 +218,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                 and startup_app_ready
                 and app.state.daemon.backend is not None
             ):
-                app.state.startup_app_antenna_watcher_task = asyncio.create_task(
+                app.state.daemon.startup_app_watcher_task = asyncio.create_task(
                     watch_antennas_for_startup_app(
                         app.state.app_manager,
                         app.state.daemon,
@@ -262,7 +260,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     pass
 
             # Cancel startup app antenna watcher before closing the app manager.
-            antenna_watcher_task = app.state.startup_app_antenna_watcher_task
+            antenna_watcher_task = app.state.daemon.startup_app_watcher_task
             if antenna_watcher_task and not antenna_watcher_task.done():
                 antenna_watcher_task.cancel()
                 try:
