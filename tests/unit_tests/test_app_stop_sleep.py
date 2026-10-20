@@ -17,6 +17,7 @@ def _fake_current_app() -> SimpleNamespace:
         process=SimpleNamespace(returncode=0, pid=0),
         monitor_task=SimpleNamespace(done=lambda: True),
         status=SimpleNamespace(state="running", info=SimpleNamespace(name="x")),
+        stop_requested=MagicMock(),
     )
 
 

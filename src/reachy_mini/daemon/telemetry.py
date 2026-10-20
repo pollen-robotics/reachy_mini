@@ -322,8 +322,12 @@ class Telemetry:
                 success=True,
             )
 
-        self._stop.clear()
-        self._thread = threading.Thread(target=self._run, name="telemetry", daemon=True)
+        # One stop event per thread: a previous thread still stuck in a send
+        # must not be revived by a quick opt-out / opt-in.
+        self._stop = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run, args=(self._stop,), name="telemetry", daemon=True
+        )
         self._thread.start()
 
     def _halt(self, flush: bool) -> None:
@@ -338,10 +342,10 @@ class Telemetry:
             self._thread.join(timeout=3.0)
             self._thread = None
 
-    def _run(self) -> None:
+    def _run(self, stop: threading.Event) -> None:
         next_heartbeat = time.monotonic() + HEARTBEAT_INTERVAL_S
         started = time.monotonic()
-        while not self._stop.is_set():
+        while not stop.is_set():
             self._wake.wait(FLUSH_INTERVAL_S)
             self._wake.clear()
             if time.monotonic() >= next_heartbeat:
@@ -374,8 +378,10 @@ class Telemetry:
             retry = True
         if retry:
             # Offline or throttled: retry at the next tick, newest dropped first.
+            # Dropped if the user opted out (or got a new id) meanwhile.
             with self._lock:
-                self._queue.extendleft(reversed(batch))
+                if batch[0]["distinct_id"] == self._robot_id:
+                    self._queue.extendleft(reversed(batch))
 
 
 telemetry = Telemetry()

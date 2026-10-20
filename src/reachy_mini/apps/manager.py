@@ -53,6 +53,8 @@ class RunningApp:
     process: asyncio.subprocess.Process
     monitor_task: asyncio.Task[None]
     status: AppStatus
+    # Set by stop_current_app; the state can't tell, the monitor overwrites it.
+    stop_requested: asyncio.Event
 
 
 def _get_catalog_app_key(app: AppInfo) -> str:
@@ -238,6 +240,7 @@ class AppManager:
         )
         app_id = app_id_for(local_common_venv._load_app_metadata(app_name))
         started_at = time.monotonic()
+        stop_requested = asyncio.Event()
         telemetry.capture("robot_app_started", app_id=app_id)
 
         async def monitor_process() -> None:
@@ -309,8 +312,7 @@ class AppManager:
                     app_id=app_id,
                     duration_s=int(time.monotonic() - started_at),
                     exit_code=exit_code,
-                    crashed=exit_code not in (0, None)
-                    and status.state != AppState.STOPPING,
+                    crashed=exit_code not in (0, None) and not stop_requested.is_set(),
                 )
 
         monitor_task = asyncio.create_task(monitor_process())
@@ -319,6 +321,7 @@ class AppManager:
             process=process,
             monitor_task=monitor_task,
             status=status,
+            stop_requested=stop_requested,
         )
 
         return self.current_app.status
@@ -334,6 +337,7 @@ class AppManager:
         assert self.current_app is not None
 
         self.current_app.status.state = AppState.STOPPING
+        self.current_app.stop_requested.set()
         self.logger.getChild("runner").info(
             f"Stopping app {self.current_app.status.info.name}"
         )

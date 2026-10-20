@@ -202,6 +202,33 @@ def test_client_connected_once_per_client(client: tm.Telemetry) -> None:
     assert _events(client).count("client_connected") == 1
 
 
+def test_opt_out_during_failing_send_drops_the_batch(
+    client: tm.Telemetry, isolated: MagicMock
+) -> None:
+    """Events in flight when the user opts out are never retried."""
+    _start(client)
+
+    def opt_out_then_fail(*args: object, **kwargs: object) -> None:
+        client.set_enabled(False)
+        raise requests.ConnectionError
+
+    isolated.side_effect = opt_out_then_fail
+    client._flush(timeout=1)
+    assert not client._queue
+    client._flush(timeout=1)
+    assert isolated.call_count == 1
+
+
+def test_opt_in_again_does_not_revive_old_sender(client: tm.Telemetry) -> None:
+    """Each sender thread has its own stop event, so only one keeps running."""
+    _start(client)
+    old_stop = client._stop
+    client.set_enabled(False)
+    client.set_enabled(True)
+    assert old_stop.is_set()
+    assert client._stop is not old_stop and not client._stop.is_set()
+
+
 def test_flush_posts_batch_and_requeues_when_offline(
     client: tm.Telemetry, isolated: MagicMock
 ) -> None:
