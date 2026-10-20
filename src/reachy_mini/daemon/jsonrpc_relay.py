@@ -4,8 +4,8 @@ Incoming JSON-RPC frames from any client transport (WebRTC DataChannel,
 ``/ws/sdk``) are routed here by namespace:
 
 * ``apps.*`` — handled locally against the :class:`AppManager` (start / stop /
-  status of the single running app). This *is* the "apps API" exposed over
-  WebRTC.
+  status of the single running app, install, update check and update). This
+  *is* the "apps API" exposed over WebRTC.
 * anything else (e.g. ``conversation.*``) — relayed to the running app's
   ``/rpc`` WebSocket. The relay holds one persistent connection to that
   endpoint, which doubles as the daemon's subscription to the app's event
@@ -20,12 +20,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from importlib.metadata import distributions
 from typing import Any, Callable, Optional
 from urllib.parse import urlparse
 
 from websockets.asyncio.client import ClientConnection, connect
 
+from reachy_mini.apps import SourceKind
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.apps.sources import app_update_checker, local_common_venv
 from reachy_mini.daemon.app.startup_app import ensure_startup_app_installed
 from reachy_mini.io.jsonrpc import (
     JsonRpcError,
@@ -75,6 +78,9 @@ class JsonRpcRelay:
         self._pending: dict[str, Reply] = {}
         self._pending_original_id: dict[str, Any] = {}
         self._counter = 0
+        # app name -> background update, and the error of the last failed one.
+        self._updates: dict[str, asyncio.Task[None]] = {}
+        self._update_errors: dict[str, str] = {}
 
     # -- entry point -------------------------------------------------------
 
@@ -108,11 +114,7 @@ class JsonRpcRelay:
     async def _handle_apps(self, req: RpcRequest, reply: Reply) -> None:
         verb = req.method.split(".", 1)[1] if "." in req.method else ""
         if verb == "start":
-            name = req.params.get("name")
-            if not isinstance(name, str) or not name:
-                raise JsonRpcError(
-                    "apps.start requires a 'name'", reason="invalid_params", code=-32602
-                )
+            name = _require_name(req)
             try:
                 # keep_remote: the requester is this connected client that will
                 # drive the app; don't evict its own WebRTC/DataChannel session.
@@ -125,13 +127,7 @@ class JsonRpcRelay:
             await self._apps.stop_current_app()
             result = {"stopped": True}
         elif verb == "install":
-            name = req.params.get("name")
-            if not isinstance(name, str) or not name:
-                raise JsonRpcError(
-                    "apps.install requires a 'name'",
-                    reason="invalid_params",
-                    code=-32602,
-                )
+            name = _require_name(req)
             # Install-if-missing from the HF catalog (no-op when already
             # installed). Can take minutes on a first install — callers
             # should use a generous timeout. Runs as its own task, so
@@ -145,6 +141,10 @@ class JsonRpcRelay:
             result = {"installed": True}
         elif verb == "status":
             result = self._current_status_dict()
+        elif verb == "check_update":
+            result = await self._check_update(_require_name(req))
+        elif verb == "update":
+            result = await self._start_update(_require_name(req))
         else:
             raise JsonRpcError(
                 f"unknown method: {req.method}",
@@ -153,6 +153,62 @@ class JsonRpcRelay:
             )
         if not req.is_notification:
             reply(make_result(req.id, result))
+
+    async def _check_update(self, name: str) -> dict[str, Any]:
+        """Whether ``name`` is installed, has an update, or is being updated."""
+        task = self._updates.get(name)
+        updating = task is not None and not task.done()
+        installed = await self._apps.list_available_apps(SourceKind.INSTALLED)
+        app = next((a for a in installed if a.name == name), None)
+        info = None
+        version = None
+        if app is not None and not updating:
+            # One HF API call; None when the install source can't be checked.
+            info = await app_update_checker.check_app_update(
+                app,
+                wireless_version=self._apps.wireless_version,
+                desktop_app_daemon=self._apps.desktop_app_daemon,
+            )
+            site_packages = local_common_venv.get_app_site_packages(
+                name, self._apps.wireless_version, self._apps.desktop_app_daemon
+            )
+            paths = [str(site_packages)] if site_packages else []
+            dist = next(iter(distributions(name=name, path=paths)), None)
+            version = dist.version if dist else None
+        return {
+            "installed": app is not None,
+            "version": version,
+            "update_available": bool(info and info.update_available),
+            "updating": updating,
+            "error": self._update_errors.get(name),
+        }
+
+    async def _start_update(self, name: str) -> dict[str, Any]:
+        """Start updating ``name`` in the background; poll ``apps.check_update``.
+
+        An update takes minutes, far past any RPC timeout. The app is stopped
+        first if it's the one running, since the manager refuses otherwise.
+        """
+        task = self._updates.get(name)
+        if task is not None and not task.done():
+            return {"started": False}
+        running = self._apps.current_app
+        if (
+            self._apps.is_app_running()
+            and running is not None
+            and running.status.info.name == name
+        ):
+            await self._apps.stop_current_app()
+        self._update_errors.pop(name, None)
+        self._updates[name] = asyncio.create_task(self._run_update(name))
+        return {"started": True}
+
+    async def _run_update(self, name: str) -> None:
+        try:
+            await self._apps.update_app(name, self.logger)
+        except Exception as e:  # noqa: BLE001 - reported through apps.check_update
+            self.logger.warning("update of %s failed: %s", name, e)
+            self._update_errors[name] = str(e)
 
     def _current_status_dict(self) -> dict[str, Any]:
         app = self._apps.current_app
@@ -279,6 +335,16 @@ def _rpc_ws_url(app_url: str) -> str:
     scheme = "wss" if p.scheme == "https" else "ws"
     port = f":{p.port}" if p.port else ""
     return f"{scheme}://{host}{port}/rpc"
+
+
+def _require_name(req: RpcRequest) -> str:
+    """Return the request's ``name`` param, or raise ``invalid_params``."""
+    name = req.params.get("name")
+    if not isinstance(name, str) or not name:
+        raise JsonRpcError(
+            f"{req.method} requires a 'name'", reason="invalid_params", code=-32602
+        )
+    return name
 
 
 def _status_dict(status: Any) -> dict[str, Any]:
