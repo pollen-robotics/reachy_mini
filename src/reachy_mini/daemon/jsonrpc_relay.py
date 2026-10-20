@@ -4,8 +4,8 @@ Incoming JSON-RPC frames from any client transport (WebRTC DataChannel,
 ``/ws/sdk``) are routed here by namespace:
 
 * ``apps.*`` — handled locally against the :class:`AppManager` (start / stop /
-  status of the single running app, install, update check and update). This
-  *is* the "apps API" exposed over WebRTC.
+  status of the single running app, install, update check and update, and the
+  startup app the antennas launch). This *is* the "apps API" exposed over WebRTC.
 * anything else (e.g. ``conversation.*``) — relayed to the running app's
   ``/rpc`` WebSocket. The relay holds one persistent connection to that
   endpoint, which doubles as the daemon's subscription to the app's event
@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from importlib.metadata import distributions
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 from urllib.parse import urlparse
 
 from websockets.asyncio.client import ClientConnection, connect
@@ -29,7 +29,14 @@ from websockets.asyncio.client import ClientConnection, connect
 from reachy_mini.apps import SourceKind
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.apps.sources import app_update_checker, local_common_venv
-from reachy_mini.daemon.app.startup_app import ensure_startup_app_installed
+from reachy_mini.daemon import startup_app_config
+from reachy_mini.daemon.app.startup_app import (
+    apply_startup_app,
+    ensure_startup_app_installed,
+)
+
+if TYPE_CHECKING:
+    from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.io.jsonrpc import (
     JsonRpcError,
     RpcErrorResponse,
@@ -55,6 +62,7 @@ class JsonRpcRelay:
         app_manager: AppManager,
         broadcast: Callable[[str], None],
         logger: Optional[logging.Logger] = None,
+        daemon: Optional["Daemon"] = None,
     ) -> None:
         """Create the relay.
 
@@ -64,10 +72,12 @@ class JsonRpcRelay:
                 backend's ``broadcast_to_all_clients``). Used to fan app
                 notifications out.
             logger: optional logger.
+            daemon: owner of the startup-app watcher, for ``apps.set_startup``.
 
         """
         self._apps = app_manager
         self._broadcast = broadcast
+        self._daemon = daemon
         self.logger = logger or logging.getLogger("reachy_mini.jsonrpc_relay")
 
         self._app_ws: Optional[ClientConnection] = None
@@ -145,6 +155,10 @@ class JsonRpcRelay:
             result = await self._check_update(_require_name(req))
         elif verb == "update":
             result = await self._start_update(_require_name(req))
+        elif verb == "get_startup":
+            result = {"name": startup_app_config.get_startup_app()}
+        elif verb == "set_startup":
+            result = await self._set_startup(req)
         else:
             raise JsonRpcError(
                 f"unknown method: {req.method}",
@@ -153,6 +167,23 @@ class JsonRpcRelay:
             )
         if not req.is_notification:
             reply(make_result(req.id, result))
+
+    async def _set_startup(self, req: RpcRequest) -> dict[str, Any]:
+        """Set (``name``) or clear (``null``) the app the antennas start on wake-up."""
+        name = req.params.get("name")
+        if name is not None and (not isinstance(name, str) or not name):
+            raise JsonRpcError(
+                "apps.set_startup takes a 'name' or null",
+                reason="invalid_params",
+                code=-32602,
+            )
+        if self._daemon is None:
+            raise JsonRpcError("no daemon to arm the startup app", reason="unavailable")
+        try:
+            await apply_startup_app(self._apps, self._daemon, name)
+        except ValueError as e:
+            raise JsonRpcError(str(e), reason="not_installed") from e
+        return {"name": name}
 
     async def _check_update(self, name: str) -> dict[str, Any]:
         """Whether ``name`` is installed, has an update, or is being updated."""
