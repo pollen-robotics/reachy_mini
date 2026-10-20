@@ -25,6 +25,7 @@ from fastapi.responses import HTMLResponse
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.app.middleware import (
+    ClientTelemetryMiddleware,
     LocalNetworkGuardMiddleware,
     MaxBodySizeMiddleware,
 )
@@ -41,6 +42,7 @@ from reachy_mini.daemon.app.routers import (
     move,
     sdk_ws,
     state,
+    telemetry,
     volume,
 )
 from reachy_mini.daemon.app.startup_app import (
@@ -49,6 +51,7 @@ from reachy_mini.daemon.app.startup_app import (
     watch_antennas_for_startup_app,
 )
 from reachy_mini.daemon.daemon import Daemon
+from reachy_mini.daemon.telemetry import telemetry as daemon_telemetry
 from reachy_mini.daemon.utils import SimulationMode
 from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
@@ -234,6 +237,19 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             # Register mDNS service only after the daemon is ready
             mdns.register()
 
+            daemon_telemetry.start(
+                form_factor=(
+                    "mujoco"
+                    if args.sim
+                    else "mockup"
+                    if args.mockup_sim
+                    else "wireless"
+                    if args.wireless_version
+                    else "lite"
+                ),
+                desktop_app_daemon=args.desktop_app_daemon,
+            )
+
             # Wire the live rename hook now that both the daemon (relay +
             # status) and the mDNS registration exist. A `set_robot_name`
             # command then applies without a restart: daemon status + central
@@ -288,6 +304,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             except Exception as e:
                 logger.exception(f"Error stopping daemon: {e}")
 
+            # Last, so app_stopped events from the shutdown above are flushed.
+            await asyncio.to_thread(daemon_telemetry.stop)
+
     app = FastAPI(
         lifespan=lifespan,
     )
@@ -328,6 +347,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(motors.router)
     router.include_router(move.router)
     router.include_router(state.router)
+    router.include_router(telemetry.router)
     router.include_router(volume.router)
 
     if args.wireless_version:
@@ -348,6 +368,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             """Health check endpoint to reset the health check timer."""
             health_check_event.set()
             return {"status": "ok"}
+
+    # Innermost, so requests rejected by the guards below are not counted.
+    app.add_middleware(ClientTelemetryMiddleware)
 
     # Cap the size of sound uploads before the body is read, so a large file
     # cannot be streamed to disk (see GHSA-m2pc-3q4q-w6jr). Added before CORS

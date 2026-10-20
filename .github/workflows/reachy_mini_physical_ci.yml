@@ -11,6 +11,8 @@ on:
 
 env:
   REACHY_REF: ${{ inputs.ref || github.sha }}
+  # CI daemons must not show up in the fleet telemetry.
+  REACHY_MINI_TELEMETRY: "0"
 
 jobs:
   validate_ref:
@@ -63,6 +65,9 @@ jobs:
             set -e
             sudo systemctl stop reachy-mini-daemon
             /venvs/mini_daemon/bin/pip install --force-reinstall --upgrade \"reachy-mini[wireless-version] @ git+https://github.com/pollen-robotics/reachy_mini.git@$REACHY_REF\"
+            sudo mkdir -p /etc/systemd/system/reachy-mini-daemon.service.d
+            printf '[Service]\nEnvironment=REACHY_MINI_TELEMETRY=0\n' | sudo tee /etc/systemd/system/reachy-mini-daemon.service.d/no-telemetry.conf > /dev/null
+            sudo systemctl daemon-reload
             sudo systemctl start reachy-mini-daemon
           "
 
