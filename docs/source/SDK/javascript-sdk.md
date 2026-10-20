@@ -391,9 +391,8 @@ await robot.signOut();
 
 ## Prerequisites
 
-- Your robot must be running the wireless firmware and connected to the central signaling server.
-- The robot must have a valid Hugging Face token configured (see [Usage](../platforms/reachy_mini/usage)).
-- Currently supported on **wireless versions** only.
+- The robot's daemon must be connected to the central signaling server, which happens automatically when it has a valid Hugging Face token configured (see [Usage](../platforms/reachy_mini/usage)).
+- Works on both Wireless and Lite robots (for a Lite, the daemon runs on the computer it is plugged into).
 
 ## Working examples
 
