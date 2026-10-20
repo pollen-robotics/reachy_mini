@@ -614,8 +614,16 @@ async def _race_crashed_app_clear_with_install(
             name="other", source_kind=jsonrpc_relay.SourceKind.HF_SPACE
         )
 
+    finish_first = threading.Event()
+
+    async def slow_job(name: str, logger: Any) -> None:
+        # Keep the first job running while the queued install is checked.
+        await asyncio.to_thread(finish_first.wait, 5)
+
     apps.stop_current_app = slow_stop  # type: ignore[method-assign]
     apps.install_new_app = slow_install  # type: ignore[method-assign]
+    apps.remove_app = slow_job  # type: ignore[method-assign]
+    apps.update_app = slow_job  # type: ignore[method-assign]
     monkeypatch.setattr(jsonrpc_relay, "get_python_app_info", resolve)
     monkeypatch.setattr(
         jsonrpc_relay.startup_app_config, "get_startup_app", lambda: None
@@ -623,11 +631,20 @@ async def _race_crashed_app_clear_with_install(
 
     first = asyncio.create_task(_call(relay, f"apps.{verb}", {"name": "conv"}))
     await stop_entered.wait()
-    install = await _call(relay, "apps.install_space", {"space_id": "pollen/other"})
-    assert "job_id" in install["result"]
+    # Another client's install arrives while the crashed app is being
+    # cleared: job starts are serialized, so it waits instead of racing.
+    install = asyncio.create_task(
+        _call(relay, "apps.install_space", {"space_id": "pollen/other"})
+    )
+    await asyncio.sleep(0.05)
+    assert not install.done()
     release_stop.set()
     reply = await first
+    queued = await install
+    finish_first.set()
     finish_install.set()
+    # Exactly one job got the venv: the queued install is refused busy.
+    assert queued["error"]["data"]["reason"] == "busy"
     return reply
 
 
@@ -635,9 +652,9 @@ async def _race_crashed_app_clear_with_install(
 async def test_remove_of_crashed_app_races_an_install(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Clearing a crashed app awaits: an install started meanwhile wins."""
+    """Clearing a crashed app awaits: an install arriving meanwhile must not race."""
     reply = await _race_crashed_app_clear_with_install(monkeypatch, "remove")
-    assert reply["error"]["data"]["reason"] == "busy"
+    assert "job_id" in reply["result"]
 
 
 @pytest.mark.asyncio
@@ -646,7 +663,7 @@ async def test_update_of_crashed_app_races_an_install(
 ) -> None:
     """Same race as remove, through apps.update."""
     reply = await _race_crashed_app_clear_with_install(monkeypatch, "update")
-    assert reply["error"]["data"]["reason"] == "busy"
+    assert reply["result"]["started"] is True
 
 
 @pytest.mark.asyncio
@@ -820,6 +837,12 @@ async def test_concurrent_updates_start_only_one(
     await _call(relay, "apps.start", {"name": "conv"})
 
     async def slow_stop() -> None:
+        # Like the real manager: an app being stopped still holds the slot
+        # (is_app_running), and a second stop raises.
+        status = apps.current_app.status
+        if status.state == "stopping":
+            raise RuntimeError("No app is currently running")
+        status.state = "stopping"
         await asyncio.sleep(0.05)
         apps.stopped += 1
         apps.current_app = None
@@ -829,15 +852,13 @@ async def test_concurrent_updates_start_only_one(
         _call(relay, "apps.update", {"name": "conv"}),
         _call(relay, "apps.update", {"name": "conv"}),
     )
-    started = [r["result"]["started"] for r in (first, second) if "result" in r]
-    refused = [r["error"]["data"]["reason"] for r in (first, second) if "error" in r]
-    # One update runs; the other is told so (started: false) or refused busy.
-    assert started.count(True) == 1
-    assert started.count(False) + len(refused) == 1
-    assert set(refused) <= {"busy"}
+    # One update runs; the second tap is told so and gets the same job.
+    assert first["result"]["started"] is True
+    assert second["result"] == {"started": False, "job_id": first["result"]["job_id"]}
     apps.update_gate.set()
-    await _wait_job_done(first.get("result", second.get("result"))["job_id"])
+    await _wait_job_done(first["result"]["job_id"])
     assert apps.updated == ["conv"]
+    assert apps.stopped == 1
 
 
 @pytest.mark.asyncio

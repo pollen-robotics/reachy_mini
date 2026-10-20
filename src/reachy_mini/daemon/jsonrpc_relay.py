@@ -98,6 +98,10 @@ class JsonRpcRelay:
         # apps.update: the job updating each app, and the last failure.
         self._update_jobs: dict[str, str] = {}
         self._update_errors: dict[str, str] = {}
+        # Serializes job starts (check -> stop/lookup -> re-check -> register).
+        # Each frame is its own coroutine, so without it a double tap passes
+        # the checks twice while the first one awaits.
+        self._job_start_lock = asyncio.Lock()
 
     # -- entry point -------------------------------------------------------
 
@@ -170,13 +174,19 @@ class JsonRpcRelay:
             installed = await self._apps.list_available_apps(SourceKind.INSTALLED)
             result = {"apps": [_installed_dict(a) for a in installed]}
         elif verb == "install_space":
-            result = await self._start_install_job(_required_str(req, "space_id"))
+            space_id = _required_str(req, "space_id")
+            async with self._job_start_lock:
+                result = await self._start_install_job(space_id)
         elif verb == "remove":
-            result = await self._start_remove_job(_required_str(req, "name"))
+            name = _required_str(req, "name")
+            async with self._job_start_lock:
+                result = await self._start_remove_job(name)
         elif verb == "check_update":
             result = await self._check_update(_required_str(req, "name"))
         elif verb == "update":
-            result = await self._start_update(_required_str(req, "name"))
+            name = _required_str(req, "name")
+            async with self._job_start_lock:
+                result = await self._start_update(name)
         elif verb == "job_status":
             job_id = _required_str(req, "job_id")
             try:
@@ -338,7 +348,10 @@ class JsonRpcRelay:
             try:
                 await self._apps.stop_current_app()
             except RuntimeError:
-                pass  # it exited on its own meanwhile
+                # Already stopping (another client, the Talk tab's teardown)
+                # or exited meanwhile: the manager refuses to update until the
+                # slot is free, so wait for it rather than start a doomed job.
+                await self._wait_slot_released(name)
         # Again: the stop awaited, so a double tap or another client may have
         # started a job meanwhile. No await from here to run_command, which
         # registers the job synchronously.
@@ -362,6 +375,20 @@ class JsonRpcRelay:
         self._job_apps[job_id] = name
         _invalidate_rest_update_cache()
         return {"started": True, "job_id": job_id}
+
+    async def _wait_slot_released(self, name: str, timeout: float = 25.0) -> None:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:
+            app = self._apps.current_app
+            if (
+                app is None
+                or not self._apps.is_app_running()
+                or app.status.info.name != name
+            ):
+                return
+            await asyncio.sleep(0.1)
+        raise JsonRpcError(f"{name!r} did not stop", reason="app_running")
 
     def _update_job_active(self, name: str) -> bool:
         job_id = self._update_jobs.get(name)
