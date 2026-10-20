@@ -2,7 +2,7 @@
 
 Privacy mode cuts the camera and the microphones for every consumer (see
 ``reachy_mini.daemon.privacy``). These routes drive the ``"api"`` source; the
-NFC privacy hat is a second, independent one.
+NFC privacy hat will be a second, independent one once the NFC module lands.
 """
 
 import asyncio

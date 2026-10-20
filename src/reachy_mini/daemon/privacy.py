@@ -11,8 +11,9 @@ Both cuts are made where no consumer can be missed:
 The pipeline itself keeps running, so apps and remote sessions stay connected:
 they simply receive silence and a black picture until privacy mode ends.
 
-Privacy mode is on while at least one *source* asks for it: ``"hat"`` (the NFC
-privacy hat is on the head) or ``"api"`` (REST, SDK or data-channel request).
+Privacy mode is on while at least one *source* asks for it: ``"api"`` (REST,
+SDK or data-channel request) or ``"hat"`` (the NFC privacy hat is on the head,
+wired up together with the NFC module).
 A request from one source never clears another's, so software cannot switch
 off a hat that is still on the head.
 """
