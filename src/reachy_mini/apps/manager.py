@@ -393,8 +393,12 @@ class AppManager:
 
         self.current_app = None
 
-    async def restart_current_app(self) -> AppStatus:
-        """Restart the current app."""
+    async def restart_current_app(self, keep_remote: bool = False) -> AppStatus:
+        """Restart the current app.
+
+        ``keep_remote`` is forwarded to :meth:`start_app`: the JSON-RPC relay
+        sets it so the remote client asking for the restart keeps its session.
+        """
         if not self.is_app_running():
             raise RuntimeError("No app is currently running")
 
@@ -403,7 +407,7 @@ class AppManager:
         app_info = self.current_app.status.info
 
         await self.stop_current_app()
-        await self.start_app(app_info.name)
+        await self.start_app(app_info.name, keep_remote=keep_remote)
 
         return self.current_app.status
 

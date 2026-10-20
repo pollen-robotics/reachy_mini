@@ -8,6 +8,7 @@ Covers the three things the relay must get right:
 
 import asyncio
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -107,11 +108,13 @@ class FakeAppManager:
         self.current_app: Any = None
         self.started: list[str] = []
         self.stopped = 0
-        self.installed = ["conv"]
+        self.installed: list[Any] = ["conv"]
         self.wireless_version = True
         self.desktop_app_daemon = False
         self.updated: list[str] = []
-        self.update_gate: asyncio.Event | None = None
+        # Updates run in the job thread (own event loop): gate with a thread
+        # event, not an asyncio one bound to the test's loop.
+        self.update_gate: threading.Event | None = None
         self.update_error: str | None = None
 
     def is_app_running(self) -> bool:
@@ -143,7 +146,7 @@ class FakeAppManager:
         if self.is_app_running() and self.current_app.status.info.name == name:
             raise RuntimeError("Cannot update while it is running")
         if self.update_gate is not None:
-            await self.update_gate.wait()
+            await asyncio.to_thread(self.update_gate.wait, 5)
         if self.update_error:
             raise RuntimeError(self.update_error)
         self.updated.append(name)
@@ -318,7 +321,9 @@ async def test_apps_install(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_original_id_recorded_before_send(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_original_id_recorded_before_send(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The caller's id must be recorded before the frame leaves the relay.
 
     Regression: the reader task runs on this loop and can deliver the app's
@@ -350,13 +355,344 @@ async def test_original_id_recorded_before_send(monkeypatch: pytest.MonkeyPatch)
     await relay.aclose()
 
 
-async def _call(relay: JsonRpcRelay, method: str, params: dict[str, Any]) -> dict[str, Any]:
+# ------------------------------------------------------- apps.* management
+
+
+class FakeManagerWithInstalled(FakeAppManager):
+    """FakeAppManager plus an installed list and job coroutines."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.installed = [
+            jsonrpc_relay.AppInfo(
+                name="conv",
+                source_kind=jsonrpc_relay.SourceKind.INSTALLED,
+                url="https://huggingface.co/spaces/pollen/conv",
+                extra={
+                    "id": "pollen/conv",
+                    "cardData": {
+                        "title": "Conv",
+                        "emoji": "🎤",
+                        "short_description": "Talk",
+                    },
+                    "custom_app_url": "http://0.0.0.0:7860/",
+                    "siblings": ["huge", "payload"],
+                },
+            )
+        ]
+        self.restarted_keep_remote: bool | None = None
+
+    async def list_available_apps(self, source: Any) -> list[Any]:
+        return self.installed
+
+    async def restart_current_app(self, keep_remote: bool = False) -> Any:
+        if self.current_app is None:
+            raise RuntimeError("No app is currently running")
+        self.restarted_keep_remote = keep_remote
+        return self.current_app.status
+
+    async def install_new_app(self, app: Any, logger: Any) -> None:
+        logger.info(f"installing {app.name}")
+
+    async def remove_app(self, name: str, logger: Any) -> None:
+        raise RuntimeError("uninstall failed")
+
+
+async def _call(
+    relay: JsonRpcRelay, method: str, params: dict[str, Any] | None = None
+) -> dict[str, Any]:
     replies: list[dict[str, Any]] = []
-    await relay.handle(
-        json.dumps({"jsonrpc": "2.0", "id": "1", "method": method, "params": params}),
-        replies.append,
+    frame: dict[str, Any] = {"jsonrpc": "2.0", "id": "x", "method": method}
+    if params is not None:
+        frame["params"] = params
+    await relay.handle(json.dumps(frame), replies.append)
+    return replies[0]
+
+
+@pytest.mark.asyncio
+async def test_apps_list_installed_is_trimmed() -> None:
+    relay = JsonRpcRelay(FakeManagerWithInstalled(), broadcast=lambda _: None)
+    reply = await _call(relay, "apps.list_installed")
+    assert reply["result"]["apps"] == [
+        {
+            "name": "conv",
+            "description": "Talk",
+            "url": "https://huggingface.co/spaces/pollen/conv",
+            "space_id": "pollen/conv",
+            "title": "Conv",
+            "emoji": "🎤",
+            "private": False,
+            "custom_app_url": "http://0.0.0.0:7860/",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_apps_stop_and_restart_when_idle_report_not_running() -> None:
+    relay = JsonRpcRelay(FakeManagerWithInstalled(), broadcast=lambda _: None)
+
+    async def stop_raises() -> None:
+        raise RuntimeError("No app is currently running")
+
+    relay._apps.stop_current_app = stop_raises  # type: ignore[method-assign]
+    assert (await _call(relay, "apps.stop"))["error"]["data"]["reason"] == "not_running"
+    assert (await _call(relay, "apps.restart"))["error"]["data"][
+        "reason"
+    ] == "not_running"
+
+
+@pytest.mark.asyncio
+async def test_apps_restart_keeps_remote() -> None:
+    apps = FakeManagerWithInstalled()
+    relay = JsonRpcRelay(apps, broadcast=lambda _: None)
+    await _call(relay, "apps.start", {"name": "conv"})
+    reply = await _call(relay, "apps.restart")
+    assert reply["result"]["info"]["name"] == "conv"
+    assert apps.restarted_keep_remote is True
+
+
+async def _wait_final(events: list[dict[str, Any]], timeout: float = 2.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not any(e["params"]["final"] for e in events):
+        assert asyncio.get_running_loop().time() < deadline, "job never finished"
+        await asyncio.sleep(0.01)
+
+
+@pytest.mark.asyncio
+async def test_apps_install_space_runs_a_job_and_streams_progress(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_resolve(space_id: str) -> Any:
+        if space_id != "pollen/conv":
+            return None
+        return jsonrpc_relay.AppInfo(
+            name="conv", source_kind=jsonrpc_relay.SourceKind.HF_SPACE
+        )
+
+    monkeypatch.setattr(jsonrpc_relay, "get_python_app_info", fake_resolve)
+    events: list[dict[str, Any]] = []
+    relay = JsonRpcRelay(
+        FakeManagerWithInstalled(), broadcast=lambda s: events.append(json.loads(s))
     )
-    return replies[-1]
+
+    reply = await _call(relay, "apps.install_space", {"space_id": "pollen/conv"})
+    job_id = reply["result"]["job_id"]
+    assert reply["result"]["name"] == "conv"
+    await _wait_final(events)
+
+    assert all(e["method"] == "apps.job_progress" for e in events)
+    assert all(e["params"]["job_id"] == job_id for e in events)
+    assert any(e["params"]["line"] == "installing conv" for e in events)
+    assert events[-1]["params"]["final"] is True
+    assert events[-1]["params"]["status"] == "done"
+
+    status = await _call(relay, "apps.job_status", {"job_id": job_id})
+    assert status["result"]["status"] == "done"
+    assert "installing conv" in status["result"]["logs"]
+
+    assert (await _call(relay, "apps.install_space", {"space_id": "pollen/nope"}))[
+        "error"
+    ]["data"]["reason"] == "not_found"
+    assert (await _call(relay, "apps.install_space", {"space_id": "bad"}))["error"][
+        "data"
+    ]["reason"] == "invalid_params"
+    assert (await _call(relay, "apps.job_status", {"job_id": "nope"}))["error"]["data"][
+        "reason"
+    ] == "unknown_job"
+
+
+@pytest.mark.asyncio
+async def test_apps_remove_guards_and_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    apps = FakeManagerWithInstalled()
+    events: list[dict[str, Any]] = []
+    relay = JsonRpcRelay(apps, broadcast=lambda s: events.append(json.loads(s)))
+
+    # Refused while running.
+    await _call(relay, "apps.start", {"name": "conv"})
+    reply = await _call(relay, "apps.remove", {"name": "conv"})
+    assert reply["error"]["data"]["reason"] == "app_running"
+    apps.current_app = None
+
+    # Refused for the startup app.
+    monkeypatch.setattr(
+        jsonrpc_relay.startup_app_config, "get_startup_app", lambda: "conv"
+    )
+    reply = await _call(relay, "apps.remove", {"name": "conv"})
+    assert reply["error"]["data"]["reason"] == "startup_app"
+    monkeypatch.setattr(
+        jsonrpc_relay.startup_app_config, "get_startup_app", lambda: None
+    )
+
+    # Busy while another job runs.
+    monkeypatch.setattr(jsonrpc_relay.bg_job_register, "has_active_job", lambda: True)
+    reply = await _call(relay, "apps.remove", {"name": "conv"})
+    assert reply["error"]["data"]["reason"] == "busy"
+    monkeypatch.undo()
+    monkeypatch.setattr(
+        jsonrpc_relay.startup_app_config, "get_startup_app", lambda: None
+    )
+
+    # A failing job ends with a final `failed` event.
+    reply = await _call(relay, "apps.remove", {"name": "conv"})
+    assert "job_id" in reply["result"]
+    await _wait_final(events)
+    assert events[-1]["params"]["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_apps_remove_clears_a_crashed_app_first() -> None:
+    apps = FakeManagerWithInstalled()
+    events: list[dict[str, Any]] = []
+    relay = JsonRpcRelay(apps, broadcast=lambda s: events.append(json.loads(s)))
+    await _call(relay, "apps.start", {"name": "conv"})
+    apps.current_app.status.state = "error"
+
+    reply = await _call(relay, "apps.remove", {"name": "conv"})
+
+    assert "job_id" in reply["result"]
+    assert apps.stopped == 1
+    await _wait_final(events)
+
+
+@pytest.mark.asyncio
+async def test_apps_restart_start_failure_is_not_reported_as_idle() -> None:
+    apps = FakeManagerWithInstalled()
+    relay = JsonRpcRelay(apps, broadcast=lambda _: None)
+    await _call(relay, "apps.start", {"name": "conv"})
+
+    async def restart_fails(keep_remote: bool = False) -> Any:
+        raise RuntimeError("An app is already running")
+
+    apps.restart_current_app = restart_fails  # type: ignore[method-assign]
+    reply = await _call(relay, "apps.restart")
+    assert reply["error"]["data"]["reason"] == "already_running"
+
+
+@pytest.mark.asyncio
+async def test_inline_install_blocks_install_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release = asyncio.Event()
+
+    async def slow_ensure(apps: Any, name: str) -> bool:
+        await release.wait()
+        return True
+
+    monkeypatch.setattr(jsonrpc_relay, "ensure_startup_app_installed", slow_ensure)
+    relay = JsonRpcRelay(FakeManagerWithInstalled(), broadcast=lambda _: None)
+
+    legacy = asyncio.create_task(_call(relay, "apps.install", {"name": "conv"}))
+    await asyncio.sleep(0)
+    reply = await _call(relay, "apps.install_space", {"space_id": "pollen/other"})
+    assert reply["error"]["data"]["reason"] == "busy"
+
+    release.set()
+    assert (await legacy)["result"] == {"installed": True}
+
+
+async def _race_crashed_app_clear_with_install(
+    monkeypatch: pytest.MonkeyPatch, verb: str
+) -> dict[str, Any]:
+    """Run `verb` on a crashed app while another client installs meanwhile."""
+    apps = FakeManagerWithInstalled()
+    relay = JsonRpcRelay(apps, broadcast=lambda _: None)
+    await _call(relay, "apps.start", {"name": "conv"})
+    apps.current_app.status.state = "error"
+    stop_entered, release_stop = asyncio.Event(), asyncio.Event()
+    finish_install = threading.Event()
+
+    async def slow_stop() -> None:
+        stop_entered.set()
+        await release_stop.wait()
+        apps.current_app = None
+
+    async def slow_install(app: Any, logger: Any) -> None:
+        await asyncio.to_thread(finish_install.wait, 5)
+
+    async def resolve(space_id: str) -> Any:
+        return jsonrpc_relay.AppInfo(
+            name="other", source_kind=jsonrpc_relay.SourceKind.HF_SPACE
+        )
+
+    apps.stop_current_app = slow_stop  # type: ignore[method-assign]
+    apps.install_new_app = slow_install  # type: ignore[method-assign]
+    monkeypatch.setattr(jsonrpc_relay, "get_python_app_info", resolve)
+    monkeypatch.setattr(
+        jsonrpc_relay.startup_app_config, "get_startup_app", lambda: None
+    )
+
+    first = asyncio.create_task(_call(relay, f"apps.{verb}", {"name": "conv"}))
+    await stop_entered.wait()
+    install = await _call(relay, "apps.install_space", {"space_id": "pollen/other"})
+    assert "job_id" in install["result"]
+    release_stop.set()
+    reply = await first
+    finish_install.set()
+    return reply
+
+
+@pytest.mark.asyncio
+async def test_remove_of_crashed_app_races_an_install(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Clearing a crashed app awaits: an install started meanwhile wins."""
+    reply = await _race_crashed_app_clear_with_install(monkeypatch, "remove")
+    assert reply["error"]["data"]["reason"] == "busy"
+
+
+@pytest.mark.asyncio
+async def test_update_of_crashed_app_races_an_install(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same race as remove, through apps.update."""
+    reply = await _race_crashed_app_clear_with_install(monkeypatch, "update")
+    assert reply["error"]["data"]["reason"] == "busy"
+
+
+@pytest.mark.asyncio
+async def test_install_space_refuses_a_running_app(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reinstalling must not swap files under the app's live process."""
+
+    async def resolve(space_id: str) -> Any:
+        return jsonrpc_relay.AppInfo(
+            name="conv", source_kind=jsonrpc_relay.SourceKind.HF_SPACE
+        )
+
+    monkeypatch.setattr(jsonrpc_relay, "get_python_app_info", resolve)
+    apps = FakeManagerWithInstalled()
+    relay = JsonRpcRelay(apps, broadcast=lambda _: None)
+    await _call(relay, "apps.start", {"name": "conv"})
+
+    reply = await _call(relay, "apps.install_space", {"space_id": "pollen/conv"})
+    assert reply["error"]["data"]["reason"] == "app_running"
+
+    # A crashed copy is cleared instead, and the reinstall goes ahead.
+    apps.current_app.status.state = "error"
+    reply = await _call(relay, "apps.install_space", {"space_id": "pollen/conv"})
+    assert "job_id" in reply["result"]
+    assert apps.stopped == 1
+
+
+# ------------------------------------------- apps.check_update / apps.update
+
+
+async def _wait_job_done(job_id: str, timeout: float = 3.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while jsonrpc_relay._job_is_active(job_id):
+        assert asyncio.get_running_loop().time() < deadline, "job never finished"
+        await asyncio.sleep(0.01)
+
+
+def _fake_dist(root: Path, dist: str, version: str, entry_point: str | None) -> None:
+    info = root / f"{dist}-{version}.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text(f"Name: {dist}\nVersion: {version}\n")
+    if entry_point:
+        (info / "entry_points.txt").write_text(
+            f"[reachy_mini_apps]\n{entry_point} = pkg.main:App\n"
+        )
 
 
 @pytest.mark.asyncio
@@ -370,15 +706,12 @@ async def test_apps_check_update(
         checked.append(app.name)
         return SimpleNamespace(update_available=True)
 
-    monkeypatch.setattr(jsonrpc_relay.app_update_checker, "check_app_update", fake_check)
-    (tmp_path / "conv-1.1.0.dist-info").mkdir()
-    (tmp_path / "conv-1.1.0.dist-info" / "METADATA").write_text(
-        "Name: conv\nVersion: 1.1.0\n"
-    )
     monkeypatch.setattr(
-        jsonrpc_relay.local_common_venv,
-        "get_app_site_packages",
-        lambda *_: tmp_path,
+        jsonrpc_relay.app_update_checker, "check_app_update", fake_check
+    )
+    _fake_dist(tmp_path, "conv", "1.1.0", None)
+    monkeypatch.setattr(
+        jsonrpc_relay.local_common_venv, "get_app_site_packages", lambda *_: tmp_path
     )
     relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None)
 
@@ -387,6 +720,7 @@ async def test_apps_check_update(
         "installed": True,
         "version": "1.1.0",
         "update_available": True,
+        "checkable": True,
         "updating": False,
         "error": None,
     }
@@ -399,37 +733,61 @@ async def test_apps_check_update(
 
 
 @pytest.mark.asyncio
-async def test_apps_update_stops_the_app_and_runs_in_background(
+async def test_apps_check_update_finds_version_through_entry_point(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The app name is the entry-point name; the distribution may be named otherwise."""
+
+    async def unknown(app: Any, **kwargs: Any) -> Any:
+        return None  # the source can't be checked
+
+    monkeypatch.setattr(jsonrpc_relay.app_update_checker, "check_app_update", unknown)
+    _fake_dist(tmp_path, "reachy_mini_conversation_app", "2.3.0", "conv")
+    monkeypatch.setattr(
+        jsonrpc_relay.local_common_venv, "get_app_site_packages", lambda *_: tmp_path
+    )
+    relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None)
+
+    result = (await _call(relay, "apps.check_update", {"name": "conv"}))["result"]
+    assert result["version"] == "2.3.0"
+    # Not checkable is not "up to date".
+    assert result["update_available"] is False
+    assert result["checkable"] is False
+
+
+@pytest.mark.asyncio
+async def test_apps_update_stops_the_app_and_runs_as_a_job(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """apps.update returns at once; check_update shows progress, then the result."""
+    """apps.update returns at once with a job; check_update follows it."""
 
     async def no_update(app: Any, **kwargs: Any) -> Any:
         return SimpleNamespace(update_available=False)
 
     monkeypatch.setattr(jsonrpc_relay.app_update_checker, "check_app_update", no_update)
+    events: list[dict[str, Any]] = []
     apps = FakeAppManager()
-    apps.update_gate = asyncio.Event()
-    relay = JsonRpcRelay(apps, broadcast=lambda _: None)
+    apps.update_gate = threading.Event()
+    relay = JsonRpcRelay(apps, broadcast=lambda s: events.append(json.loads(s)))
     await _call(relay, "apps.start", {"name": "conv"})
 
-    reply = await _call(relay, "apps.update", {"name": "conv"})
-    assert reply["result"] == {"started": True}
+    reply = (await _call(relay, "apps.update", {"name": "conv"}))["result"]
+    assert reply["started"] is True
+    job_id = reply["job_id"]
     assert apps.stopped == 1  # the manager refuses to update a running app
-    assert (await _call(relay, "apps.update", {"name": "conv"}))["result"] == {
-        "started": False
-    }
-    assert (await _call(relay, "apps.check_update", {"name": "conv"}))["result"][
-        "updating"
-    ] is True
+    again = (await _call(relay, "apps.update", {"name": "conv"}))["result"]
+    assert again == {"started": False, "job_id": job_id}
+    check = (await _call(relay, "apps.check_update", {"name": "conv"}))["result"]
+    assert check["updating"] is True
 
     apps.update_gate.set()
-    await asyncio.sleep(0)
-    await asyncio.sleep(0)
+    await _wait_job_done(job_id)
     result = (await _call(relay, "apps.check_update", {"name": "conv"}))["result"]
     assert result["updating"] is False
     assert result["error"] is None
     assert apps.updated == ["conv"]
+    # Progress went out like any app job.
+    assert any(e["params"]["job_id"] == job_id for e in events)
 
 
 @pytest.mark.asyncio
@@ -437,15 +795,77 @@ async def test_apps_update_failure_is_reported(monkeypatch: pytest.MonkeyPatch) 
     """A failed background update surfaces through apps.check_update."""
 
     async def no_update(app: Any, **kwargs: Any) -> Any:
-        return None  # source can't be checked
+        return None
 
     monkeypatch.setattr(jsonrpc_relay.app_update_checker, "check_app_update", no_update)
     apps = FakeAppManager()
     apps.update_error = "space not found"
     relay = JsonRpcRelay(apps, broadcast=lambda _: None)
 
-    await _call(relay, "apps.update", {"name": "conv"})
-    await asyncio.sleep(0)
+    job_id = (await _call(relay, "apps.update", {"name": "conv"}))["result"]["job_id"]
+    await _wait_job_done(job_id)
     result = (await _call(relay, "apps.check_update", {"name": "conv"}))["result"]
     assert result["error"] == "space not found"
     assert result["update_available"] is False
+
+
+@pytest.mark.asyncio
+async def test_concurrent_updates_start_only_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A double tap (two frames dispatched concurrently) must not run two updates."""
+    apps = FakeAppManager()
+    apps.update_gate = threading.Event()
+    relay = JsonRpcRelay(apps, broadcast=lambda _: None)
+    await _call(relay, "apps.start", {"name": "conv"})
+
+    async def slow_stop() -> None:
+        await asyncio.sleep(0.05)
+        apps.stopped += 1
+        apps.current_app = None
+
+    apps.stop_current_app = slow_stop  # type: ignore[method-assign]
+    first, second = await asyncio.gather(
+        _call(relay, "apps.update", {"name": "conv"}),
+        _call(relay, "apps.update", {"name": "conv"}),
+    )
+    started = [r["result"]["started"] for r in (first, second) if "result" in r]
+    refused = [r["error"]["data"]["reason"] for r in (first, second) if "error" in r]
+    # One update runs; the other is told so (started: false) or refused busy.
+    assert started.count(True) == 1
+    assert started.count(False) + len(refused) == 1
+    assert set(refused) <= {"busy"}
+    apps.update_gate.set()
+    await _wait_job_done(first.get("result", second.get("result"))["job_id"])
+    assert apps.updated == ["conv"]
+
+
+@pytest.mark.asyncio
+async def test_apps_start_refuses_an_app_being_updated() -> None:
+    """Starting an app mid-reinstall would run half-written files."""
+    apps = FakeAppManager()
+    apps.update_gate = threading.Event()
+    relay = JsonRpcRelay(apps, broadcast=lambda _: None)
+
+    job_id = (await _call(relay, "apps.update", {"name": "conv"}))["result"]["job_id"]
+    reply = await _call(relay, "apps.start", {"name": "conv"})
+    assert reply["error"]["data"]["reason"] == "busy"
+    assert apps.started == []
+
+    apps.update_gate.set()
+    await _wait_job_done(job_id)
+    assert "result" in await _call(relay, "apps.start", {"name": "conv"})
+
+
+@pytest.mark.asyncio
+async def test_relay_jobs_invalidate_the_rest_update_cache() -> None:
+    """The dashboard's /check-updates must not show a stale result after an RPC job."""
+    from reachy_mini.daemon.app.routers import apps as apps_router
+
+    apps = FakeAppManager()
+    relay = JsonRpcRelay(apps, broadcast=lambda _: None)
+    apps_router._update_cache = ("stale", "stale")  # type: ignore[assignment]
+
+    job_id = (await _call(relay, "apps.update", {"name": "conv"}))["result"]["job_id"]
+    assert apps_router._update_cache is None
+    await _wait_job_done(job_id)
