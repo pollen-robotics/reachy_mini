@@ -22,6 +22,8 @@ Example usage::
     >>> # The server is now streaming and ready to accept client connections
 """
 
+import ctypes
+import ctypes.util
 import logging
 import os
 import platform
@@ -62,7 +64,7 @@ from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
-from gi.repository import GLib, Gst, GstApp  # noqa: E402, F401
+from gi.repository import GLib, GObject, Gst, GstApp  # noqa: E402, F401
 
 # Hard cap on how long a freshly-added consumer is allowed to spend
 # before its `webrtcbin.connection-state` reaches "connected". In a
@@ -125,6 +127,46 @@ class _PeerWebRTCState:
             "signaling_state": self.signaling_state,
             "elapsed_s": round(time.monotonic() - self.added_at, 2),
         }
+
+
+_gobject_ref: Optional[Callable[[int], int]] = None
+_pinned_ice_agents: list[GObject.Object] = []
+
+
+def _keep_ice_agent_alive(ice: GObject.Object) -> None:
+    """Re-balance the reference ``webrtcbin``'s ``ice-agent`` getter hands out.
+
+    On the GStreamer we ship (1.22-1.24) webrtcbin keeps its ICE agent
+    as a floating reference: PyGObject sinks it when wrapping, owns the
+    only reference, and finalizes the agent as soon as the Python wrapper
+    is collected - under a live webrtcbin (re-reads return None, then
+    GStreamer-CRITICAL on dispose). Detected by a refcount of 1 while we
+    hold the wrapper; then take one C-level reference, released by
+    webrtcbin's own unref on dispose. If that's impossible, pin the
+    wrapper for the process lifetime: a tiny leak beats freeing the
+    agent of a live session.
+    """
+    global _gobject_ref
+    if ice.ref_count > 1:
+        return  # webrtcbin holds its own reference: nothing to fix
+    try:
+        if _gobject_ref is None:
+            lib = ctypes.CDLL(
+                ctypes.util.find_library("gobject-2.0") or "libgobject-2.0.so.0"
+            )
+            lib.g_object_ref.argtypes = [ctypes.c_void_p]
+            lib.g_object_ref.restype = ctypes.c_void_p
+            get_pointer = ctypes.pythonapi.PyCapsule_GetPointer
+            get_pointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
+            get_pointer.restype = ctypes.c_void_p
+
+            def _ref(obj: Any) -> int:
+                return int(lib.g_object_ref(get_pointer(obj.__gpointer__, None)))
+
+            _gobject_ref = _ref
+        _gobject_ref(ice)
+    except Exception:
+        _pinned_ice_agents.append(ice)
 
 
 class GstMediaServer:
@@ -429,6 +471,7 @@ class GstMediaServer:
         # Without it we only offer host/srflx and a NAT-restricted remote
         # consumer (e.g. a cloud backend) can't reach us.
         self._apply_turn_servers(webrtcbin)
+        self._disable_upnp(webrtcbin)
 
         GLib.timeout_add_seconds(5, self._dump_latency)
 
@@ -452,6 +495,32 @@ class GstMediaServer:
         # and report it (instead of letting the JS client spin
         # forever). See `ICE_NEGOTIATION_DEADLINE_S`.
         self._install_negotiation_watchdog(peer_id, webrtcbin)
+
+    def _disable_upnp(self, webrtcbin: Gst.Element) -> None:
+        """Stop libnice from asking the home router for port mappings.
+
+        libnice's NiceAgent has UPnP-IGD on by default, so every
+        consumer made the robot SSDP-discover the router and send it
+        AddPortMapping / DeletePortMapping SOAP calls. We never need a
+        mapped port (LAN host candidates, STUN and TURN cover every
+        path), and some home routers handle it badly: on an SFR box the
+        calls started timing out ("Error deleting port mapping: Could
+        not connect to 192.168.1.1") shortly before the box hung and
+        rebooted, dropping the robot and the phone off Wi-Fi. Must run
+        before candidate gathering, i.e. in ``consumer-added``.
+        """
+        try:
+            ice = webrtcbin.get_property("ice-agent")
+        except Exception as e:
+            self._logger.warning(f"Could not reach the ICE agent to disable UPnP: {e}")
+            return
+        if ice is None:
+            return
+        _keep_ice_agent_alive(ice)
+        try:
+            ice.get_property("agent").set_property("upnp", False)
+        except Exception as e:  # older GStreamer: no NiceAgent behind it
+            self._logger.warning(f"Could not disable UPnP on the ICE agent: {e}")
 
     def _apply_turn_servers(self, webrtcbin: Gst.Element) -> None:
         """Add the currently held TURN relay servers to this webrtcbin.
