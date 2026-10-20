@@ -114,7 +114,7 @@ Pick the reference closest to your needs and clone its repo from Hugging Face:
 
 | Reference app                       | Stack                       | Use it for                                  |
 |-------------------------------------|-----------------------------|---------------------------------------------|
-| [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | **Vanilla TS + Vite**       | Smallest bundled runtime, no framework      |
+| [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | **Vanilla TS + Vite**       | Smallest bundled runtime, no framework. **Voice apps**: live speech with the robot's mic via the HF realtime backend, no server |
 | [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions)               | React 19 + MUI 7 + Vite     | UI-rich app with rich components / theming  |
 | [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence)       | React 19 + MUI 7 + Vite     | App with camera / media streams             |
 | [`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app) | Vanilla TS + Vite           | Tour of every SDK primitive                 |
