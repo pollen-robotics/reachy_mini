@@ -204,3 +204,37 @@ async def list_all_apps() -> list[AppInfo]:
             apps.append(app_info)
 
     return apps
+
+
+async def get_python_app_info(space_id: str) -> AppInfo | None:
+    """Resolve one Space id (``owner/repo``) to an installable ``AppInfo``.
+
+    Looks the Space up directly (with the stored HF token, so the owner's
+    private Spaces resolve too) instead of scanning the whole catalog, and only
+    returns it when it is tagged as a Python app. ``extra.private`` is set from
+    the Hub so ``install_package`` knows whether to pass the token.
+    Returns None when the Space is missing, unreachable or not a Python app.
+    """
+    token = hf_auth.get_hf_token() or False
+
+    def fetch() -> SpaceData | None:
+        info = HfApi().space_info(repo_id=space_id, token=token)
+        return _coerce_space_data(_to_plain_json(info.__dict__))
+
+    try:
+        # Bounded below the phone's 30 s install_space timeout.
+        data = await asyncio.wait_for(asyncio.to_thread(fetch), timeout=20)
+    except Exception as exc:
+        logger.warning("Could not resolve Space %s: %s", space_id, exc)
+        return None
+    if data is None:
+        return None
+    data = _normalize_space_data(data)
+    tags: list[object] = []
+    for source in (data.get("tags"), _get_card_data(data).get("tags")):
+        if isinstance(source, list):
+            tags.extend(source)
+    if HF_SPACES_FILTER not in tags:
+        return None
+    data["private"] = bool(data.get("private"))
+    return _build_app_info(data)
