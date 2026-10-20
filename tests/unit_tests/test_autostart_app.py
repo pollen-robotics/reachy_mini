@@ -1,4 +1,5 @@
 import asyncio
+import json
 import types
 from collections.abc import Callable
 from contextlib import suppress
@@ -22,6 +23,7 @@ from reachy_mini.daemon.app.startup_app import (
     wake_or_start_startup_app_if_idle,
     watch_antennas_for_startup_app,
 )
+from reachy_mini.daemon.jsonrpc_relay import JsonRpcRelay
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
 from reachy_mini.io.protocol import MotorControlMode
 
@@ -112,6 +114,7 @@ class StubDaemon:
     def __init__(self) -> None:
         self.backend = StubBackend()
         self.robot_app_lock = RobotAppLock()
+        self.startup_app_watcher_task: asyncio.Task[None] | None = None
 
 
 @pytest.mark.asyncio
@@ -457,10 +460,8 @@ def test_config_corrupt_file_reads_as_none(config_file: Path) -> None:
 
 
 def _stub_request(daemon: object) -> object:
-    """Minimal Request stand-in exposing app.state.{daemon,watcher task}."""
-    state = types.SimpleNamespace(
-        daemon=daemon, startup_app_antenna_watcher_task=None
-    )
+    """Minimal Request stand-in exposing app.state.daemon."""
+    state = types.SimpleNamespace(daemon=daemon)
     return types.SimpleNamespace(app=types.SimpleNamespace(state=state))
 
 
@@ -483,7 +484,7 @@ async def test_set_startup_app_endpoint_persists_and_rearms(config_file: Path) -
     result = await apps_router.set_startup_app(
         apps_router.StartupApp(startup_app="foo"), request, mgr  # type: ignore[arg-type]
     )
-    task = request.app.state.startup_app_antenna_watcher_task  # type: ignore[attr-defined]
+    task = request.app.state.daemon.startup_app_watcher_task  # type: ignore[attr-defined]
     try:
         assert result.startup_app == "foo"
         assert startup_app_config.get_startup_app() == "foo"
@@ -507,7 +508,7 @@ async def test_set_startup_app_endpoint_clears_with_null(config_file: Path) -> N
     )
     assert result.startup_app is None
     assert startup_app_config.get_startup_app() is None
-    assert request.app.state.startup_app_antenna_watcher_task is None  # type: ignore[attr-defined]
+    assert request.app.state.daemon.startup_app_watcher_task is None  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
@@ -599,7 +600,7 @@ async def test_remove_app_clears_startup_app(
         "foo", request, StubAppManager(installed=["foo"], catalog=[])  # type: ignore[arg-type]
     )
     assert startup_app_config.get_startup_app() is None
-    assert request.app.state.startup_app_antenna_watcher_task is None  # type: ignore[attr-defined]
+    assert request.app.state.daemon.startup_app_watcher_task is None  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
@@ -613,3 +614,32 @@ async def test_remove_other_app_keeps_startup_app(
         "bar", request, StubAppManager(installed=["foo", "bar"], catalog=[])  # type: ignore[arg-type]
     )
     assert startup_app_config.get_startup_app() == "foo"
+
+
+async def _rpc(relay: JsonRpcRelay, method: str, params: dict[str, object]) -> dict:  # type: ignore[type-arg]
+    replies: list[dict] = []  # type: ignore[type-arg]
+    frame = {"jsonrpc": "2.0", "id": "1", "method": method, "params": params}
+    await relay.handle(json.dumps(frame), replies.append)
+    return replies[0]
+
+
+@pytest.mark.asyncio
+async def test_relay_sets_and_clears_the_startup_app(config_file: Path) -> None:
+    """apps.set_startup persists and arms like the REST route; null clears."""
+    daemon = StubDaemon()
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    relay = JsonRpcRelay(mgr, broadcast=lambda _: None, daemon=daemon)  # type: ignore[arg-type]
+
+    reply = await _rpc(relay, "apps.set_startup", {"name": "foo"})
+    assert reply["result"] == {"name": "foo"}
+    assert (await _rpc(relay, "apps.get_startup", {}))["result"] == {"name": "foo"}
+    assert daemon.startup_app_watcher_task is not None
+
+    reply = await _rpc(relay, "apps.set_startup", {"name": "nope"})
+    assert reply["error"]["data"]["reason"] == "not_installed"
+    assert startup_app_config.get_startup_app() == "foo"
+
+    reply = await _rpc(relay, "apps.set_startup", {"name": None})
+    assert reply["result"] == {"name": None}
+    assert startup_app_config.get_startup_app() is None
+    assert daemon.startup_app_watcher_task is None

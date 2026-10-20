@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from reachy_mini.apps import SourceKind
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.robot_app_lock import RobotAppLockState
 from reachy_mini.io.protocol import MotorControlMode
 
@@ -315,4 +316,21 @@ async def rearm_startup_app_watcher(
     logger.info(f"Startup app re-armed for app: {name}")
     return asyncio.create_task(
         watch_antennas_for_startup_app(app_manager, daemon, name)
+    )
+
+
+async def apply_startup_app(
+    app_manager: AppManager, daemon: "Daemon", name: str | None
+) -> None:
+    """Persist the startup app (``None`` clears it) and re-arm its watcher live.
+
+    Raises ``ValueError`` when ``name`` is not installed; nothing is persisted then.
+    """
+    if name:
+        installed = await app_manager.list_available_apps(SourceKind.INSTALLED)
+        if not any(a.name == name for a in installed):
+            raise ValueError(f"App '{name}' is not installed")
+    startup_app_config.set_startup_app(name)
+    daemon.startup_app_watcher_task = await rearm_startup_app_watcher(
+        app_manager, daemon, name, daemon.startup_app_watcher_task
     )
