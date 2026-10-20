@@ -280,6 +280,9 @@ class Daemon:
                 self._media_server.set_session_failed_handler(
                     relay.notify_peer_session_failed
                 )
+                # Let the relay judge session liveness on the peer-to-peer
+                # link (data channel) rather than on central's signaling.
+                relay.set_dc_idle_probe(self._media_server.seconds_since_dc_inbound)
         except Exception as e:
             self.logger.warning(f"Failed to start central signaling relay: {e}")
 

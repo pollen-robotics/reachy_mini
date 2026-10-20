@@ -308,6 +308,10 @@ class GstMediaServer:
         # central signaling relay so the JS client gets a typed
         # `endSession` instead of a spinner. Signature:
         # `(peer_id, reason, diagnostic_dict) -> None`.
+        # Monotonic time of the last inbound data-channel message from any
+        # consumer (None: never). Lets the relay judge a session's liveness
+        # on the peer-to-peer link instead of on central's signaling.
+        self._last_dc_inbound_at: Optional[float] = None
         self._on_session_failed: Optional[
             Callable[[str, str, Dict[str, Any]], None]
         ] = None
@@ -2119,9 +2123,16 @@ class GstMediaServer:
     def _on_data_channel_message(
         self, channel: Gst.Element, message: str, peer_id: str
     ) -> None:
+        self._last_dc_inbound_at = time.monotonic()
         self._logger.debug(f"Data channel message from peer {peer_id}: {message}")
         if self._on_data_message:
             self._on_data_message(peer_id, message)
+
+    def seconds_since_dc_inbound(self) -> Optional[float]:
+        """Seconds since a consumer last sent anything on a data channel."""
+        if self._last_dc_inbound_at is None:
+            return None
+        return time.monotonic() - self._last_dc_inbound_at
 
     def _on_data_channel_error(
         self, channel: Gst.Element, error: str, peer_id: str

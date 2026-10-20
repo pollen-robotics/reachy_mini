@@ -15,6 +15,7 @@ import logging
 import os
 import random
 import threading
+import time
 from enum import Enum
 from typing import Any, Callable, Optional
 
@@ -63,6 +64,14 @@ LOCAL_WS_WELCOME_TIMEOUT = (
 SSE_READ_TIMEOUT = (
     60.0  # seconds - timeout for reading from SSE stream (should receive keepalive)
 )
+
+# Session liveness, judged on the peer-to-peer link rather than on central.
+# A live client polls state over the data channel every ~500 ms, so this
+# much inbound silence means nobody is driving the session any more.
+SESSION_LINK_IDLE_S = 2.5
+# A mapped session younger than this may still be negotiating (no data
+# channel yet): never treat it as a ghost.
+SESSION_SETTLE_S = 10.0
 
 # Producer-listed health check (self-heal split-brain states where the
 # relay's SSE is alive but central no longer lists this robot as a
@@ -194,6 +203,11 @@ class CentralSignalingRelay:
         # `_keep_sessions_on_central_loss`). Their media is peer-to-peer
         # and doesn't need central; their central session ids are stale.
         self._orphaned_local_sessions: set[str] = set()
+        # When each local session was mapped (monotonic), see SESSION_SETTLE_S.
+        self._local_session_started_at: dict[str, float] = {}
+        # Seconds since the media server last received anything on a data
+        # channel (None: never). Set by the daemon; see `set_dc_idle_probe`.
+        self._dc_idle_probe: Optional[Callable[[], Optional[float]]] = None
         # Handler of the local GStreamer websocket. Outlives a central
         # reconnect so the sessions it carries survive (closing the
         # websocket makes webrtcsink drop every consumer on it).
@@ -348,6 +362,7 @@ class CentralSignalingRelay:
 
         # Clear all session bookkeeping.
         self._orphaned_local_sessions.clear()
+        self._local_session_started_at.clear()
         self._pending_central_sessions.clear()
         self._local_to_central_session.clear()
         self._central_to_local_session.clear()
@@ -661,6 +676,7 @@ class CentralSignalingRelay:
             # Clear session state
             self._local_task = None
             self._orphaned_local_sessions.clear()
+            self._local_session_started_at.clear()
             self._central_peer_id = None
             self._local_peer_id = None
             self._session_to_local_peer.clear()
@@ -1333,6 +1349,37 @@ class CentralSignalingRelay:
         finally:
             self._keep_sessions_on_central_loss()
 
+    def set_dc_idle_probe(self, probe: Callable[[], Optional[float]]) -> None:
+        """Give the relay a view on the peer-to-peer link's liveness.
+
+        ``probe()`` returns the seconds since the media server last
+        received a data-channel message (``None`` if never). With it, the
+        session's liveness is decided by the link itself instead of by
+        central's signaling channel; without it the relay keeps its
+        conservative behaviour.
+        """
+        self._dc_idle_probe = probe
+
+    def _link_state(self) -> str:
+        """``live`` / ``idle`` from the data channel, ``unknown`` without a probe."""
+        if self._dc_idle_probe is None:
+            return "unknown"
+        try:
+            idle = self._dc_idle_probe()
+        except Exception:
+            return "unknown"
+        if idle is not None and idle < SESSION_LINK_IDLE_S:
+            return "live"
+        return "idle"
+
+    def _sessions_settled(self) -> bool:
+        """Tell whether every mapped session is past its negotiation window."""
+        now = time.monotonic()
+        return all(
+            now - self._local_session_started_at.get(local_id, 0.0) >= SESSION_SETTLE_S
+            for local_id in self._local_to_central_session
+        )
+
     def _keep_sessions_on_central_loss(self) -> None:
         """Keep established sessions alive while central is unreachable.
 
@@ -1371,9 +1418,15 @@ class CentralSignalingRelay:
 
     async def _end_orphaned_sessions(self, reason: str) -> None:
         """End sessions kept across a central drop (see above)."""
-        for local_session_id in list(self._orphaned_local_sessions):
+        await self._end_local_sessions(list(self._orphaned_local_sessions), reason)
+
+    async def _end_local_sessions(
+        self, local_session_ids: list[str], reason: str
+    ) -> None:
+        """End the given local sessions and drop their bookkeeping."""
+        for local_session_id in local_session_ids:
             logger.info(
-                "[Central Relay] Ending orphaned session %s (%s)",
+                "[Central Relay] Ending session %s (%s)",
                 local_session_id,
                 reason,
             )
@@ -1392,7 +1445,8 @@ class CentralSignalingRelay:
                     "[Central Relay] Failed to end orphaned session locally",
                     exc_info=True,
                 )
-        self._orphaned_local_sessions.clear()
+            self._orphaned_local_sessions.discard(local_session_id)
+            self._local_session_started_at.pop(local_session_id, None)
         if (
             self._robot_app_lock is not None
             and not self._central_to_local_session
@@ -1536,11 +1590,23 @@ class CentralSignalingRelay:
                 f"[Central Relay] Received session request from remote client peer_id={client_peer_id} session_id={session_id}"
             )
 
-            # Sessions kept across a central drop are best-effort: a fresh
-            # request (typically the same phone re-dialing because its side
-            # gave up) takes over instead of being refused as busy.
-            if self._orphaned_local_sessions:
-                await self._end_orphaned_sessions("superseded by a new session")
+            # Who owns the robot is decided by the peer-to-peer link, not by
+            # central: a session whose data channel went quiet is a ghost
+            # (its client vanished, or is this very phone re-dialing after
+            # giving up), so the new request takes over. A live link keeps
+            # the robot and the request is refused as busy below. Sessions
+            # still negotiating (pending, or mapped < SESSION_SETTLE_S ago)
+            # are never ghosts. Without a link probe, only sessions kept
+            # across a central drop are superseded (previous behaviour).
+            if self._local_to_central_session and not self._pending_central_sessions:
+                link = self._link_state()
+                if link == "idle" and self._sessions_settled():
+                    await self._end_local_sessions(
+                        list(self._local_to_central_session),
+                        "ghost: its data channel went quiet, superseded by a new session",
+                    )
+                elif link == "unknown" and self._orphaned_local_sessions:
+                    await self._end_orphaned_sessions("superseded by a new session")
 
             # Safety net: the central server is supposed to gate concurrent sessions,
             # but if one slips through (e.g. older central without the gate), enforce
@@ -1645,6 +1711,25 @@ class CentralSignalingRelay:
                 logger.info(
                     f"[Central Relay] Session ended from central: central_session_id={central_session_id}"
                 )
+                # An endSession without a reason is central's own bookkeeping
+                # (the client's signaling channel timed out and it evicted
+                # it), not the client hanging up: a deliberate hang-up carries
+                # a reason, and closing its peer connection ends the session
+                # here anyway. While the link is live, keep the session; it
+                # stays supersedable once it goes quiet (see startSession).
+                kept_local = self._central_to_local_session.get(central_session_id)
+                if (
+                    kept_local is not None
+                    and not msg.get("reason")
+                    and self._link_state() == "live"
+                ):
+                    self._orphaned_local_sessions.add(kept_local)
+                    logger.info(
+                        "[Central Relay] Central dropped session %s but its peer link "
+                        "is live; keeping it",
+                        central_session_id,
+                    )
+                    return
                 self._session_to_local_peer.pop(central_session_id, None)
                 # Also remove from pending if it never got started
                 if central_session_id in self._pending_central_sessions:
@@ -1745,6 +1830,7 @@ class CentralSignalingRelay:
                 central_session_id = self._pending_central_sessions.pop(0)
                 self._local_to_central_session[local_session_id] = central_session_id
                 self._central_to_local_session[central_session_id] = local_session_id
+                self._local_session_started_at[local_session_id] = time.monotonic()
                 logger.info(
                     f"[Central Relay] Session mapping established: local_session={local_session_id} <-> central_session={central_session_id}"
                 )
