@@ -1028,10 +1028,19 @@ class CentralSignalingRelay:
             Reachy attached (``get_hardware_id()`` returns ``None``);
             consumers must treat ``undefined`` as "no stable id" and
             fall back to whatever they already had.
+          * ``session_liveness: "peer"``: our sessions live as long as
+            their peer-to-peer link, not our SSE (see
+            ``_keep_sessions_on_central_loss``), so central keeps them
+            across our SSE reconnect grace instead of ending them.
+          * ``session_active``: whether we serve a session right now
+            (refreshed by every heartbeat). Lets central list us busy
+            for a session it already forgot; display only.
         """
         meta: dict[str, Any] = {
             "name": self.robot_name,
             "transport": self.transport,
+            "session_liveness": "peer",
+            "session_active": bool(self._local_to_central_session),
         }
         hw = get_hardware_id()
         if hw is not None:

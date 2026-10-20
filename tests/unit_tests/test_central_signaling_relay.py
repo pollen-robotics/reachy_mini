@@ -294,7 +294,13 @@ def test_meta_shape_with_hardware_id(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(relay_module, "get_hardware_id", lambda: "deadbeef00112233")
     relay = _make_relay()
     meta = relay._build_producer_meta()
-    assert set(meta.keys()) == {"name", "transport", "hardware_id"}
+    assert set(meta.keys()) == {
+        "name",
+        "transport",
+        "hardware_id",
+        "session_liveness",
+        "session_active",
+    }
 
 
 def test_meta_shape_without_hardware_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -309,7 +315,12 @@ def test_meta_shape_without_hardware_id(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(relay_module, "get_hardware_id", lambda: None)
     relay = _make_relay()
     meta = relay._build_producer_meta()
-    assert set(meta.keys()) == {"name", "transport"}
+    assert set(meta.keys()) == {
+        "name",
+        "transport",
+        "session_liveness",
+        "session_active",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1481,3 +1492,14 @@ def test_a_young_session_is_never_taken_as_a_ghost() -> None:
         "reason": "robot_busy_local",
     } in central.sent
     assert relay._local_to_central_session == {"local-1": "s1"}
+
+
+def test_meta_reports_session_liveness_and_activity() -> None:
+    """Central keeps our sessions across SSE drops and can list us busy."""
+    relay = _make_relay()
+    meta = relay._build_producer_meta()
+    assert meta["session_liveness"] == "peer"
+    assert meta["session_active"] is False
+
+    relay._local_to_central_session["local-1"] = "s1"
+    assert relay._build_producer_meta()["session_active"] is True
