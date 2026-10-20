@@ -22,9 +22,11 @@ Example usage::
     >>> # The server is now streaming and ready to accept client connections
 """
 
+import glob
 import logging
 import os
 import platform
+import struct
 import time
 from dataclasses import dataclass, field
 from threading import Lock, Thread
@@ -90,6 +92,57 @@ SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 
 # Cap the local IPC feed below the capture rate; it also paces every client, face tracker included.
 IPC_FPS = 10
+
+
+# V4L2 test-pattern control of the wireless camera sensor (imx708).
+_VIDIOC_G_CTRL = 0xC008561B
+_VIDIOC_S_CTRL = 0xC008561C
+_V4L2_CID_TEST_PATTERN = 0x009F0903
+_TEST_PATTERN_SOLID_COLOUR = 2
+
+
+def _set_sensor_test_pattern(enabled: bool) -> bool:
+    """Make the wireless camera sensor output a solid colour instead of the picture.
+
+    The picture then never leaves the sensor. The control belongs to the
+    sensor driver: it takes effect within a few frames while the camera
+    streams, and it survives a restart of the camera pipeline.
+
+    Returns:
+        bool: True when the sensor reports the requested state, False when it
+        does not or when there is no such sensor.
+
+    """
+    value = _TEST_PATTERN_SOLID_COLOUR if enabled else 0
+    for name_file in glob.glob("/sys/class/video4linux/v4l-subdev*/name"):
+        try:
+            with open(name_file) as f:
+                if "imx708" not in f.read():
+                    continue
+            import fcntl  # not available on Windows
+
+            device = f"/dev/{os.path.basename(os.path.dirname(name_file))}"
+            with open(device, "rb+", buffering=0) as sensor:
+                control = struct.pack("Ii", _V4L2_CID_TEST_PATTERN, value)
+                fcntl.ioctl(sensor, _VIDIOC_S_CTRL, control)
+                control = struct.pack("Ii", _V4L2_CID_TEST_PATTERN, 0)
+                reply = fcntl.ioctl(sensor, _VIDIOC_G_CTRL, control)
+                return bool(struct.unpack("Ii", reply)[1] == value)
+        except OSError as e:
+            logging.getLogger(__name__).warning(
+                "Could not set the camera sensor test pattern: %s", e
+            )
+            return False
+    return False
+
+
+def _is_png(path: str) -> bool:
+    """Whether ``path`` is a readable PNG file."""
+    try:
+        with open(path, "rb") as f:
+            return f.read(8) == b"\x89PNG\r\n\x1a\n"
+    except OSError:
+        return False
 
 
 @dataclass
@@ -173,6 +226,14 @@ class GstMediaServer:
     # Name of the appsrc feeding the incoming-audio playback pipeline; used
     # both when building the pipeline and when flushing it (clear_incoming_audio).
     INCOMING_AUDIO_SRC_NAME = "audio_in"
+
+    # Privacy mode (see set_privacy). The flag outlives the elements, which
+    # are re-created each time the pipeline is rebuilt.
+    _privacy = False
+    _privacy_black: Optional[Gst.Element] = None
+    _privacy_label: Optional[Gst.Element] = None
+    _privacy_mute: Optional[Gst.Element] = None
+    _privacy_sensor = False  # the camera sensor can blank the picture itself
 
     def __init__(
         self,
@@ -841,6 +902,11 @@ class GstMediaServer:
             last_source.link(capsfilter_raw)
             last_source = capsfilter_raw
 
+        # Privacy filter, before the tee so that no branch can be missed.
+        last_source = self._add_privacy_filter(
+            pipeline, last_source, sensor_pattern=is_rpi
+        )
+
         # --- Tee: split into IPC + WebRTC branches ---
         tee = Gst.ElementFactory.make("tee")
         pipeline.add(tee)
@@ -1225,10 +1291,10 @@ class GstMediaServer:
             for upstream, downstream in zip(chain, chain[1:]):
                 upstream.link(downstream)
             chain[-1].link(webrtcdsp)
-            webrtcdsp.link(queue)
+            self._add_privacy_mute(pipeline, webrtcdsp).link(queue)
             self._logger.info("No hardware AEC; enabled software echo cancellation.")
         else:
-            audiosrc.link(queue)
+            self._add_privacy_mute(pipeline, audiosrc).link(queue)
 
         # Link into webrtcsink last, once the full upstream chain exists, so its
         # request pad / stream discovery sees a fully-linked input.
@@ -1340,6 +1406,106 @@ class GstMediaServer:
         """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
         self._pipeline_sender.set_state(Gst.State.NULL)
+
+    def set_privacy(self, enabled: bool) -> None:
+        """Black out the camera and silence the streamed microphone, or restore them.
+
+        Nothing is stopped: every consumer keeps receiving frames and audio,
+        so no app or remote session has to reconnect. The frames are black
+        with a "privacy mode" label, the audio is silence.
+
+        This only covers what flows through this pipeline. On-device apps
+        read the sound card directly: for them the microphones are muted in
+        the audio chip (see ``audio_control_utils.set_microphones_muted``).
+        """
+        self._privacy = enabled
+        self._apply_privacy()
+
+    def _apply_privacy(self) -> None:
+        # On the wireless the sensor replaces the picture with a solid colour:
+        # blacking frames out here takes about 200 ms of CPU per frame on its
+        # camera buffers. Everywhere else, or if the sensor does not confirm,
+        # the frames are blacked out in place.
+        blanked_by_sensor = (
+            self._privacy_sensor
+            and _set_sensor_test_pattern(self._privacy)
+            and self._privacy
+        )
+        black = self._privacy and not blanked_by_sensor
+        if self._privacy_black is not None:
+            # Neutral values put videobalance in passthrough.
+            self._privacy_black.set_property("brightness", -1.0 if black else 0.0)
+            self._privacy_black.set_property("contrast", 0.0 if black else 1.0)
+            self._privacy_black.set_property("saturation", 0.0 if black else 1.0)
+        if self._privacy_label is not None:
+            self._privacy_label.set_property("alpha", 1.0 if self._privacy else 0.0)
+        if self._privacy_mute is not None:
+            self._privacy_mute.set_property("mute", self._privacy)
+
+    def _add_privacy_filter(
+        self,
+        pipeline: Gst.Pipeline,
+        upstream: Gst.Element,
+        sensor_pattern: bool = False,
+    ) -> Gst.Element:
+        """Add the camera privacy filter after ``upstream`` and return its last element.
+
+        Both elements work in place on the camera's own buffers, so the
+        FD-backed buffers the IPC branch needs on the wireless are preserved.
+        Blanking the picture is what privacy relies on; the label only tells a
+        viewer why, and is skipped where its plugin or its image is missing.
+
+        Args:
+            pipeline: the pipeline the camera chain lives in.
+            upstream: the last element of the camera chain.
+            sensor_pattern: the camera is the wireless one, whose sensor can
+                blank the picture itself (see ``_set_sensor_test_pattern``).
+
+        """
+        black = Gst.ElementFactory.make("videobalance", "privacy_black")
+        if black is None:
+            raise RuntimeError("Failed to create the privacy filter (videobalance)")
+        pipeline.add(black)
+        upstream.link(black)
+        last = black
+
+        # The element fails the whole pipeline on an image it cannot load,
+        # such as the text pointer left by an install that skipped Git LFS.
+        image = f"{ASSETS_ROOT_PATH}/privacy_mode.png"
+        label = None
+        if _is_png(image):
+            label = Gst.ElementFactory.make("gdkpixbufoverlay", "privacy_label")
+        if label is not None:
+            width = int(self.resolution[0] * 0.6)
+            label.set_property("location", image)
+            label.set_property("overlay-width", width)
+            label.set_property("overlay-height", width // 4)  # the image is 4:1
+            # Centre the image on the frame.
+            label.set_property("positioning-mode", "pixels-absolute")
+            for axis in ("x", "y"):
+                label.set_property(f"coef-{axis}", 0.5)
+                label.set_property(f"relative-{axis}", -0.5)
+            pipeline.add(label)
+            black.link(label)
+            last = label
+
+        self._privacy_black, self._privacy_label = black, label
+        self._privacy_sensor = sensor_pattern
+        self._apply_privacy()
+        return last
+
+    def _add_privacy_mute(
+        self, pipeline: Gst.Pipeline, upstream: Gst.Element
+    ) -> Gst.Element:
+        """Add the microphone privacy mute after ``upstream`` and return it."""
+        mute = Gst.ElementFactory.make("volume", "privacy_mute")
+        if mute is None:
+            raise RuntimeError("Failed to create the privacy mute (volume)")
+        pipeline.add(mute)
+        upstream.link(mute)
+        self._privacy_mute = mute
+        self._apply_privacy()
+        return mute
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker.
