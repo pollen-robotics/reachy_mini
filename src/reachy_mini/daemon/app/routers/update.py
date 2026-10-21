@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, WebSocket
 
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.bg_job_register import JobInfo
+from reachy_mini.daemon.telemetry import telemetry
 from reachy_mini.utils.wireless_version.update import update_reachy_mini
 from reachy_mini.utils.wireless_version.update_available import (
     get_install_source,
@@ -21,6 +22,23 @@ from reachy_mini.utils.wireless_version.update_available import (
 
 router = APIRouter(prefix="/update")
 busy_lock = threading.Lock()
+
+
+async def _run_update(
+    logger: logging.Logger, pre_release: bool = False, git_ref: str | None = None
+) -> None:
+    # Success restarts the daemon and is reported from the next boot.
+    with busy_lock:
+        try:
+            await update_reachy_mini(logger, pre_release=pre_release, git_ref=git_ref)
+        except Exception as e:
+            telemetry.capture(
+                "update_result",
+                from_version=str(get_local_version("reachy_mini")),
+                success=False,
+                error_class=type(e).__name__,
+            )
+            raise
 
 
 @router.get("/install-source")
@@ -65,8 +83,7 @@ def start_update(pre_release: bool = False) -> dict[str, str]:
         raise HTTPException(status_code=400, detail="No update available")
 
     async def update_wrapper(logger: logging.Logger) -> None:
-        with busy_lock:
-            await update_reachy_mini(logger, pre_release=pre_release)
+        await _run_update(logger, pre_release=pre_release)
 
     job_uuid = bg_job_register.run_command(
         "update_reachy_mini",
@@ -107,8 +124,7 @@ def start_update_from_ref(git_ref: str) -> dict[str, str]:
         raise HTTPException(status_code=400, detail="Git ref cannot be empty")
 
     async def update_wrapper(logger: logging.Logger) -> None:
-        with busy_lock:
-            await update_reachy_mini(logger, git_ref=git_ref)
+        await _run_update(logger, git_ref=git_ref)
 
     job_uuid = bg_job_register.run_command("update_reachy_mini", update_wrapper)
     return {"job_id": job_uuid}

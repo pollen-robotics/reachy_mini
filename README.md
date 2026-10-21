@@ -26,7 +26,7 @@
 
 ## 📱 Apps & Ecosystem
 
-Reachy Mini comes with an app store powered by Hugging Face Spaces. You can install these apps directly from your robot's dashboard with one click!
+Reachy Mini comes with an app store powered by Hugging Face Spaces. Use the Applications tab in Reachy Mini Control to discover and install community apps.
 
 * **🗣️ [Conversation App](https://huggingface.co/spaces/pollen-robotics/reachy_mini_conversation_app):** Talk naturally with Reachy Mini (powered by LLMs).
 * **📻 [Radio](https://huggingface.co/spaces/pollen-robotics/reachy_mini_radio):** Listen to the radio with Reachy Mini!

@@ -32,7 +32,7 @@ The same app code works in both modes; only the entry point differs.
 
 | Document | Audience | Read it when… |
 |----------|----------|----------------|
-| **[`../APP_CREATION_GUIDE.md`](../APP_CREATION_GUIDE.md)** | app authors **and** host maintainers | Single source of truth: scaffold, `sdk: static` deploy, host ↔ embed contract, invariants, protocol v1. Today's SDK pin: `1.8.0`. |
+| **[`../APP_CREATION_GUIDE.md`](../APP_CREATION_GUIDE.md)** | app authors **and** host maintainers | Single source of truth: scaffold, `sdk: static` deploy, host ↔ embed contract, invariants, protocol v1. SDK pin: the latest stable release on [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk). |
 
 App authors and library maintainers both start with the
 **[App Creation Guide](../APP_CREATION_GUIDE.md)**: §1-§12 are the
@@ -125,14 +125,15 @@ for the detailed walk-through and reference apps.
 
 ## Reference apps
 
-Three open-source apps live alongside this package and are kept in lockstep
+These open-source apps live alongside this package and are kept in lockstep
 with every release:
 
 | App | Stack | What it shows |
 |-----|-------|---------------|
-| [`pollen-robotics/reachy_mini_minimal_conversation`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation) | Vanilla TypeScript | Smallest possible app. Tech-freedom proof. |
-| [`pollen-robotics/reachy_mini_emotions`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions) | React + MUI | Plutchik emotion wheel + dance triggers. |
-| [`pollen-robotics/reachy_mini_telepresence`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence) | React + MUI | Live video + head / body teleop. |
+| [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) | Vanilla TypeScript | Smallest possible app. Tech-freedom proof. |
+| [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions) | React + MUI | Plutchik emotion wheel + dance triggers. |
+| [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence) | React + MUI | Live video + head / body teleop. |
+| [`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app) | Vanilla TypeScript | Tour of every SDK primitive: camera, 3D pose view, moves, conversation. |
 
 App authors are free to use any UI framework they want inside the iframe; the
 host doesn't care. This is a hard design rule, not an accident
@@ -149,7 +150,7 @@ incompatible postMessage changes
 (see [`APP_CREATION_GUIDE.md` §13.6](../APP_CREATION_GUIDE.md#136-protocol-v1-messages)).
 
 App authors should **pin to the exact version that the reference
-apps use** - today `1.8.0`, see
+apps use** - the latest stable release on [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk), see
 [`APP_CREATION_GUIDE.md` §10](../APP_CREATION_GUIDE.md#10-sdk-version-pinning).
 
 ## License

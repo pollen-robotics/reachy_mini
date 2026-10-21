@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from huggingface_hub.errors import RepositoryNotFoundError
 from pydantic import BaseModel
 
-from reachy_mini.motion.recorded_move import RecordedMoves
+from reachy_mini.motion.recorded_move import RecordedMoves, dataset_token
 from reachy_mini.utils.interpolation import InterpolationTechnique
 
 from ....daemon.backend.abstract import Backend
@@ -167,7 +167,7 @@ async def list_recorded_move_dataset(
 ) -> list[str]:
     """List available recorded moves in a dataset."""
     try:
-        moves = RecordedMoves(dataset_name)
+        moves = RecordedMoves(dataset_name, token=dataset_token(dataset_name))
     except RepositoryNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -182,7 +182,7 @@ async def play_recorded_move_dataset(
 ) -> MoveUUID:
     """Request the robot to play a predefined recorded move from a dataset."""
     try:
-        recorded_moves = RecordedMoves(dataset_name)
+        recorded_moves = RecordedMoves(dataset_name, token=dataset_token(dataset_name))
     except RepositoryNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     try:

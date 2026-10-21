@@ -41,12 +41,22 @@ class JobHandler:
 register: dict[str, JobHandler] = {}
 
 
+JobListener = Callable[[str, JobInfo, str | None], None]
+
+
 def run_command(
     command: str,
     coro_func: Callable[..., Awaitable[None]],
     *args: Any,
+    on_event: JobListener | None = None,
 ) -> str:
-    """Start a background job, with a custom logger and return its job_id."""
+    """Start a background job, with a custom logger and return its job_id.
+
+    ``on_event(job_id, info, line)`` (optional) is called from the job thread
+    for every log line (``line`` set) and once more when the job ends
+    (``line=None``, ``info.status`` final). It must be thread-safe and must not
+    raise; the JSON-RPC relay uses it to push progress to remote clients.
+    """
     job_uuid = str(uuid.uuid4())
 
     jh = JobHandler(
@@ -58,14 +68,24 @@ def run_command(
 
     start_evt = threading.Event()
 
+    def notify(line: str | None) -> None:
+        if on_event is None:
+            return
+        try:
+            on_event(job_uuid, jh.info, line)
+        except Exception:
+            pass  # a listener failure must never break the job itself
+
     async def wrapper() -> None:
         jh.info.status = JobStatus.IN_PROGRESS
 
         class JobLogger(logging.Handler):
             def emit(self, record: logging.LogRecord) -> None:
-                jh.info.logs.append(self.format(record))
+                line = self.format(record)
+                jh.info.logs.append(line)
                 for ws in jh.new_log_evt.values():
                     ws.set()
+                notify(line)
 
         logger = logging.getLogger(f"logs_job_{job_uuid}")
         logger.setLevel(logging.INFO)
@@ -78,9 +98,15 @@ def run_command(
             await coro_func(*args, logger=logger)
             jh.info.status = JobStatus.DONE
             logger.info(f"Job '{command}' completed successfully")
-        except Exception as e:
+        except BaseException as e:
+            # BaseException too (cancellation, SystemExit): a job left
+            # IN_PROGRESS would block every later install as "busy".
             jh.info.status = JobStatus.FAILED
             logger.error(f"Job '{command}' failed with error: {e}")
+            if not isinstance(e, Exception):
+                notify(None)
+                raise
+        notify(None)
 
     t = threading.Thread(target=lambda: asyncio.run(wrapper()))
     t.start()
@@ -88,6 +114,19 @@ def run_command(
     start_evt.wait()
 
     return job_uuid
+
+
+APP_JOB_COMMANDS = frozenset({"install", "remove", "update"})
+
+
+def has_active_job() -> bool:
+    """Whether an app install/remove/update job is still pending or running."""
+    # list(): REST routes running on the threadpool may insert concurrently.
+    return any(
+        jh.info.command in APP_JOB_COMMANDS
+        and jh.info.status in (JobStatus.PENDING, JobStatus.IN_PROGRESS)
+        for jh in list(register.values())
+    )
 
 
 def get_info(job_id: str) -> JobInfo:

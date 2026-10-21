@@ -55,7 +55,7 @@ from reachy_mini.media.camera_constants import (
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
 from reachy_mini.media.gstreamer_utils import handle_default_bus_message
-from reachy_mini.media.webrtc_utils import TurnCredentials
+from reachy_mini.media.webrtc_utils import TurnCredentials, split_for_data_channel
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
@@ -1839,15 +1839,21 @@ class GstMediaServer:
             peer_id: If specified, send only to this peer. Otherwise broadcast to all.
 
         """
+        # A message over the channel's limit would be dropped silently;
+        # large ones go out as ordered chunks the client reassembles.
+        frames = split_for_data_channel(message)
         if peer_id:
-            if peer_id in self._data_channels:
-                self._data_channels[peer_id].emit("send-string", message)
-            else:
+            channel = self._data_channels.get(peer_id)
+            if channel is None:
                 self._logger.warning(f"No data channel for peer {peer_id}")
+                return
+            channels = [channel]
         else:
             # Broadcast to all connected peers
-            for channel in self._data_channels.values():
-                channel.emit("send-string", message)
+            channels = list(self._data_channels.values())
+        for channel in channels:
+            for frame in frames:
+                channel.emit("send-string", frame)
 
     def _setup_data_channel(self, peer_id: str, webrtcbin: Gst.Element) -> None:
         self._logger.debug(f"Setting up data channel for peer {peer_id}")

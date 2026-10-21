@@ -24,7 +24,11 @@ from fastapi.responses import HTMLResponse
 
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon import startup_app_config
-from reachy_mini.daemon.app.middleware import MaxBodySizeMiddleware
+from reachy_mini.daemon.app.middleware import (
+    ClientTelemetryMiddleware,
+    LocalNetworkGuardMiddleware,
+    MaxBodySizeMiddleware,
+)
 from reachy_mini.daemon.app.routers import (
     apps,
     audio_config,
@@ -39,6 +43,7 @@ from reachy_mini.daemon.app.routers import (
     nfc,
     sdk_ws,
     state,
+    telemetry,
     volume,
 )
 from reachy_mini.daemon.app.startup_app import (
@@ -47,6 +52,7 @@ from reachy_mini.daemon.app.startup_app import (
     watch_antennas_for_startup_app,
 )
 from reachy_mini.daemon.daemon import Daemon
+from reachy_mini.daemon.telemetry import telemetry as daemon_telemetry
 from reachy_mini.daemon.utils import SimulationMode
 from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
@@ -128,6 +134,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
+        # The JSON-RPC app relay must not be scheduled onto whichever loop
+        # `Daemon.start` runs on: over HTTP that is a background job's
+        # throwaway loop. This one owns the app and lives as long as the
+        # process.
+        app.state.daemon.set_rpc_loop(asyncio.get_running_loop())
         dataset_updater_task: asyncio.Task[None] | None = None
         # Held on app.state so the /apps/startup-app endpoint can re-arm it live.
         app.state.startup_app_antenna_watcher_task = None
@@ -144,7 +155,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         def preload_with_logging() -> None:
             """Download datasets with logging."""
             try:
-                preload_default_datasets()
+                preload_default_datasets(token=False)
                 logger.info("Recorded move datasets pre-loaded successfully")
             except Exception as e:
                 logger.warning(f"Failed to pre-load some datasets: {e}")
@@ -231,6 +242,19 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             # Register mDNS service only after the daemon is ready
             mdns.register()
 
+            daemon_telemetry.start(
+                form_factor=(
+                    "mujoco"
+                    if args.sim
+                    else "mockup"
+                    if args.mockup_sim
+                    else "wireless"
+                    if args.wireless_version
+                    else "lite"
+                ),
+                desktop_app_daemon=args.desktop_app_daemon,
+            )
+
             # Wire the live rename hook now that both the daemon (relay +
             # status) and the mDNS registration exist. A `set_robot_name`
             # command then applies without a restart: daemon status + central
@@ -301,6 +325,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             except Exception as e:
                 logger.exception(f"Error stopping daemon: {e}")
 
+            # Last, so app_stopped events from the shutdown above are flushed.
+            await asyncio.to_thread(daemon_telemetry.stop)
+
     app = FastAPI(
         lifespan=lifespan,
     )
@@ -356,6 +383,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(move.router)
     router.include_router(nfc.router)
     router.include_router(state.router)
+    router.include_router(telemetry.router)
     router.include_router(volume.router)
 
     if args.wireless_version:
@@ -377,6 +405,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             health_check_event.set()
             return {"status": "ok"}
 
+    # Innermost, so requests rejected by the guards below are not counted.
+    app.add_middleware(ClientTelemetryMiddleware)
+
     # Cap the size of sound uploads before the body is read, so a large file
     # cannot be streamed to disk (see GHSA-m2pc-3q4q-w6jr). Added before CORS
     # so CORS remains the outermost middleware and even a 413 carries its
@@ -386,6 +417,13 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         max_body_size=media.MAX_SOUND_UPLOAD_BYTES,
         paths={"/api/media/sounds/upload"},
     )
+
+    # Block DNS rebinding and preflight-free cross-site writes against the
+    # unauthenticated API (CAN-2026-2032024): validates the Host header on all
+    # requests and the Origin header on state-changing ones. Added before CORS
+    # so CORS stays outermost and rejections for allowed origins carry its
+    # headers; requests without an Origin (curl, SDK, native apps) pass through.
+    app.add_middleware(LocalNetworkGuardMiddleware)
 
     # Restrict cross-origin access to local browser tooling and the native app
     # webviews (see CORS_ORIGIN_REGEX); everything else is same-origin or WebRTC.
@@ -537,6 +575,9 @@ def configure_root_logging(log_level: str, log_file: str | None = None) -> None:
     # Drop anything a library installed at import time, then own the config.
     root_logger.handlers.clear()
 
+    logging.getLogger("uvicorn.access").addFilter(access_log_filter)
+    logging.getLogger("huggingface_hub.utils._auth").addFilter(_hub_auth_log_filter)
+
     # Handler that writes to stderr with immediate flush
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(log_level)
@@ -547,6 +588,46 @@ def configure_root_logging(log_level: str, log_file: str | None = None) -> None:
         file_handler = logging.FileHandler(log_file, mode="a")
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
+
+
+_POLLING_PATHS = (
+    "/health-check",
+    "/api/hf-auth/relay-status",
+    "/api/nfc/status",
+    "/api/nfc/tag",
+)
+_OAUTH_CALLBACK_PATH = "/api/hf-auth/oauth/callback"
+
+# Hub embeds provider text or stored token lines in these messages.
+_HUB_AUTH_REDACTIONS = {
+    "_refresh_oauth_token_if_needed": "Hugging Face credential refresh failed",
+    "_warn_refresh_failure_once": "Hugging Face credential refresh failed",
+    "_read_stored_tokens_full": "Could not parse the stored Hugging Face tokens file",
+}
+
+
+def _hub_auth_log_filter(record: logging.LogRecord) -> bool:
+    message = _HUB_AUTH_REDACTIONS.get(record.funcName)
+    if record.levelno >= logging.WARNING and message:
+        record.msg = message
+        record.args = ()
+        record.exc_info = record.exc_text = record.stack_info = None
+    return True
+
+
+def access_log_filter(record: logging.LogRecord) -> bool:
+    """Redact OAuth codes and lower polling log levels."""
+    args = record.args
+    if not isinstance(args, tuple) or len(args) < 3 or not isinstance(args[2], str):
+        return True
+    path, separator, _ = args[2].partition("?")
+    normalized_path = path.rstrip("/")
+    if normalized_path == _OAUTH_CALLBACK_PATH and separator:
+        record.args = (*args[:2], path + "?<redacted>", *args[3:])
+    if normalized_path in _POLLING_PATHS:
+        record.levelno = logging.DEBUG
+        record.levelname = "DEBUG"
+    return True
 
 
 def run_app(args: Args) -> None:
@@ -570,24 +651,6 @@ def run_app(args: Args) -> None:
     apps_logger = logging.getLogger("reachy_mini.apps.manager")
     apps_logger.setLevel(args.log_level)
     apps_logger.propagate = True  # Ensure it propagates to root logger
-
-    # Downgrade noisy polling routes to DEBUG in uvicorn access logs
-    class AccessLogFilter(logging.Filter):
-        _POLLING_PATHS = {
-            "/health-check",
-            "/api/hf-auth/relay-status",
-            "/api/nfc/status",
-            "/api/nfc/tag",
-        }
-
-        def filter(self, record: logging.LogRecord) -> bool:
-            msg = record.getMessage()
-            if any(path in msg for path in self._POLLING_PATHS):
-                record.levelno = logging.DEBUG
-                record.levelname = "DEBUG"
-            return True
-
-    logging.getLogger("uvicorn.access").addFilter(AccessLogFilter())
 
     # Install exception hook to catch uncaught exceptions
     def exception_hook(

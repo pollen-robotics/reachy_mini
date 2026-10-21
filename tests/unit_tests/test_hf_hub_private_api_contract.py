@@ -100,7 +100,7 @@ def test_device_code_error_is_exception() -> None:
     [
         ("huggingface_hub.utils._oauth_device", "request_device_code"),
         ("huggingface_hub.utils._oauth_device", "poll_device_token"),
-        ("huggingface_hub._login", "_save_oauth_token"),
+        ("huggingface_hub.utils._oauth_device", "refresh_access_token"),
         ("huggingface_hub.errors", "DeviceCodeError"),
     ],
 )

@@ -11,6 +11,7 @@ import {
 
 import { createLogger } from './logger.js';
 import { degToRad, rpyToMatrix } from './math.js';
+import { MessageReassembler } from './message-chunks.js';
 import { BroadcastTimeoutError, PendingReplies, SLOT_ROUNDTRIP_TIMEOUT_MS } from './pending-replies.js';
 import type { MotionCommand, ReplySlotKey, ReplySlotValues } from './pending-replies.js';
 import { SessionSupervisor } from './session-supervisor.js';
@@ -754,7 +755,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     this._dcOpen = true;
                     this._checkSessionReady();
                 };
-                this._dc.onmessage = (ev) => this._handleRobotMessage(JSON.parse(ev.data));
+                // Replies over 64 KiB arrive as ordered chunks; one
+                // reassembler per channel, so nothing leaks across sessions.
+                const reassembler = new MessageReassembler();
+                this._dc.onmessage = (ev) => {
+                    const msg = reassembler.accept(JSON.parse(ev.data));
+                    if (msg) this._handleRobotMessage(msg);
+                };
             };
 
             this._sendToServer({ type: 'startSession', peerId: robotId }).then((r) => {

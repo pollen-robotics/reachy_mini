@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import tempfile
 import threading
 import time
@@ -1869,7 +1870,7 @@ class Backend:
             # WAITING_FOR_TOKEN), so the robot de-registers and disappears
             # from its owner's list until it is set up again. Fail-safe:
             # delete_hf_token() never raises (returns False on failure), so
-            # a storage/logout error can't break the command loop.
+            # a storage error can't break the command loop.
             from reachy_mini.apps.sources.hf_auth import delete_hf_token
 
             ok = delete_hf_token()
@@ -2251,8 +2252,30 @@ class Backend:
                 f"upload_audio: evicted orphaned audio {uid} (TTL exceeded)"
             )
 
+    # upload_id ends up in os.path.join(self._audio_temp_dir,
+    # f"{upload_id}.{ext}") at audio-finish time. Only ids matching this
+    # pattern may open a slot, so traversal (``..``, ``/``, absolute
+    # paths) and absolute-join escapes are rejected at the single
+    # point where slots are created. The JS SDK generates
+    # 'u' + base36 + base36, well within this charset.
+    _SAFE_UPLOAD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+    # Per-slot cap on the assembled wire (base64) payload, matching the
+    # HTTP sound-upload route's MAX_SOUND_UPLOAD_BYTES budget
+    # (daemon/app/routers/media.py): base64 inflates decoded bytes by
+    # 4/3, so 25 MiB decoded ≈ 33.6 MiB on the wire. A slot pushing
+    # past this is either hostile or a runaway client; drop it so the
+    # WS channel can't write more to disk per upload than the REST
+    # one does.
+    _MAX_AUDIO_UPLOAD_WIRE_BYTES = (25 * 1024 * 1024) * 4 // 3
+
     def _handle_audio_start(self, cmd: UploadAudioStartCmd) -> None:
         self._evict_stale_audios()
+        if not self._SAFE_UPLOAD_ID_RE.fullmatch(cmd.upload_id):
+            self.logger.warning(
+                f"upload_audio_start: refusing unsafe upload_id {cmd.upload_id!r}"
+            )
+            return
         if len(self._audio_chunks) >= self._upload_max_active_slots:
             self.logger.warning(
                 f"upload_audio_start: refusing {cmd.upload_id}, too many active slots"
@@ -2265,6 +2288,7 @@ class Backend:
             "total_chunks": cmd.total_chunks,
             "encoding": cmd.encoding,
             "description": cmd.description,
+            "wire_bytes": 0,
         }
         self._audio_ts[cmd.upload_id] = time.time()
 
@@ -2273,7 +2297,7 @@ class Backend:
         meta = self._audio_meta.get(cmd.upload_id)
         if slot is None or meta is None:
             self.logger.warning(
-                f"upload_audio_chunk: no slot {cmd.upload_id}, dropping chunk {cmd.chunk_index}"
+                f"upload_audio_chunk: no slot {cmd.upload_id!r}, dropping chunk {cmd.chunk_index}"
             )
             return
         expected_index = len(slot)
@@ -2296,6 +2320,16 @@ class Backend:
             self._audio_ts.pop(cmd.upload_id, None)
             return
         slot.append(cmd.chunk)
+        meta["wire_bytes"] += len(cmd.chunk)
+        if meta["wire_bytes"] > self._MAX_AUDIO_UPLOAD_WIRE_BYTES:
+            self.logger.warning(
+                f"upload_audio_chunk: slot {cmd.upload_id} exceeds "
+                f"{self._MAX_AUDIO_UPLOAD_WIRE_BYTES} wire bytes; dropping slot"
+            )
+            self._audio_chunks.pop(cmd.upload_id, None)
+            self._audio_meta.pop(cmd.upload_id, None)
+            self._audio_ts.pop(cmd.upload_id, None)
+            return
         self._audio_ts[cmd.upload_id] = time.time()
 
     def _handle_audio_finish(self, cmd: UploadAudioFinishCmd) -> None:
@@ -2303,7 +2337,7 @@ class Backend:
         meta = self._audio_meta.pop(cmd.upload_id, None)
         self._audio_ts.pop(cmd.upload_id, None)
         if slot is None or meta is None:
-            self.logger.warning(f"upload_audio_finish: no such slot {cmd.upload_id}")
+            self.logger.warning(f"upload_audio_finish: no such slot {cmd.upload_id!r}")
             return
         if len(slot) != meta["total_chunks"]:
             self.logger.warning(
@@ -2709,6 +2743,7 @@ class Backend:
         from reachy_mini.motion.recorded_move import (
             DEFAULT_EMOTIONS_DATASET,
             RecordedMoves,
+            dataset_token,
         )
 
         dataset = cmd.dataset_name or DEFAULT_EMOTIONS_DATASET
@@ -2717,7 +2752,9 @@ class Backend:
             # snapshot_download: run it in a worker thread so it cannot stall
             # the daemon's event loop (and its pose stream) mid-session.
             move = await asyncio.to_thread(
-                lambda: RecordedMoves(dataset).get(cmd.move_name)
+                lambda: RecordedMoves(dataset, token=dataset_token(dataset)).get(
+                    cmd.move_name
+                )
             )
         except Exception as e:
             self.logger.warning(
@@ -2761,9 +2798,11 @@ class Backend:
         reported but deliberately not fatal - ``play_recorded_move`` will
         retry the download on demand at playback time.
         """
-        from reachy_mini.motion.recorded_move import preload_dataset
+        from reachy_mini.motion.recorded_move import dataset_token, preload_dataset
 
-        local_path = await asyncio.to_thread(preload_dataset, cmd.dataset_name)
+        local_path = await asyncio.to_thread(
+            preload_dataset, cmd.dataset_name, dataset_token(cmd.dataset_name)
+        )
         if local_path is None:
             send_response(
                 {

@@ -39,11 +39,11 @@ Wait for user to confirm they're ready.
 
 ## Step 2: Run the App
 
-Run it the same way the dashboard will launch it:
+Run it directly through its app entry point:
 
 ```bash
 cd ~/reachy_mini_apps/my_app
-python my_app/main.py
+python -m my_app.main
 ```
 
 Or if the app has a different entry point, use that.
@@ -102,10 +102,12 @@ If you just want to verify the app doesn't crash immediately:
 
 ```bash
 # Run with timeout (Linux/macOS)
-timeout 5 python my_app/main.py
+timeout 5 python -m my_app.main
 
 # Or on Windows PowerShell
-# Start-Process python -ArgumentList "my_app/main.py" -Wait -Timeout 5
+# $p = Start-Process python -ArgumentList "-m","my_app.main" -PassThru
+# Wait-Process -Id $p.Id -Timeout 5 -ErrorAction SilentlyContinue
+# Stop-Process -Id $p.Id -ErrorAction SilentlyContinue
 ```
 
 ---

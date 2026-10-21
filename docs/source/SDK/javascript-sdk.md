@@ -5,9 +5,10 @@
 > the repo root. It covers scaffolding, `public/icon.svg`, the host
 > shell, `sdk: static` deploy,
 > `mountHost()` / `connectToHost()` API, local dev, FAQ, and the host
-> ↔ embed contract. **Pin the SDK to
-> `@pollen-robotics/reachy-mini-sdk@1.8.0`** (the stable release
-> validated against the host shell + daemon).
+> ↔ embed contract. **Pin the SDK to the latest release on
+> [npm](https://www.npmjs.com/package/@pollen-robotics/reachy-mini-sdk)**
+> (`npm install @pollen-robotics/reachy-mini-sdk@latest`) — the stable
+> release validated against the host shell + daemon.
 >
 > **This file** is the runtime API surface of the `ReachyMini` class
 > you receive from `handle.reachy` once `connectToHost()` resolves:
@@ -119,7 +120,7 @@ new ReachyMini({
 | `stopSession()` | `Promise` | End session, back to `connected` |
 | `disconnect()` | — | Close signaling (keeps auth) |
 | `logout()` | — | Clear HF credentials |
-| `attachVideo(videoEl)` | `() => void` | Bind video stream to element; returns cleanup function |
+| `attachVideo(videoEl)` | `() => void` | Bind video stream to element; returns cleanup function. **Standalone apps only** — in a host-shell embed the handshake completes before your app mounts, so this silently no-ops; use `handle.media.attachVideo(videoEl)` instead (see the App Creation Guide, §5) |
 | `setTarget({ head?, antennas?, body_yaw? })` | `boolean` | Atomic raw-units update — `head` is `number[16]` (flat 4×4), `antennas` is `[rRad, lRad]`, `body_yaw` is radians |
 | `gotoTarget({ head?, antennas?, body_yaw?, duration })` | `boolean` | Smooth daemon-side interpolation to a target pose over `duration` seconds (same wire units as `setTarget`). Throws `TypeError` on invalid input |
 | `setHeadRpyDeg(roll, pitch, yaw)` | `boolean` | Set head orientation in degrees (wraps `setTarget`) |
@@ -179,7 +180,7 @@ Use `robot.addEventListener(name, handler)` — the SDK extends `EventTarget`.
 | `streaming` | `{ sessionId, robotId }` | WebRTC session active |
 | `sessionStopped` | `{ reason }` | Session ended |
 | `state` | Same shape as the `robotState` property (see above) | Robot state update (~500 ms polled, or ~30 Hz when subscribed via `subscribePose()`; wire shape) |
-| `videoTrack` | `{ track, stream }` | Video track available |
+| `videoTrack` | `{ track, stream }` | Video track available. `stream` also carries the robot's **mic audio track** (`stream.getAudioTracks()`) — usable for Web Audio metering or in-browser speech recognition (`SpeechRecognition.start(track)`, Chrome 135+) |
 | `micSupported` | `{ supported }` | Bidirectional audio availability |
 | `error` | `{ source, error }` | Error from `signaling`, `webrtc`, or `robot` |
 | `sessionRejected` | `{ reason, activeApp }` | The robot refused the session (e.g. busy with another app) |
@@ -202,6 +203,8 @@ Beyond the typed surface above, the runtime object exposes lower-level hooks (no
 
 - `rpcCall(method, params?, { timeoutMs? })` — send a JSON-RPC request over the data channel and await the correlated result (e.g. app-defined methods).
 - `onNotification(method, cb)` — subscribe to one-way JSON-RPC notifications pushed by the robot/app (e.g. `conversation.turn`); returns an unsubscribe fn.
+
+A reply or notification over 64 KiB, the data channel's message limit, is split by the daemon and reassembled by the SDK, so `rpcCall` resolves with the whole result. Older SDKs cannot reassemble and see such a call time out.
 - `startDaemonUpdate({ preRelease?, onProgress? })` — trigger a PyPI update of the daemon. It restarts on success (which tears the session down), so treat a successful reconnect as the "done" signal; `onProgress` fires with `status: "failed"` if the install errors first.
 
 ### Debug logging
@@ -394,10 +397,11 @@ await robot.signOut();
 
 ## Working examples
 
-The three reference apps maintained alongside the SDK are the canonical worked examples. They all use the host shell pattern and the current SDK pin:
+The reference apps maintained alongside the SDK are the canonical worked examples. They all use the host shell pattern and the current SDK pin:
 
-- [`pollen-robotics/reachy_mini_minimal_conversation`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_minimal_conversation) — vanilla TS + Vite.
-- [`pollen-robotics/reachy_mini_emotions`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_emotions) — React 19 + MUI 7 + Vite.
-- [`pollen-robotics/reachy_mini_telepresence`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_telepresence) — React 19 + MUI 7 + Vite with camera + media streams.
+- [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) — vanilla TS + Vite.
+- [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions) — React 19 + MUI 7 + Vite.
+- [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence) — React 19 + MUI 7 + Vite with camera + media streams.
+- [`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app) — vanilla TS + Vite tour of every SDK primitive (camera, 3D pose view, moves, conversation).
 
 Clone the closest one and trim. See [`ts/APP_CREATION_GUIDE.md`](../../../ts/APP_CREATION_GUIDE.md) for the step-by-step.

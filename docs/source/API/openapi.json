@@ -966,7 +966,7 @@
     "/api/hf-auth/refresh-relay": {
       "post": {
         "summary": "Refresh Relay",
-        "description": "Force the central signaling relay to reconnect \u2014 see ``notify_force_reconnect``.\n\nResponse shapes:\n  - ``{\"status\": \"requested\", \"token_available\": bool}`` \u2014 a\n    reconnect was kicked off.\n  - ``{\"status\": \"skipped\", \"token_available\": bool,\n        \"reason\": \"relay_not_running\" | \"relay_unavailable\"}`` \u2014 no\n    reconnect happened. The mobile app's auto-heal loop must NOT\n    wait for a state change in this case (it would hang forever).\n    ``relay_unavailable`` covers the import failure (Lite-only\n    build that ships no relay module); ``relay_not_running`` covers\n    the module-present-but-no-instance case (daemon started\n    without a token / pre-init / shutdown).",
+        "description": "Force the central signaling relay to reconnect \u2014 see ``notify_force_reconnect``.\n\nResponse shapes:\n  - ``{\"status\": \"requested\", \"token_available\": bool}`` \u2014 a\n    reconnect was kicked off.\n  - ``{\"status\": \"skipped\", \"token_available\": bool,\n        \"reason\": \"relay_not_running\"}`` \u2014 no reconnect happened\n    because no relay instance exists (daemon started without a token,\n    pre-init, or shutdown). The mobile app's auto-heal loop must NOT\n    wait for a state change in this case (it would hang forever).",
         "operationId": "refresh_relay_api_hf_auth_refresh_relay_post",
         "responses": {
           "200": {
@@ -2709,6 +2709,62 @@
         }
       }
     },
+    "/api/telemetry": {
+      "get": {
+        "summary": "Get Telemetry",
+        "description": "Get the telemetry choice. Nothing is sent while ``disabled_by_env``.",
+        "operationId": "get_telemetry_api_telemetry_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set Telemetry",
+        "description": "Enable or disable telemetry. Disabling also forgets the robot id.",
+        "operationId": "set_telemetry_api_telemetry_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelemetrySettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/volume/current": {
       "get": {
         "summary": "Get Volume",
@@ -3076,7 +3132,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -4546,6 +4602,39 @@
         "type": "object",
         "title": "StartupApp",
         "description": "The app configured to auto-start on the robot's first wake-up."
+      },
+      "TelemetrySettings": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "TelemetrySettings",
+        "description": "User's telemetry choice."
+      },
+      "TelemetryStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "disabled_by_env": {
+            "type": "boolean",
+            "title": "Disabled By Env"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "disabled_by_env"
+        ],
+        "title": "TelemetryStatus",
+        "description": "User's choice plus whether an environment variable overrides it."
       },
       "TestSoundResponse": {
         "properties": {

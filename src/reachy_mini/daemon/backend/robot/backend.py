@@ -613,6 +613,14 @@ class RobotBackend(Backend):
         # individually.
         if mode == self.motor_control_mode and not self._partial_torque_override:
             return
+        # Reject before touching state, so a pending override survives.
+        if (
+            mode == MotorControlMode.GravityCompensation
+            and self.kinematics_engine != "Placo"
+        ):
+            raise ValueError(
+                "Gravity compensation requires the Placo kinematics engine."
+            )
         self._partial_torque_override = False
 
         if mode == MotorControlMode.Enabled:
@@ -630,11 +638,6 @@ class RobotBackend(Backend):
             self.disable_motors()
 
         elif mode == MotorControlMode.GravityCompensation:
-            if self.kinematics_engine != "Placo":
-                raise RuntimeError(
-                    "Gravity compensation mode is only supported with the Placo kinematics engine."
-                )
-
             self.disable_motors()
             self.set_head_operation_mode(0)
             self.set_antennas_operation_mode(0)
