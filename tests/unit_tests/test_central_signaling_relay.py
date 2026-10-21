@@ -1004,6 +1004,7 @@ class _FakeHTTPSession:
     def __init__(self, status: int = 200) -> None:
         self._status = status
         self.posts: list[tuple[str, Any, Any]] = []
+        self.timeouts: list[Any] = []
         self.closed = False
 
     def post(
@@ -1013,8 +1014,10 @@ class _FakeHTTPSession:
         headers: Any = None,
         allow_redirects: bool = True,
         proxy: Any = None,
+        timeout: Any = None,
     ) -> _FakeResponse:
         self.posts.append((url, json, headers))
+        self.timeouts.append(timeout)
         return _FakeResponse(self._status)
 
     def get(self, url: str, **_kwargs: Any) -> _FakeResponse:
@@ -1064,6 +1067,57 @@ def test_send_to_central_posts_with_bearer_token() -> None:
     assert url == f"{relay.central_uri}/send"
     assert body == {"type": "peer"}
     assert headers == {"Authorization": "Bearer tok"}
+
+
+def test_send_to_central_bounds_each_request() -> None:
+    """Every POST carries its own budget, not the session's 300 s default."""
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    relay = _make_relay()
+    relay._http_session = _FakeHTTPSession(status=200)  # type: ignore[assignment]
+    relay.hf_token = "tok"
+    asyncio.run(relay._send_to_central({"type": "setPeerStatus"}))
+    assert relay._http_session.timeouts[0].total == relay_module.CENTRAL_SEND_TIMEOUT_S
+
+
+def test_send_to_central_fails_fast_when_central_goes_silent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A server that accepts and never answers (packets dropped) is a failure.
+
+    This is what a heartbeat sees when the network stalls under a
+    kept-alive connection; without a budget the POST hangs and the
+    heartbeat never counts a failure.
+    """
+    import aiohttp
+
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    monkeypatch.setattr(relay_module, "CENTRAL_SEND_TIMEOUT_S", 0.3)
+
+    async def run() -> tuple[bool, float]:
+        async def swallow(
+            reader: asyncio.StreamReader, _w: asyncio.StreamWriter
+        ) -> None:
+            await reader.read(-1)  # read the request, never reply
+
+        server = await asyncio.start_server(swallow, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        relay = _make_relay()
+        relay.central_uri = f"http://127.0.0.1:{port}"
+        relay.hf_token = "tok"
+        relay._http_session = aiohttp.ClientSession()
+        try:
+            start = time.monotonic()
+            ok = await relay._send_to_central({"type": "setPeerStatus"})
+            return ok, time.monotonic() - start
+        finally:
+            await relay._http_session.close()
+            server.close()
+
+    ok, elapsed = asyncio.run(run())
+    assert ok is False
+    assert elapsed < 2.0
 
 
 def test_send_to_central_non_200_does_not_raise() -> None:
