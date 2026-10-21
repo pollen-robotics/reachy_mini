@@ -6,6 +6,8 @@ Incoming JSON-RPC frames from any client transport (WebRTC DataChannel,
 * ``apps.*`` — handled locally against the :class:`AppManager` (start / stop /
   status of the single running app). This *is* the "apps API" exposed over
   WebRTC.
+* ``nfc.*`` — handled locally against the optional NFC reader, mirroring the
+  ``/api/nfc`` routes for clients that only reach the daemon over WebRTC.
 * anything else (e.g. ``conversation.*``) — relayed to the running app's
   ``/rpc`` WebSocket. The relay holds one persistent connection to that
   endpoint, which doubles as the daemon's subscription to the app's event
@@ -20,9 +22,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 from urllib.parse import urlparse
 
+from pydantic import ValidationError
 from websockets.asyncio.client import ClientConnection, connect
 
 from reachy_mini.apps.manager import AppManager
@@ -39,6 +42,9 @@ from reachy_mini.io.jsonrpc import (
     parse_request,
 )
 
+if TYPE_CHECKING:
+    from reachy_mini.nfc import NfcReader
+
 Reply = Callable[[dict[str, Any]], None]
 
 _CONNECT_TIMEOUT_S = 5.0
@@ -52,6 +58,7 @@ class JsonRpcRelay:
         app_manager: AppManager,
         broadcast: Callable[[str], None],
         logger: Optional[logging.Logger] = None,
+        nfc_reader: "NfcReader | None" = None,
     ) -> None:
         """Create the relay.
 
@@ -61,9 +68,12 @@ class JsonRpcRelay:
                 backend's ``broadcast_to_all_clients``). Used to fan app
                 notifications out.
             logger: optional logger.
+            nfc_reader: the NFC reader, or None when the daemon runs without
+                one (``--no-nfc``).
 
         """
         self._apps = app_manager
+        self._nfc = nfc_reader
         self._broadcast = broadcast
         self.logger = logger or logging.getLogger("reachy_mini.jsonrpc_relay")
 
@@ -89,6 +99,8 @@ class JsonRpcRelay:
         try:
             if req.namespace == "apps":
                 await self._handle_apps(req, reply)
+            elif req.namespace == "nfc":
+                await self._handle_nfc(req, reply)
             else:
                 await self._relay_to_app(req, reply)
         except JsonRpcError as e:
@@ -151,6 +163,76 @@ class JsonRpcRelay:
                 reason="method_not_found",
                 code=-32601,
             )
+        if not req.is_notification:
+            reply(make_result(req.id, result))
+
+    # -- nfc.* (daemon-local) ---------------------------------------------
+
+    async def _handle_nfc(self, req: RpcRequest, reply: Reply) -> None:
+        # Imported here: the reader module pulls in serial I/O the relay does
+        # not otherwise need.
+        from reachy_mini.nfc import (
+            NfcEnableRequest,
+            NfcEraseRequest,
+            NfcStatus,
+            NfcWriteRequest,
+            driver_available,
+            no_tag,
+            set_nfc_enabled,
+        )
+
+        verb = req.method.split(".", 1)[1] if "." in req.method else ""
+        reader = self._nfc
+        try:
+            if verb == "status":
+                status = (
+                    reader.get_status()
+                    if reader is not None
+                    else NfcStatus(
+                        connected=False,
+                        enabled=False,
+                        chip_detected=False,
+                        driver_available=driver_available(),
+                        error="NFC reader disabled",
+                    )
+                )
+                result: Any = status.model_dump(mode="json")
+            elif verb == "tag":
+                tag = reader.get_tag() if reader is not None else no_tag()
+                result = tag.model_dump(mode="json")
+            elif verb == "set_enabled":
+                enable = NfcEnableRequest.model_validate(req.params)
+                if reader is None:
+                    raise _nfc_disabled()
+                set_nfc_enabled(enable.enabled)
+                # stop() joins the reader thread: keep it off the event loop.
+                await asyncio.to_thread(reader.start if enable.enabled else reader.stop)
+                result = reader.get_status().model_dump(mode="json")
+            elif verb == "erase":
+                erase = NfcEraseRequest.model_validate(req.params)
+                if reader is None or not reader.is_enabled():
+                    raise _nfc_disabled()
+                # Blocks until a tag is presented: keep it off the event loop.
+                outcome = await asyncio.to_thread(reader.erase, erase)
+                result = outcome.model_dump(mode="json")
+            elif verb == "write":
+                write = NfcWriteRequest.model_validate(req.params)
+                if reader is None or not reader.is_enabled():
+                    raise _nfc_disabled()
+                outcome = await asyncio.to_thread(reader.write, write)
+                result = outcome.model_dump(mode="json")
+            else:
+                raise JsonRpcError(
+                    f"unknown method: {req.method}",
+                    reason="method_not_found",
+                    code=-32601,
+                )
+        except ValidationError as e:
+            raise JsonRpcError(
+                f"invalid params for {req.method}: {e.errors()[0]['msg']}",
+                reason="invalid_params",
+                code=-32602,
+            ) from e
         if not req.is_notification:
             reply(make_result(req.id, result))
 
@@ -279,6 +361,11 @@ def _rpc_ws_url(app_url: str) -> str:
     scheme = "wss" if p.scheme == "https" else "ws"
     port = f":{p.port}" if p.port else ""
     return f"{scheme}://{host}{port}/rpc"
+
+
+def _nfc_disabled() -> JsonRpcError:
+    """Refuse a tag operation while the reader is off (REST answers 503)."""
+    return JsonRpcError("NFC reader disabled", reason="nfc_disabled")
 
 
 def _status_dict(status: Any) -> dict[str, Any]:

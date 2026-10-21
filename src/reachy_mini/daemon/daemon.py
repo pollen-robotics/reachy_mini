@@ -32,6 +32,7 @@ from .jsonrpc_relay import JsonRpcRelay
 if TYPE_CHECKING:
     from reachy_mini.apps.manager import AppManager
     from reachy_mini.daemon.backend.abstract import Backend
+    from reachy_mini.nfc import NfcReader
 
 # Central signaling relay for WebRTC (optional)
 _central_relay_task: Optional[asyncio.Task[Any]] = None
@@ -95,6 +96,8 @@ class Daemon:
         # Set by the daemon FastAPI factory so `Daemon.start` can wire the
         # JSON-RPC app relay (apps.* + conversation.* over the DataChannel).
         self.app_manager: "AppManager | None" = None
+        # Set by the same factory: the relay serves nfc.* from it.
+        self.nfc_reader: "NfcReader | None" = None
         self._jsonrpc_relay: "JsonRpcRelay | None" = None
 
         # Single source of truth for which managed app (local Python app or
@@ -179,7 +182,9 @@ class Daemon:
         frames onto it with ``run_coroutine_threadsafe``.
         """
         loop = asyncio.get_running_loop()
-        relay = JsonRpcRelay(app_manager, backend.broadcast_to_all_clients)
+        relay = JsonRpcRelay(
+            app_manager, backend.broadcast_to_all_clients, nfc_reader=self.nfc_reader
+        )
         self._jsonrpc_relay = relay
 
         def handler(raw: str, reply: Callable[[dict[str, Any]], None]) -> None:

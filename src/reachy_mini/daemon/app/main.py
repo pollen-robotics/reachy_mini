@@ -340,6 +340,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         if args.nfc_enabled
         else None
     )
+    # The JSON-RPC relay serves nfc.* to clients that only reach the daemon
+    # over WebRTC (the mobile app).
+    app.state.daemon.nfc_reader = app.state.nfc_reader
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
