@@ -853,8 +853,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     const ice = this._pc?.iceConnectionState;
                     if (ice !== 'connected' && ice !== 'completed') return;
                     log.info('robot closed the session');
-                    this._emit('sessionStopped', { reason: 'remote_end', message: null });
-                    this.stopSession().catch(() => { /* swallow */ });
+                    this._endedByRobot('remote_end', null);
                 };
             };
 
@@ -1057,6 +1056,22 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._signalingDown = false;
             this._state = 'disconnected';
         }
+    }
+
+    /**
+     * The robot (or central on its behalf) ended a streaming session:
+     * tear our side down and emit ONE `sessionStopped` carrying the
+     * robot's reason (`stopSession()` would add a second, `user`, one).
+     * No endSession goes back: the other side already ended it.
+     */
+    private _endedByRobot(reason: string, message: string | null): void {
+        this._supervisor.cancelRedial();
+        this._logSubscribers.clear();
+        this._updateProgressSubscribers.clear();
+        this._closeTransport(new Error('Session ended by the robot'));
+        if (this._state === 'streaming') this._state = 'connected';
+        this._emit('sessionStopped', { reason, message });
+        this._dropToDisconnectedIfSignalingDown();
     }
 
     /** Session over while signaling is down: surface the real state. */
@@ -2188,11 +2203,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 this._emit('signalingSessionEnded', { reason: null });
                 return;
             }
-            this._emit('sessionStopped', {
-                reason: reason || 'remote_end',
-                message: friendly,
-            });
-            this.stopSession().catch(() => { /* swallow */ });
+            this._endedByRobot(reason || 'remote_end', friendly);
         }
     }
 

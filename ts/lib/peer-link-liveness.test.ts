@@ -77,7 +77,9 @@ describe('central endSession on a streaming session', () => {
 
         s._handleEndSession({ type: 'endSession', sessionId: 'central-1', reason: 'local_app_started' });
 
-        expect(stopped[0]).toMatchObject({ reason: 'local_app_started' });
+        // Exactly one event, with the robot's reason (no extra `user` one).
+        expect(stopped).toEqual([{ reason: 'local_app_started', message: 'Disconnected: a local Python app started on the robot' }]);
+        expect(s._state).toBe('connected');
     });
 
     it('ends the session when the peer link has gone quiet', () => {
