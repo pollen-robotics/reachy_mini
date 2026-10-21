@@ -1548,7 +1548,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * forgets the robot id. Resolves the stored choice, or `null` on error.
      */
     setTelemetry(enabled: boolean): Promise<TelemetryStatus | null> {
-        return this._slotRoundtrip('telemetry', { type: 'set_telemetry', enabled });
+        return this._slotRoundtrip('set_telemetry', { type: 'set_telemetry', enabled });
     }
 
     /**
@@ -2342,7 +2342,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         }
         if (data.command === 'get_telemetry' || data.command === 'set_telemetry') {
             this._pending.settleReplySlot(
-                'telemetry',
+                data.command === 'get_telemetry' ? 'telemetry' : 'set_telemetry',
                 data.status === 'error'
                     ? null
                     : { enabled: !!data.enabled, disabled_by_env: !!data.disabled_by_env },
