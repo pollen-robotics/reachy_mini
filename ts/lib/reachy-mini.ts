@@ -1068,6 +1068,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._supervisor.cancelRedial();
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
+        this._outgoingAudioTrack = null;
         this._closeTransport(new Error('Session ended by the robot'));
         if (this._state === 'streaming') this._state = 'connected';
         this._emit('sessionStopped', { reason, message });
