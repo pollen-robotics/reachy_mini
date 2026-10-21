@@ -37,7 +37,6 @@ import {
     gzipBase64,
     clampVolume,
     audioUploadEncoding,
-    normalizeMoveFrames,
 } from './upload-helpers.js';
 import type {
     ApplyAudioConfigOptions,
@@ -853,6 +852,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._supervisor.cancelRedial();
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
+        this._outgoingAudioTrack = null;
 
         const sessionId = this._closeTransport(new Error('Session stopped'));
         if (sessionId) {
@@ -872,6 +872,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
 
+        this._outgoingAudioTrack = null;
         const sessionId = this._closeTransport(new Error('Disconnected'));
         if (sessionId && this._token) {
             void this._sendToServer({ type: 'endSession', sessionId });
@@ -1497,7 +1498,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * ownership of it (the SDK never stops it).
      *
      * Resolves `true` once the track is on the wire, `false` when there is
-     * no live session yet — it is then applied as soon as one starts.
+     * no live session yet (it is then applied as soon as one starts) or when
+     * the robot didn't offer two-way audio. Cleared by `stopSession()` /
+     * `disconnect()`. `setMicMuted()` only mutes the SDK's placeholder, not
+     * this track — stop or disable the track itself to go quiet.
      * For clips that must stay in sync with motion, prefer
      * `playMove(motion, { audioBlob })` or `uploadAudio` + `playUploadedAudio`.
      */
@@ -1512,7 +1516,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private async _applyOutgoingAudioTrack(): Promise<boolean> {
         const sender = this._pc?.getTransceivers()
             .find((t) => t.receiver.track.kind === 'audio')?.sender;
-        if (!sender) return false;
+        if (!sender || !this._micSupported) return false;
         const fallback = this._micStream?.getAudioTracks()[0] ?? null;
         await sender.replaceTrack(this._outgoingAudioTrack ?? fallback);
         return true;
@@ -1575,7 +1579,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         const moveDict = {
             description,
             time: motion.time,
-            set_target_data: normalizeMoveFrames(motion.set_target_data),
+            set_target_data: motion.set_target_data,
         };
         const jsonStr = JSON.stringify(moveDict);
         let payload: string;
@@ -2022,7 +2026,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     await this._pc.setLocalDescription(answer);
                     // Re-dials build a fresh peer connection: carry the app's
                     // outgoing audio over instead of reverting to the placeholder.
-                    if (this._outgoingAudioTrack) await this._applyOutgoingAudioTrack();
+                    if (this._outgoingAudioTrack) {
+                        // Best-effort: a failed swap must not keep the answer from going out.
+                        await this._applyOutgoingAudioTrack()
+                            .catch((e: unknown) => log.warn('re-applying outgoing audio failed:', e));
+                    }
                     await this._sendToServer({
                         type: 'peer',
                         sessionId: this._sessionId,

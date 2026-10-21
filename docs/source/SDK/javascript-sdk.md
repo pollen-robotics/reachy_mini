@@ -107,7 +107,7 @@ new ReachyMini({
 | `audioMuted` | `boolean` | Robot speaker mute state (local only) |
 | `preselectedRobotId` | `string\|null` | Robot id read from `?robot_peer_id=` / `#robot_peer_id=` (set by the host iframe) |
 | `isEmbedded` | `boolean` | `true` iff `preselectedRobotId !== null` — UX branching helper (embed vs standalone) |
-| `robotAudioTrack` | `MediaStreamTrack\|null` | The robot's microphone, once the session's audio arrives (see the `audioTrack` event) |
+| `robotAudioTrack` | `MediaStreamTrack\|null` | The robot's microphone, once the session's audio arrives (see the `audioTrack` event). Embedded (host-shell) apps use `handle.media.robotStream` instead |
 | `peerConnection` | `RTCPeerConnection\|null` | Read-only, for `getStats()`; replaced on every auto-reconnect, so re-read it each time |
 
 ### Methods
@@ -141,7 +141,7 @@ new ReachyMini({
 | `requestState()` | `boolean` | Request a state snapshot |
 | `setAudioMuted(muted)` | — | Mute/unmute robot speaker (local) |
 | `setMicMuted(muted)` | — | Mute/unmute your microphone |
-| `setOutgoingAudioTrack(track)` | `Promise<boolean>` | Stream an audio track (TTS, Web Audio graph, the user's mic) to the robot speaker in real time; `null` = silence. Survives auto-reconnects. For clips synced with motion prefer `playMove(…, { audioBlob })` |
+| `setOutgoingAudioTrack(track)` | `Promise<boolean>` | Stream an audio track (TTS, Web Audio graph, the user's mic) to the robot speaker in real time; `null` = silence. Survives auto-reconnects, cleared by `stopSession()`; resolves `false` if the robot offered no two-way audio. `setMicMuted` doesn't affect it. For clips synced with motion prefer `playMove(…, { audioBlob })` |
 | `getImu()` | `Promise<ImuData\|null>` | Accelerometer / gyroscope / quaternion / temperature; `null` on IMU-less robots (Lite, sim) |
 | `getVolume()` / `setVolume(v)` | `Promise<number\|null>` | Read / set speaker volume (integer `0..100`, clamped); resolves the applied value or `null` if unavailable |
 | `getMicrophoneVolume()` / `setMicrophoneVolume(v)` | `Promise<number\|null>` | Read / set microphone gain (integer `0..100`, clamped) |
@@ -253,7 +253,7 @@ robot.cancelMove();
 ```js
 { time: [0, 0.01, 0.02, …], set_target_data: [{ head, antennas, body_yaw }, …] }
 ```
-`head` may be the flat `number[16]` you get from `state` events or a nested 4×4 — the SDK normalises it, so frames captured with `subscribePose()` can be replayed as-is.
+`head` may be the flat `number[16]` you get from `state` events or a nested 4×4 — the daemon accepts both, so frames captured with `subscribePose()` can be replayed as-is.
 
 `audioLeadMs` shifts audio relative to motion at the daemon:
 - **Positive** — audio fires N ms BEFORE motion (compensates motor pickup).

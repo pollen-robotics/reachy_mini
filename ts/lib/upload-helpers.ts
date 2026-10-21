@@ -93,17 +93,3 @@ export function audioUploadEncoding(blob: Blob): string {
     }
 }
 
-/**
- * Reshape every frame's `head` from the flat row-major `number[16]` that
- * `state` / `setTarget` use into the nested 4×4 the daemon's recorded-move
- * parser requires. Nested heads and frames without a head pass through, so
- * frames captured from `state` events can be fed to `playMove` as-is.
- */
-export function normalizeMoveFrames(frames: object[]): object[] {
-    return frames.map((frame) => {
-        const head = (frame as { head?: unknown }).head;
-        if (!Array.isArray(head) || head.length !== 16 || Array.isArray(head[0])) return frame;
-        const rows = [0, 1, 2, 3].map((r) => (head as number[]).slice(r * 4, r * 4 + 4));
-        return { ...frame, head: rows };
-    });
-}

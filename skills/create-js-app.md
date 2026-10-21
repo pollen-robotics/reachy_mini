@@ -69,8 +69,8 @@ contract - your app is agnostic of everything else.
 - Call `reachy.stopSession()` yourself - the host tears down; use `onLeave`.
 - Reach into host internals or private SDK fields (e.g. `reachy._pc`).
   Use the public API (`handle.media.attachVideo`, `enableMicrophone`).
-  Robot mic: `reachy.robotAudioTrack`; app audio to the robot speaker:
-  `reachy.setOutgoingAudioTrack(track)`.
+  Robot mic: `handle.media.robotStream` (embedded) or `reachy.robotAudioTrack`;
+  app audio to the robot speaker: `reachy.setOutgoingAudioTrack(track)`.
 - Call `reachy.attachVideo()` in an embedded app - it silently no-ops.
   `connectToHost()` finishes the WebRTC handshake before your app mounts,
   so the one-shot `videoTrack` event has already fired and your listener
