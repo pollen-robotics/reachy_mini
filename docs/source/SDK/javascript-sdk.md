@@ -391,9 +391,8 @@ await robot.signOut();
 
 ## Prerequisites
 
-- Your robot must be running the wireless firmware and connected to the central signaling server.
-- The robot must have a valid Hugging Face token configured (see [Usage](../platforms/reachy_mini/usage)).
-- Currently supported on **wireless versions** only.
+- The robot's daemon must be connected to the central signaling server, which happens automatically when it has a valid Hugging Face token configured (see [Usage](../platforms/reachy_mini/usage)).
+- Works on both Wireless and Lite robots (for a Lite, the daemon runs on the computer it is plugged into).
 
 ## Working examples
 
@@ -403,5 +402,6 @@ The reference apps maintained alongside the SDK are the canonical worked example
 - [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions) — React 19 + MUI 7 + Vite.
 - [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence) — React 19 + MUI 7 + Vite with camera + media streams.
 - [`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app) — vanilla TS + Vite tour of every SDK primitive (camera, 3D pose view, moves, conversation).
+- [`pollen-robotics/reachy-mini-js-template`](https://huggingface.co/spaces/pollen-robotics/reachy-mini-js-template) — bare HTML, no build step: the smallest correct starting point, with short recipes for the common patterns.
 
 Clone the closest one and trim. See [`ts/APP_CREATION_GUIDE.md`](../../../ts/APP_CREATION_GUIDE.md) for the step-by-step.

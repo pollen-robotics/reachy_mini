@@ -8,14 +8,15 @@ This guide helps AI agents assist users in developing Reachy Mini applications.
 
 ### FIRST: Check for agents.local.md
 
-**Before doing anything else**, search for `agents.local.md` in the current directory:
+**Before doing anything else**, search for `agents.local.md` in your working directory (the folder where the app lives or will be created — not the reachy_mini repo clone):
 
 ```
 IF agents.local.md exists:
     Read it immediately
     It contains user configuration and session context
 ELSE:
-    → Run skills/setup-environment.md to set up the environment
+    → Python path: run skills/setup-environment.md to set up the environment
+    → JS path: skip it (Node.js is all you need), just create agents.local.md in that working directory
 ```
 
 This file stores the user's robot type, preferences, and setup status. Always check it first.
@@ -32,10 +33,10 @@ Unless the user explicitly requests otherwise:
 
 Reachy Mini supports two app types. **Default to a JS (Live/Web) app** unless the user explicitly wants on-robot Python, or has a need that only Python can cover (heavy on-robot compute, rich hardware access, deterministic real-time control loops, or bundled offline LAN tooling).
 
-| Flavour | Default for | Where it runs |
-|---|---|---|
-| **JS app (recommended)** | End-users, shareable-by-URL experiences, anyone who wants "open a link, use the robot". Remote launch, zero-install, streaming A/V UIs. | Static HF Space; reaches the robot over WebRTC via the central signaling server. |
-| **Python app** | Developer tools, on-robot control loops, heavy motion sequencing, offline/LAN. | Robot owner's machine (laptop / CM4), optionally with a bundled web UI. |
+| Flavour | Default for | Where it runs | Constraints |
+|---|---|---|---|
+| **JS app (recommended)** | End-users, shareable-by-URL experiences, anyone who wants "open a link, use the robot". Remote launch, zero-install, streaming A/V UIs. | Static HF Space; reaches the robot over WebRTC via the central signaling server. | Runs only while a browser tab is open; needs internet and an HF account for every session; one controlling session per robot. Works on Wireless and Lite. |
+| **Python app** | Developer tools, on-robot control loops, heavy motion sequencing, offline/LAN. | Robot owner's machine (laptop / CM4), optionally with a bundled web UI. | Pick it when the app must run unattended or always-on, work without internet or keep data inside the home network, or be reachable by other local services (e.g. Home Assistant). |
 
 Both coexist — a Python app can bundle a browser UI, and a JS app can call the Python daemon's REST API.
 
@@ -154,6 +155,7 @@ Browser apps that drive a Reachy Mini over WebRTC, deployed as Hugging Face Spac
 | [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions) | React 19 + MUI 7 + Vite | UI-rich apps (rich components, theming, deep links). |
 | [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence) | React 19 + MUI 7 + Vite | Camera / media-stream apps. |
 | [`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app) | Vanilla TS + Vite | Tour of every SDK primitive (camera, 3D pose view, moves, conversation). |
+| [`pollen-robotics/reachy-mini-js-template`](https://huggingface.co/spaces/pollen-robotics/reachy-mini-js-template) | **Bare HTML, no build** | Smallest correct starting point: one `index.html` with short recipes (robot mic, head poses, emotions, app audio on the robot speaker, record & replay, head tracking, clean leave). |
 
 These are kept in lockstep with every SDK release. **Mimicking them is the fastest path to a working app.** The 3-file contract, deploy steps, gotchas, and SDK pin all live in [`ts/APP_CREATION_GUIDE.md`](ts/APP_CREATION_GUIDE.md) - read it before scaffolding anything non-trivial.
 
@@ -171,7 +173,7 @@ Once `connectToHost()` resolves you get a live `ReachyMini` instance (`handle.re
 - **Recorded-move playback (daemon-side, single-clock A/V sync)**: `playMove(motion, { audioBlob?, audioLeadMs? = -100 })` → `{finished|cancelled|error}`. `cancelMove()` stops mid-play. For record-time flows: `uploadAudio(blob)` returns `uploadId`, then `playUploadedAudio(uploadId)` resolves on the daemon's `started` broadcast (sync anchor). **Use these instead of hand-rolling `sendRaw` chunked uploads.**
 - **Audio**: `setAudioMuted(bool)`, `setMicMuted(bool)`, `getVolume()` / `setVolume(0-100)`, `getMicrophoneVolume()` / `setMicrophoneVolume(0-100)`. `playSound(file)`.
 - **Wake / torque**: `setMotorMode("enabled"|"disabled"|"gravity_compensation")`, `wakeUp()` / `gotoSleep()` / `isAwake()` / `ensureAwake()`.
-- **Media flow**: `<video>` passed to `handle.media.attachVideo()` receives the **robot's** camera/mic over WebRTC (in a standalone `mountHost` app, use `reachy.attachVideo()`). Do NOT call `navigator.mediaDevices.getUserMedia()` to read robot media - that grabs the user's *own* laptop camera. Bidirectional audio is automatic when `enableMicrophone: true` is passed to `mountHost()`. The robot's mic track also works for **voice input / speech recognition entirely in-browser** — no server needed: feed it to `SpeechRecognition.start(track)` (Chrome 135+), a client-side ASR model, or the HF realtime backend; [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) is a full static voice app doing exactly this.
+- **Media flow**: `<video>` passed to `handle.media.attachVideo()` receives the **robot's** camera/mic over WebRTC (in a standalone `mountHost` app, use `reachy.attachVideo()`). Do NOT call `navigator.mediaDevices.getUserMedia()` to read robot media - that grabs the user's *own* laptop camera. Robot audio arrives without any flag; `enableMicrophone: true` on `mountHost()` only lets the app use the *user's* microphone. The robot's mic track also works for **voice input / speech recognition entirely in-browser** — no server needed: feed it to `SpeechRecognition.start(track)` (Chrome 135+), a client-side ASR model, or the HF realtime backend; [`tfrere/minimal-conversation`](https://huggingface.co/spaces/tfrere/minimal-conversation) is a full static voice app doing exactly this.
 - **Events**: `connected`, `disconnected`, `robotsChanged`, `streaming`, `sessionStopped`, `sessionRejected` (robot busy - inspect `e.detail.activeApp`), `state` (every ~500 ms), `videoTrack`, `micSupported`, `error`.
 - **Math utilities**: `rpyToMatrix`, `matrixToRpy`, `degToRad`, `radToDeg`.
 - **Motion utilities** (subpath `@pollen-robotics/reachy-mini-sdk/animation`): `Pose` / `PartialPose` types, `INIT_POSE` safe-rest constant, `distanceBetweenPoses` (per-channel raw distance, head in magic-mm), `scaledDuration` → `{ duration, limiter, perChannel }` (synchronous client-side duration math, mirrors the daemon so you can sync audio cues without an RPC), `safelyReturnToPose(reachy)` (canonical `onLeave` one-liner: enables torque safely, computes scaled duration, dispatches goto to `INIT_POSE`, returns synchronously after dispatch), `installShutdownHandler(reachy)` (**standalone apps only** - host-shell apps use `handle.onLeave()` instead, mixing both double-fires the goto). Full recipe and anti-patterns: [§14 of the JS App Creation Guide](ts/APP_CREATION_GUIDE.md#14-robotics-best-practices).
@@ -200,7 +202,7 @@ The daemon exposes an HTTP/WebSocket API at `http://{daemon-ip}:8000/api`.
 - **Lite**: `localhost:8000` (daemon runs on your machine)
 - **Wireless**: `reachy-mini.local:8000` or the robot's IP address
 
-**Use REST API for:** Web UIs, non-Python clients, remote control, AI/LLM integration via HTTP. => Note: for the app to be discoverable, it must be a python app for now, this will change in a future release.
+**Use REST API for:** Web UIs, non-Python clients, remote control, AI/LLM integration via HTTP.
 
 **Interactive docs:** `http://{daemon-ip}:8000/docs` (when daemon is running)
 
