@@ -1,13 +1,19 @@
 """stop_current_app must not wake a robot the app deliberately put to sleep."""
 
+import asyncio
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
 
+from reachy_mini.apps import manager as manager_module
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.apps.sources import local_common_venv
 from reachy_mini.daemon.backend.abstract import Backend
+from reachy_mini.daemon.robot_app_lock import RobotAppLock, RobotAppLockState
 from reachy_mini.io.protocol import MotorControlMode
 
 
@@ -53,3 +59,33 @@ async def test_stop_returns_to_zero_when_awake() -> None:
     reset_to_init.assert_awaited_once()
     assert mngr.current_app is None
 
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("requested", [True, False])
+async def test_only_unrequested_exits_trigger_the_idle_reset(
+    requested: bool, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A user stop cleans up itself; an app exiting on its own gets the idle reset."""
+    (tmp_path / "fake_app.py").write_text(
+        f"import time\ntry:\n    time.sleep({30 if requested else 0.2})\n"
+        "except KeyboardInterrupt:\n    pass\n"
+    )
+    monkeypatch.chdir(tmp_path)  # `python -m` finds the module in the cwd
+    monkeypatch.setattr(local_common_venv, "get_app_module", lambda *a: "fake_app")
+    monkeypatch.setattr(local_common_venv, "get_app_python", lambda *a: sys.executable)
+    monkeypatch.setattr(manager_module.telemetry, "capture", MagicMock())
+    lock = RobotAppLock()
+    freed: list[bool] = []
+    lock.set_on_became_free_handler(freed.append)
+
+    mngr = AppManager(daemon=SimpleNamespace(robot_app_lock=lock, backend=None))
+    await mngr.start_app("fake_app")
+    assert mngr.current_app is not None
+    if requested:
+        await asyncio.sleep(0.5)
+        await mngr.stop_current_app(timeout=5)
+    else:
+        await asyncio.wait_for(mngr.current_app.monitor_task, timeout=10)
+
+    assert lock.status().state == RobotAppLockState.FREE
+    assert freed == ([] if requested else [False])

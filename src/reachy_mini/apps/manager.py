@@ -301,9 +301,12 @@ class AppManager:
                 # Always release the robot lock when the subprocess exits, no
                 # matter how: clean exit, crash, SIGKILL, OOM, or cancellation
                 # of this monitor task. Idempotent — stop_current_app's own
-                # release is fine too.
+                # release is fine too. A requested stop skips the daemon's idle
+                # reset: stop_current_app resets the robot itself.
                 if self.daemon is not None:
-                    self.daemon.robot_app_lock.release_local(app_name)
+                    self.daemon.robot_app_lock.release_local(
+                        app_name, cleaned_up=stop_requested.is_set()
+                    )
                 exit_code = process.returncode
                 telemetry.capture(
                     "robot_app_stopped",
