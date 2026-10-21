@@ -22,7 +22,10 @@ Example usage::
     >>> # The server is now streaming and ready to accept client connections
 """
 
+import ctypes
+import ctypes.util
 import logging
+import math
 import os
 import platform
 import time
@@ -62,7 +65,7 @@ from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
-from gi.repository import GLib, Gst, GstApp  # noqa: E402, F401
+from gi.repository import GLib, GObject, Gst, GstApp  # noqa: E402, F401
 
 # Hard cap on how long a freshly-added consumer is allowed to spend
 # before its `webrtcbin.connection-state` reaches "connected". In a
@@ -125,6 +128,69 @@ class _PeerWebRTCState:
             "signaling_state": self.signaling_state,
             "elapsed_s": round(time.monotonic() - self.added_at, 2),
         }
+
+
+# webrtcsink names each consumer's webrtcbin after its signalling session
+# (the relay's local session id), unlike the consumer peer id it reports,
+# which all relayed sessions share (the relay's own local peer id).
+_WEBRTCBIN_NAME_PREFIX = "webrtcbin-"
+
+
+def _session_id_of(webrtcbin: Gst.Element) -> Optional[str]:
+    """Return the signalling session id a consumer's webrtcbin belongs to."""
+    name = webrtcbin.get_name() or ""
+    if name.startswith(_WEBRTCBIN_NAME_PREFIX) and len(name) > len(
+        _WEBRTCBIN_NAME_PREFIX
+    ):
+        return name[len(_WEBRTCBIN_NAME_PREFIX) :]
+    return None
+
+
+_gobject_ref: Optional[Callable[[Any], int]] = None
+_gobject_ref_unavailable = False
+
+
+def _resolve_gobject_ref() -> Optional[Callable[[Any], int]]:
+    """Return a C-level ``g_object_ref`` for PyGObject objects, if reachable."""
+    global _gobject_ref, _gobject_ref_unavailable
+    if _gobject_ref is not None or _gobject_ref_unavailable:
+        return _gobject_ref
+    try:
+        lib = ctypes.CDLL(
+            ctypes.util.find_library("gobject-2.0") or "libgobject-2.0.so.0"
+        )
+        lib.g_object_ref.argtypes = [ctypes.c_void_p]
+        lib.g_object_ref.restype = ctypes.c_void_p
+        get_pointer = ctypes.pythonapi.PyCapsule_GetPointer
+        get_pointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
+        get_pointer.restype = ctypes.c_void_p
+
+        def _ref(obj: Any) -> int:
+            return int(lib.g_object_ref(get_pointer(obj.__gpointer__, None)))
+
+        _gobject_ref = _ref
+    except Exception:
+        _gobject_ref_unavailable = True
+    return _gobject_ref
+
+
+def _keep_ice_agent_alive(ice: GObject.Object) -> None:
+    """Re-balance the reference ``webrtcbin``'s ``ice-agent`` getter hands out.
+
+    webrtcbin keeps its ICE agent as a floating reference (seen on
+    GStreamer 1.24, 1.26 - the robot - and 1.28): PyGObject sinks it when
+    wrapping, owns the only reference, and finalizes the agent as soon as
+    the Python wrapper is collected - under a live webrtcbin (re-reads
+    return None, then GStreamer-CRITICAL on dispose). Detected by a
+    refcount of 1 while we hold the wrapper; then take one C-level
+    reference, released by webrtcbin's own unref on dispose. Callers must
+    check `_resolve_gobject_ref()` BEFORE reading the property.
+    """
+    if ice.__grefcount__ > 1:
+        return  # webrtcbin holds its own reference: nothing to fix
+    ref = _resolve_gobject_ref()
+    assert ref is not None  # checked by the caller before reading ice-agent
+    ref(ice)
 
 
 class GstMediaServer:
@@ -266,6 +332,17 @@ class GstMediaServer:
         # central signaling relay so the JS client gets a typed
         # `endSession` instead of a spinner. Signature:
         # `(peer_id, reason, diagnostic_dict) -> None`.
+        # Per-session liveness of the peer-to-peer link, keyed by the
+        # signalling session id (see `_session_id_of`): monotonic time of
+        # the client's last sign of life - an RTCP packet (sent by any
+        # client receiving media, even one that never writes on the data
+        # channel) or a data-channel message. Sessions whose client sent
+        # an RTCP BYE are in `_session_bye`. Read by the relay through
+        # `session_idle_seconds`.
+        self._session_activity: Dict[str, float] = {}
+        self._session_bye: set[str] = set()
+        self._session_rtcp_seen: set[str] = set()
+        self._session_activity_lock = Lock()
         self._on_session_failed: Optional[
             Callable[[str, str, Dict[str, Any]], None]
         ] = None
@@ -418,7 +495,10 @@ class GstMediaServer:
         peer_id: str,
         webrtcbin: Gst.Element,
     ) -> None:
-        self._logger.info(f"consumer added with peer id: {peer_id}")
+        session_id = _session_id_of(webrtcbin)
+        self._logger.info(
+            f"consumer added with peer id: {peer_id} (session {session_id})"
+        )
 
         # Gst.debug_bin_to_dot_file(
         #     self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
@@ -429,10 +509,13 @@ class GstMediaServer:
         # Without it we only offer host/srflx and a NAT-restricted remote
         # consumer (e.g. a cloud backend) can't reach us.
         self._apply_turn_servers(webrtcbin)
+        self._disable_upnp(webrtcbin)
 
         GLib.timeout_add_seconds(5, self._dump_latency)
 
-        self._setup_data_channel(peer_id, webrtcbin)
+        self._setup_data_channel(peer_id, webrtcbin, session_id)
+        if session_id is not None:
+            self._track_session_liveness(session_id, webrtcbin)
 
         # Deepen this consumer's receive jitter buffer before media flows
         # so transient Wi-Fi jitter on the phone->robot voice leg doesn't
@@ -451,7 +534,43 @@ class GstMediaServer:
         # this peer's webrtcbin so we can detect a stuck negotiation
         # and report it (instead of letting the JS client spin
         # forever). See `ICE_NEGOTIATION_DEADLINE_S`.
-        self._install_negotiation_watchdog(peer_id, webrtcbin)
+        # Keyed by session: relayed sessions all share one consumer peer id.
+        self._install_negotiation_watchdog(session_id or peer_id, webrtcbin)
+
+    def _disable_upnp(self, webrtcbin: Gst.Element) -> None:
+        """Stop libnice from asking the home router for port mappings.
+
+        libnice's NiceAgent has UPnP-IGD on by default, so every
+        consumer made the robot SSDP-discover the router and send it
+        AddPortMapping / DeletePortMapping SOAP calls. We never need a
+        mapped port (LAN host candidates, STUN and TURN cover every
+        path), and some home routers handle it badly: on an SFR box the
+        calls started timing out ("Error deleting port mapping: Could
+        not connect to 192.168.1.1") shortly before the box hung and
+        rebooted, dropping the robot and the phone off Wi-Fi. Must run
+        before candidate gathering, i.e. in ``consumer-added``.
+
+        Merely reading ``ice-agent`` from Python frees the agent unless
+        its reference is re-balanced (see `_keep_ice_agent_alive`), so
+        without a usable ``g_object_ref`` UPnP is left on instead.
+        """
+        if _resolve_gobject_ref() is None:
+            self._logger.warning(
+                "Leaving UPnP on: no g_object_ref to read the ICE agent safely"
+            )
+            return
+        try:
+            ice = webrtcbin.get_property("ice-agent")
+        except Exception as e:
+            self._logger.warning(f"Could not reach the ICE agent to disable UPnP: {e}")
+            return
+        if ice is None:
+            return
+        _keep_ice_agent_alive(ice)
+        try:
+            ice.get_property("agent").set_property("upnp", False)
+        except Exception as e:  # older GStreamer: no NiceAgent behind it
+            self._logger.warning(f"Could not disable UPnP on the ICE agent: {e}")
 
     def _apply_turn_servers(self, webrtcbin: Gst.Element) -> None:
         """Add the currently held TURN relay servers to this webrtcbin.
@@ -509,13 +628,16 @@ class GstMediaServer:
         peer_id: str,
         webrtcbin: Gst.Element,
     ) -> None:
-        self._logger.info(f"consumer removed: {peer_id}")
+        session_id = _session_id_of(webrtcbin)
+        self._logger.info(f"consumer removed: {peer_id} (session {session_id})")
+        if session_id is not None:
+            self._forget_session_liveness(session_id)
         self._cleanup_incoming_audio(peer_id)
         self._drop_pose_peer(peer_id)
         self._peer_webrtcbins.pop(peer_id, None)
-        # Cancel any outstanding watchdog for this peer; the consumer
+        # Cancel any outstanding watchdog for this session; the consumer
         # is gone so there's nothing left to police.
-        self._teardown_negotiation_watchdog(peer_id)
+        self._teardown_negotiation_watchdog(session_id or peer_id)
         if self._on_peer_disconnect is not None:
             try:
                 self._on_peer_disconnect(peer_id)
@@ -1855,7 +1977,9 @@ class GstMediaServer:
             for frame in frames:
                 channel.emit("send-string", frame)
 
-    def _setup_data_channel(self, peer_id: str, webrtcbin: Gst.Element) -> None:
+    def _setup_data_channel(
+        self, peer_id: str, webrtcbin: Gst.Element, session_id: Optional[str] = None
+    ) -> None:
         self._logger.debug(f"Setting up data channel for peer {peer_id}")
 
         # Create data channel options
@@ -1871,6 +1995,10 @@ class GstMediaServer:
             channel.connect("on-open", self._on_data_channel_open, peer_id)
             channel.connect("on-close", self._on_data_channel_close, peer_id)
             channel.connect("on-message-string", self._on_data_channel_message, peer_id)
+            if session_id is not None:
+                channel.connect(
+                    "on-message-string", self._on_session_dc_message, session_id
+                )
             channel.connect("on-error", self._on_data_channel_error, peer_id)
         else:
             self._logger.error(f"Failed to create data channel for peer {peer_id}")
@@ -2053,6 +2181,73 @@ class GstMediaServer:
         self._logger.debug(f"Data channel message from peer {peer_id}: {message}")
         if self._on_data_message:
             self._on_data_message(peer_id, message)
+
+    def session_idle_seconds(self, session_id: str) -> Optional[float]:
+        """Seconds since this session's client last showed a sign of life.
+
+        ``None`` when the session isn't tracked (unknown id, or a
+        webrtcbin we couldn't key): callers must not judge it. ``inf``
+        once the client sent an RTCP BYE (it hung up).
+        """
+        with self._session_activity_lock:
+            if session_id in self._session_bye:
+                return math.inf
+            last = self._session_activity.get(session_id)
+        if last is None:
+            return None
+        return time.monotonic() - last
+
+    def _track_session_liveness(self, session_id: str, webrtcbin: Gst.Element) -> None:
+        """Record the client's RTCP (and BYE) for `session_idle_seconds`."""
+        with self._session_activity_lock:
+            # Baseline at creation: a client that never says anything goes
+            # idle from here (the relay also waits for a settle window).
+            self._session_activity[session_id] = time.monotonic()
+            self._session_bye.discard(session_id)
+        rtpbin = webrtcbin.get_by_name("rtpbin")
+        if rtpbin is None:
+            self._logger.warning(
+                f"No rtpbin in {webrtcbin.get_name()}: RTCP liveness off"
+            )
+            return
+        rtpbin.connect("on-ssrc-active", self._on_session_rtcp, session_id)
+        rtpbin.connect("on-bye-ssrc", self._on_session_bye, session_id)
+
+    def _mark_session_alive(self, session_id: str) -> None:
+        with self._session_activity_lock:
+            if session_id in self._session_activity:
+                self._session_activity[session_id] = time.monotonic()
+
+    def _on_session_rtcp(
+        self, _rtpbin: Gst.Element, _session: int, ssrc: int, session_id: str
+    ) -> None:
+        with self._session_activity_lock:
+            first = session_id not in self._session_rtcp_seen
+            if first and session_id in self._session_activity:
+                self._session_rtcp_seen.add(session_id)
+        if first:
+            self._logger.info(
+                f"session {session_id}: client RTCP flowing (ssrc {ssrc})"
+            )
+        self._mark_session_alive(session_id)
+
+    def _on_session_bye(
+        self, _rtpbin: Gst.Element, _session: int, _ssrc: int, session_id: str
+    ) -> None:
+        with self._session_activity_lock:
+            if session_id in self._session_activity:
+                self._session_bye.add(session_id)
+
+    def _on_session_dc_message(
+        self, _channel: Gst.Element, _message: str, session_id: str
+    ) -> None:
+        self._mark_session_alive(session_id)
+
+    def _forget_session_liveness(self, session_id: str) -> None:
+        with self._session_activity_lock:
+            self._session_activity.pop(session_id, None)
+            self._session_bye.discard(session_id)
+            self._session_rtcp_seen.discard(session_id)
 
     def _on_data_channel_error(
         self, channel: Gst.Element, error: str, peer_id: str
