@@ -1,1 +1,1 @@
-{"id":"c63cf251d16760d3f0934edabf172db3.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_robot_app_lock#test_local_release_returns_to_free","name":"test_local_release_returns_to_free","status":"passed","testResultsByEnv":{"default":"5a6108cf9cca048f784a48a1dde0cbfb"}}
+{"id":"c63cf251d16760d3f0934edabf172db3.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_robot_app_lock#test_local_release_returns_to_free","name":"test_local_release_returns_to_free","status":"passed","testResultsByEnv":{"default":"aae18fdaae86529f09c823ca344aba8c"}}

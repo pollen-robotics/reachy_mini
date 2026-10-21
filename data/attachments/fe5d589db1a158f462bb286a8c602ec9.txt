@@ -1,0 +1,1 @@
+ERROR    _ble_auth_binding_under_test:bluetooth_service.py:875 Failed to emit BLE notification: 'NoneType' object has no attribute 'services'
