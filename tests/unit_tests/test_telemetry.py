@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import threading
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -231,6 +233,30 @@ def test_opt_in_again_does_not_revive_old_sender(client: tm.Telemetry) -> None:
     assert old_stop.is_set()
     assert client._stop is not old_stop and not client._stop.is_set()
 
+
+
+def test_opt_out_does_not_wait_for_a_stuck_send(
+    client: tm.Telemetry, isolated: MagicMock
+) -> None:
+    """Opting out returns at once even while a send hangs (slow network)."""
+    release = threading.Event()
+    sending = threading.Event()
+
+    def hang(*args: object, **kwargs: object) -> MagicMock:
+        sending.set()
+        release.wait(5)
+        return MagicMock(status_code=200)
+
+    isolated.side_effect = hang
+    _start(client)
+    client._wake.set()
+    assert sending.wait(2)
+
+    started = time.monotonic()
+    client.set_enabled(False)
+    assert time.monotonic() - started < 0.5
+    assert not client.active
+    release.set()
 
 def test_flush_posts_batch_and_requeues_when_offline(
     client: tm.Telemetry, isolated: MagicMock

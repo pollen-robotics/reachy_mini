@@ -2816,7 +2816,7 @@ class Backend:
 
         status = "ok"
         try:
-            # Opting out waits up to 3 s for the sender thread: keep it off the loop.
+            # File writes and the toggle lock: keep them off the loop.
             await asyncio.to_thread(telemetry.set_enabled, cmd.enabled)
         except OSError as e:
             self.logger.warning(f"set_telemetry failed: {e}")

@@ -196,6 +196,8 @@ class Telemetry:
         self._wake = threading.Event()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        # Serialises set_enabled between the HTTP route and the data channel.
+        self._toggle_lock = threading.Lock()
         self._context: dict[str, Any] | None = None
         self._envelope: dict[str, Any] | None = None
         self._robot_id: str | None = None
@@ -242,13 +244,16 @@ class Telemetry:
         Disabling also forgets the robot id, so re-enabling starts a new,
         unlinkable identity. May raise OSError on a write error.
         """
-        startup_app_config.set_telemetry_enabled(enabled)
-        if enabled and not self.active and self._context and not disabled_by_env():
-            self._activate(time_to_ready_ms=None)
-        elif not enabled:
-            if self.active:
-                self._halt(flush=False)
-            _forget()
+        with self._toggle_lock:
+            startup_app_config.set_telemetry_enabled(enabled)
+            if enabled and not self.active and self._context and not disabled_by_env():
+                self._activate(time_to_ready_ms=None)
+            elif not enabled:
+                if self.active:
+                    # No join: the thread has its own stop event and its
+                    # requeue is dropped once the robot id is gone.
+                    self._halt(flush=False, wait=False)
+                _forget()
 
     def capture(self, event: str, **properties: Any) -> None:
         """Queue an event; a no-op while inactive. Never blocks on I/O."""
@@ -330,7 +335,7 @@ class Telemetry:
         )
         self._thread.start()
 
-    def _halt(self, flush: bool) -> None:
+    def _halt(self, flush: bool, wait: bool = True) -> None:
         with self._lock:
             self._envelope = None
             self._robot_id = None
@@ -338,9 +343,9 @@ class Telemetry:
                 self._queue.clear()
         self._stop.set()
         self._wake.set()
-        if self._thread is not None:
+        if self._thread is not None and wait:
             self._thread.join(timeout=3.0)
-            self._thread = None
+        self._thread = None
 
     def _run(self, stop: threading.Event) -> None:
         next_heartbeat = time.monotonic() + HEARTBEAT_INTERVAL_S
