@@ -1,1 +1,0 @@
-INFO     logs_job_c35d9f37-ca2d-4b51-a3c8-603266293c28:bg_job_register.py:100 Job 'remove' completed successfully
