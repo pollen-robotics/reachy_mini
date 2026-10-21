@@ -19,7 +19,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import WebSocket, WebSocketDisconnect
 
+from reachy_mini.io.protocol import DaemonState, DaemonStatus
 from reachy_mini.io.ws_server import WSServer
+
+STATUS = DaemonStatus(
+    robot_name="test",
+    state=DaemonState.RUNNING,
+    wireless_version=False,
+    desktop_app_daemon=False,
+    simulation_enabled=False,
+    mockup_sim_enabled=False,
+    backend_status=None,
+)
 
 
 class FakeWebSocket:
@@ -101,3 +112,52 @@ async def test_broadcast_before_any_client_is_noop() -> None:
     """Before the first connection there is no loop, so _broadcast returns."""
     server = WSServer(backend=MagicMock())
     server._broadcast('{"type": "status"}')  # must not raise
+
+
+async def _wait_sent(ws: FakeWebSocket, count: int) -> None:
+    async with asyncio.timeout(2):
+        while len(ws.sent) < count:
+            await asyncio.sleep(0.01)
+
+
+@pytest.mark.asyncio
+async def test_new_client_receives_status_on_connect() -> None:
+    """A new client gets the current status without waiting for the 1 Hz tick."""
+    server = WSServer(backend=MagicMock(), status_provider=lambda: STATUS)
+
+    ws = FakeWebSocket()
+    client_task = asyncio.create_task(server.handle_client(cast(WebSocket, ws)))
+    await _wait_sent(ws, 1)
+
+    assert ws.sent == [STATUS.model_dump_json()]
+
+    ws.disconnect()
+    await client_task
+
+
+@pytest.mark.asyncio
+async def test_new_client_skips_broadcast_queued_before_it_connected() -> None:
+    """A broadcast scheduled before registration must not follow the fresh status."""
+    server = WSServer(backend=MagicMock(), status_provider=lambda: STATUS)
+    stale = STATUS.model_copy(update={"state": DaemonState.STARTING})
+
+    first = FakeWebSocket()  # captures the loop so _broadcast schedules
+    first_task = asyncio.create_task(server.handle_client(cast(WebSocket, first)))
+    await _wait_sent(first, 1)
+
+    second = FakeWebSocket()
+    with patch.object(
+        second,
+        "accept",
+        side_effect=lambda: server.publish_status(stale.model_dump_json()),
+    ):
+        second_task = asyncio.create_task(server.handle_client(cast(WebSocket, second)))
+        await _wait_sent(first, 2)
+        await _wait_sent(second, 1)
+        await asyncio.sleep(0.05)
+
+    assert second.sent == [STATUS.model_dump_json()]
+
+    first.disconnect()
+    second.disconnect()
+    await asyncio.gather(first_task, second_task)
