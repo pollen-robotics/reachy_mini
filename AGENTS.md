@@ -8,7 +8,7 @@ This guide helps AI agents assist users in developing Reachy Mini applications.
 
 ### FIRST: Check for agents.local.md
 
-**Before doing anything else**, search for `agents.local.md` in the current directory:
+**Before doing anything else**, search for `agents.local.md` in your working directory (the folder where the app lives or will be created — not the reachy_mini repo clone):
 
 ```
 IF agents.local.md exists:
@@ -16,7 +16,7 @@ IF agents.local.md exists:
     It contains user configuration and session context
 ELSE:
     → Python path: run skills/setup-environment.md to set up the environment
-    → JS path: skip it (Node.js is all you need), just create agents.local.md
+    → JS path: skip it (Node.js is all you need), just create agents.local.md in that working directory
 ```
 
 This file stores the user's robot type, preferences, and setup status. Always check it first.
@@ -36,7 +36,7 @@ Reachy Mini supports two app types. **Default to a JS (Live/Web) app** unless th
 | Flavour | Default for | Where it runs | Constraints |
 |---|---|---|---|
 | **JS app (recommended)** | End-users, shareable-by-URL experiences, anyone who wants "open a link, use the robot". Remote launch, zero-install, streaming A/V UIs. | Static HF Space; reaches the robot over WebRTC via the central signaling server. | Runs only while a browser tab is open; needs internet and an HF account for every session; one controlling session per robot. Works on Wireless and Lite. |
-| **Python app** | Developer tools, on-robot control loops, heavy motion sequencing, offline/LAN. | Robot owner's machine (laptop / CM4), optionally with a bundled web UI. | Pick it when the app must run unattended or always-on, stay LAN-only / private, or be reachable by other local services (e.g. Home Assistant). |
+| **Python app** | Developer tools, on-robot control loops, heavy motion sequencing, offline/LAN. | Robot owner's machine (laptop / CM4), optionally with a bundled web UI. | Pick it when the app must run unattended or always-on, work without internet or keep data inside the home network, or be reachable by other local services (e.g. Home Assistant). |
 
 Both coexist — a Python app can bundle a browser UI, and a JS app can call the Python daemon's REST API.
 
