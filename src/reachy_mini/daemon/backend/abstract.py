@@ -1781,7 +1781,11 @@ class Backend:
             )
 
         elif isinstance(cmd, SetMotorModeCmd):
-            self.set_motor_control_mode(MotorControlMode(cmd.mode))
+            try:
+                self.set_motor_control_mode(MotorControlMode(cmd.mode))
+            except ValueError as e:
+                send_response({"error": str(e), "command": "set_motor_mode"})
+                return
             send_response({"motor_mode": cmd.mode, "status": "ok"})
 
         elif isinstance(cmd, SetTorqueCmd):

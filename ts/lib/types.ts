@@ -340,6 +340,8 @@ export interface SessionRejectedEventDetail {
 }
 export type StateEventDetail = RobotState;
 export interface VideoTrackEventDetail { track: MediaStreamTrack; stream: MediaStream; }
+/** The robot's microphone track. */
+export interface AudioTrackEventDetail { track: MediaStreamTrack; stream: MediaStream; }
 export interface MicSupportedEventDetail { supported: boolean; }
 export interface ErrorEventDetail {
     source: 'signaling' | 'webrtc' | 'robot';
@@ -387,6 +389,7 @@ export interface ReachyMiniEventMap {
     sessionRejected: CustomEvent<SessionRejectedEventDetail>;
     state: CustomEvent<StateEventDetail>;
     videoTrack: CustomEvent<VideoTrackEventDetail>;
+    audioTrack: CustomEvent<AudioTrackEventDetail>;
     micSupported: CustomEvent<MicSupportedEventDetail>;
     error: CustomEvent<ErrorEventDetail>;
     iceStateChange: CustomEvent<IceStateChangeEventDetail>;
@@ -430,6 +433,8 @@ export interface ReachyMiniInstance extends EventTarget {
      * use — never capture it across ticks.
      */
     readonly peerConnection: RTCPeerConnection | null;
+    /** The robot's microphone track, or `null` until the session's audio arrives. */
+    readonly robotAudioTrack: MediaStreamTrack | null;
     /**
      * Build version of this SDK (npm package `version`), injected from
      * package.json at build time. The JS SDK's OWN version — distinct from
@@ -444,9 +449,9 @@ export interface ReachyMiniInstance extends EventTarget {
      *  app bundles that predate the getter. */
     _pc: RTCPeerConnection | null;
     /** Silent placeholder MediaStream the SDK feeds the WebRTC audio
-     *  sender so robot-speaker output can negotiate sendrecv. Apps inject
-     *  their own audio (TTS, files, the user's mic for teleop) by calling
-     *  `replaceTrack()` on the audio sender from `_pc.getSenders()`. */
+     *  sender so robot-speaker output can negotiate sendrecv. Apps send
+     *  their own audio (TTS, files, the user's mic for teleop) with
+     *  `setOutgoingAudioTrack(track)`. */
     _micStream: MediaStream | null;
 
     authenticate(): Promise<boolean>;
@@ -575,6 +580,11 @@ export interface ReachyMiniInstance extends EventTarget {
 
     setAudioMuted(muted: boolean): void;
     setMicMuted(muted: boolean): void;
+    /**
+     * Stream an audio track to the robot's speaker (`null` = silence).
+     * Survives auto-reconnects; resolves `false` when no session is live yet.
+     */
+    setOutgoingAudioTrack(track: MediaStreamTrack | null): Promise<boolean>;
 
     getVolume(): Promise<number | null>;
     setVolume(volume: number): Promise<number | null>;
