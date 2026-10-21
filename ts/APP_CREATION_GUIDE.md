@@ -337,7 +337,7 @@ mountHost({
 
 **Required**: `appName`. Everything else has sensible defaults.
 
-**Return**: `{ dispose(): void }` - call to unmount cleanly. You
+**Return**: `{ unmount(): void }` - call it to tear the shell down. You
 usually never need this; the page lifecycle handles it.
 
 ---
