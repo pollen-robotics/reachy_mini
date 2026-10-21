@@ -155,6 +155,7 @@ Browser apps that drive a Reachy Mini over WebRTC, deployed as Hugging Face Spac
 | [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions) | React 19 + MUI 7 + Vite | UI-rich apps (rich components, theming, deep links). |
 | [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence) | React 19 + MUI 7 + Vite | Camera / media-stream apps. |
 | [`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app) | Vanilla TS + Vite | Tour of every SDK primitive (camera, 3D pose view, moves, conversation). |
+| [`pollen-robotics/reachy-mini-js-template`](https://huggingface.co/spaces/pollen-robotics/reachy-mini-js-template) | **Bare HTML, no build** | Smallest correct starting point: one `index.html` with short recipes (robot mic, head poses, emotions, app audio on the robot speaker, record & replay, head tracking, clean leave). |
 
 These are kept in lockstep with every SDK release. **Mimicking them is the fastest path to a working app.** The 3-file contract, deploy steps, gotchas, and SDK pin all live in [`ts/APP_CREATION_GUIDE.md`](ts/APP_CREATION_GUIDE.md) - read it before scaffolding anything non-trivial.
 

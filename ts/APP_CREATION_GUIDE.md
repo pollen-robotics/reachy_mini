@@ -118,6 +118,7 @@ Pick the reference closest to your needs and clone its repo from Hugging Face:
 | [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions)               | React 19 + MUI 7 + Vite     | UI-rich app with rich components / theming  |
 | [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence)       | React 19 + MUI 7 + Vite     | App with camera / media streams             |
 | [`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app) | Vanilla TS + Vite           | Tour of every SDK primitive                 |
+| [`pollen-robotics/reachy-mini-js-template`](https://huggingface.co/spaces/pollen-robotics/reachy-mini-js-template) | **Bare HTML, no build**     | Smallest correct template; see §11.5        |
 
 ```bash
 # Example: start from the vanilla TS template
@@ -899,6 +900,10 @@ If you don't want a Node toolchain, prefer plain JS, or are shipping a
 one-off prototype, you can deploy a single `index.html` that imports
 the SDK from a CDN. No `package.json`, no `app_build_command`, no
 build step. HF serves the repo root as-is.
+
+Start from [`pollen-robotics/reachy-mini-js-template`](https://huggingface.co/spaces/pollen-robotics/reachy-mini-js-template): duplicate the
+Space and edit its `index.html` — it already follows every rule in this
+guide and shows the common recipes in a few lines each.
 
 **Trade-off summary**
 

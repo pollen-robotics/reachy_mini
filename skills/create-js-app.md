@@ -97,7 +97,7 @@ before scaffolding (same rule as in `AGENTS.md`).
 | Path | Use when | Deploy |
 |------|----------|--------|
 | **TS + Vite (default)** | New app, almost always. Production, TypeScript, npm deps. | `sdk: static` + `app_build_command`, HF builds on push |
-| Bare HTML + CDN | Trivial prototype, no Node toolchain wanted | `sdk: static`, no build. See guide §11.5 |
+| Bare HTML + CDN | Trivial prototype, no Node toolchain wanted | `sdk: static`, no build. Duplicate [`pollen-robotics/reachy-mini-js-template`](https://huggingface.co/spaces/pollen-robotics/reachy-mini-js-template); see guide §11.5 |
 | Docker | Need a server / secrets / Python | Ask first. `sdk: docker`. See guide |
 
 Default to **TS + Vite** for a NEW app unless the user explicitly wants otherwise.
