@@ -55,6 +55,11 @@ LOCAL_GSTREAMER_SIGNALING = "ws://127.0.0.1:8443"
 # Reconnection settings
 RECONNECT_INTERVAL = 5.0  # seconds
 MAX_RECONNECT_INTERVAL = 60.0  # seconds - cap for the reconnect backoff
+# Cap while sessions are kept alive across a central drop: their clients
+# need us back on central to re-dial or hand over, so a long outage must
+# not leave the robot invisible for a minute after the network returns.
+# Only robots in that state use it, so it can't cause a fleet-wide storm.
+KEPT_SESSIONS_MAX_RECONNECT_INTERVAL = 10.0
 RECONNECT_BACKOFF_JITTER = 0.1  # fractional jitter (+0-10%) per backoff
 TOKEN_CHECK_INTERVAL = 30.0  # seconds - how often to check for token when not connected
 LOCAL_WS_CONNECT_TIMEOUT = 5.0  # seconds - timeout for local websocket connection
@@ -723,7 +728,12 @@ class CentralSignalingRelay:
         token refresh reconnects immediately regardless of the backoff.
         """
         exponent = min(max(self._connection_attempts - 1, 0), 20)
-        base: float = min(RECONNECT_INTERVAL * (2**exponent), MAX_RECONNECT_INTERVAL)
+        cap = (
+            KEPT_SESSIONS_MAX_RECONNECT_INTERVAL
+            if self._local_to_central_session
+            else MAX_RECONNECT_INTERVAL
+        )
+        base: float = min(RECONNECT_INTERVAL * (2**exponent), cap)
         jitter: float = random.uniform(0.0, base * RECONNECT_BACKOFF_JITTER)
         return base + jitter
 

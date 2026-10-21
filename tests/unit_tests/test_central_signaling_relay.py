@@ -613,6 +613,21 @@ def test_reconnect_delay_grows_and_is_capped() -> None:
     )
 
 
+def test_reconnect_delay_stays_short_while_sessions_are_kept() -> None:
+    """Clients of kept sessions need the robot back on central quickly."""
+    from reachy_mini.media.central_signaling_relay import (
+        KEPT_SESSIONS_MAX_RECONNECT_INTERVAL,
+    )
+
+    relay = _make_relay()
+    relay._connection_attempts = 1000
+    relay._local_to_central_session["local-1"] = "s1"
+    assert (
+        relay._reconnect_delay()
+        <= KEPT_SESSIONS_MAX_RECONNECT_INTERVAL * (1 + RECONNECT_BACKOFF_JITTER) + 1e-9
+    )
+
+
 # ---------------------------------------------------------------------------
 # startSession robot-lock gating (free / local_app control-only / busy)
 # ---------------------------------------------------------------------------
