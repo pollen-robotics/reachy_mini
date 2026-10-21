@@ -78,6 +78,12 @@ SESSION_LINK_IDLE_S = 12.0
 # Consecutive failed heartbeats that end the central leg at once, instead
 # of waiting out SSE_READ_TIMEOUT on a stream that is already dead.
 HEARTBEAT_MAX_FAILURES = 2
+# Per-request budget for POST /send. The session's default is 300 s, and a
+# request on a kept-alive connection whose packets are silently dropped
+# (Wi-Fi stall, route gone) hangs for all of it: heartbeats would never
+# count a failure. /send is a small JSON POST, a healthy central answers
+# well within this.
+CENTRAL_SEND_TIMEOUT_S = 5.0
 # A mapped session younger than this may still be negotiating (no data
 # channel yet): never treat it as a ghost.
 SESSION_SETTLE_S = 10.0
@@ -1605,6 +1611,7 @@ class CentralSignalingRelay:
                 headers=headers,
                 allow_redirects=False,
                 proxy=proxy_for(send_url),
+                timeout=aiohttp.ClientTimeout(total=CENTRAL_SEND_TIMEOUT_S),
             ) as response:
                 if response.status != 200:
                     body = ""
