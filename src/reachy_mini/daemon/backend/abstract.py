@@ -1384,24 +1384,12 @@ class Backend:
         self.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
         self.disable_head_tracking()
 
-    async def reset_to_sleep(self) -> None:
-        """Put the robot to sleep from ANY motor state the last app left behind.
+    async def reset_to_init(self) -> None:
+        """Bring the robot to the init pose, under position control, from ANY motor state.
 
-        ``goto_sleep()`` assumes it inherits a robot under position control.
-        When that assumption is broken it degrades silently instead of failing:
-        under gravity compensation the control loop ignores position targets
-        outright, so the whole trajectory is written into the void and the final
-        torque cut drops the head from wherever it happened to be. Motors left
-        limp - globally or per-motor via ``set_torque(ids=...)`` - are just as
-        bad, and none of these paths are hypothetical: a crashed app, a killed
-        tab or a dropped Wi-Fi link all skip the client's own cleanup.
-
-        So re-establish the assumption first, then reuse the normal sequence:
-        torque on (``enable_motors`` pins every target to the measured pose, so
-        nothing snaps), lift to the init pose, then ``goto_sleep()``, which ends
-        limp at the sleep pose. The lift is what makes the result predictable -
-        it collapses every possible inherited pose into the one starting point
-        the sleep trajectory was tuned for.
+        Torque on (``enable_motors`` pins every target to the measured pose, so
+        nothing snaps), gravity compensation and per-motor torque overrides
+        cleared, aim sources quiesced, then a lift to the init pose.
         """
         # Ordered: quiesce first so tracking can't re-aim the head between the
         # torque coming back and the lift starting.
@@ -1419,6 +1407,26 @@ class Backend:
             # one, and capped so a fully drooped head doesn't crawl back up.
             duration=float(np.clip(magic_distance * 20 / 1000, 0.3, 1.5)),
         )
+
+    async def reset_to_sleep(self) -> None:
+        """Put the robot to sleep from ANY motor state the last app left behind.
+
+        ``goto_sleep()`` assumes it inherits a robot under position control.
+        When that assumption is broken it degrades silently instead of failing:
+        under gravity compensation the control loop ignores position targets
+        outright, so the whole trajectory is written into the void and the final
+        torque cut drops the head from wherever it happened to be. Motors left
+        limp - globally or per-motor via ``set_torque(ids=...)`` - are just as
+        bad, and none of these paths are hypothetical: a crashed app, a killed
+        tab or a dropped Wi-Fi link all skip the client's own cleanup.
+
+        So re-establish the assumption first with ``reset_to_init()``, then
+        ``goto_sleep()``, which ends limp at the sleep pose. The lift to init is
+        what makes the result predictable - it collapses every possible
+        inherited pose into the one starting point the sleep trajectory was
+        tuned for.
+        """
+        await self.reset_to_init()
         await asyncio.sleep(0.2)
 
         await self.goto_sleep()

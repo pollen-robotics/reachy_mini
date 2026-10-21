@@ -329,6 +329,18 @@ def test_became_free_handler_fires_on_local_release() -> None:
     assert calls == ["free"]
 
 
+def test_cleaned_up_local_release_does_not_fire_became_free() -> None:
+    """A user stop resets the robot itself: no idle reset on top of it."""
+    lock = RobotAppLock()
+    calls: list[str] = []
+    lock.set_on_became_free_handler(lambda _handoff: calls.append("free"))
+
+    assert lock.try_acquire_local("app_a") is True
+    lock.release_local("app_a", cleaned_up=True)
+    assert lock.status().state == RobotAppLockState.FREE
+    assert calls == []
+
+
 def test_became_free_handler_reports_handoff_intent() -> None:
     """The FREE handler must be able to tell a hand-off from a plain drop.
 
