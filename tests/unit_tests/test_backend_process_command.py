@@ -327,6 +327,13 @@ def test_set_gravity_compensation_value_error(sim_backend: Any) -> None:
     ]
 
 
+def test_set_motor_mode_value_error(sim_backend: Any) -> None:
+    """A refused mode (e.g. gravity comp without Placo) is an error response."""
+    sim_backend.set_motor_control_mode = Mock(side_effect=ValueError("no grav comp"))
+    responses = _dispatch(sim_backend, SetMotorModeCmd(mode="gravity_compensation"))
+    assert responses == [{"error": "no grav comp", "command": "set_motor_mode"}]
+
+
 def test_set_automatic_body_yaw(sim_backend: Any) -> None:
     """SetAutomaticBodyYawCmd forwards the flag to set_automatic_body_yaw."""
     sim_backend.set_automatic_body_yaw = Mock()

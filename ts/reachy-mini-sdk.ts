@@ -120,6 +120,7 @@ export type {
     SessionRejectedEventDetail,
     StateEventDetail,
     VideoTrackEventDetail,
+    AudioTrackEventDetail,
     MicSupportedEventDetail,
     ErrorEventDetail,
 } from './lib/types.js';

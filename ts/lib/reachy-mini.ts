@@ -175,6 +175,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Audio ───────────────────────────────────────────────────────────
     _micStream: MediaStream | null = null;
+    private _robotAudioTrack: MediaStreamTrack | null = null;
+    private _outgoingAudioTrack: MediaStreamTrack | null = null;
     private _micMuted = true;
     private _audioMuted = true;
     private _micSupported = false;
@@ -275,6 +277,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * use — never capture it across ticks.
      */
     get peerConnection(): RTCPeerConnection | null { return this._pc; }
+    /**
+     * The robot's microphone as a live audio track, or `null` until the
+     * session's audio arrives (see the `audioTrack` event). Feed it to Web
+     * Audio, `MediaRecorder` or `SpeechRecognition.start(track)`.
+     */
+    get robotAudioTrack(): MediaStreamTrack | null { return this._robotAudioTrack; }
 
     /**
      * Build version of this SDK (npm package `version`), injected from
@@ -679,6 +687,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                             .playoutDelayHint = ms / 1000;
                     } catch { /* ignore */ }
                     this._emit('videoTrack', { track: e.track, stream: e.streams[0]! });
+                } else if (e.track.kind === 'audio') {
+                    this._robotAudioTrack = e.track;
+                    this._emit('audioTrack', { track: e.track, stream: e.streams[0]! });
                 }
             };
 
@@ -802,6 +813,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
         if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
         if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
+        this._robotAudioTrack = null;
         this._micMuted = true;
         this._micSupported = false;
         if (this._pc) { this._pc.close(); this._pc = null; }
@@ -840,6 +852,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._supervisor.cancelRedial();
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
+        this._outgoingAudioTrack = null;
 
         const sessionId = this._closeTransport(new Error('Session stopped'));
         if (sessionId) {
@@ -859,6 +872,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
 
+        this._outgoingAudioTrack = null;
         const sessionId = this._closeTransport(new Error('Disconnected'));
         if (sessionId && this._token) {
             void this._sendToServer({ type: 'endSession', sessionId });
@@ -1477,6 +1491,37 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         }
     }
 
+    /**
+     * Stream an audio track to the robot's speaker in real time (TTS output,
+     * a WebAudio graph, the user's own mic for teleop…). Pass `null` to go
+     * back to silence. The track survives auto-reconnects; the app keeps
+     * ownership of it (the SDK never stops it).
+     *
+     * Resolves `true` once the track is on the wire, `false` when there is
+     * no live session yet (it is then applied as soon as one starts) or when
+     * the robot didn't offer two-way audio. Cleared by `stopSession()` /
+     * `disconnect()`. `setMicMuted()` only mutes the SDK's placeholder, not
+     * this track — stop or disable the track itself to go quiet.
+     * For clips that must stay in sync with motion, prefer
+     * `playMove(motion, { audioBlob })` or `uploadAudio` + `playUploadedAudio`.
+     */
+    async setOutgoingAudioTrack(track: MediaStreamTrack | null): Promise<boolean> {
+        if (track && track.kind !== 'audio') {
+            throw new TypeError(`setOutgoingAudioTrack: expected an audio track, got "${track.kind}"`);
+        }
+        this._outgoingAudioTrack = track;
+        return this._applyOutgoingAudioTrack();
+    }
+
+    private async _applyOutgoingAudioTrack(): Promise<boolean> {
+        const sender = this._pc?.getTransceivers()
+            .find((t) => t.receiver.track.kind === 'audio')?.sender;
+        if (!sender || !this._micSupported) return false;
+        const fallback = this._micStream?.getAudioTracks()[0] ?? null;
+        await sender.replaceTrack(this._outgoingAudioTrack ?? fallback);
+        return true;
+    }
+
     // ─── Video helper ────────────────────────────────────────────────────
 
     attachVideo(videoElement: HTMLVideoElement): () => void {
@@ -1939,6 +1984,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._supervisor.uninstallNetworkListeners();
             if (this._pc) { this._pc.close(); this._pc = null; }
             if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
+            this._robotAudioTrack = null;
             this._iceConnected = false;
             this._dcOpen = false;
             this._micMuted = true;
@@ -1978,6 +2024,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     await this._pc.setRemoteDescription(new RTCSessionDescription(sdp));
                     const answer = await this._pc.createAnswer();
                     await this._pc.setLocalDescription(answer);
+                    // Re-dials build a fresh peer connection: carry the app's
+                    // outgoing audio over instead of reverting to the placeholder.
+                    if (this._outgoingAudioTrack) {
+                        // Best-effort: a failed swap must not keep the answer from going out.
+                        await this._applyOutgoingAudioTrack()
+                            .catch((e: unknown) => log.warn('re-applying outgoing audio failed:', e));
+                    }
                     await this._sendToServer({
                         type: 'peer',
                         sessionId: this._sessionId,

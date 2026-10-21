@@ -133,8 +133,13 @@ class RecordedMove(Move):
         else:
             alpha = (t - t_prev) / (t_next - t_prev)
 
-        head_prev = np.array(self.trajectory[idx_prev]["head"], dtype=np.float64)
-        head_next = np.array(self.trajectory[idx_next]["head"], dtype=np.float64)
+        # Nested 4x4 or the flat row-major 16 that state/set_target use.
+        head_prev = np.array(
+            self.trajectory[idx_prev]["head"], dtype=np.float64
+        ).reshape(4, 4)
+        head_next = np.array(
+            self.trajectory[idx_next]["head"], dtype=np.float64
+        ).reshape(4, 4)
         antennas_prev: List[float] = self.trajectory[idx_prev]["antennas"]  # type: ignore[assignment]
         antennas_next: List[float] = self.trajectory[idx_next]["antennas"]  # type: ignore[assignment]
         body_yaw_prev: float = self.trajectory[idx_prev].get("body_yaw", 0.0)  # type: ignore[assignment]
