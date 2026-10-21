@@ -88,6 +88,7 @@ export type {
     RobotInfo,
     RobotState,
     ImuData,
+    TelemetryStatus,
     ReachyMiniOptions,
     ReachyMiniInstance,
     ReachyMiniConstructor,

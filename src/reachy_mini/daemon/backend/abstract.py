@@ -42,6 +42,7 @@ from reachy_mini.io.protocol import (
     GetMotorModeCmd,
     GetRobotNameCmd,
     GetStateCmd,
+    GetTelemetryCmd,
     GetTrackedFaceCmd,
     GetVersionCmd,
     GetVolumeCmd,
@@ -76,6 +77,7 @@ from reachy_mini.io.protocol import (
     SetRobotNameCmd,
     SetSpeechOffsetsCmd,
     SetTargetCmd,
+    SetTelemetryCmd,
     SetTorqueCmd,
     SetVolumeCmd,
     SetWobblingCmd,
@@ -1915,6 +1917,12 @@ class Backend:
                     }
                 )
 
+        elif isinstance(cmd, GetTelemetryCmd):
+            send_response(self._telemetry_status("get_telemetry", "ok"))
+
+        elif isinstance(cmd, SetTelemetryCmd):
+            asyncio.create_task(self._async_set_telemetry(cmd, send_response))
+
         elif isinstance(
             cmd,
             (
@@ -2787,6 +2795,33 @@ class Backend:
             await self.play_move(move, initial_goto_duration=cmd.initial_goto_duration)
         except Exception as e:
             self.logger.warning(f"play_recorded_move: playback failed: {e}")
+
+    @staticmethod
+    def _telemetry_status(command: str, status: str) -> dict[str, Any]:
+        from reachy_mini.daemon.telemetry import disabled_by_env, user_enabled
+
+        return {
+            "command": command,
+            "status": status,
+            "enabled": user_enabled(),
+            "disabled_by_env": disabled_by_env(),
+        }
+
+    async def _async_set_telemetry(
+        self,
+        cmd: SetTelemetryCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        from reachy_mini.daemon.telemetry import telemetry
+
+        status = "ok"
+        try:
+            # Opting out waits up to 3 s for the sender thread: keep it off the loop.
+            await asyncio.to_thread(telemetry.set_enabled, cmd.enabled)
+        except OSError as e:
+            self.logger.warning(f"set_telemetry failed: {e}")
+            status = "error"
+        send_response(self._telemetry_status("set_telemetry", status))
 
     async def _async_preload_dataset(
         self,

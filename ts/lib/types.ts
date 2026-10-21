@@ -75,6 +75,13 @@ export interface ImuData {
     temperature: number;
 }
 
+/** The robot's anonymous telemetry choice (wire shape of `get_telemetry`). */
+export interface TelemetryStatus {
+    enabled: boolean;
+    /** An environment variable on the robot forces telemetry off, whatever `enabled` says. */
+    disabled_by_env: boolean;
+}
+
 export interface RobotState {
     /** Flat row-major 4×4 head pose (16 numbers). */
     head?: number[];
@@ -626,6 +633,14 @@ export interface ReachyMiniInstance extends EventTarget {
      * restart. Resolves with the stored name, or `null` on error.
      */
     setRobotName(name: string): Promise<string | null>;
+
+    /**
+     * Read the robot's anonymous telemetry choice. `null` when the channel
+     * isn't open or the daemon predates the `get_telemetry` command.
+     */
+    getTelemetry(): Promise<TelemetryStatus | null>;
+    /** Enable or disable telemetry. Disabling also forgets the robot id. */
+    setTelemetry(enabled: boolean): Promise<TelemetryStatus | null>;
 
     /**
      * Apply a batch of XVF3800 audio-board parameters on the robot.

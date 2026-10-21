@@ -1,8 +1,10 @@
 """Tests for the daemon's anonymous telemetry (issue #1452)."""
 
+import asyncio
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,6 +15,7 @@ from fastapi.testclient import TestClient
 from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon import telemetry as tm
 from reachy_mini.daemon.app.routers import telemetry as telemetry_router
+from reachy_mini.io.protocol import GetTelemetryCmd, SetTelemetryCmd
 
 FORBIDDEN_KEYS = {"robot_name", "hostname", "hardware_id", "ip", "ssid", "username"}
 
@@ -263,4 +266,38 @@ def test_router_get_and_put(
     assert (
         http.put("/api/telemetry", json={"enabled": False}).json()["enabled"] is False
     )
+    assert startup_app_config.get_telemetry_enabled() is False
+
+
+@pytest.mark.asyncio
+async def test_data_channel_get_and_set(
+    client: tm.Telemetry, monkeypatch: pytest.MonkeyPatch, sim_backend: Any
+) -> None:
+    """The data channel reads and toggles the choice like the HTTP API."""
+    monkeypatch.setattr(tm, "telemetry", client)
+    responses: list[dict[str, Any]] = []
+
+    sim_backend.process_command(GetTelemetryCmd(), send_response=responses.append)
+    sim_backend.process_command(
+        SetTelemetryCmd(enabled=False), send_response=responses.append
+    )
+    for _ in range(100):
+        if len(responses) == 2:
+            break
+        await asyncio.sleep(0.01)
+
+    assert responses == [
+        {
+            "command": "get_telemetry",
+            "status": "ok",
+            "enabled": True,
+            "disabled_by_env": False,
+        },
+        {
+            "command": "set_telemetry",
+            "status": "ok",
+            "enabled": False,
+            "disabled_by_env": False,
+        },
+    ]
     assert startup_app_config.get_telemetry_enabled() is False
