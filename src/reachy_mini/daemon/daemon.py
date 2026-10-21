@@ -151,8 +151,9 @@ class Daemon:
             return
 
         self.logger.info("Releasing media hardware for direct access...")
-        self._media_server.stop()
+        # Relay first: it ends its sessions on central while they still exist.
         await self._stop_central_signaling_relay()
+        self._media_server.stop()
         self._media_released = True
         self._status.media_released = True
         self.logger.info("Media hardware released.")
@@ -594,12 +595,14 @@ class Daemon:
                 self._jsonrpc_relay = None
 
             if self._media_server and not self._media_released:
+                # Stop the central signaling relay first: it ends its
+                # sessions on central while they still exist, so clients
+                # are told the robot is going away.
+                await self._stop_central_signaling_relay()
                 # Stop pipeline (NULL) to release camera/audio hardware so
                 # external tools (rpicam-still, etc.) can access them.
                 # start() will rebuild the pipeline from scratch.
                 self._media_server.stop()
-                # Stop the central signaling relay
-                await self._stop_central_signaling_relay()
 
             if goto_sleep_on_stop:
                 try:

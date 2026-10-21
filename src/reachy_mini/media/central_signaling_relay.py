@@ -84,6 +84,9 @@ HEARTBEAT_MAX_FAILURES = 2
 # count a failure. /send is a small JSON POST, a healthy central answers
 # well within this.
 CENTRAL_SEND_TIMEOUT_S = 5.0
+# How long `stop()` waits for central to hear that our sessions are over.
+# Bounded so an unreachable central cannot hold up a daemon shutdown.
+STOP_END_SESSIONS_TIMEOUT_S = 2.0
 # A mapped session younger than this may still be negotiating (no data
 # channel yet): never treat it as a ghost.
 SESSION_SETTLE_S = 10.0
@@ -401,6 +404,32 @@ class CentralSignalingRelay:
     async def stop(self) -> None:
         """Stop the relay service."""
         logger.info("[Central Relay] Stopping relay service...")
+
+        # End our sessions on central before the loop goes away. Central
+        # keeps a session across our disconnect (session_liveness "peer"),
+        # so this endSession is how the client learns the robot is gone,
+        # instead of re-dialing until its own link timeouts give up. The
+        # reason makes the SDK believe it even while the link still looks
+        # live.
+        if (
+            self._thread_loop is not None
+            and self._thread_loop.is_running()
+            and self._central_to_local_session
+        ):
+            fut = asyncio.run_coroutine_threadsafe(
+                self._tear_down_active_sessions(reason="robot_stopping"),
+                self._thread_loop,
+            )
+            try:
+                await asyncio.wait_for(
+                    asyncio.wrap_future(fut), STOP_END_SESSIONS_TIMEOUT_S
+                )
+            except Exception:
+                logger.warning(
+                    "[Central Relay] Could not end sessions on central before stopping",
+                    exc_info=True,
+                )
+
         self._running = False
 
         # Wake up any waiting in the thread's event loop
