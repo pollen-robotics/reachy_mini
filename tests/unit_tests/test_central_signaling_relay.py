@@ -1171,6 +1171,75 @@ def test_tear_down_active_sessions_notifies_both_and_clears() -> None:
     assert relay._pending_central_sessions == []
 
 
+class _RunningLoop:
+    """An event loop running in a thread, standing in for the relay's own."""
+
+    def __enter__(self) -> asyncio.AbstractEventLoop:
+        self.loop = asyncio.new_event_loop()
+        self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
+        self.thread.start()
+        return self.loop
+
+    def __exit__(self, *_exc: Any) -> None:
+        self.loop.call_soon_threadsafe(self.loop.stop)
+        self.thread.join(timeout=2.0)
+        self.loop.close()
+
+
+def test_stop_ends_sessions_on_central_first() -> None:
+    """A stopping relay tells central, with a reason, that its sessions are over.
+
+    Central keeps a session across the robot's disconnect, so without this
+    the client only learns from its own link timeouts.
+    """
+    relay, central, local = _make_relay_with_journals()
+    relay._central_to_local_session["cs1"] = "ls1"
+    relay._local_to_central_session["ls1"] = "cs1"
+    with _RunningLoop() as loop:
+        relay._thread_loop = loop
+        asyncio.run(relay.stop())
+
+    assert central.sent == [
+        {"type": "endSession", "sessionId": "cs1", "reason": "robot_stopping"}
+    ]
+    assert local.sent == [{"type": "endSession", "sessionId": "ls1"}]
+
+
+def test_stop_does_not_wait_on_an_unreachable_central(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ending the sessions is bounded: a hung central cannot hold up a stop."""
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    monkeypatch.setattr(relay_module, "STOP_END_SESSIONS_TIMEOUT_S", 0.2)
+    relay, _central, _local = _make_relay_with_journals()
+
+    async def hang(_msg: dict[str, Any]) -> bool:
+        await asyncio.sleep(30)
+        return True
+
+    relay._send_to_central = hang  # type: ignore[method-assign]
+    relay._central_to_local_session["cs1"] = "ls1"
+    relay._local_to_central_session["ls1"] = "cs1"
+    with _RunningLoop() as loop:
+        relay._thread_loop = loop
+        start = time.monotonic()
+        asyncio.run(relay.stop())
+        elapsed = time.monotonic() - start
+
+    assert elapsed < 2.0
+    assert relay.state == RelayState.STOPPED
+
+
+def test_stop_without_sessions_sends_nothing() -> None:
+    """No session, nothing to tell central."""
+    relay, central, _local = _make_relay_with_journals()
+    with _RunningLoop() as loop:
+        relay._thread_loop = loop
+        asyncio.run(relay.stop())
+    assert central.sent == []
+
+
 def test_close_connections_closes_and_clears() -> None:
     """Closing drops the session/ws, clears session state, releases the lock."""
     lock = _FakeLock()
