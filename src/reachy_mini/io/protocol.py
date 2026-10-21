@@ -8,7 +8,7 @@ Client->Server command types:
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
     get_state, get_version, get_imu, start_recording, stop_recording, append_record,
-    get_robot_name, set_robot_name, delete_hf_token,
+    get_robot_name, set_robot_name, delete_hf_token, get_telemetry, set_telemetry,
     subscribe_logs, unsubscribe_logs, subscribe_pose, unsubscribe_pose,
     restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
@@ -455,6 +455,21 @@ class SetFirstWakeUpCmd(BaseModel):
 
     type: Literal["set_first_wake_up"] = "set_first_wake_up"
     is_completed: bool = True
+
+
+# Anonymous telemetry choice. Remote counterpart of `GET/PUT /api/telemetry`
+# for clients that only reach the robot over the data channel.
+class GetTelemetryCmd(BaseModel):
+    """Query the telemetry choice."""
+
+    type: Literal["get_telemetry"] = "get_telemetry"
+
+
+class SetTelemetryCmd(BaseModel):
+    """Enable or disable telemetry. Disabling also forgets the robot id."""
+
+    type: Literal["set_telemetry"] = "set_telemetry"
+    enabled: bool
 
 
 class SetSpeechOffsetsCmd(BaseModel):
@@ -961,6 +976,8 @@ AnyCommand = Annotated[
     | DeleteHfTokenCmd
     | GetFirstWakeUpCmd
     | SetFirstWakeUpCmd
+    | GetTelemetryCmd
+    | SetTelemetryCmd
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
     | SubscribePoseCmd

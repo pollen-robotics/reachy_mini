@@ -34,7 +34,9 @@ Events are sent to [PostHog](https://posthog.com) EU Cloud (servers in the Europ
 
 ## Turning it off
 
-Set `telemetry_enabled` to `false` in the daemon config file, then restart the daemon:
+The simplest way is the **Share anonymous usage data** switch: in the desktop app's settings, or under **About & diagnostics** in the mobile app. It applies right away, no restart needed.
+
+You can also set `telemetry_enabled` to `false` in the daemon config file, then restart the daemon:
 
 - Reachy Mini Wireless: `/home/pollen/.config/reachy_mini/daemon_config.json`
 - Reachy Mini Lite: `daemon_config.json` in the `reachy_mini` folder of your user config directory (`~/.config/reachy_mini/` on Linux, `~/Library/Application Support/reachy_mini/` on macOS, `%LOCALAPPDATA%\reachy_mini\reachy_mini\` on Windows)

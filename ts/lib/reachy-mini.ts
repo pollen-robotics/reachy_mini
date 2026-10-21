@@ -58,6 +58,7 @@ import type {
     RequestOptions,
     RobotInfo,
     RobotState,
+    TelemetryStatus,
     SessionRejectError,
     StartDaemonUpdateOptions,
     SubscribeLogsOptions,
@@ -1535,6 +1536,22 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     /**
+     * Read the robot's anonymous telemetry choice. Resolves `null` when the
+     * channel isn't open or the daemon predates the `get_telemetry` command.
+     */
+    getTelemetry(): Promise<TelemetryStatus | null> {
+        return this._slotRoundtrip('telemetry', { type: 'get_telemetry' });
+    }
+
+    /**
+     * Enable or disable telemetry on the robot, applied live. Disabling also
+     * forgets the robot id. Resolves the stored choice, or `null` on error.
+     */
+    setTelemetry(enabled: boolean): Promise<TelemetryStatus | null> {
+        return this._slotRoundtrip('set_telemetry', { type: 'set_telemetry', enabled });
+    }
+
+    /**
      * Sign this robot out of Hugging Face: asks the daemon to delete its
      * stored HF token, which de-registers the robot from the central
      * signaling relay (it disappears from its owner's robot list until it
@@ -2320,6 +2337,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._pending.settleReplySlot(
                 'robot_name',
                 data.status === 'error' ? null : ((data.name as string | null) ?? null),
+            );
+            return;
+        }
+        if (data.command === 'get_telemetry' || data.command === 'set_telemetry') {
+            this._pending.settleReplySlot(
+                data.command === 'get_telemetry' ? 'telemetry' : 'set_telemetry',
+                data.status === 'error'
+                    ? null
+                    : { enabled: !!data.enabled, disabled_by_env: !!data.disabled_by_env },
             );
             return;
         }
