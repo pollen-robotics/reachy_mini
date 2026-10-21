@@ -1392,7 +1392,7 @@ def _settled_live_session(
     """Build an established, settled session whose link probe reports ``idle_s``."""
     relay, central, local = _relay_with_live_session(lock)
     relay._local_session_started_at["local-1"] = time.monotonic() - 60.0
-    relay.set_dc_idle_probe(lambda: idle_s)
+    relay.set_session_idle_probe(lambda _sid: idle_s)
     return relay, central, local
 
 
@@ -1478,7 +1478,8 @@ def test_a_young_session_is_never_taken_as_a_ghost() -> None:
     """A session still negotiating (no data channel yet) is protected."""
     lock = RobotAppLock()
     relay, central, _local = _relay_with_live_session(lock)
-    relay.set_dc_idle_probe(lambda: None)  # nothing received yet
+    # Quiet so far, but mapped moments ago: still negotiating.
+    relay.set_session_idle_probe(lambda _sid: 30.0)
 
     asyncio.run(
         relay._process_central_message(
@@ -1503,3 +1504,125 @@ def test_meta_reports_session_liveness_and_activity() -> None:
 
     relay._local_to_central_session["local-1"] = "s1"
     assert relay._build_producer_meta()["session_active"] is True
+
+
+def test_ghost_takeover_tells_central_the_old_session_was_superseded() -> None:
+    """Central (and the old client) learn the ghost was replaced."""
+    lock = RobotAppLock()
+    relay, central, _local = _settled_live_session(lock, idle_s=30.0)
+
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p2", "sessionId": "s9"}
+        )
+    )
+
+    assert {
+        "type": "endSession",
+        "sessionId": "s1",
+        "reason": "superseded",
+    } in central.sent
+
+
+def test_one_live_session_keeps_the_robot_even_beside_a_ghost() -> None:
+    """Liveness is per session: a live one blocks a takeover of the others."""
+    lock = RobotAppLock()
+    relay, central, local = _settled_live_session(lock, idle_s=0.0)
+    relay._local_to_central_session["local-2"] = "s2"
+    relay._central_to_local_session["s2"] = "local-2"
+    relay._local_session_started_at["local-2"] = time.monotonic() - 60.0
+    relay.set_session_idle_probe(lambda sid: 0.5 if sid == "local-1" else 30.0)
+
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p3", "sessionId": "s9"}
+        )
+    )
+
+    assert local.sent == []
+    assert set(relay._local_to_central_session) == {"local-1", "local-2"}
+    assert {
+        "type": "endSession",
+        "sessionId": "s9",
+        "reason": "robot_busy_local",
+    } in central.sent
+
+
+def test_an_unjudgeable_session_is_never_taken_as_a_ghost() -> None:
+    """A session the media server doesn't track (probe None) keeps the robot."""
+    lock = RobotAppLock()
+    relay, central, local = _settled_live_session(lock, idle_s=None)
+
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p2", "sessionId": "s9"}
+        )
+    )
+
+    assert local.sent == []
+    assert {
+        "type": "endSession",
+        "sessionId": "s9",
+        "reason": "robot_busy_local",
+    } in central.sent
+
+
+def test_failed_heartbeats_end_the_central_leg() -> None:
+    """Two failed heartbeats in a row return, triggering a central-only reconnect."""
+    relay = _make_relay()
+    relay._running = True
+    relay._state = RelayState.CONNECTED
+    relay._heartbeat_interval_seconds = 0.0
+    sent: list[dict[str, Any]] = []
+
+    async def failing_send(msg: dict[str, Any]) -> bool:
+        sent.append(msg)
+        return False
+
+    relay._send_to_central = failing_send  # type: ignore[method-assign]
+
+    asyncio.run(asyncio.wait_for(relay._heartbeat_loop(), timeout=2.0))
+
+    assert len(sent) == 2
+
+
+def test_close_connections_cancels_the_kept_local_handler() -> None:
+    """The local handler kept across central drops doesn't leak past a close."""
+
+    async def scenario() -> asyncio.Task[None]:
+        relay = _make_relay()
+        relay._local_task = asyncio.create_task(asyncio.sleep(3600))
+        task = relay._local_task
+        await relay._close_connections()
+        return task
+
+    task = asyncio.run(scenario())
+    assert task.cancelled()
+
+
+def test_rebuilt_local_websocket_drops_stale_sessions_and_the_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sessions mapped on a dead local websocket are forgotten on reconnect."""
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    lock = RobotAppLock()
+    relay, _central, _local = _relay_with_live_session(lock)
+
+    class _FakeHTTP:
+        async def close(self) -> None:
+            return None
+
+    relay._http_session = _FakeHTTP()  # type: ignore[assignment]
+
+    def refuse(*_a: Any, **_k: Any) -> Any:
+        raise OSError("local signalling down")
+
+    monkeypatch.setattr(relay_module.websockets, "connect", refuse)
+
+    with pytest.raises(OSError):
+        asyncio.run(relay._connect_local())
+
+    assert relay._local_to_central_session == {}
+    assert lock.status().state == RobotAppLockState.FREE
+    assert relay._build_producer_meta()["session_active"] is False

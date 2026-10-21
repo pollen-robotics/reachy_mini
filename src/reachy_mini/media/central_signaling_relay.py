@@ -65,10 +65,14 @@ SSE_READ_TIMEOUT = (
     60.0  # seconds - timeout for reading from SSE stream (should receive keepalive)
 )
 
-# Session liveness, judged on the peer-to-peer link rather than on central.
-# A live client polls state over the data channel every ~500 ms, so this
-# much inbound silence means nobody is driving the session any more.
-SESSION_LINK_IDLE_S = 2.5
+# Session liveness, judged on the peer-to-peer link rather than on central:
+# the client's RTCP (any client receiving media sends receiver reports,
+# at least every ~5 s even on the slowest RTCP schedule) or data-channel
+# messages. This much silence from both means the client is gone.
+SESSION_LINK_IDLE_S = 12.0
+# Consecutive failed heartbeats that end the central leg at once, instead
+# of waiting out SSE_READ_TIMEOUT on a stream that is already dead.
+HEARTBEAT_MAX_FAILURES = 2
 # A mapped session younger than this may still be negotiating (no data
 # channel yet): never treat it as a ghost.
 SESSION_SETTLE_S = 10.0
@@ -205,9 +209,10 @@ class CentralSignalingRelay:
         self._orphaned_local_sessions: set[str] = set()
         # When each local session was mapped (monotonic), see SESSION_SETTLE_S.
         self._local_session_started_at: dict[str, float] = {}
-        # Seconds since the media server last received anything on a data
-        # channel (None: never). Set by the daemon; see `set_dc_idle_probe`.
-        self._dc_idle_probe: Optional[Callable[[], Optional[float]]] = None
+        # Seconds since a session's client last showed a sign of life on the
+        # peer-to-peer link (None: untracked). Set by the daemon; see
+        # `set_session_idle_probe`.
+        self._session_idle_probe: Optional[Callable[[str], Optional[float]]] = None
         # Handler of the local GStreamer websocket. Outlives a central
         # reconnect so the sessions it carries survive (closing the
         # websocket makes webrtcsink drop every consumer on it).
@@ -673,8 +678,22 @@ class CentralSignalingRelay:
                     pass
                 self._local_ws = None
 
-            # Clear session state
+            # The local handler outlives central-only reconnects: cancel it
+            # here, or it (and its socket) leak past a stop.
+            local_task = self._local_task
             self._local_task = None
+            if (
+                local_task is not None
+                and not local_task.done()
+                and local_task is not asyncio.current_task()
+            ):
+                local_task.cancel()
+                try:
+                    await local_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+
+            # Clear session state
             self._orphaned_local_sessions.clear()
             self._local_session_started_at.clear()
             self._central_peer_id = None
@@ -798,6 +817,11 @@ class CentralSignalingRelay:
         except Exception as e:
             logger.error(f"[Central Relay] Unexpected error in run loop: {e}")
             raise
+        finally:
+            # A central-only drop leaves the local websocket (and its
+            # handler) open on purpose; a stop during the retry wait must
+            # still close it, or the socket outlives the daemon's relay.
+            await self._close_connections()
 
     async def _connect_and_relay(self) -> None:
         """Connect to both servers and relay messages."""
@@ -930,6 +954,24 @@ class CentralSignalingRelay:
         is closed and the error propagates to `_run_loop` (backoff).
         """
         assert self._http_session is not None
+        # Sessions mapped on a previous local websocket died with it
+        # (webrtcsink drops every consumer of a closed signalling
+        # connection): forget them, or we'd keep the robot lock and
+        # advertise `session_active` with nothing behind it.
+        if self._local_to_central_session or self._pending_central_sessions:
+            logger.info(
+                "[Central Relay] Local WebRTC connection rebuilt; dropping %d stale session(s)",
+                len(self._local_to_central_session)
+                + len(self._pending_central_sessions),
+            )
+            self._session_to_local_peer.clear()
+            self._pending_central_sessions.clear()
+            self._local_to_central_session.clear()
+            self._central_to_local_session.clear()
+            self._orphaned_local_sessions.clear()
+            self._local_session_started_at.clear()
+            if self._robot_app_lock is not None:
+                self._robot_app_lock.release_remote()
         self._set_state(RelayState.CONNECTING, "Connecting to local WebRTC...")
         logger.info(
             f"[Central Relay] Attempting to connect to local websocket: {self.local_uri}"
@@ -1126,6 +1168,7 @@ class CentralSignalingRelay:
             FIRST_COMPLETED race tears all sibling tasks down.
         """
         last_logged_interval: Optional[float] = None
+        failures = 0
 
         while self._running:
             interval = self._heartbeat_interval_seconds
@@ -1146,11 +1189,23 @@ class CentralSignalingRelay:
                 continue
 
             try:
-                await self._send_to_central(self._producer_status_payload())
+                ok = await self._send_to_central(self._producer_status_payload())
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 logger.debug("[Central Relay] heartbeat re-emit failed: %s", e)
+                ok = False
+            failures = 0 if ok else failures + 1
+            if failures >= HEARTBEAT_MAX_FAILURES:
+                # Central can't hear us (network gone, or it evicted us:
+                # "Connect to /events first"). Returning ends this task,
+                # which wins the FIRST_COMPLETED race: a central-only
+                # reconnect now instead of after SSE_READ_TIMEOUT.
+                logger.warning(
+                    "[Central Relay] %d heartbeats failed in a row; reconnecting to central",
+                    failures,
+                )
+                return
 
     async def _is_listed_as_producer(self) -> Optional[bool]:
         """Ask central whether we are still a registered producer.
@@ -1358,36 +1413,34 @@ class CentralSignalingRelay:
         finally:
             self._keep_sessions_on_central_loss()
 
-    def set_dc_idle_probe(self, probe: Callable[[], Optional[float]]) -> None:
-        """Give the relay a view on the peer-to-peer link's liveness.
+    def set_session_idle_probe(self, probe: Callable[[str], Optional[float]]) -> None:
+        """Give the relay a per-session view on the peer-to-peer link.
 
-        ``probe()`` returns the seconds since the media server last
-        received a data-channel message (``None`` if never). With it, the
-        session's liveness is decided by the link itself instead of by
-        central's signaling channel; without it the relay keeps its
-        conservative behaviour.
+        ``probe(local_session_id)`` returns the seconds since that
+        session's client last sent RTCP or a data-channel message
+        (``None``: session not tracked, ``inf``: the client said BYE).
+        With it, a session's liveness is decided by its own link instead
+        of by central's signaling channel; without it the relay keeps
+        its conservative behaviour.
         """
-        self._dc_idle_probe = probe
+        self._session_idle_probe = probe
 
-    def _link_state(self) -> str:
-        """``live`` / ``idle`` from the data channel, ``unknown`` without a probe."""
-        if self._dc_idle_probe is None:
+    def _link_state(self, local_session_id: str) -> str:
+        """``live`` / ``idle`` for one session, ``unknown`` when it can't be judged."""
+        if self._session_idle_probe is None:
             return "unknown"
         try:
-            idle = self._dc_idle_probe()
+            idle = self._session_idle_probe(local_session_id)
         except Exception:
             return "unknown"
-        if idle is not None and idle < SESSION_LINK_IDLE_S:
-            return "live"
-        return "idle"
+        if idle is None:
+            return "unknown"
+        return "live" if idle < SESSION_LINK_IDLE_S else "idle"
 
-    def _sessions_settled(self) -> bool:
-        """Tell whether every mapped session is past its negotiation window."""
-        now = time.monotonic()
-        return all(
-            now - self._local_session_started_at.get(local_id, 0.0) >= SESSION_SETTLE_S
-            for local_id in self._local_to_central_session
-        )
+    def _session_settled(self, local_session_id: str) -> bool:
+        """Tell whether a mapped session is past its negotiation window."""
+        started = self._local_session_started_at.get(local_session_id, 0.0)
+        return time.monotonic() - started >= SESSION_SETTLE_S
 
     def _keep_sessions_on_central_loss(self) -> None:
         """Keep established sessions alive while central is unreachable.
@@ -1430,9 +1483,17 @@ class CentralSignalingRelay:
         await self._end_local_sessions(list(self._orphaned_local_sessions), reason)
 
     async def _end_local_sessions(
-        self, local_session_ids: list[str], reason: str
+        self,
+        local_session_ids: list[str],
+        reason: str,
+        central_reason: Optional[str] = None,
     ) -> None:
-        """End the given local sessions and drop their bookkeeping."""
+        """End the given local sessions and drop their bookkeeping.
+
+        With ``central_reason``, central (and through it the old client)
+        is told too, so it clears the session instead of keeping a
+        phantom one.
+        """
         for local_session_id in local_session_ids:
             logger.info(
                 "[Central Relay] Ending session %s (%s)",
@@ -1445,13 +1506,21 @@ class CentralSignalingRelay:
             if central_session_id is not None:
                 self._central_to_local_session.pop(central_session_id, None)
                 self._session_to_local_peer.pop(central_session_id, None)
+                if central_reason is not None:
+                    await self._send_to_central(
+                        {
+                            "type": "endSession",
+                            "sessionId": central_session_id,
+                            "reason": central_reason,
+                        }
+                    )
             try:
                 await self._send_to_local(
                     {"type": "endSession", "sessionId": local_session_id}
                 )
             except Exception:
                 logger.warning(
-                    "[Central Relay] Failed to end orphaned session locally",
+                    "[Central Relay] Failed to end a session locally",
                     exc_info=True,
                 )
             self._orphaned_local_sessions.discard(local_session_id)
@@ -1504,8 +1573,8 @@ class CentralSignalingRelay:
                 f"[Central Relay] Error handling local GStreamer messages: {e}"
             )
 
-    async def _send_to_central(self, msg: dict[str, Any]) -> None:
-        """Send a message to the central server via HTTP POST."""
+    async def _send_to_central(self, msg: dict[str, Any]) -> bool:
+        """Send a message to the central server via HTTP POST; True on HTTP 200."""
         msg_type = msg.get("type", "?")
         if not self._http_session or not self.hf_token:
             logger.warning(
@@ -1514,7 +1583,7 @@ class CentralSignalingRelay:
                 bool(self._http_session),
                 bool(self.hf_token),
             )
-            return
+            return False
 
         # Token goes in the Authorization header only, not the URL.
         send_url = f"{self.central_uri}/send"
@@ -1539,14 +1608,16 @@ class CentralSignalingRelay:
                         response.status,
                         body,
                     )
-                else:
-                    logger.info("[Central Relay] _send_to_central OK type=%s", msg_type)
+                    return False
+                logger.info("[Central Relay] _send_to_central OK type=%s", msg_type)
+                return True
         except Exception as e:
             logger.error(
                 "[Central Relay] _send_to_central exception type=%s err=%s",
                 msg_type,
                 e,
             )
+            return False
 
     async def _send_to_local(self, msg: dict[str, Any]) -> None:
         """Send a message to local GStreamer signaling."""
@@ -1608,14 +1679,25 @@ class CentralSignalingRelay:
             # are never ghosts. Without a link probe, only sessions kept
             # across a central drop are superseded (previous behaviour).
             if self._local_to_central_session and not self._pending_central_sessions:
-                link = self._link_state()
-                if link == "idle" and self._sessions_settled():
-                    await self._end_local_sessions(
-                        list(self._local_to_central_session),
-                        "ghost: its data channel went quiet, superseded by a new session",
-                    )
-                elif link == "unknown" and self._orphaned_local_sessions:
-                    await self._end_orphaned_sessions("superseded by a new session")
+                if self._session_idle_probe is None:
+                    if self._orphaned_local_sessions:
+                        await self._end_orphaned_sessions("superseded by a new session")
+                else:
+                    ghosts = [
+                        local_id
+                        for local_id in self._local_to_central_session
+                        if self._link_state(local_id) == "idle"
+                        and self._session_settled(local_id)
+                    ]
+                    # Only when EVERY session is a ghost: one live (or
+                    # unjudgeable, or still negotiating) session keeps
+                    # the robot, and the request is refused below.
+                    if ghosts and len(ghosts) == len(self._local_to_central_session):
+                        await self._end_local_sessions(
+                            ghosts,
+                            "ghost: no RTCP nor data from its client, superseded",
+                            central_reason="superseded",
+                        )
 
             # Safety net: the central server is supposed to gate concurrent sessions,
             # but if one slips through (e.g. older central without the gate), enforce
@@ -1730,7 +1812,7 @@ class CentralSignalingRelay:
                 if (
                     kept_local is not None
                     and not msg.get("reason")
-                    and self._link_state() == "live"
+                    and self._link_state(kept_local) == "live"
                 ):
                     self._orphaned_local_sessions.add(kept_local)
                     logger.info(
