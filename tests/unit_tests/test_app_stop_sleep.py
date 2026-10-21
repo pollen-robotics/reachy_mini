@@ -22,23 +22,23 @@ def _fake_current_app() -> SimpleNamespace:
 
 
 def _manager_with_head_pose(head_pose: np.ndarray) -> tuple[AppManager, AsyncMock]:
-    goto_target = AsyncMock()
+    reset_to_init = AsyncMock()
     backend = SimpleNamespace(
         get_current_head_pose=lambda: head_pose,
         SLEEP_HEAD_POSE=Backend.SLEEP_HEAD_POSE,
-        goto_target=goto_target,
+        reset_to_init=reset_to_init,
         set_motor_control_mode=MagicMock(),
     )
     mngr = AppManager(daemon=SimpleNamespace(backend=backend))
     mngr.current_app = _fake_current_app()  # type: ignore[assignment]
-    return mngr, goto_target
+    return mngr, reset_to_init
 
 
 @pytest.mark.asyncio
 async def test_stop_leaves_robot_asleep_when_in_sleep_pose() -> None:
-    mngr, goto_target = _manager_with_head_pose(Backend.SLEEP_HEAD_POSE.copy())
+    mngr, reset_to_init = _manager_with_head_pose(Backend.SLEEP_HEAD_POSE.copy())
     await mngr.stop_current_app()
-    goto_target.assert_not_awaited()
+    reset_to_init.assert_not_awaited()
     # left asleep, and made limp
     mngr.daemon.backend.set_motor_control_mode.assert_called_once_with(
         MotorControlMode.Disabled
@@ -48,7 +48,8 @@ async def test_stop_leaves_robot_asleep_when_in_sleep_pose() -> None:
 
 @pytest.mark.asyncio
 async def test_stop_returns_to_zero_when_awake() -> None:
-    mngr, goto_target = _manager_with_head_pose(np.eye(4))
+    mngr, reset_to_init = _manager_with_head_pose(np.eye(4))
     await mngr.stop_current_app()
-    goto_target.assert_awaited_once()
+    reset_to_init.assert_awaited_once()
     assert mngr.current_app is None
+

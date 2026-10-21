@@ -9,11 +9,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
-import numpy as np
 import psutil
 from pydantic import BaseModel
 
-from reachy_mini.daemon.backend.robot import RobotBackend
 from reachy_mini.daemon.telemetry import app_id_for, telemetry
 from reachy_mini.io.protocol import MotorControlMode
 from reachy_mini.utils.interpolation import distance_between_poses
@@ -387,23 +385,13 @@ class AppManager:
                     "Robot is asleep; leaving it limp in the sleep pose."
                 )
             else:
-                if isinstance(backend, RobotBackend):
-                    backend.enable_motors()
-
                 try:
-                    from reachy_mini.reachy_mini import (
-                        INIT_ANTENNAS_JOINT_POSITIONS,
-                        INIT_HEAD_POSE,
-                    )
-
                     self.logger.getChild("runner").info(
                         "Returning robot to zero position"
                     )
-                    await backend.goto_target(
-                        head=INIT_HEAD_POSE,
-                        antennas=np.array(INIT_ANTENNAS_JOINT_POSITIONS),
-                        duration=1.0,
-                    )
+                    # Not a bare goto: the app may have left gravity
+                    # compensation, limp motors or head tracking behind.
+                    await backend.reset_to_init()
                 except Exception as e:
                     self.logger.getChild("runner").warning(
                         f"Could not return to zero position: {e}"
