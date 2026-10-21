@@ -10,17 +10,17 @@
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 113840,
-  "createdAt": 1792575629598,
+  "duration": 114993,
+  "createdAt": 1792577177654,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "0caa07ac-240c-4ebf-80ff-f4d678e8577d",
+    "reportId": "16578d11-9690-459c-b256-794961509dd5",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/39578351553",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/39581601865",
   "href": "awesome/",
   "coverage": 60
 }
