@@ -1,0 +1,1 @@
+ERROR    logs_job_3508c79c-4236-475b-b092-533420fdd92b:bg_job_register.py:105 Job 'remove' failed with error: uninstall failed
