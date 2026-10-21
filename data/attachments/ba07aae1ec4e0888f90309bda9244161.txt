@@ -1,0 +1,29 @@
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:287 [Central Relay] Starting relay service...
+DEBUG    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:268 [Central Relay] State transition: stopped -> connecting | Starting relay service...
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:383 [Central Relay] Thread starting, creating event loop...
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:307 [Central Relay] Relay thread started: Thread-364 (_run_in_thread)
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:742 [Central Relay] _run_loop started
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:747 [Central Relay] Starting connection attempts
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:838 [Central Relay] _connect_and_relay() starting
+DEBUG    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:268 [Central Relay] State transition: connecting -> connecting | Connecting to local WebRTC...
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:986 [Central Relay] Attempting to connect to local websocket: ws://127.0.0.1:38237/local
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:998 [Central Relay] Local websocket connection established
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1019 [Central Relay] Waiting for welcome message from local websocket...
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1023 [Central Relay] Local message handler task started
+DEBUG    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1871 [Central Relay] Received from local GStreamer: type=welcome
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1876 [Central Relay] Connected to local GStreamer signaling server peer_id=local
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1029 [Central Relay] Local WebRTC connection verified (welcome received)
+DEBUG    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:268 [Central Relay] State transition: connecting -> connecting | Connecting to central server...
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1186 [Central Relay] heartbeat loop interval=5.0s
+DEBUG    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1645 [Central Relay] Received from central server: type=welcome
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1651 [Central Relay] central welcome received peer_id=peer; registering as producer name='reachymini', heartbeat=5.0s
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1622 [Central Relay] _send_to_central OK type=setPeerStatus
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:260 [Central Relay] State transition: connecting -> connected | Remote access enabled as 'reachymini'
+DEBUG    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1249 [Central Relay] producer health check returned HTTP 308
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:397 [Central Relay] Stopping relay service...
+DEBUG    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1051 [Central Relay] Token update signal received, closing connections
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:914 [Central Relay] Local WebSocket handler exited, will reconnect
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:914 [Central Relay] Token update triggered reconnect
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:266 [Central Relay] State transition: connected -> reconnecting | Connection lost, reconnecting...
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:391 [Central Relay] Thread event loop finished
+INFO     reachy_mini.media.central_signaling_relay:central_signaling_relay.py:270 [Central Relay] State transition: reconnecting -> stopped | Relay stopped
