@@ -128,7 +128,7 @@ new ReachyMini({
 | `setBodyYawDeg(yaw)` | `boolean` | Set body yaw in degrees (wraps `setTarget`) |
 | `startHeadTracking(weight?)` / `stopHeadTracking()` | `boolean` | Enable / disable daemon-side visual head tracking. `weight` in `[0,1]` blends tracking with app motion (default `1.0`) |
 | `getTrackedFace()` | `Promise<FaceTarget\|null>` | Latest face seen by head tracking — `{ detected, x, y, roll }` |
-| `setMotorMode(mode)` | `boolean` | `"enabled"` (position control), `"disabled"` (limp), or `"gravity_compensation"` (float by hand) |
+| `setMotorMode(mode)` | `boolean` | `"enabled"` (position control), `"disabled"` (limp), or `"gravity_compensation"` (float by hand — needs a daemon running the Placo kinematics engine, which stock Wireless robots don't ship; otherwise refused with an `error` event, so use `"disabled"` and support the head) |
 | `setMotorTorque(on, ids?)` | `boolean` | Toggle torque; per-motor when `ids` is given, else global |
 | `wakeUp(opts?)` / `gotoSleep(opts?)` | `Promise<void>` | Play the wake-up / sleep trajectory; resolves on daemon completion (rejects after `opts.timeoutMs`, default 8000). `wakeUp` enables motors first |
 | `isAwake()` | `boolean` | Awake state derived from the cached `motor_mode` (`gravity_compensation` counts as awake) |
