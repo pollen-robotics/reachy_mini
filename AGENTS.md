@@ -266,6 +266,10 @@ For coordinate systems and architecture details, see `docs/source/SDK/core-conce
 
 For platform-specific guides (Lite, Wireless, Simulation), see `docs/source/platforms/`.
 
+**Changing the daemon itself** (REST API, JSON-RPC relay, app manager, media):
+see [`docs/AGENT_TESTING.md`](docs/AGENT_TESTING.md) for unit tests, putting a branch
+on a robot, and observing it.
+
 **Releasing the package:** see [`RELEASE.md`](RELEASE.md) — the `Release` workflow
 (`workflow_dispatch`, modes `minor-prerelease` / `minor-release` / `patch-release`)
 handles version bump, tag, PyPI publish, AI release notes, and downstream RC testing.

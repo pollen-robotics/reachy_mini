@@ -57,6 +57,8 @@ For instance
 pytest -m "audio"
 ```
 
+To test a daemon change on a physical robot (putting a branch on it, reading its logs and state, driving the JSON-RPC relay), see [`AGENT_TESTING.md`](AGENT_TESTING.md).
+
 ## Issues and Pull Requests
 
 Write concisely and get to the point. Issues, PR descriptions and review comments are read by humans, so no walls of text, no feature tours, no restating the diff in prose. If a sentence doesn't help the reader, cut it.
