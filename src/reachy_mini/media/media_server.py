@@ -341,6 +341,7 @@ class GstMediaServer:
         # `session_idle_seconds`.
         self._session_activity: Dict[str, float] = {}
         self._session_bye: set[str] = set()
+        self._session_rtcp_seen: set[str] = set()
         self._session_activity_lock = Lock()
         self._on_session_failed: Optional[
             Callable[[str, str, Dict[str, Any]], None]
@@ -2218,8 +2219,16 @@ class GstMediaServer:
                 self._session_activity[session_id] = time.monotonic()
 
     def _on_session_rtcp(
-        self, _rtpbin: Gst.Element, _session: int, _ssrc: int, session_id: str
+        self, _rtpbin: Gst.Element, _session: int, ssrc: int, session_id: str
     ) -> None:
+        with self._session_activity_lock:
+            first = session_id not in self._session_rtcp_seen
+            if first and session_id in self._session_activity:
+                self._session_rtcp_seen.add(session_id)
+        if first:
+            self._logger.info(
+                f"session {session_id}: client RTCP flowing (ssrc {ssrc})"
+            )
         self._mark_session_alive(session_id)
 
     def _on_session_bye(
@@ -2238,6 +2247,7 @@ class GstMediaServer:
         with self._session_activity_lock:
             self._session_activity.pop(session_id, None)
             self._session_bye.discard(session_id)
+            self._session_rtcp_seen.discard(session_id)
 
     def _on_data_channel_error(
         self, channel: Gst.Element, error: str, peer_id: str

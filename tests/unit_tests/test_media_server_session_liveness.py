@@ -10,6 +10,7 @@ as gone once it sent an RTCP BYE.
 
 from __future__ import annotations
 
+import logging
 import math
 import time
 import types
@@ -25,7 +26,9 @@ def _server() -> GstMediaServer:
     server = GstMediaServer.__new__(GstMediaServer)
     server._session_activity = {}
     server._session_bye = set()
+    server._session_rtcp_seen = set()
     server._session_activity_lock = Lock()
+    server._logger = logging.getLogger("test")
     server.close = lambda: None  # type: ignore[method-assign]  # nothing to tear down
     return server
 
