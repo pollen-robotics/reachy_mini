@@ -1,1 +1,1 @@
-{"id":"cb37ed0baa54401339044e332dcaf890.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_device_detection.TestParser#test_windows_utf16_parsing","name":"test_windows_utf16_parsing","status":"passed","testResultsByEnv":{"default":"e110af59a3f5a6e79e45014314885f0d"}}
+{"id":"cb37ed0baa54401339044e332dcaf890.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_device_detection.TestParser#test_windows_utf16_parsing","name":"test_windows_utf16_parsing","status":"passed","testResultsByEnv":{"default":"3a2a1d7f85e59a940f5916b2e5fdf3c6"}}
