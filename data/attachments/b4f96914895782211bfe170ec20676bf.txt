@@ -1,1 +1,0 @@
-INFO     logs_job_fda517f2-f422-4d80-b44d-11ca830e9058:bg_job_register.py:100 Job 'update' completed successfully
