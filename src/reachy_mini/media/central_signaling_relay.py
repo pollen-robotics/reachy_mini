@@ -783,6 +783,7 @@ class CentralSignalingRelay:
 
             while self._running:
                 had_exception = False
+                attempt_started = time.monotonic()
                 try:
                     await self._connect_and_relay()
                 except asyncio.CancelledError:
@@ -838,9 +839,15 @@ class CentralSignalingRelay:
                 if (
                     self._running
                     and not had_exception
-                    and self._state == RelayState.ERROR
+                    and self._state != RelayState.WAITING_FOR_TOKEN
+                    and (
+                        self._state == RelayState.ERROR
+                        or time.monotonic() - attempt_started < RECONNECT_INTERVAL
+                    )
                 ):
-                    # Clean return but ERROR (e.g. 401) - back off like a failure.
+                    # Clean return but ERROR (e.g. 401), or the attempt died at
+                    # once (central closing on connect, a handler raising every
+                    # time): back off like a failure instead of spinning.
                     had_exception = True
                     self._connection_attempts += 1
 

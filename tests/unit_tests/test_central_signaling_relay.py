@@ -590,6 +590,38 @@ def test_run_loop_backs_off_when_connect_returns_in_error_state(
     assert elapsed >= 0.1
 
 
+def test_run_loop_backs_off_when_connect_ends_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An attempt that dies right away (no ERROR state) still gets a backoff."""
+    monkeypatch.setattr(
+        "reachy_mini.media.central_signaling_relay.RECONNECT_INTERVAL", 0.05
+    )
+
+    relay = _make_relay()
+    relay._running = True
+
+    call_count = 0
+
+    async def fake_connect_and_relay() -> None:
+        nonlocal call_count
+        call_count += 1
+        # e.g. central accepts the SSE stream and closes it at once.
+        relay._set_state(RelayState.RECONNECTING, "Connection lost, reconnecting...")
+        if call_count >= 3:
+            relay._running = False
+
+    relay._connect_and_relay = fake_connect_and_relay  # type: ignore[method-assign]
+
+    start = time.monotonic()
+    asyncio.run(relay._run_loop())
+    elapsed = time.monotonic() - start
+
+    assert call_count == 3
+    assert relay._connection_attempts == 2
+    assert elapsed >= 0.1
+
+
 def test_connect_after_token_update_does_not_tear_itself_down() -> None:
     """A login's token signal is consumed, not replayed on every reconnect.
 
