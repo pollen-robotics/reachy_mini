@@ -211,6 +211,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _sseAbortController: AbortController | null = null;
     /** The open in flight (fetch → welcome): a second open joins it. */
     private _signalingOpening: Promise<void> | null = null;
+    private _signalingOpeningController: AbortController | null = null;
 
     // ─── WebRTC ──────────────────────────────────────────────────────────
     _pc: RTCPeerConnection | null = null;
@@ -468,9 +469,17 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private _openSignaling(): Promise<void> {
         // Two opens at once (an app reconnect racing the supervisor's) would
         // run two streams, each handling every message: join the first.
-        if (this._signalingOpening) return this._signalingOpening;
+        // Never join an open that was aborted on purpose (disconnect(), a
+        // dropped background retry): it is about to reject, and the caller
+        // asked for a fresh connection.
+        if (this._signalingOpening && !this._signalingOpeningController?.signal.aborted) {
+            return this._signalingOpening;
+        }
         const opening = this._openSignalingOnce().finally(() => {
-            if (this._signalingOpening === opening) this._signalingOpening = null;
+            if (this._signalingOpening === opening) {
+                this._signalingOpening = null;
+                this._signalingOpeningController = null;
+            }
         });
         this._signalingOpening = opening;
         return opening;
@@ -478,6 +487,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     private async _openSignalingOnce(): Promise<void> {
         this._sseAbortController = new AbortController();
+        this._signalingOpeningController = this._sseAbortController;
         const openController = this._sseAbortController;
         let openTimedOut = false;
         const openTimer = setTimeout(() => {
@@ -529,6 +539,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     // Fired far later than asked: the page was frozen (screen
                     // lock, background tab), and bytes buffered meanwhile have
                     // not been read yet. Give them a moment before judging.
+                    // While timers stay heavily throttled (hidden tab) this can
+                    // re-arm repeatedly; a dead stream is then aborted within
+                    // the grace once the page runs normally again.
                     if (Date.now() - armedAt > delayMs + SIGNALING_FROZEN_SLACK_MS) {
                         armStallTimer(SIGNALING_FROZEN_GRACE_MS);
                         return;
@@ -964,6 +977,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     // before central answered: the reply is not the current
                     // dial's. Retire its id and free the robot-side slot.
                     if (r?.sessionId) {
+                        // Should a stray frame have made it current, drop it too.
+                        if (this._sessionId === r.sessionId) this._sessionId = null;
                         this._retireSession(r.sessionId);
                         void this._sendToServer({ type: 'endSession', sessionId: r.sessionId, reason: 'client_stop' });
                     }

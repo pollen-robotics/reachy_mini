@@ -149,6 +149,23 @@ describe('signaling opens', () => {
         r.disconnect();
     });
 
+    it('connect() right after disconnect() opens a fresh stream', async () => {
+        const fetchMock = vi.fn(async (_u: string, init?: RequestInit) =>
+            streamResponse(init, WELCOME));
+        vi.stubGlobal('fetch', fetchMock);
+        const r = new ReachyMini();
+        (r as unknown as Internals)._sendToServer = vi.fn().mockResolvedValue(null);
+
+        const first = r.connect('hf').catch(() => 'aborted');
+        r.disconnect(); // aborts the open in flight
+        await r.connect('hf');
+        await first;
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(r.state).toBe('connected');
+        r.disconnect();
+    });
+
     it('a stall timer fired late by a frozen page re-judges after a grace', async () => {
         let push!: (line: string) => void;
         vi.stubGlobal(
