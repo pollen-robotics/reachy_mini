@@ -127,6 +127,9 @@ const POSE_STREAM_FRESH_MS = 750;
  */
 const PEER_LINK_LIVE_MS = 2500;
 
+/** How many closed session ids to remember, to ignore their late endSession. */
+const RETIRED_SESSIONS_MAX = 8;
+
 /**
  * Central pings an idle signaling stream every 30 s. Silence well past that
  * means the stream stalled without closing (seen after a phone screen lock or
@@ -196,6 +199,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     _pc: RTCPeerConnection | null = null;
     private _dc: RTCDataChannel | null = null;
     private _sessionId: string | null = null;
+    /** Our session after central dropped it while the peer link lived on. */
+    private _staleSessionId: string | null = null;
+    /** Sessions we closed: a late endSession for one must not end the next. */
+    private _retiredSessionIds = new Set<string>();
     private _selectedRobotId: string | null = null;
     private _pendingRemoteIce: NonNullable<SignalingMessage['ice']>[] = [];
 
@@ -710,6 +717,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (dialedIdentity) this._dialedRobotIdentity = dialedIdentity;
         else if (this._dialedRobotId !== robotId) this._dialedRobotIdentity = null;
         this._dialedRobotId = robotId;
+        // A new dial owns no session id until central's reply: anything
+        // left over from an earlier attempt is retired, so its late
+        // endSession cannot end this one, nor make us drop this one's own.
+        this._retireSession(this._sessionId);
+        this._sessionId = null;
+        this._retireSession(this._staleSessionId);
+        this._staleSessionId = null;
         this._iceConnected = false;
         this._dcOpen = false;
         this._micSupported = false;
@@ -927,7 +941,33 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._dcOpen = false;
         const sessionId = this._sessionId;
         this._sessionId = null;
+        this._retireSession(sessionId);
+        this._retireSession(this._staleSessionId);
+        this._staleSessionId = null;
         return sessionId;
+    }
+
+    private _retireSession(sessionId: string | null): void {
+        if (!sessionId) return;
+        this._retiredSessionIds.add(sessionId);
+        // Only recent ones matter: drop the oldest beyond a handful.
+        if (this._retiredSessionIds.size > RETIRED_SESSIONS_MAX) {
+            const oldest = this._retiredSessionIds.values().next().value;
+            if (oldest !== undefined) this._retiredSessionIds.delete(oldest);
+        }
+    }
+
+    /**
+     * Whether an endSession is about another session than ours: one we
+     * already closed (a re-dial's old session, ended late by the robot as
+     * superseded), or any id but the current one. With no id known yet
+     * (startSession in flight) it is ours: rejections arrive that way.
+     */
+    private _isOtherSession(sessionId: string | undefined): boolean {
+        if (!sessionId) return false;
+        if (this._retiredSessionIds.has(sessionId)) return true;
+        const current = this._sessionId ?? this._staleSessionId;
+        return current !== null && sessionId !== current;
     }
 
     private _failSessionRejected(msg: SignalingMessage): void {
@@ -2196,6 +2236,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     private _handleEndSession(msg: SignalingMessage): void {
+        if (this._isOtherSession(msg.sessionId)) {
+            log.info(`ignoring endSession for session ${msg.sessionId}: not the current one`);
+            return;
+        }
         const reason = msg.reason;
         const friendly = reason === 'robot_busy_local_app'
             ? 'Robot is busy: a local Python app is running'
@@ -2225,6 +2269,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._dcOpen = false;
             this._micMuted = true;
             this._micSupported = false;
+            // Same bookkeeping as _closeTransport: this id is over.
+            this._retireSession(this._sessionId);
+            this._sessionId = null;
             const reject = this._sessionReject;
             this._sessionResolve = null;
             this._sessionReject = null;
@@ -2239,6 +2286,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             // session lives as long as the peer link does.
             if (!reason && this._peerLinkLive()) {
                 log.info('central ended the session but the peer link is live; keeping it');
+                this._staleSessionId = this._sessionId;
                 this._sessionId = null; // stale on central
                 this._emit('signalingSessionEnded', { reason: null });
                 return;
