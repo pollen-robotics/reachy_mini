@@ -93,6 +93,11 @@ CENTRAL_SEND_TIMEOUT_S = 5.0
 # How long `stop()` waits for central to hear that our sessions are over.
 # Bounded so an unreachable central cannot hold up a daemon shutdown.
 STOP_END_SESSIONS_TIMEOUT_S = 2.0
+# How long a local app's start waits for the remote sessions it evicts to be
+# torn down. Bounded: if the relay loop exits before running the tear-down,
+# the future never resolves and the app start (holding the lock as
+# LOCAL_APP) would hang, refusing every later start until a daemon restart.
+EVICTION_TIMEOUT_S = 8.0
 # A mapped session younger than this may still be negotiating (no data
 # channel yet): never treat it as a ghost.
 SESSION_SETTLE_S = 10.0
@@ -344,7 +349,14 @@ class CentralSignalingRelay:
         # Wait for the tear-down to complete so AppManager knows the remote
         # peer has been notified before the local app starts up.
         try:
-            await asyncio.wrap_future(fut)
+            await asyncio.wait_for(asyncio.wrap_future(fut), EVICTION_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            fut.cancel()
+            logger.warning(
+                "[Central Relay] Remote eviction tear-down did not finish in %.0f s; "
+                "starting the local app anyway",
+                EVICTION_TIMEOUT_S,
+            )
         except Exception:
             logger.warning(
                 "[Central Relay] Remote eviction tear-down raised", exc_info=True

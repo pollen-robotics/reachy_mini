@@ -1349,6 +1349,32 @@ def test_stop_does_not_wait_on_an_unreachable_central(
     assert relay.state == RelayState.STOPPED
 
 
+def test_remote_eviction_never_hangs_the_local_app_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tear-down that never completes cannot hold up a local app's start.
+
+    If the relay loop exits before running it, the eviction future never
+    resolves: the app start, already holding the lock, used to hang there
+    and every later start was refused until a daemon restart.
+    """
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    monkeypatch.setattr(relay_module, "EVICTION_TIMEOUT_S", 0.2)
+    relay = _make_relay()
+
+    async def never_finishes(reason: str) -> None:
+        await asyncio.sleep(30)
+
+    relay._tear_down_active_sessions = never_finishes  # type: ignore[method-assign]
+    with _RunningLoop() as loop:
+        relay._thread_loop = loop
+        start = time.monotonic()
+        asyncio.run(relay._handle_remote_eviction())
+        elapsed = time.monotonic() - start
+    assert elapsed < 2.0
+
+
 def test_stop_without_sessions_sends_nothing() -> None:
     """No session, nothing to tell central."""
     relay, central, _local = _make_relay_with_journals()
