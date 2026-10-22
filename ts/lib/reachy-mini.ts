@@ -128,6 +128,14 @@ const POSE_STREAM_FRESH_MS = 750;
 const PEER_LINK_LIVE_MS = 2500;
 
 /**
+ * Central pings an idle signaling stream every 30 s. Silence well past that
+ * means the stream stalled without closing (seen after a phone screen lock or
+ * a network drop): it would never deliver again while our POSTs still go out,
+ * so every startSession times out unanswered. Abort it and reconnect instead.
+ */
+const SIGNALING_STALL_MS = 75_000;
+
+/**
  * A robot's stable identity across central re-registrations (its peer id
  * changes each time): `install_id`, else `hardware_id`. Never the name,
  * which users often leave at the default and share across robots.
@@ -460,11 +468,23 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             const decoder = new TextDecoder();
             let buffer = '';
 
+            const controller = this._sseAbortController;
+            let stallTimer: ReturnType<typeof setTimeout> | null = null;
+            const armStallTimer = (): void => {
+                if (stallTimer !== null) clearTimeout(stallTimer);
+                stallTimer = setTimeout(() => {
+                    log.warn('signaling stream silent for too long; reconnecting');
+                    controller?.abort();
+                }, SIGNALING_STALL_MS);
+            };
+
             const readLoop = async (): Promise<void> => {
                 try {
+                    armStallTimer();
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
+                        armStallTimer();
                         buffer += decoder.decode(value, { stream: true });
                         const lines = buffer.split('\n');
                         buffer = lines.pop() ?? '';
@@ -502,6 +522,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                         this._emit('error', { source: 'signaling', error: e as Error });
                     }
                     if (!welcomed) { reject(e as Error); return; }
+                } finally {
+                    if (stallTimer !== null) clearTimeout(stallTimer);
                 }
                 if (this._state === 'streaming') {
                     // Signaling is only needed to SET UP a session: a live
