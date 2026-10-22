@@ -78,6 +78,10 @@ SESSION_LINK_IDLE_S = 12.0
 # Consecutive failed heartbeats that end the central leg at once, instead
 # of waiting out SSE_READ_TIMEOUT on a stream that is already dead.
 HEARTBEAT_MAX_FAILURES = 2
+# A local startSession the GStreamer signalling server has not answered with
+# sessionStarted within this long is considered lost. Until then no second
+# start goes out for the pending requests it covers (see `_start_pending_locally`).
+LOCAL_START_ANSWER_S = 5.0
 # Per-request budget for POST /send. The session's default is 300 s, and a
 # request on a kept-alive connection whose packets are silently dropped
 # (Wi-Fi stall, route gone) hangs for all of it: heartbeats would never
@@ -87,6 +91,11 @@ CENTRAL_SEND_TIMEOUT_S = 5.0
 # How long `stop()` waits for central to hear that our sessions are over.
 # Bounded so an unreachable central cannot hold up a daemon shutdown.
 STOP_END_SESSIONS_TIMEOUT_S = 2.0
+# How long a local app's start waits for the remote sessions it evicts to be
+# torn down. Bounded: if the relay loop exits before running the tear-down,
+# the future never resolves and the app start (holding the lock as
+# LOCAL_APP) would hang, refusing every later start until a daemon restart.
+EVICTION_TIMEOUT_S = 8.0
 # A mapped session younger than this may still be negotiating (no data
 # channel yet): never treat it as a ghost.
 SESSION_SETTLE_S = 10.0
@@ -218,6 +227,12 @@ class CentralSignalingRelay:
         self._central_to_local_session: dict[
             str, str
         ] = {}  # central_session_id -> local_session_id
+        # Send times of local startSessions not answered yet (sessionStarted).
+        # Each startSession from central triggers a local `list`, and every
+        # list reply used to start a local session for every pending
+        # request: two requests a millisecond apart started two GStreamer
+        # sessions for one central session.
+        self._local_starts_unanswered: list[float] = []
 
         # Local sessions kept alive across a central-only drop (see
         # `_keep_sessions_on_central_loss`). Their media is peer-to-peer
@@ -323,33 +338,61 @@ class CentralSignalingRelay:
         Runs on the main asyncio loop (caller of ``acquire_local_evicting_remote``)
         but dispatches the actual work onto the relay's thread loop.
         """
-        if self._thread_loop is None or not self._thread_loop.is_running():
+        loop = self._thread_loop
+        if loop is None or not loop.is_running():
             logger.debug(
                 "[Central Relay] Eviction requested but relay loop not running; nothing to do"
             )
             return
 
+        # The sessions to evict are the ones up NOW: a tear-down that runs
+        # late (see the shield below) must not end a session accepted after
+        # the local app took the robot. dict/list .copy() is atomic under the
+        # GIL, so these reads from the main thread are safe.
+        evicted = set(self._central_to_local_session.copy()) | set(
+            self._pending_central_sessions.copy()
+        )
         fut = asyncio.run_coroutine_threadsafe(
-            self._tear_down_active_sessions(reason="local_app_started"),
-            self._thread_loop,
+            self._tear_down_active_sessions(reason="local_app_started", only=evicted),
+            loop,
         )
         # Wait for the tear-down to complete so AppManager knows the remote
         # peer has been notified before the local app starts up.
+        # Shielded: past the bound we stop WAITING, but the tear-down keeps
+        # running, so it still ends the remote session on both sides rather
+        # than leaving it half torn down next to the local app.
         try:
-            await asyncio.wrap_future(fut)
+            await asyncio.wait_for(
+                asyncio.shield(asyncio.wrap_future(fut)), EVICTION_TIMEOUT_S
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[Central Relay] Remote eviction tear-down still running after %.0f s; "
+                "starting the local app anyway",
+                EVICTION_TIMEOUT_S,
+            )
         except Exception:
             logger.warning(
                 "[Central Relay] Remote eviction tear-down raised", exc_info=True
             )
 
-    async def _tear_down_active_sessions(self, reason: str) -> None:
-        """End every active/pending remote session and notify both sides.
+    async def _tear_down_active_sessions(
+        self, reason: str, only: Optional[set[str]] = None
+    ) -> None:
+        """End remote sessions and notify both sides.
+
+        With ``only`` (central session ids), end just those and leave any
+        session that started since alone; otherwise end every active and
+        pending session and clear all bookkeeping.
 
         Runs on the relay's thread event loop.
         """
+        central_ids = [
+            c for c in self._central_to_local_session if only is None or c in only
+        ]
         # Notify central so it clears its own session_id on the producer
         # and sends endSession to the remote consumer.
-        for central_session_id in list(self._central_to_local_session.keys()):
+        for central_session_id in central_ids:
             logger.info(
                 "[Central Relay] Tearing down central session %s (reason=%s)",
                 central_session_id,
@@ -370,7 +413,12 @@ class CentralSignalingRelay:
                 )
 
         # Notify local GStreamer so it closes its RTCPeerConnection.
-        for local_session_id in list(self._local_to_central_session.keys()):
+        local_ids = [
+            local
+            for local, central in self._local_to_central_session.items()
+            if only is None or central in central_ids
+        ]
+        for local_session_id in local_ids:
             try:
                 await self._send_to_local(
                     {"type": "endSession", "sessionId": local_session_id}
@@ -381,10 +429,26 @@ class CentralSignalingRelay:
                     exc_info=True,
                 )
 
+        if only is not None:
+            # Drop just the ended sessions' bookkeeping.
+            for central_session_id in central_ids:
+                self._central_to_local_session.pop(central_session_id, None)
+                self._session_to_local_peer.pop(central_session_id, None)
+            for local_session_id in local_ids:
+                self._local_to_central_session.pop(local_session_id, None)
+                self._local_session_started_at.pop(local_session_id, None)
+                self._orphaned_local_sessions.discard(local_session_id)
+            for central_session_id in only:
+                if central_session_id in self._pending_central_sessions:
+                    self._pending_central_sessions.remove(central_session_id)
+                    self._session_to_local_peer.pop(central_session_id, None)
+            return
+
         # Clear all session bookkeeping.
         self._orphaned_local_sessions.clear()
         self._local_session_started_at.clear()
         self._pending_central_sessions.clear()
+        self._local_starts_unanswered.clear()
         self._local_to_central_session.clear()
         self._central_to_local_session.clear()
         self._session_to_local_peer.clear()
@@ -742,6 +806,7 @@ class CentralSignalingRelay:
             self._local_peer_id = None
             self._session_to_local_peer.clear()
             self._pending_central_sessions.clear()
+            self._local_starts_unanswered.clear()
             self._local_to_central_session.clear()
             self._central_to_local_session.clear()
 
@@ -1029,6 +1094,7 @@ class CentralSignalingRelay:
             )
             self._session_to_local_peer.clear()
             self._pending_central_sessions.clear()
+            self._local_starts_unanswered.clear()
             self._local_to_central_session.clear()
             self._central_to_local_session.clear()
             self._orphaned_local_sessions.clear()
@@ -1528,6 +1594,7 @@ class CentralSignalingRelay:
         for central_session_id in self._pending_central_sessions:
             self._session_to_local_peer.pop(central_session_id, None)
         self._pending_central_sessions.clear()
+        self._local_starts_unanswered.clear()
         if self._local_to_central_session:
             newly_kept = (
                 set(self._local_to_central_session) - self._orphaned_local_sessions
@@ -1921,6 +1988,34 @@ class CentralSignalingRelay:
             # Another peer changed status - ignore for producers
             pass
 
+    async def _start_pending_locally(self) -> None:
+        """Send one local startSession per pending request not covered yet.
+
+        Pending requests are interchangeable (the first sessionStarted maps
+        the first pending one), so a start still unanswered covers one
+        pending request whichever it was sent for. Starts unanswered past
+        LOCAL_START_ANSWER_S are dropped from the count, in case the local
+        server lost them.
+        """
+        if not self._local_producer_id:
+            return
+        now = time.monotonic()
+        self._local_starts_unanswered = [
+            t for t in self._local_starts_unanswered if now - t < LOCAL_START_ANSWER_S
+        ]
+        pending = list(self._pending_central_sessions)
+        for central_session_id in pending[len(self._local_starts_unanswered) :]:
+            self._local_starts_unanswered.append(now)
+            logger.info(
+                f"[Central Relay] Starting local session for pending central_session={central_session_id}"
+            )
+            await self._send_to_local(
+                {
+                    "type": "startSession",
+                    "peerId": self._local_producer_id,
+                }
+            )
+
     async def _process_local_message(self, msg: dict[str, Any]) -> None:
         """Process a message from local GStreamer signaling."""
         msg_type = msg.get("type", "")
@@ -1955,26 +2050,25 @@ class CentralSignalingRelay:
                     f"[Central Relay] Local GStreamer producer found: producer_id={self._local_producer_id}"
                 )
 
-                # Only start sessions for PENDING requests, not all tracked sessions
-                for central_session_id in list(self._pending_central_sessions):
-                    logger.info(
-                        f"[Central Relay] Starting local session for pending central_session={central_session_id}"
-                    )
-                    await self._send_to_local(
-                        {
-                            "type": "startSession",
-                            "peerId": self._local_producer_id,
-                        }
-                    )
+                await self._start_pending_locally()
 
         elif msg_type == "peerStatusChanged":
             peer_id = msg.get("peerId")
             roles = msg.get("roles", [])
             if "producer" in roles:
+                if peer_id != self._local_producer_id:
+                    # A new producer (pipeline restarted): starts sent to the
+                    # old one can never be answered, so they cover nothing.
+                    self._local_starts_unanswered.clear()
                 self._local_producer_id = peer_id
                 logger.debug(
                     f"[Central Relay] Local GStreamer producer registered: producer_id={peer_id}"
                 )
+                # A request accepted before the media pipeline registered got
+                # an empty list reply and would wait forever (the robot then
+                # answers "busy" to everyone): start it now.
+                if self._pending_central_sessions:
+                    await self._start_pending_locally()
 
         elif msg_type == "sessionStarted":
             local_session_id: Optional[str] = msg.get("sessionId")
@@ -1982,8 +2076,23 @@ class CentralSignalingRelay:
                 f"[Central Relay] Local GStreamer session started: local_session_id={local_session_id}"
             )
 
+            if self._local_starts_unanswered:
+                self._local_starts_unanswered.pop(0)
             # Map local session ID to the pending central session ID
-            if self._pending_central_sessions and local_session_id:
+            if local_session_id and not self._pending_central_sessions:
+                # Nothing is waiting for it: an orphan (a second start raced
+                # the first, or its request was ended meanwhile). End it now,
+                # or its webrtcbin lingers and its data channel can replace
+                # the live session's on the media server.
+                logger.warning(
+                    "[Central Relay] Local session %s started with no pending "
+                    "central session; ending it",
+                    local_session_id,
+                )
+                await self._send_to_local(
+                    {"type": "endSession", "sessionId": local_session_id}
+                )
+            elif self._pending_central_sessions and local_session_id:
                 central_session_id = self._pending_central_sessions.pop(0)
                 self._local_to_central_session[local_session_id] = central_session_id
                 self._central_to_local_session[central_session_id] = local_session_id
