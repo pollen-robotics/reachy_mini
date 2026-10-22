@@ -1,1 +1,0 @@
-WARNING  test:media_server.py:565 Could not reach the ICE agent to disable UPnP: 'object' object has no attribute 'get_property'

@@ -1,0 +1,2 @@
+ERROR    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1130 [Central Relay] Local WebRTC connection failed: local signalling down
+WARNING  reachy_mini.media.central_signaling_relay:central_signaling_relay.py:288 [Central Relay] State transition: connecting -> error | Local WebRTC unavailable: local signalling down

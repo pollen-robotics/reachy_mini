@@ -1,1 +1,0 @@
-ERROR    reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1681 [Central Relay] _send_to_central exception type=setPeerStatus err=

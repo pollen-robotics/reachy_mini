@@ -1,0 +1,17 @@
+WARNING  reachy_mini.media.central_signaling_relay:central_signaling_relay.py:494 [Central Relay] Could not end sessions on central before stopping
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/work/reachy_mini/reachy_mini/src/reachy_mini/media/central_signaling_relay.py", line 490, in stop
+    await asyncio.wait_for(
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 519, in wait_for
+    async with timeouts.timeout(timeout):
+  File "/usr/lib/python3.12/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError

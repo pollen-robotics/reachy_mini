@@ -1,0 +1,3 @@
+ERROR    asyncio:base_events.py:1821 Task was destroyed but it is pending!
+task: <Task pending name='Task-463' coro=<test_remote_eviction_never_hangs_the_local_app_start.<locals>.never_finishes() done, defined at /home/runner/work/reachy_mini/reachy_mini/tests/unit_tests/test_central_signaling_relay.py:1471> wait_for=<Future pending cb=[Task.task_wakeup()]> cb=[_chain_future.<locals>._call_set_state() at /usr/lib/python3.12/asyncio/futures.py:394]>
+WARNING  reachy_mini.media.central_signaling_relay:central_signaling_relay.py:369 [Central Relay] Remote eviction tear-down still running after 0 s; starting the local app anyway
