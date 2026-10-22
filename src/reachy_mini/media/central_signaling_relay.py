@@ -184,6 +184,8 @@ class CentralSignalingRelay:
         self._local_peer_id: Optional[str] = None
         self._http_session: Optional[aiohttp.ClientSession] = None
         self._connection_attempts = 0
+        # Set by an attempt that ended on purpose to retry right away.
+        self._retry_at_once = False
         # Reentrancy guard for `_close_connections`. A teardown can be
         # triggered from three converging paths on the same event loop:
         #   1. `_reconnect()` scheduled by `force_reconnect()` /
@@ -783,6 +785,8 @@ class CentralSignalingRelay:
 
             while self._running:
                 had_exception = False
+                self._retry_at_once = False
+                attempt_started = time.monotonic()
                 try:
                     await self._connect_and_relay()
                 except asyncio.CancelledError:
@@ -838,15 +842,24 @@ class CentralSignalingRelay:
                 if (
                     self._running
                     and not had_exception
-                    and self._state == RelayState.ERROR
+                    and self._state != RelayState.WAITING_FOR_TOKEN
+                    and (
+                        self._state == RelayState.ERROR
+                        or (
+                            not self._retry_at_once
+                            and time.monotonic() - attempt_started < RECONNECT_INTERVAL
+                        )
+                    )
                 ):
-                    # Clean return but ERROR (e.g. 401) - back off like a failure.
+                    # Clean return but ERROR (e.g. 401), or the attempt died at
+                    # once (central closing on connect, a handler raising every
+                    # time): back off like a failure instead of spinning.
                     had_exception = True
                     self._connection_attempts += 1
 
                 if self._running and had_exception:
-                    # Only wait after connection failures, not after normal returns
-                    # (e.g., when token update triggered reconnection)
+                    # Wait after failures and after attempts that ended at once;
+                    # a long-lived connection that drops reconnects right away.
                     self._token_updated.clear()
                     try:
                         await asyncio.wait_for(
@@ -872,7 +885,12 @@ class CentralSignalingRelay:
         """Connect to both servers and relay messages."""
         logger.info("[Central Relay] _connect_and_relay() starting")
 
-        # Always refresh the token on each connection attempt
+        # Always refresh the token on each connection attempt. That read
+        # consumes any pending token signal: left set, it would make this
+        # attempt's token watcher tear the new connection down at once.
+        self._token_updated.clear()
+        if not self._running:
+            return  # stop() raced us and its wake-up was just cleared
         self._refresh_token()
 
         if not self.hf_token:
@@ -1402,7 +1420,9 @@ class CentralSignalingRelay:
                     retry_now = self._connection_attempts == 0
                     self._connection_attempts += 1
                     refreshed = await self._recover_from_unauthorized(self.hf_token)
-                    if not (retry_now and refreshed):
+                    if retry_now and refreshed:
+                        self._retry_at_once = True
+                    else:
                         self._set_state(RelayState.ERROR, "Authentication failed")
                     return
                 elif response.status != 200:

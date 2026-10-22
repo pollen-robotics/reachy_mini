@@ -590,6 +590,69 @@ def test_run_loop_backs_off_when_connect_returns_in_error_state(
     assert elapsed >= 0.1
 
 
+def test_run_loop_backs_off_when_connect_ends_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An attempt that dies right away (no ERROR state) still gets a backoff."""
+    monkeypatch.setattr(
+        "reachy_mini.media.central_signaling_relay.RECONNECT_INTERVAL", 0.05
+    )
+
+    relay = _make_relay()
+    relay._running = True
+
+    call_count = 0
+
+    async def fake_connect_and_relay() -> None:
+        nonlocal call_count
+        call_count += 1
+        # e.g. central accepts the SSE stream and closes it at once.
+        relay._set_state(RelayState.RECONNECTING, "Connection lost, reconnecting...")
+        if call_count >= 3:
+            relay._running = False
+
+    relay._connect_and_relay = fake_connect_and_relay  # type: ignore[method-assign]
+
+    start = time.monotonic()
+    asyncio.run(relay._run_loop())
+    elapsed = time.monotonic() - start
+
+    assert call_count == 3
+    assert relay._connection_attempts == 2
+    assert elapsed >= 0.1
+
+
+def test_connect_after_token_update_does_not_tear_itself_down() -> None:
+    """A login's token signal is consumed, not replayed on every reconnect.
+
+    Regression: the event stayed set after the login reconnect, so each new
+    attempt's token watcher fired at once and closed its own HTTP session.
+    """
+    relay = _make_relay()
+    relay._running = True
+    relay.hf_token = "hf_token"
+    relay._refresh_token = lambda force_refresh=False: relay.hf_token  # type: ignore[method-assign]
+    relay._token_updated.set()
+
+    async def forever() -> None:
+        await asyncio.Event().wait()
+
+    async def fake_connect_local() -> None:
+        relay._local_ws = _FakeWebsocket()  # type: ignore[assignment]
+        relay._local_task = asyncio.create_task(forever())
+
+    relay._connect_local = fake_connect_local  # type: ignore[method-assign]
+    relay._handle_central_sse = forever  # type: ignore[method-assign]
+    relay._producer_health_loop = forever  # type: ignore[method-assign]
+    relay._heartbeat_loop = forever  # type: ignore[method-assign]
+
+    async def run() -> None:
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(relay._connect_and_relay(), timeout=0.2)
+
+    asyncio.run(run())
+
+
 def test_reconnect_delay_grows_and_is_capped() -> None:
     """``_reconnect_delay`` backs off exponentially and stays under the cap."""
     relay = _make_relay()
@@ -1412,6 +1475,49 @@ def test_relay_backs_off_when_central_rejects_every_token(
 
     assert refreshes == [True, True]
     assert relay.state is RelayState.ERROR
+
+
+def test_run_loop_retries_at_once_after_a_refreshed_401(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The short-attempt backoff must not delay the first 401's retry."""
+    from reachy_mini.apps.sources import hf_auth
+
+    relay = _make_relay()
+    relay._running = True
+    relay.hf_token = "expired"
+    monkeypatch.setattr(hf_auth, "get_hf_token", lambda force_refresh=False: "fresh")
+    calls = 0
+
+    async def fake_connect_and_relay() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            relay._http_session = _FakeHTTPSession(status=401)  # type: ignore[assignment]
+            await relay._handle_central_sse()
+        else:
+            relay._running = False
+
+    relay._connect_and_relay = fake_connect_and_relay  # type: ignore[method-assign]
+
+    start = time.monotonic()
+    asyncio.run(relay._run_loop())
+
+    assert calls == 2
+    assert time.monotonic() - start < 1.0
+
+
+def test_connect_skipped_when_stop_raced_the_attempt() -> None:
+    """stop()'s wake-up is cleared by a starting attempt: it must not connect."""
+    relay = _make_relay()
+    relay._running = False
+    relay._token_updated.set()
+    refreshed: list[bool] = []
+    relay._refresh_token = lambda force_refresh=False: refreshed.append(True)  # type: ignore[method-assign,func-returns-value]
+
+    asyncio.run(relay._connect_and_relay())
+
+    assert refreshed == []
 
 
 def test_relay_recovers_after_a_failed_refresh(
