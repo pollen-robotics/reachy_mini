@@ -1477,6 +1477,49 @@ def test_relay_backs_off_when_central_rejects_every_token(
     assert relay.state is RelayState.ERROR
 
 
+def test_run_loop_retries_at_once_after_a_refreshed_401(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The short-attempt backoff must not delay the first 401's retry."""
+    from reachy_mini.apps.sources import hf_auth
+
+    relay = _make_relay()
+    relay._running = True
+    relay.hf_token = "expired"
+    monkeypatch.setattr(hf_auth, "get_hf_token", lambda force_refresh=False: "fresh")
+    calls = 0
+
+    async def fake_connect_and_relay() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            relay._http_session = _FakeHTTPSession(status=401)  # type: ignore[assignment]
+            await relay._handle_central_sse()
+        else:
+            relay._running = False
+
+    relay._connect_and_relay = fake_connect_and_relay  # type: ignore[method-assign]
+
+    start = time.monotonic()
+    asyncio.run(relay._run_loop())
+
+    assert calls == 2
+    assert time.monotonic() - start < 1.0
+
+
+def test_connect_skipped_when_stop_raced_the_attempt() -> None:
+    """stop()'s wake-up is cleared by a starting attempt: it must not connect."""
+    relay = _make_relay()
+    relay._running = False
+    relay._token_updated.set()
+    refreshed: list[bool] = []
+    relay._refresh_token = lambda force_refresh=False: refreshed.append(True)  # type: ignore[method-assign,func-returns-value]
+
+    asyncio.run(relay._connect_and_relay())
+
+    assert refreshed == []
+
+
 def test_relay_recovers_after_a_failed_refresh(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
