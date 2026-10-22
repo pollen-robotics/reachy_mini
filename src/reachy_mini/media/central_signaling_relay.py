@@ -2056,6 +2056,10 @@ class CentralSignalingRelay:
             peer_id = msg.get("peerId")
             roles = msg.get("roles", [])
             if "producer" in roles:
+                if peer_id != self._local_producer_id:
+                    # A new producer (pipeline restarted): starts sent to the
+                    # old one can never be answered, so they cover nothing.
+                    self._local_starts_unanswered.clear()
                 self._local_producer_id = peer_id
                 logger.debug(
                     f"[Central Relay] Local GStreamer producer registered: producer_id={peer_id}"

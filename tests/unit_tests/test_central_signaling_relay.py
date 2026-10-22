@@ -856,6 +856,36 @@ def test_eviction_only_ends_the_sessions_up_when_it_was_asked() -> None:
     assert relay._local_to_central_session == {"L-new": "new"}
 
 
+def test_a_new_producer_is_not_blocked_by_starts_sent_to_the_old_one() -> None:
+    """Starts sent to a producer that left cover nothing once a new one registers.
+
+    The local server answers such a start with an error the relay ignores;
+    counted as unanswered, it used to keep the pending request from being
+    started on the re-registered producer for 5 s (and nothing retried).
+    """
+    relay, _central, local = _relay_with_lock(RobotAppLock())
+
+    async def run() -> None:
+        await relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s1"}
+        )
+        await relay._process_local_message(
+            {"type": "list", "producers": [{"id": "old-producer"}]}
+        )
+        assert _local_starts(local) == 1
+        await relay._process_local_message(
+            {
+                "type": "peerStatusChanged",
+                "peerId": "new-producer",
+                "roles": ["producer"],
+            }
+        )
+
+    asyncio.run(run())
+    assert _local_starts(local) == 2
+    assert local.sent[-1] == {"type": "startSession", "peerId": "new-producer"}
+
+
 def test_startsession_control_only_while_local_app_runs() -> None:
     """While a local app holds the robot, a remote peer connects control-only."""
     lock = RobotAppLock()

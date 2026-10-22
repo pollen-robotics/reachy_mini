@@ -145,3 +145,44 @@ def test_an_orphan_created_after_the_live_session_does_not_displace_it() -> None
     sent = [c.args for c in live.emit.call_args_list if c.args[0] == "send-string"]
     assert sent == [("send-string", "targeted"), ("send-string", "broadcast")]
     assert not [c for c in orphan.emit.call_args_list if c.args[0] == "send-string"]
+
+
+def test_closed_channels_are_released() -> None:
+    """Each channel's creation-time reference is released at its on-close.
+
+    Direct LAN consumers each have their own peer id: holding the reference
+    past on-close leaked one data channel per session for the daemon's life.
+    """
+    server = _make_server()
+    server._on_data_channel_message = MagicMock()  # type: ignore[method-assign]
+    server._on_session_dc_message = MagicMock()  # type: ignore[method-assign]
+    server._on_data_channel_error = MagicMock()  # type: ignore[method-assign]
+    server._peer_webrtcbins = {}
+    for i in range(5):
+        channel = MagicMock()
+        handlers: dict = {}
+        channel.connect.side_effect = lambda sig, cb, *a, h=handlers: h.setdefault(
+            sig, (cb, *a)
+        )
+        webrtcbin = MagicMock()
+        webrtcbin.emit.return_value = channel
+        server._setup_data_channel(f"lan-{i}", webrtcbin, None)
+        _fire(handlers, "on-open", channel)
+        _fire(handlers, "on-close", channel)
+    assert server._created_data_channels == {}
+    assert server._data_channels == {}
+    assert server._data_channel_session == {}
+
+
+def test_an_orphan_closing_keeps_the_live_reference() -> None:
+    """An orphan's on-close releases only its own reference."""
+    server = _make_server()
+    server._on_data_channel_message = MagicMock()  # type: ignore[method-assign]
+    server._on_session_dc_message = MagicMock()  # type: ignore[method-assign]
+    server._on_data_channel_error = MagicMock()  # type: ignore[method-assign]
+    server._peer_webrtcbins = {}
+    orphan, orphan_handlers = _create_channel(server, "orphan")
+    live, live_handlers = _create_channel(server, "live")
+    _fire(live_handlers, "on-open", live)
+    _fire(orphan_handlers, "on-close", orphan)
+    assert server._created_data_channels["relay"] is live

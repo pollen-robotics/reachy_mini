@@ -303,8 +303,9 @@ class GstMediaServer:
         # never opens, so it can no longer displace the live session's.
         self._data_channels: dict[str, Gst.Element] = {}
         # peer_id -> last channel created, holding the Python reference from
-        # creation exactly as before (dropping channel references early is
-        # what segfaulted earlier attempts). Never read for sending.
+        # creation until that channel's on-close, as the original registry
+        # did (dropping channel references early is what segfaulted earlier
+        # attempts). Never read for sending.
         self._created_data_channels: dict[str, Gst.Element] = {}
         # Open state is keyed by SESSION, not peer: every relayed session
         # shares the relay's one consumer peer id, so a peer-keyed flag was
@@ -2209,6 +2210,10 @@ class GstMediaServer:
         if self._data_channel_session.get(peer_id, peer_id) == key:
             self._data_channels.pop(peer_id, None)
             self._data_channel_session.pop(peer_id, None)
+        # Release the creation-time reference at the same point the original
+        # code did, but only this channel's: never a newer session's.
+        if self._created_data_channels.get(peer_id) is channel:
+            del self._created_data_channels[peer_id]
 
     def _on_data_channel_message(
         self, channel: Gst.Element, message: str, peer_id: str
