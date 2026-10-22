@@ -872,7 +872,10 @@ class CentralSignalingRelay:
         """Connect to both servers and relay messages."""
         logger.info("[Central Relay] _connect_and_relay() starting")
 
-        # Always refresh the token on each connection attempt
+        # Always refresh the token on each connection attempt. That read
+        # consumes any pending token signal: left set, it would make this
+        # attempt's token watcher tear the new connection down at once.
+        self._token_updated.clear()
         self._refresh_token()
 
         if not self.hf_token:

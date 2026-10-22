@@ -590,6 +590,37 @@ def test_run_loop_backs_off_when_connect_returns_in_error_state(
     assert elapsed >= 0.1
 
 
+def test_connect_after_token_update_does_not_tear_itself_down() -> None:
+    """A login's token signal is consumed, not replayed on every reconnect.
+
+    Regression: the event stayed set after the login reconnect, so each new
+    attempt's token watcher fired at once and closed its own HTTP session.
+    """
+    relay = _make_relay()
+    relay._running = True
+    relay.hf_token = "hf_token"
+    relay._refresh_token = lambda force_refresh=False: relay.hf_token  # type: ignore[method-assign]
+    relay._token_updated.set()
+
+    async def forever() -> None:
+        await asyncio.Event().wait()
+
+    async def fake_connect_local() -> None:
+        relay._local_ws = _FakeWebsocket()  # type: ignore[assignment]
+        relay._local_task = asyncio.create_task(forever())
+
+    relay._connect_local = fake_connect_local  # type: ignore[method-assign]
+    relay._handle_central_sse = forever  # type: ignore[method-assign]
+    relay._producer_health_loop = forever  # type: ignore[method-assign]
+    relay._heartbeat_loop = forever  # type: ignore[method-assign]
+
+    async def run() -> None:
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(relay._connect_and_relay(), timeout=0.2)
+
+    asyncio.run(run())
+
+
 def test_reconnect_delay_grows_and_is_capped() -> None:
     """``_reconnect_delay`` backs off exponentially and stays under the cap."""
     relay = _make_relay()
