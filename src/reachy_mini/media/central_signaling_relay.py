@@ -78,12 +78,6 @@ SESSION_LINK_IDLE_S = 12.0
 # Consecutive failed heartbeats that end the central leg at once, instead
 # of waiting out SSE_READ_TIMEOUT on a stream that is already dead.
 HEARTBEAT_MAX_FAILURES = 2
-# A pending central session gets one local startSession per this long. Each
-# startSession from central triggers a local `list`, and every list reply
-# used to start a local session for every pending request: two requests a
-# millisecond apart started two GStreamer sessions for one central session.
-# Past this the start is re-sent, in case the local server dropped it.
-LOCAL_START_RESEND_S = 10.0
 # Per-request budget for POST /send. The session's default is 300 s, and a
 # request on a kept-alive connection whose packets are silently dropped
 # (Wi-Fi stall, route gone) hangs for all of it: heartbeats would never
@@ -229,8 +223,12 @@ class CentralSignalingRelay:
         self._central_to_local_session: dict[
             str, str
         ] = {}  # central_session_id -> local_session_id
-        # central_session_id -> monotonic time its local startSession was sent
-        self._local_start_sent_at: dict[str, float] = {}
+        # Pending central sessions whose local startSession already went out.
+        # Each startSession from central triggers a local `list`, and every
+        # list reply used to start a local session for every pending
+        # request: two requests a millisecond apart started two GStreamer
+        # sessions for one central session.
+        self._local_start_sent: set[str] = set()
 
         # Local sessions kept alive across a central-only drop (see
         # `_keep_sessions_on_central_loss`). Their media is peer-to-peer
@@ -336,7 +334,8 @@ class CentralSignalingRelay:
         Runs on the main asyncio loop (caller of ``acquire_local_evicting_remote``)
         but dispatches the actual work onto the relay's thread loop.
         """
-        if self._thread_loop is None or not self._thread_loop.is_running():
+        loop = self._thread_loop
+        if loop is None or not loop.is_running():
             logger.debug(
                 "[Central Relay] Eviction requested but relay loop not running; nothing to do"
             )
@@ -344,16 +343,20 @@ class CentralSignalingRelay:
 
         fut = asyncio.run_coroutine_threadsafe(
             self._tear_down_active_sessions(reason="local_app_started"),
-            self._thread_loop,
+            loop,
         )
         # Wait for the tear-down to complete so AppManager knows the remote
         # peer has been notified before the local app starts up.
+        # Shielded: past the bound we stop WAITING, but the tear-down keeps
+        # running, so it still ends the remote session on both sides rather
+        # than leaving it half torn down next to the local app.
         try:
-            await asyncio.wait_for(asyncio.wrap_future(fut), EVICTION_TIMEOUT_S)
+            await asyncio.wait_for(
+                asyncio.shield(asyncio.wrap_future(fut)), EVICTION_TIMEOUT_S
+            )
         except asyncio.TimeoutError:
-            fut.cancel()
             logger.warning(
-                "[Central Relay] Remote eviction tear-down did not finish in %.0f s; "
+                "[Central Relay] Remote eviction tear-down still running after %.0f s; "
                 "starting the local app anyway",
                 EVICTION_TIMEOUT_S,
             )
@@ -405,7 +408,7 @@ class CentralSignalingRelay:
         self._orphaned_local_sessions.clear()
         self._local_session_started_at.clear()
         self._pending_central_sessions.clear()
-        self._local_start_sent_at.clear()
+        self._local_start_sent.clear()
         self._local_to_central_session.clear()
         self._central_to_local_session.clear()
         self._session_to_local_peer.clear()
@@ -763,7 +766,7 @@ class CentralSignalingRelay:
             self._local_peer_id = None
             self._session_to_local_peer.clear()
             self._pending_central_sessions.clear()
-            self._local_start_sent_at.clear()
+            self._local_start_sent.clear()
             self._local_to_central_session.clear()
             self._central_to_local_session.clear()
 
@@ -1051,7 +1054,7 @@ class CentralSignalingRelay:
             )
             self._session_to_local_peer.clear()
             self._pending_central_sessions.clear()
-            self._local_start_sent_at.clear()
+            self._local_start_sent.clear()
             self._local_to_central_session.clear()
             self._central_to_local_session.clear()
             self._orphaned_local_sessions.clear()
@@ -1551,7 +1554,7 @@ class CentralSignalingRelay:
         for central_session_id in self._pending_central_sessions:
             self._session_to_local_peer.pop(central_session_id, None)
         self._pending_central_sessions.clear()
-        self._local_start_sent_at.clear()
+        self._local_start_sent.clear()
         if self._local_to_central_session:
             newly_kept = (
                 set(self._local_to_central_session) - self._orphaned_local_sessions
@@ -1980,16 +1983,13 @@ class CentralSignalingRelay:
                 )
 
                 # Only start sessions for PENDING requests, not all tracked
-                # sessions, and only once each (see LOCAL_START_RESEND_S).
+                # sessions, and only once each (see `_local_start_sent`).
                 pending = list(self._pending_central_sessions)
-                for stale in set(self._local_start_sent_at) - set(pending):
-                    del self._local_start_sent_at[stale]
-                now = time.monotonic()
+                self._local_start_sent &= set(pending)
                 for central_session_id in pending:
-                    sent_at = self._local_start_sent_at.get(central_session_id)
-                    if sent_at is not None and now - sent_at < LOCAL_START_RESEND_S:
+                    if central_session_id in self._local_start_sent:
                         continue
-                    self._local_start_sent_at[central_session_id] = now
+                    self._local_start_sent.add(central_session_id)
                     logger.info(
                         f"[Central Relay] Starting local session for pending central_session={central_session_id}"
                     )
@@ -2016,7 +2016,20 @@ class CentralSignalingRelay:
             )
 
             # Map local session ID to the pending central session ID
-            if self._pending_central_sessions and local_session_id:
+            if local_session_id and not self._pending_central_sessions:
+                # Nothing is waiting for it: an orphan (a second start raced
+                # the first, or its request was ended meanwhile). End it now,
+                # or its webrtcbin lingers and its data channel can replace
+                # the live session's on the media server.
+                logger.warning(
+                    "[Central Relay] Local session %s started with no pending "
+                    "central session; ending it",
+                    local_session_id,
+                )
+                await self._send_to_local(
+                    {"type": "endSession", "sessionId": local_session_id}
+                )
+            elif self._pending_central_sessions and local_session_id:
                 central_session_id = self._pending_central_sessions.pop(0)
                 self._local_to_central_session[local_session_id] = central_session_id
                 self._central_to_local_session[central_session_id] = local_session_id

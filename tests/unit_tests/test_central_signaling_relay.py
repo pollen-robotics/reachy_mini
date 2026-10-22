@@ -761,24 +761,36 @@ def test_quick_redial_starts_one_local_session() -> None:
     assert relay._central_to_local_session == {"s2": "local-2"}
 
 
-def test_unanswered_local_start_is_resent_later(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A start the local server never answered is re-sent past the resend delay."""
-    import reachy_mini.media.central_signaling_relay as relay_module
+def test_orphan_local_session_is_ended() -> None:
+    """A local session nobody waits for is ended, whatever ordering made it.
 
+    Here the first request's list reply lands before central ends that
+    request, so a start goes out for each request; the second local
+    sessionStarted then finds nothing pending.
+    """
     relay, _central, local = _relay_with_lock(RobotAppLock())
     producers = {"type": "list", "producers": [{"id": "producer-1"}]}
-    clock = [1000.0]
-    monkeypatch.setattr(relay_module.time, "monotonic", lambda: clock[0])
 
-    _start_session(relay)
-    asyncio.run(relay._process_local_message(producers))
-    assert _local_starts(local) == 1
+    async def run() -> None:
+        await relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s1"}
+        )
+        await relay._process_local_message(producers)
+        await relay._process_central_message({"type": "endSession", "sessionId": "s1"})
+        await relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s2"}
+        )
+        await relay._process_local_message(producers)
+        await relay._process_local_message(
+            {"type": "sessionStarted", "sessionId": "L1"}
+        )
+        await relay._process_local_message(
+            {"type": "sessionStarted", "sessionId": "L2"}
+        )
 
-    clock[0] += relay_module.LOCAL_START_RESEND_S + 1
-    asyncio.run(relay._process_local_message(producers))
-    assert _local_starts(local) == 2
+    asyncio.run(run())
+    assert relay._central_to_local_session == {"s2": "L1"}
+    assert {"type": "endSession", "sessionId": "L2"} in local.sent
 
 
 def test_startsession_control_only_while_local_app_runs() -> None:
@@ -1373,6 +1385,31 @@ def test_remote_eviction_never_hangs_the_local_app_start(
         asyncio.run(relay._handle_remote_eviction())
         elapsed = time.monotonic() - start
     assert elapsed < 2.0
+
+
+def test_a_slow_remote_eviction_still_completes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Past the bound the app start stops waiting, but the tear-down finishes.
+
+    Cancelling it instead could leave the remote session half torn down
+    (central told, the local peer connection never closed) next to the app.
+    """
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    monkeypatch.setattr(relay_module, "EVICTION_TIMEOUT_S", 0.1)
+    relay = _make_relay()
+    finished = threading.Event()
+
+    async def slow(reason: str) -> None:
+        await asyncio.sleep(0.4)
+        finished.set()
+
+    relay._tear_down_active_sessions = slow  # type: ignore[method-assign]
+    with _RunningLoop() as loop:
+        relay._thread_loop = loop
+        asyncio.run(relay._handle_remote_eviction())
+        assert finished.wait(timeout=2.0)
 
 
 def test_stop_without_sessions_sends_nothing() -> None:
