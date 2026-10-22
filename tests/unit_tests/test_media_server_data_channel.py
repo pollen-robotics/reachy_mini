@@ -20,6 +20,7 @@ def _make_server() -> GstMediaServer:
     server = cast(GstMediaServer, object.__new__(GstMediaServer))
     server._logger = logging.getLogger("test_data_channel")
     server._data_channels = {}
+    server._created_data_channels = {}
     server._data_channel_session = {}
     server._open_data_channels = set()
     # `__del__` -> `close()` touches these.
@@ -98,3 +99,49 @@ def test_the_live_session_closing_stops_its_sends() -> None:
     server.send_data_message(None, "hello")
     live.emit.assert_not_called()
     assert "relay" not in server._data_channels
+
+
+def _create_channel(server: GstMediaServer, session: str) -> tuple[MagicMock, dict]:
+    """Run the real `_setup_data_channel` for a relayed session.
+
+    Returns the channel and its connected handlers ({signal: (cb, *args)}),
+    so a test fires them exactly as GStreamer would.
+    """
+    channel = MagicMock()
+    handlers: dict = {}
+    channel.connect.side_effect = lambda sig, cb, *a: handlers.setdefault(sig, (cb, *a))
+    webrtcbin = MagicMock()
+    webrtcbin.emit.return_value = channel
+    server._setup_data_channel("relay", webrtcbin, session)
+    return channel, handlers
+
+
+def _fire(handlers: dict, signal: str, channel: MagicMock) -> None:
+    cb, *args = handlers[signal]
+    cb(channel, *args)
+
+
+def test_an_orphan_created_after_the_live_session_does_not_displace_it() -> None:
+    """An orphan created after the live session opened cannot displace it.
+
+    The duplicate-start race: the live session opens, then an orphan of the
+    same relay peer is created (and never opens), then torn down. The orphan
+    used to overwrite the registered channel at creation, so the live session
+    got nothing. Channels are now registered at on-open.
+    """
+    server = _make_server()
+    server._on_data_channel_message = MagicMock()  # type: ignore[method-assign]
+    server._on_session_dc_message = MagicMock()  # type: ignore[method-assign]
+    server._on_data_channel_error = MagicMock()  # type: ignore[method-assign]
+    server._peer_webrtcbins = {}
+    live, live_handlers = _create_channel(server, "live")
+    _fire(live_handlers, "on-open", live)
+    orphan, orphan_handlers = _create_channel(server, "orphan")  # never opens
+    _fire(orphan_handlers, "on-close", orphan)
+    server._open_data_channels.discard("orphan")  # its consumer removal
+
+    server.send_data_message("relay", "targeted")
+    server.send_data_message(None, "broadcast")
+    sent = [c.args for c in live.emit.call_args_list if c.args[0] == "send-string"]
+    assert sent == [("send-string", "targeted"), ("send-string", "broadcast")]
+    assert not [c for c in orphan.emit.call_args_list if c.args[0] == "send-string"]

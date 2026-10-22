@@ -298,7 +298,14 @@ class GstMediaServer:
 
         self._cam_path = cam_path
 
-        self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
+        # peer_id -> channel to SEND on, registered at on-open: an orphan
+        # session of the same peer (the relay's sessions share one peer id)
+        # never opens, so it can no longer displace the live session's.
+        self._data_channels: dict[str, Gst.Element] = {}
+        # peer_id -> last channel created, holding the Python reference from
+        # creation exactly as before (dropping channel references early is
+        # what segfaulted earlier attempts). Never read for sending.
+        self._created_data_channels: dict[str, Gst.Element] = {}
         # Open state is keyed by SESSION, not peer: every relayed session
         # shares the relay's one consumer peer id, so a peer-keyed flag was
         # cleared for the live session when an orphan or a superseded one
@@ -2003,9 +2010,8 @@ class GstMediaServer:
         channel = webrtcbin.emit("create-data-channel", "data", options)
         if channel:
             self._logger.debug(f"Data channel created for peer {peer_id}")
-            self._data_channels[peer_id] = channel
+            self._created_data_channels[peer_id] = channel
             key = session_id or peer_id
-            self._data_channel_session[peer_id] = key
 
             # Connect to data channel signals
             channel.connect("on-open", self._on_data_channel_open, peer_id, key)
@@ -2187,7 +2193,10 @@ class GstMediaServer:
         self, channel: Gst.Element, peer_id: str, key: Optional[str] = None
     ) -> None:
         self._logger.info(f"Data channel opened for peer {peer_id}")
-        self._open_data_channels.add(key or peer_id)
+        key = key or peer_id
+        self._data_channels[peer_id] = channel
+        self._data_channel_session[peer_id] = key
+        self._open_data_channels.add(key)
 
     def _on_data_channel_close(
         self, channel: Gst.Element, peer_id: str, key: Optional[str] = None
@@ -2199,6 +2208,7 @@ class GstMediaServer:
         # orphan's channel closing must not unregister the live session's.
         if self._data_channel_session.get(peer_id, peer_id) == key:
             self._data_channels.pop(peer_id, None)
+            self._data_channel_session.pop(peer_id, None)
 
     def _on_data_channel_message(
         self, channel: Gst.Element, message: str, peer_id: str
