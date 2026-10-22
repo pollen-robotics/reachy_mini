@@ -299,6 +299,7 @@ class GstMediaServer:
         self._cam_path = cam_path
 
         self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
+        self._open_data_channels: set[str] = set()  # peer_ids past on-open
         self._on_data_message: Optional[Callable[[str, str], None]] = None
         # Second, unreliable/unordered data channel per peer used to *push*
         # the robot pose at a steady rate (see `_setup_pose_channel` /
@@ -635,6 +636,8 @@ class GstMediaServer:
         self._cleanup_incoming_audio(peer_id)
         self._drop_pose_peer(peer_id)
         self._peer_webrtcbins.pop(peer_id, None)
+        # `on-close` may never fire for a peer that vanished.
+        self._open_data_channels.discard(peer_id)
         # Cancel any outstanding watchdog for this session; the consumer
         # is gone so there's nothing left to police.
         self._teardown_negotiation_watchdog(session_id or peer_id)
@@ -1969,11 +1972,16 @@ class GstMediaServer:
             if channel is None:
                 self._logger.warning(f"No data channel for peer {peer_id}")
                 return
-            channels = [channel]
+            channels = [(peer_id, channel)]
         else:
             # Broadcast to all connected peers
-            channels = list(self._data_channels.values())
-        for channel in channels:
+            channels = list(self._data_channels.items())
+        for pid, channel in channels:
+            # Before on-open a send is a GStreamer assertion, not a send.
+            # Tracked from the signals: reading `ready-state` here segfaulted
+            # on channels of a session being torn down.
+            if pid not in self._open_data_channels:
+                continue
             for frame in frames:
                 channel.emit("send-string", frame)
 
@@ -2169,9 +2177,11 @@ class GstMediaServer:
 
     def _on_data_channel_open(self, channel: Gst.Element, peer_id: str) -> None:
         self._logger.info(f"Data channel opened for peer {peer_id}")
+        self._open_data_channels.add(peer_id)
 
     def _on_data_channel_close(self, channel: Gst.Element, peer_id: str) -> None:
         self._logger.info(f"Data channel closed for peer {peer_id}")
+        self._open_data_channels.discard(peer_id)
         if peer_id in self._data_channels:
             del self._data_channels[peer_id]
 
