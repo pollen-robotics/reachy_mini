@@ -299,7 +299,12 @@ class GstMediaServer:
         self._cam_path = cam_path
 
         self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
-        self._open_data_channels: set[str] = set()  # peer_ids past on-open
+        # Open state is keyed by SESSION, not peer: every relayed session
+        # shares the relay's one consumer peer id, so a peer-keyed flag was
+        # cleared for the live session when an orphan or a superseded one
+        # was removed. Plain strings only, never read from the channel.
+        self._data_channel_session: dict[str, str] = {}  # peer_id -> session key
+        self._open_data_channels: set[str] = set()  # session keys past on-open
         self._on_data_message: Optional[Callable[[str, str], None]] = None
         # Second, unreliable/unordered data channel per peer used to *push*
         # the robot pose at a steady rate (see `_setup_pose_channel` /
@@ -636,8 +641,9 @@ class GstMediaServer:
         self._cleanup_incoming_audio(peer_id)
         self._drop_pose_peer(peer_id)
         self._peer_webrtcbins.pop(peer_id, None)
-        # `on-close` may never fire for a peer that vanished.
-        self._open_data_channels.discard(peer_id)
+        # `on-close` may never fire for a peer that vanished. Only this
+        # session's flag: another session of the same peer may be live.
+        self._open_data_channels.discard(session_id or peer_id)
         # Cancel any outstanding watchdog for this session; the consumer
         # is gone so there's nothing left to police.
         self._teardown_negotiation_watchdog(session_id or peer_id)
@@ -1980,7 +1986,7 @@ class GstMediaServer:
             # Before on-open a send is a GStreamer assertion, not a send.
             # Tracked from the signals: reading `ready-state` here segfaulted
             # on channels of a session being torn down.
-            if pid not in self._open_data_channels:
+            if self._data_channel_session.get(pid, pid) not in self._open_data_channels:
                 continue
             for frame in frames:
                 channel.emit("send-string", frame)
@@ -1998,10 +2004,12 @@ class GstMediaServer:
         if channel:
             self._logger.debug(f"Data channel created for peer {peer_id}")
             self._data_channels[peer_id] = channel
+            key = session_id or peer_id
+            self._data_channel_session[peer_id] = key
 
             # Connect to data channel signals
-            channel.connect("on-open", self._on_data_channel_open, peer_id)
-            channel.connect("on-close", self._on_data_channel_close, peer_id)
+            channel.connect("on-open", self._on_data_channel_open, peer_id, key)
+            channel.connect("on-close", self._on_data_channel_close, peer_id, key)
             channel.connect("on-message-string", self._on_data_channel_message, peer_id)
             if session_id is not None:
                 channel.connect(
@@ -2175,15 +2183,22 @@ class GstMediaServer:
         with self._pose_lock:
             self._pose_subscribers.discard(peer_id)
 
-    def _on_data_channel_open(self, channel: Gst.Element, peer_id: str) -> None:
+    def _on_data_channel_open(
+        self, channel: Gst.Element, peer_id: str, key: Optional[str] = None
+    ) -> None:
         self._logger.info(f"Data channel opened for peer {peer_id}")
-        self._open_data_channels.add(peer_id)
+        self._open_data_channels.add(key or peer_id)
 
-    def _on_data_channel_close(self, channel: Gst.Element, peer_id: str) -> None:
+    def _on_data_channel_close(
+        self, channel: Gst.Element, peer_id: str, key: Optional[str] = None
+    ) -> None:
         self._logger.info(f"Data channel closed for peer {peer_id}")
-        self._open_data_channels.discard(peer_id)
-        if peer_id in self._data_channels:
-            del self._data_channels[peer_id]
+        key = key or peer_id
+        self._open_data_channels.discard(key)
+        # Unregister only if the registered channel is this session's: an
+        # orphan's channel closing must not unregister the live session's.
+        if self._data_channel_session.get(peer_id, peer_id) == key:
+            self._data_channels.pop(peer_id, None)
 
     def _on_data_channel_message(
         self, channel: Gst.Element, message: str, peer_id: str
