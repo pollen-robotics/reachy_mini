@@ -789,8 +789,71 @@ def test_orphan_local_session_is_ended() -> None:
         )
 
     asyncio.run(run())
+    # The second list reply found a start still unanswered: no second start.
+    assert _local_starts(local) == 1
     assert relay._central_to_local_session == {"s2": "L1"}
+    # A stray local session (injected here as L2) is ended all the same.
     assert {"type": "endSession", "sessionId": "L2"} in local.sent
+
+
+def test_request_waiting_for_a_late_producer_is_started() -> None:
+    """A request accepted before the media pipeline registered still starts.
+
+    After a daemon restart the relay can be back on central before
+    GStreamer's producer is up: the list reply is empty, and the request
+    used to stay pending forever, the robot answering "busy" to everyone.
+    """
+    relay, _central, local = _relay_with_lock(RobotAppLock())
+
+    async def run() -> None:
+        await relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s1"}
+        )
+        await relay._process_local_message({"type": "list", "producers": []})
+        assert _local_starts(local) == 0
+        await relay._process_local_message(
+            {"type": "peerStatusChanged", "peerId": "producer-1", "roles": ["producer"]}
+        )
+
+    asyncio.run(run())
+    assert _local_starts(local) == 1
+
+
+def test_lost_local_start_is_resent_after_the_answer_delay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A start the local server never answered no longer blocks the next one."""
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    relay, _central, local = _relay_with_lock(RobotAppLock())
+    producers = {"type": "list", "producers": [{"id": "producer-1"}]}
+    clock = [1000.0]
+    monkeypatch.setattr(relay_module.time, "monotonic", lambda: clock[0])
+    _start_session(relay)
+    asyncio.run(relay._process_local_message(producers))
+    asyncio.run(relay._process_local_message(producers))
+    assert _local_starts(local) == 1
+    clock[0] += relay_module.LOCAL_START_ANSWER_S + 1
+    asyncio.run(relay._process_local_message(producers))
+    assert _local_starts(local) == 2
+
+
+def test_eviction_only_ends_the_sessions_up_when_it_was_asked() -> None:
+    """A session accepted after the local app took the robot is left alone."""
+    relay, central, local = _make_relay_with_journals()
+    relay._central_to_local_session.update({"old": "L-old", "new": "L-new"})
+    relay._local_to_central_session.update({"L-old": "old", "L-new": "new"})
+
+    asyncio.run(
+        relay._tear_down_active_sessions(reason="local_app_started", only={"old"})
+    )
+
+    assert central.sent == [
+        {"type": "endSession", "sessionId": "old", "reason": "local_app_started"}
+    ]
+    assert local.sent == [{"type": "endSession", "sessionId": "L-old"}]
+    assert relay._central_to_local_session == {"new": "L-new"}
+    assert relay._local_to_central_session == {"L-new": "new"}
 
 
 def test_startsession_control_only_while_local_app_runs() -> None:
@@ -1375,7 +1438,7 @@ def test_remote_eviction_never_hangs_the_local_app_start(
     monkeypatch.setattr(relay_module, "EVICTION_TIMEOUT_S", 0.2)
     relay = _make_relay()
 
-    async def never_finishes(reason: str) -> None:
+    async def never_finishes(reason: str, **_kw: Any) -> None:
         await asyncio.sleep(30)
 
     relay._tear_down_active_sessions = never_finishes  # type: ignore[method-assign]
@@ -1401,7 +1464,7 @@ def test_a_slow_remote_eviction_still_completes(
     relay = _make_relay()
     finished = threading.Event()
 
-    async def slow(reason: str) -> None:
+    async def slow(reason: str, **_kw: Any) -> None:
         await asyncio.sleep(0.4)
         finished.set()
 
