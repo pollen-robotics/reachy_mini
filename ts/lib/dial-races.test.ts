@@ -113,6 +113,21 @@ describe('late startSession replies', () => {
         r.disconnect();
     });
 
+    it('a timed-out start central took anyway is ended on the robot', async () => {
+        const { r, s, replies, sent } = redialing();
+        s._state = 'connected';
+        s._pc = null;
+        const outcome = r.startSession('robot-1').then(() => 'resolved', () => 'rejected');
+        await vi.advanceTimersByTimeAsync(0);
+        // Central delivered the id over SSE, but the HTTP reply was lost.
+        s._sessionId = 'ghost-1';
+        replies[0]!(null);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(await outcome).toBe('rejected');
+        expect(sent()).toContainEqual({ type: 'endSession', sessionId: 'ghost-1', reason: 'client_stop' });
+        r.disconnect();
+    });
+
     it('a central refusal fails the dial at once', async () => {
         const { r, s, replies } = redialing();
         s._state = 'connected';

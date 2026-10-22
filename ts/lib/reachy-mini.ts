@@ -997,7 +997,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 // than leave it to the caller's timeout. Only if it is still
                 // the pending dial.
                 if (r === null && this._sessionReject) {
-                    this._closeTransport(new Error('Could not reach central to start the session'));
+                    const sessionId = this._closeTransport(new Error('Could not reach central to start the session'));
+                    // Central may have taken it anyway (reply lost, SSE gave
+                    // us the id): release the robot-side slot.
+                    if (sessionId) {
+                        void this._sendToServer({ type: 'endSession', sessionId, reason: 'client_stop' });
+                    }
                 } else if (r?.type === 'error' && this._sessionReject) {
                     // e.g. "Producer not found": the robot re-registered.
                     this._closeTransport(new Error(`Central refused the session: ${r.message ?? 'error'}`));
