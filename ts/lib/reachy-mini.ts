@@ -139,6 +139,18 @@ const RETIRED_SESSIONS_MAX = 8;
 const SIGNALING_STALL_MS = 75_000;
 
 /**
+ * Every call to central is bounded: a path that stalls without failing
+ * (lossy Wi-Fi, a half-dead connection) would otherwise hang a re-dial,
+ * a session start or a stop for as long as the browser's TCP timeout.
+ * `/send` and the robot list get CENTRAL_REQUEST_TIMEOUT_MS; opening the
+ * event stream gets SIGNALING_OPEN_TIMEOUT_MS for the response, then
+ * SIGNALING_WELCOME_TIMEOUT_MS for central's `welcome`.
+ */
+const CENTRAL_REQUEST_TIMEOUT_MS = 10_000;
+const SIGNALING_OPEN_TIMEOUT_MS = 15_000;
+const SIGNALING_WELCOME_TIMEOUT_MS = 15_000;
+
+/**
  * A robot's stable identity across central re-registrations (its peer id
  * changes each time): `install_id`, else `hardware_id`. Never the name,
  * which users often leave at the default and share across robots.
@@ -450,19 +462,27 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      */
     private async _openSignaling(): Promise<void> {
         this._sseAbortController = new AbortController();
+        const openController = this._sseAbortController;
+        let openTimedOut = false;
+        const openTimer = setTimeout(() => {
+            openTimedOut = true;
+            openController.abort();
+        }, SIGNALING_OPEN_TIMEOUT_MS);
 
         let res: Response;
         try {
             res = await fetch(
                 `${this._signalingUrl}/events`,
                 {
-                    signal: this._sseAbortController.signal,
+                    signal: openController.signal,
                     headers: { 'Authorization': `Bearer ${this._token}` },
                 },
             );
         } catch (e) {
-            this._sseAbortController = null;
-            throw e;
+            if (this._sseAbortController === openController) this._sseAbortController = null;
+            throw openTimedOut ? new Error('signaling: no answer from central') : e;
+        } finally {
+            clearTimeout(openTimer);
         }
         if (!res.ok) {
             this._sseAbortController = null;
@@ -476,6 +496,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             let buffer = '';
 
             const controller = this._sseAbortController;
+            // Central greets every stream at once: no welcome means a stream
+            // that will never work, and connect() must not wait on it.
+            let welcomeTimedOut = false;
+            const welcomeTimer = setTimeout(() => {
+                if (welcomed) return;
+                welcomeTimedOut = true;
+                log.warn('signaling: no welcome from central; aborting the stream');
+                controller?.abort();
+            }, SIGNALING_WELCOME_TIMEOUT_MS);
             let stallTimer: ReturnType<typeof setTimeout> | null = null;
             const armStallTimer = (): void => {
                 if (stallTimer !== null) clearTimeout(stallTimer);
@@ -501,6 +530,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                                 const msg = JSON.parse(line.slice(5).trim()) as SignalingMessage;
                                 if (!welcomed && msg.type === 'welcome' && msg.peerId) {
                                     welcomed = true;
+                                    clearTimeout(welcomeTimer);
                                     // A background reconnect lands mid-session:
                                     // the session state is left alone.
                                     const restoring = this._state !== 'disconnected';
@@ -528,8 +558,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     if ((e as Error).name !== 'AbortError') {
                         this._emit('error', { source: 'signaling', error: e as Error });
                     }
-                    if (!welcomed) { reject(e as Error); return; }
+                    if (!welcomed) {
+                        reject(welcomeTimedOut ? new Error('signaling: no welcome from central') : e as Error);
+                        return;
+                    }
                 } finally {
+                    clearTimeout(welcomeTimer);
                     if (stallTimer !== null) clearTimeout(stallTimer);
                 }
                 if (this._state === 'streaming') {
@@ -636,9 +670,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private async _fetchOwnedRobots(
         { filterBusy = true }: { filterBusy?: boolean } = {},
     ): Promise<AutoConnectRobotChoice[]> {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), CENTRAL_REQUEST_TIMEOUT_MS);
         try {
             const res = await fetch(`${this._signalingUrl}/api/robot-status`, {
                 headers: { 'Authorization': `Bearer ${this._token}` },
+                signal: controller.signal,
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const json = await res.json() as {
@@ -677,6 +714,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 meta: (r.meta ?? {}) as Record<string, unknown>,
                 lastSeenAgeSeconds: null,
             }));
+        } finally {
+            clearTimeout(timer);
         }
     }
 
@@ -894,12 +933,23 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 };
             };
 
+            const dialPc = this._pc;
             this._sendToServer({ type: 'startSession', peerId: robotId }).then((r) => {
                 if (r?.type === 'sessionRejected') {
                     this._failSessionRejected(r);
                     return;
                 }
-                if (r?.sessionId) this._sessionId = r.sessionId;
+                if (r?.sessionId) {
+                    this._sessionId = r.sessionId;
+                    return;
+                }
+                // Central never took the request (unreachable, timed out,
+                // refused): no offer will come, so fail this dial now rather
+                // than leave it to the caller's timeout. Only if it is still
+                // the pending dial.
+                if (r === null && this._pc === dialPc && this._sessionReject) {
+                    this._closeTransport(new Error('Could not reach central to start the session'));
+                }
             });
         });
     }
@@ -2093,6 +2143,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         message: Record<string, unknown>,
     ): Promise<SignalingMessage | null> {
         if (!this._token) throw new Error('No token — authenticate() first');
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), CENTRAL_REQUEST_TIMEOUT_MS);
         try {
             const res = await fetch(`${this._signalingUrl}/send`, {
                 method: 'POST',
@@ -2101,6 +2153,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     'Authorization': `Bearer ${this._token}`,
                 },
                 body: JSON.stringify(message),
+                signal: controller.signal,
             });
             if (!res.ok) {
                 let body = '';
@@ -2114,6 +2167,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         } catch (e) {
             log.error('signaling /send failed:', e);
             return null;
+        } finally {
+            clearTimeout(timer);
         }
     }
 
