@@ -78,6 +78,12 @@ SESSION_LINK_IDLE_S = 12.0
 # Consecutive failed heartbeats that end the central leg at once, instead
 # of waiting out SSE_READ_TIMEOUT on a stream that is already dead.
 HEARTBEAT_MAX_FAILURES = 2
+# A pending central session gets one local startSession per this long. Each
+# startSession from central triggers a local `list`, and every list reply
+# used to start a local session for every pending request: two requests a
+# millisecond apart started two GStreamer sessions for one central session.
+# Past this the start is re-sent, in case the local server dropped it.
+LOCAL_START_RESEND_S = 10.0
 # Per-request budget for POST /send. The session's default is 300 s, and a
 # request on a kept-alive connection whose packets are silently dropped
 # (Wi-Fi stall, route gone) hangs for all of it: heartbeats would never
@@ -218,6 +224,8 @@ class CentralSignalingRelay:
         self._central_to_local_session: dict[
             str, str
         ] = {}  # central_session_id -> local_session_id
+        # central_session_id -> monotonic time its local startSession was sent
+        self._local_start_sent_at: dict[str, float] = {}
 
         # Local sessions kept alive across a central-only drop (see
         # `_keep_sessions_on_central_loss`). Their media is peer-to-peer
@@ -385,6 +393,7 @@ class CentralSignalingRelay:
         self._orphaned_local_sessions.clear()
         self._local_session_started_at.clear()
         self._pending_central_sessions.clear()
+        self._local_start_sent_at.clear()
         self._local_to_central_session.clear()
         self._central_to_local_session.clear()
         self._session_to_local_peer.clear()
@@ -742,6 +751,7 @@ class CentralSignalingRelay:
             self._local_peer_id = None
             self._session_to_local_peer.clear()
             self._pending_central_sessions.clear()
+            self._local_start_sent_at.clear()
             self._local_to_central_session.clear()
             self._central_to_local_session.clear()
 
@@ -1029,6 +1039,7 @@ class CentralSignalingRelay:
             )
             self._session_to_local_peer.clear()
             self._pending_central_sessions.clear()
+            self._local_start_sent_at.clear()
             self._local_to_central_session.clear()
             self._central_to_local_session.clear()
             self._orphaned_local_sessions.clear()
@@ -1528,6 +1539,7 @@ class CentralSignalingRelay:
         for central_session_id in self._pending_central_sessions:
             self._session_to_local_peer.pop(central_session_id, None)
         self._pending_central_sessions.clear()
+        self._local_start_sent_at.clear()
         if self._local_to_central_session:
             newly_kept = (
                 set(self._local_to_central_session) - self._orphaned_local_sessions
@@ -1955,8 +1967,17 @@ class CentralSignalingRelay:
                     f"[Central Relay] Local GStreamer producer found: producer_id={self._local_producer_id}"
                 )
 
-                # Only start sessions for PENDING requests, not all tracked sessions
-                for central_session_id in list(self._pending_central_sessions):
+                # Only start sessions for PENDING requests, not all tracked
+                # sessions, and only once each (see LOCAL_START_RESEND_S).
+                pending = list(self._pending_central_sessions)
+                for stale in set(self._local_start_sent_at) - set(pending):
+                    del self._local_start_sent_at[stale]
+                now = time.monotonic()
+                for central_session_id in pending:
+                    sent_at = self._local_start_sent_at.get(central_session_id)
+                    if sent_at is not None and now - sent_at < LOCAL_START_RESEND_S:
+                        continue
+                    self._local_start_sent_at[central_session_id] = now
                     logger.info(
                         f"[Central Relay] Starting local session for pending central_session={central_session_id}"
                     )

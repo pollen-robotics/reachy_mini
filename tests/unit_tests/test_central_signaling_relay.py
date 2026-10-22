@@ -726,6 +726,61 @@ def test_startsession_acquires_lock_when_free() -> None:
     assert any(m.get("type") == "list" for m in local.sent)  # session proceeds
 
 
+def _local_starts(local: _SendJournal) -> int:
+    return sum(1 for m in local.sent if m.get("type") == "startSession")
+
+
+def test_quick_redial_starts_one_local_session() -> None:
+    """Two list replies for one pending request start ONE local session.
+
+    Right after a daemon restart a phone can send two requests about 1 ms
+    apart: central ends the first at once, the second stays pending, and
+    both requests' list replies arrive afterwards. Each used to start a
+    local session for the pending request: an orphan webrtcbin whose data
+    channel then replaced the real one.
+    """
+    relay, _central, local = _relay_with_lock(RobotAppLock())
+    producers = {"type": "list", "producers": [{"id": "producer-1"}]}
+
+    async def run() -> None:
+        await relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s1"}
+        )
+        await relay._process_central_message({"type": "endSession", "sessionId": "s1"})
+        await relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s2"}
+        )
+        await relay._process_local_message(producers)
+        await relay._process_local_message(producers)
+
+    asyncio.run(run())
+    assert _local_starts(local) == 1
+    asyncio.run(
+        relay._process_local_message({"type": "sessionStarted", "sessionId": "local-2"})
+    )
+    assert relay._central_to_local_session == {"s2": "local-2"}
+
+
+def test_unanswered_local_start_is_resent_later(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A start the local server never answered is re-sent past the resend delay."""
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    relay, _central, local = _relay_with_lock(RobotAppLock())
+    producers = {"type": "list", "producers": [{"id": "producer-1"}]}
+    clock = [1000.0]
+    monkeypatch.setattr(relay_module.time, "monotonic", lambda: clock[0])
+
+    _start_session(relay)
+    asyncio.run(relay._process_local_message(producers))
+    assert _local_starts(local) == 1
+
+    clock[0] += relay_module.LOCAL_START_RESEND_S + 1
+    asyncio.run(relay._process_local_message(producers))
+    assert _local_starts(local) == 2
+
+
 def test_startsession_control_only_while_local_app_runs() -> None:
     """While a local app holds the robot, a remote peer connects control-only."""
     lock = RobotAppLock()
