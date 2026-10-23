@@ -108,6 +108,20 @@ def create_move_task(coro: Coroutine[Any, Any, None]) -> MoveUUID:
     return MoveUUID(uuid=uuid)
 
 
+async def cancel_all_move_tasks(timeout: float = 2.0) -> None:
+    """Cancel every registered move task and wait up to ``timeout`` seconds.
+
+    Note: this cancels all HTTP moves, including ones started by other
+    clients such as the dashboard, not only the stopped app's moves.
+    Tasks still running after the timeout are left to finish on their own.
+    """
+    tasks = list(move_tasks.values())
+    for task in tasks:
+        task.cancel()
+    if tasks:
+        await asyncio.wait(tasks, timeout=timeout)
+
+
 async def stop_move_task(uuid: UUID) -> dict[str, str]:
     """Stop a running move task by cancelling it."""
     if uuid not in move_tasks:
