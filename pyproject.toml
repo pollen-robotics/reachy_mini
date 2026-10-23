@@ -27,7 +27,7 @@ dependencies = [
     "libusb_package>=1.0.26.3",
     "log-throttling==0.0.3",
     "numpy>=2.2.5",
-    "onnxruntime==1.27.0",
+    "onnxruntime>=1.27,<2",
     "pip>=26.1",
     "platformdirs",
     "psutil",

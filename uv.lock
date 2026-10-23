@@ -3278,7 +3278,7 @@ requires-dist = [
     { name = "mujoco", marker = "extra == 'mujoco'", specifier = "==3.3.0" },
     { name = "nmcli", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.5" },
     { name = "numpy", specifier = ">=2.2.5" },
-    { name = "onnxruntime", specifier = "==1.27.0" },
+    { name = "onnxruntime", specifier = ">=1.27,<2" },
     { name = "opencv-python", marker = "extra == 'examples'", specifier = "<=5.0" },
     { name = "opencv-python", marker = "extra == 'opencv'", specifier = "<=5.0" },
     { name = "pip", specifier = ">=26.1" },
