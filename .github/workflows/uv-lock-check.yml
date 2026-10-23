@@ -6,6 +6,9 @@ on:
       - "pyproject.toml"
       - "uv.lock"
 
+permissions:
+  contents: read
+
 jobs:
   uv-lock-check:
     runs-on: ubuntu-latest
