@@ -44,6 +44,11 @@ on:
 
 permissions: {}
 
+env:
+  # Hash-verified bootstrap from the Python eMudhra incident advisory.
+  PIP_BOOTSTRAP: >-
+    pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70
+
 jobs:
   # ============================================================
   # 0. PREFLIGHT (dry-run) — verify all secrets/vars/access are set, WITHOUT
@@ -403,7 +408,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install build frontend
-        run: pip install build
+        run: |
+          python -m pip --disable-pip-version-check install --no-index --no-deps "$PIP_BOOTSTRAP"
+          python -m pip install build
       - name: Build package
         run: python -m build
       - name: Publish to PyPI
@@ -496,7 +503,9 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         if: ${{ inputs.release_type != 'minor-release' }}
-        run: pip install PyGithub
+        run: |
+          python -m pip --disable-pip-version-check install --no-index --no-deps "$PIP_BOOTSTRAP"
+          python -m pip install PyGithub
 
       - name: Install OpenCode
         if: ${{ inputs.release_type != 'minor-release' }}
@@ -638,6 +647,8 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+        with:
+          version: ">=0.13.4"
 
       - name: Create RC-test branch, pin the RC, open PR
         env:
