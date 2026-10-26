@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from collections.abc import Iterable
 from datetime import date, datetime
 
 import aiohttp
@@ -41,8 +42,8 @@ SpaceData = dict[str, object]
 def _to_plain_json(value: object) -> object:
     """Deep-convert HfApi objects to the plain-JSON types the HTTP API returns.
 
-    Only the single-space lookup in ``get_python_app_info`` still goes through
-    HfApi; its SpaceInfo has nested fields (RepoSibling, datetimes, card data)
+    Author discovery and the single-space lookup use HfApi, whose SpaceInfo
+    has nested fields (RepoSibling, datetimes, card data)
     that are not JSON-serializable. Round-tripping through json normalizes it
     to the same shape as the HTTP API, so AppInfo.extra is always plain data.
     """
@@ -132,7 +133,7 @@ def _build_app_info(item: SpaceData | None) -> AppInfo | None:
 
 
 async def _fetch_all_spaces(
-    session: aiohttp.ClientSession, token: str | None
+    session: aiohttp.ClientSession, token: str | bool | None
 ) -> list[SpaceData]:
     """List spaces over plain HTTP, following pagination links.
 
@@ -166,10 +167,10 @@ async def _fetch_all_spaces(
     return [_normalize_space_data(space) for space in spaces]
 
 
-def _space_payloads_from_hf_objects(spaces: object) -> list[SpaceData]:
+def _space_payloads_from_hf_objects(spaces: Iterable[object]) -> list[SpaceData]:
     """Normalize an HfApi list_spaces iterable into SpaceData payloads."""
     payloads: list[SpaceData] = []
-    for space in spaces:  # type: ignore[attr-defined]
+    for space in spaces:
         space_dict = space.__dict__ if hasattr(space, "__dict__") else space
         space_data = _coerce_space_data(_to_plain_json(space_dict))
         if space_data is None or _get_string(space_data, "id") is None:
@@ -217,30 +218,6 @@ def _list_author_spaces_with_hf_api(api: HfApi, token: str | bool) -> list[Space
     except Exception as exc:  # noqa: BLE001 - catalog must stay available
         logger.warning("Could not list author HF Spaces for %s: %s", author, exc)
         return []
-
-
-def _list_all_spaces_with_hf_api(token: str | bool | None) -> list[SpaceData]:
-    """List spaces with Hugging Face Hub API using an optional token.
-
-    Always queries the likes-sorted public catalog (limit
-    ``HF_SPACES_LIMIT``). When a token is present, also merges Spaces owned
-    by that user so private / zero-like apps stay visible (issue #1374).
-    """
-    api = HfApi()
-    spaces = api.list_spaces(
-        filter=HF_SPACES_FILTER,
-        sort="likes",
-        limit=HF_SPACES_LIMIT,
-        full=True,
-        token=token,
-    )
-    catalog = _space_payloads_from_hf_objects(spaces)
-    if not token:
-        return catalog
-    author_spaces = _list_author_spaces_with_hf_api(api, token)
-    # Author Spaces first so the user's own apps win on id collisions.
-    return _merge_space_payloads(author_spaces, catalog)
-
 
 
 async def _fetch_space_data(
@@ -301,13 +278,21 @@ async def list_available_apps() -> list[AppInfo]:
 
 async def list_all_apps() -> list[AppInfo]:
     """List all apps available on Hugging Face Spaces (including private ones when authenticated)."""
-    token = hf_auth.get_hf_token()
+    token = hf_auth.get_hf_token() or False
     try:
         async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
             data = await _fetch_all_spaces(session, token)
     except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
         logger.warning("Could not list HF Spaces: %s", exc)
         return []
+
+    if token:
+        # Hub listing is lazy: consume all author pages off the event loop.
+        author_spaces = await asyncio.to_thread(
+            _list_author_spaces_with_hf_api, HfApi(), token
+        )
+        # Author metadata wins collisions with the limited public catalog.
+        data = _merge_space_payloads(author_spaces, data)
 
     apps = []
     for item in data:
