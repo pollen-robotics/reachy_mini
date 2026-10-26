@@ -24,7 +24,7 @@
 #   - secret RELEASE_PAT           : PAT/App token with contents+pull-requests write on
 #                                    reachy_mini AND reachy_mini_conversation_app (for the PRs)
 #   - secret RELEASE_NOTES_HF_TOKEN: HF token scoped to Inference Providers (release notes)
-#   - var    RELEASE_NOTES_MODEL   : provider/model for notes (e.g. huggingface/zai-org/GLM-5.2)
+#   - var    RELEASE_NOTES_MODEL   : provider/model for notes (e.g. huggingface/zai-org/GLM-5.3)
 #   - var    OPENCODE_VERSION      : pinned OpenCode version
 
 name: Release
