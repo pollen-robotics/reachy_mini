@@ -87,7 +87,7 @@ opencv = ["opencv-python<=5.0", "cv2_enumerate_cameras>=1.2.1"]
 # Optional NFC reader accessory: the host driver for the CLRC663 board. Kept
 # out of the base install because the accessory is optional and the daemon
 # reports it as unavailable rather than failing when the driver is missing.
-nfc = ["winnie_nfc>=0.3.0"]
+nfc = ["winnie_nfc>=1.0.0"]
 # `media.central_consumer` only: a cloud backend consuming a robot over the
 # HF central relay. Kept out of the base install because a robot never runs
 # the consumer, and aiortc pulls a native SRTP/crypto stack with it.
