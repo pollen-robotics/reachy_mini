@@ -101,6 +101,13 @@ MIC_REOPEN_DELAY_S = 1.0
 MIC_REOPEN_MAX_DELAY_S = 30.0
 MIC_REOPEN_RESET_S = 60.0
 
+# Restarting the WebRTC pipeline after an error (see
+# `_schedule_pipeline_restart`): at most PIPELINE_RESTART_LIMIT restarts in
+# any PIPELINE_RESTART_WINDOW_S, so a permanently broken device can't loop.
+PIPELINE_RESTART_DELAY_S = 1
+PIPELINE_RESTART_LIMIT = 3
+PIPELINE_RESTART_WINDOW_S = 60.0
+
 
 @dataclass
 class _PeerWebRTCState:
@@ -395,6 +402,11 @@ class GstMediaServer:
         self._mic_reopen_source_id: Optional[int] = None
         self._mic_reopen_delay_s = MIC_REOPEN_DELAY_S
         self._mic_last_failure = 0.0
+        # Whether `start()` has run without a matching `stop()`. Only a
+        # running pipeline is restarted after an error.
+        self._pipeline_running = False
+        self._pipeline_restart_source_id: Optional[int] = None
+        self._pipeline_restart_times: list[float] = []
 
         if enable_turn is None:
             # Deferred like the speaker-EQ lookup in audio_utils, so this
@@ -1494,7 +1506,49 @@ class GstMediaServer:
             if err.domain == GLib.quark_to_string(Gst.ResourceError.quark()):
                 self._on_mic_failure(msg.src, err.message)
                 return True
-        return handle_default_bus_message(self._logger, msg, pipeline)
+        keep_watch = handle_default_bus_message(self._logger, msg, pipeline)
+        if msg.type == Gst.MessageType.ERROR and pipeline is self._pipeline_sender:
+            self._schedule_pipeline_restart()
+        return keep_watch
+
+    def _schedule_pipeline_restart(self) -> None:
+        """Rebuild the pipeline after an error instead of leaving it dead.
+
+        An error stops the whole pipeline: WebRTC clients still connect but
+        get no media until something restarts it. Restart it like
+        `stop()` / `start()` do, so clients reconnect, at most
+        ``PIPELINE_RESTART_LIMIT`` times per ``PIPELINE_RESTART_WINDOW_S``.
+        """
+        if not self._pipeline_running or self._pipeline_restart_source_id is not None:
+            return
+
+        now = time.monotonic()
+        self._pipeline_restart_times = [
+            t
+            for t in self._pipeline_restart_times
+            if now - t < PIPELINE_RESTART_WINDOW_S
+        ]
+        if len(self._pipeline_restart_times) >= PIPELINE_RESTART_LIMIT:
+            self._logger.error(
+                f"Media pipeline failed {PIPELINE_RESTART_LIMIT} times within "
+                f"{PIPELINE_RESTART_WINDOW_S:g}s, not restarting it again"
+            )
+            return
+
+        self._pipeline_restart_times.append(now)
+        self._logger.warning(
+            f"Restarting the media pipeline in {PIPELINE_RESTART_DELAY_S}s after an error"
+        )
+        self._pipeline_restart_source_id = GLib.timeout_add_seconds(
+            PIPELINE_RESTART_DELAY_S, self._restart_pipeline
+        )
+
+    def _restart_pipeline(self) -> bool:
+        self._pipeline_restart_source_id = None
+        if self._pipeline_running:
+            self.stop()
+            self.start()
+        return False
 
     def _on_mic_failure(self, audiosrc: Gst.Element, reason: str) -> None:
         """Schedule a reopen of the Windows mic after a device failure.
@@ -1534,14 +1588,18 @@ class GstMediaServer:
         self._logger.debug("Starting WebRTC (rebuilding pipeline)")
         self._build_pipeline()
         self._pipeline_sender.set_state(Gst.State.PLAYING)
+        self._pipeline_running = True
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def stop(self) -> None:
         """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
-        if self._mic_reopen_source_id is not None:
-            GLib.source_remove(self._mic_reopen_source_id)
-            self._mic_reopen_source_id = None
+        self._pipeline_running = False
+        for source_id in (self._mic_reopen_source_id, self._pipeline_restart_source_id):
+            if source_id is not None:
+                GLib.source_remove(source_id)
+        self._mic_reopen_source_id = None
+        self._pipeline_restart_source_id = None
         self._pipeline_sender.set_state(Gst.State.NULL)
 
     def play_sound(self, sound_file: str) -> None:
