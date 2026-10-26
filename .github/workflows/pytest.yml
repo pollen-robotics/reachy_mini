@@ -15,13 +15,13 @@ jobs:
     timeout-minutes: 10
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-latest]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           lfs: true
       - name: Install system dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         uses: ./.github/actions/install-system-deps
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
@@ -44,10 +44,10 @@ jobs:
       # socket GStreamerCamera reads. Board/wireless tests stay excluded.
       # Ubuntu only.
       - name: Set up virtual sound card (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         uses: ./.github/actions/virtual-sound-card
       - name: Run audio + video tests (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         run: |
           uv run pytest -vv tests/unit_tests/test_audio.py tests/unit_tests/test_video.py \
             -m '(audio or video) and not respeaker and not wireless' --tb=short
@@ -58,10 +58,10 @@ jobs:
       # and a gst-launch webrtcsink producer loops back to the client. Pure
       # userspace (no robot). Ubuntu only. See tests/unit_tests/test_webrtc_*.
       - name: Set up gst-plugins-rs webrtc plugin (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         uses: ./.github/actions/webrtc-plugin
       - name: Run WebRTC tests (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         run: |
           # `-m webrtc` explicitly selects these, so a missing plugin fails
           # loudly (see conftest.pytest_collection_modifyitems) rather than
