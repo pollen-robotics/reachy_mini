@@ -1,0 +1,20 @@
+INFO     reachy_mini.daemon.daemon:daemon.py:72 Daemon version: 1.13.0
+INFO     reachy_mini.daemon.daemon:daemon.py:127 Media disabled (--no-media). No camera, audio, or media server.
+INFO     reachy_mini.daemon.daemon:daemon.py:407 Daemon start parameters: sim=True, mockup_sim=False, serialport=auto, scene=empty, wake_up_on_start=False, check_collision=False, kinematics_engine=AnalyticalKinematics, headless=True, hardware_config_filepath=None
+INFO     reachy_mini.daemon.daemon:daemon.py:433 Starting Reachy Mini daemon...
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:189 Using AnalyticalKinematics kinematics engine
+INFO     reachy_mini.daemon.daemon:daemon.py:240 JSON-RPC app relay wired to the DataChannel
+INFO     reachy_mini.daemon.daemon:daemon.py:535 Daemon started successfully.
+INFO     reachy_mini.daemon.daemon:daemon.py:579 Stopping Reachy Mini daemon...
+INFO     reachy_mini.daemon.daemon:daemon.py:640 Daemon stopped successfully.
+WARNING  reachy_mini.daemon.daemon:daemon.py:565 Daemon is already stopped.
+INFO     reachy_mini.daemon.daemon:daemon.py:72 Daemon version: 1.13.0
+INFO     reachy_mini.daemon.daemon:daemon.py:127 Media disabled (--no-media). No camera, audio, or media server.
+INFO     reachy_mini.daemon.daemon:daemon.py:407 Daemon start parameters: sim=True, mockup_sim=False, serialport=auto, scene=empty, wake_up_on_start=False, check_collision=False, kinematics_engine=AnalyticalKinematics, headless=True, hardware_config_filepath=None
+INFO     reachy_mini.daemon.daemon:daemon.py:433 Starting Reachy Mini daemon...
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:189 Using AnalyticalKinematics kinematics engine
+INFO     reachy_mini.daemon.daemon:daemon.py:240 JSON-RPC app relay wired to the DataChannel
+INFO     reachy_mini.daemon.daemon:daemon.py:535 Daemon started successfully.
+INFO     reachy_mini.daemon.daemon:daemon.py:579 Stopping Reachy Mini daemon...
+INFO     reachy_mini.daemon.daemon:daemon.py:640 Daemon stopped successfully.
+WARNING  reachy_mini.daemon.daemon:daemon.py:565 Daemon is already stopped.

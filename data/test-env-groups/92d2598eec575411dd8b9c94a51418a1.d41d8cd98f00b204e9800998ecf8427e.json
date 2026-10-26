@@ -1,1 +1,1 @@
-{"id":"92d2598eec575411dd8b9c94a51418a1.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_telemetry#test_client_connected_once_per_client","name":"test_client_connected_once_per_client","status":"passed","testResultsByEnv":{"default":"3b83a88b73a9165eccb3d94e34fe099f"}}
+{"id":"92d2598eec575411dd8b9c94a51418a1.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_telemetry#test_client_connected_once_per_client","name":"test_client_connected_once_per_client","status":"passed","testResultsByEnv":{"default":"69b738fad7086ab689623254dac77cb6"}}
