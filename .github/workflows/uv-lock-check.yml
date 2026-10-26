@@ -7,6 +7,9 @@ on:
       - "uv.lock"
       - ".github/workflows/uv-lock-check.yml"
 
+permissions:
+  contents: read
+
 jobs:
   uv-lock-check:
     runs-on: ubuntu-latest

@@ -19,6 +19,9 @@ on:
     - cron: "17 4 * * 1" # Mondays 04:17 UTC
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   contract-latest:
     runs-on: ubuntu-latest
