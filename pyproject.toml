@@ -30,7 +30,8 @@ dependencies = [
     "log-throttling==0.0.3",
     "numpy>=2.2.5",
     "onnxruntime==1.27.0",
-    "pip>=26.1",
+    # pip vendors its own CA bundle; updating certifi alone does not protect it.
+    "pip>=26.2.2",
     "platformdirs",
     "psutil",
     "pulsectl>=24.1.0; sys_platform == 'linux'",
@@ -126,13 +127,16 @@ reachy-mini-app-assistant = "reachy_mini.apps.app:main"
 reachy-mini-reflash-motors = "reachy_mini.tools.reflash_motors:main"
 
 [tool.uv]
+required-version = ">=0.13.4"
 exclude-newer = "7 days"
 
 [tool.uv.exclude-newer-package]
 "pollen_BMI088_imu_library"  = false
 # Security fix inside the 7-day window: admit 2026.10.19, not later releases.
-# Remove after 2026-10-27, once the default cutoff covers it.
+# Remove both certifi and pip exceptions after 2026-10-27.
 "certifi" = "2026-10-21T00:00:00Z"
+# Admit the patched pip bootstrap release during the same security exception.
+"pip" = "2026-10-21T00:00:00Z"
 # huggingface-hub is pinned to an exact version (==1.20.1) in [project.dependencies],
 # released well before the 7-day cutoff, so no opt-out is needed here.
 
