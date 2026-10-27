@@ -3111,28 +3111,34 @@ class Backend:
         def send(resp: dict[str, Any]) -> None:
             self._send_webrtc_response(peer_id, resp)
 
+        try:
+            obj = json.loads(message)
+        except (json.JSONDecodeError, ValueError):
+            obj = None
+
         # JSON-RPC frames go to the app relay; legacy {"type": ...} commands
         # fall through to command_adapter. Both share the DataChannel.
-        if self._jsonrpc_handler is not None:
-            try:
-                obj = json.loads(message)
-            except (json.JSONDecodeError, ValueError):
-                obj = None
-            if looks_like_jsonrpc(obj):
-                self._jsonrpc_handler(message, send)
-                return
+        if self._jsonrpc_handler is not None and looks_like_jsonrpc(obj):
+            self._jsonrpc_handler(message, send)
+            return
 
         try:
             cmd = command_adapter.validate_json(message)
         except Exception as e:
             self.logger.error(f"WebRTC invalid command: {e}")
-            send({"error": f"Invalid command: {e}"})
+            resp: dict[str, Any] = {"status": "error", "error": f"Invalid command: {e}"}
+            # Echo the type so the client fails the matching call, e.g. a
+            # command this daemon is too old to know, instead of timing out.
+            kind = obj.get("type") if isinstance(obj, dict) else None
+            if isinstance(kind, str):
+                resp["command"] = kind
+            send(resp)
             return
         try:
             self.process_command(cmd, send_response=send, peer_id=peer_id)
         except Exception as e:
             self.logger.error(f"WebRTC command error: {e}")
-            send({"error": str(e)})
+            send({"command": cmd.type, "status": "error", "error": str(e)})
 
     def _send_webrtc_response(self, peer_id: str, response: dict[str, Any]) -> None:
         if self._send_message_to_webrtc:
