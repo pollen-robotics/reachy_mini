@@ -94,6 +94,13 @@ SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 # Cap the local IPC feed below the capture rate; it also paces every client, face tracker included.
 IPC_FPS = 10
 
+# Reopening the Windows mic after Windows invalidated it (see
+# `_on_mic_failure`). Retries back off up to the cap while failures keep
+# coming, and start again from the base delay after a quiet spell.
+MIC_REOPEN_DELAY_S = 1.0
+MIC_REOPEN_MAX_DELAY_S = 30.0
+MIC_REOPEN_RESET_S = 60.0
+
 
 @dataclass
 class _PeerWebRTCState:
@@ -144,6 +151,14 @@ def _session_id_of(webrtcbin: Gst.Element) -> Optional[str]:
     ):
         return name[len(_WEBRTCBIN_NAME_PREFIX) :]
     return None
+
+
+def _is_wasapi2src(obj: Optional[GObject.Object]) -> bool:
+    """Whether a bus message source is the Windows mic (``wasapi2src``)."""
+    if not isinstance(obj, Gst.Element):
+        return False
+    factory = obj.get_factory()
+    return factory is not None and factory.get_name() == "wasapi2src"
 
 
 _gobject_ref: Optional[Callable[[Any], int]] = None
@@ -376,6 +391,10 @@ class GstMediaServer:
         # reused across per-peer playback pipelines (see _on_consumer_pad_added).
         self._aec_enabled = False
         self._webrtcechoprobe: Optional[Gst.Element] = None
+        # Pending reopen of the Windows mic, see `_on_mic_failure`.
+        self._mic_reopen_source_id: Optional[int] = None
+        self._mic_reopen_delay_s = MIC_REOPEN_DELAY_S
+        self._mic_last_failure = 0.0
 
         if enable_turn is None:
             # Deferred like the speaker-EQ lookup in audio_utils, so this
@@ -1440,6 +1459,11 @@ class GstMediaServer:
             if platform.system() == "Windows":
                 audiosrc = Gst.ElementFactory.make("wasapi2src")
                 audiosrc.set_property("device", id_audio_card)
+                # When Windows invalidates the endpoint, post a warning and
+                # feed silence instead of an error that stops the whole
+                # pipeline, video included. `_on_mic_failure` reopens it.
+                if audiosrc.find_property("continue-on-error") is not None:
+                    audiosrc.set_property("continue-on-error", True)
                 self._logger.info(f"Using WASAPI device {id_audio_card} for capture.")
             elif platform.system() == "Darwin":
                 audiosrc = Gst.ElementFactory.make("osxaudiosrc")
@@ -1463,7 +1487,44 @@ class GstMediaServer:
     def _on_bus_message(
         self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
     ) -> bool:
+        if msg.type == Gst.MessageType.WARNING and _is_wasapi2src(msg.src):
+            err, _ = msg.parse_warning()
+            # Device failures only; e.g. an overrun ("Can't record audio fast
+            # enough", a CORE warning) is no reason to reopen the mic.
+            if err.domain == GLib.quark_to_string(Gst.ResourceError.quark()):
+                self._on_mic_failure(msg.src, err.message)
+                return True
         return handle_default_bus_message(self._logger, msg, pipeline)
+
+    def _on_mic_failure(self, audiosrc: Gst.Element, reason: str) -> None:
+        """Schedule a reopen of the Windows mic after a device failure.
+
+        With ``continue-on-error``, ``wasapi2src`` feeds silence once Windows
+        invalidates its endpoint, and setting ``device`` again makes it reopen
+        the device. A reopen attempted while the device is still in flux fails
+        and posts another warning, which lands here again: retries back off up
+        to ``MIC_REOPEN_MAX_DELAY_S`` and start over after a quiet spell.
+        """
+        now = time.monotonic()
+        if now - self._mic_last_failure > MIC_REOPEN_RESET_S:
+            self._mic_reopen_delay_s = MIC_REOPEN_DELAY_S
+        self._mic_last_failure = now
+        if self._mic_reopen_source_id is not None:
+            return
+
+        delay_s = self._mic_reopen_delay_s
+        self._mic_reopen_delay_s = min(delay_s * 2, MIC_REOPEN_MAX_DELAY_S)
+        self._logger.warning(f"Microphone lost ({reason}), reopening in {delay_s:g}s")
+        self._mic_reopen_source_id = GLib.timeout_add(
+            int(delay_s * 1000), self._reopen_mic, audiosrc
+        )
+
+    def _reopen_mic(self, audiosrc: Gst.Element) -> bool:
+        self._mic_reopen_source_id = None
+        # Skip a source left over from a pipeline rebuilt in the meantime.
+        if audiosrc.get_parent() is self._pipeline_sender:
+            audiosrc.set_property("device", audiosrc.get_property("device"))
+        return False
 
     def start(self) -> None:
         """Rebuild the pipeline from scratch and start it.
@@ -1478,6 +1539,9 @@ class GstMediaServer:
     def stop(self) -> None:
         """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
+        if self._mic_reopen_source_id is not None:
+            GLib.source_remove(self._mic_reopen_source_id)
+            self._mic_reopen_source_id = None
         self._pipeline_sender.set_state(Gst.State.NULL)
 
     def play_sound(self, sound_file: str) -> None:
