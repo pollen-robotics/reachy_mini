@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/reachy_mini/daemon/app/routers/state.py: 58%</title>
+    <title>Coverage for src/reachy_mini/daemon/app/routers/state.py: 65%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_15cffcd0.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src<span class="sep">/</span>reachy_mini<span class="sep">/</span>daemon<span class="sep">/</span>app<span class="sep">/</span>routers<span class="sep">/</span>state.py</b>:
-            <span class="pc_cov">58%</span>
+            <span class="pc_cov">65%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">81 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">47<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">34<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">53<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">28<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_5f5ce02ad5e36bc1_telemetry_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-26 13:23 +0000
+            created at 2026-10-27 15:20 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -194,21 +194,21 @@
     <p class="run"><span class="n"><a id="t112" href="#t112">112</a></span><span class="t">        <span class="nam">pose</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">get_present_head_pose</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t113" href="#t113">113</a></span><span class="t">        <span class="nam">result</span><span class="op">[</span><span class="str">&quot;head_pose&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">as_any_pose</span><span class="op">(</span><span class="nam">pose</span><span class="op">,</span> <span class="nam">use_pose_matrix</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t114" href="#t114">114</a></span><span class="t">    <span class="key">if</span> <span class="nam">with_target_head_pose</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t115" href="#t115">115</a></span><span class="t">        <span class="nam">target_pose</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">target_head_pose</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t116" href="#t116">116</a></span><span class="t">        <span class="key">assert</span> <span class="nam">target_pose</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t117" href="#t117">117</a></span><span class="t">        <span class="nam">result</span><span class="op">[</span><span class="str">&quot;target_head_pose&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">as_any_pose</span><span class="op">(</span><span class="nam">target_pose</span><span class="op">,</span> <span class="nam">use_pose_matrix</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t115" href="#t115">115</a></span><span class="t">        <span class="nam">target_pose</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">target_head_pose</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t116" href="#t116">116</a></span><span class="t">        <span class="key">assert</span> <span class="nam">target_pose</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t117" href="#t117">117</a></span><span class="t">        <span class="nam">result</span><span class="op">[</span><span class="str">&quot;target_head_pose&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">as_any_pose</span><span class="op">(</span><span class="nam">target_pose</span><span class="op">,</span> <span class="nam">use_pose_matrix</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t118" href="#t118">118</a></span><span class="t">    <span class="key">if</span> <span class="nam">with_head_joints</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t119" href="#t119">119</a></span><span class="t">        <span class="nam">result</span><span class="op">[</span><span class="str">&quot;head_joints&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">get_present_head_joint_positions</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t120" href="#t120">120</a></span><span class="t">    <span class="key">if</span> <span class="nam">with_target_head_joints</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t121" href="#t121">121</a></span><span class="t">        <span class="nam">result</span><span class="op">[</span><span class="str">&quot;target_head_joints&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">target_head_joint_positions</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t121" href="#t121">121</a></span><span class="t">        <span class="nam">result</span><span class="op">[</span><span class="str">&quot;target_head_joints&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">target_head_joint_positions</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t122" href="#t122">122</a></span><span class="t">    <span class="key">if</span> <span class="nam">with_body_yaw</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t123" href="#t123">123</a></span><span class="t">        <span class="nam">result</span><span class="op">[</span><span class="str">&quot;body_yaw&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">get_present_body_yaw</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t124" href="#t124">124</a></span><span class="t">    <span class="key">if</span> <span class="nam">with_target_body_yaw</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t125" href="#t125">125</a></span><span class="t">        <span class="nam">result</span><span class="op">[</span><span class="str">&quot;target_body_yaw&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">target_body_yaw</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t125" href="#t125">125</a></span><span class="t">        <span class="nam">result</span><span class="op">[</span><span class="str">&quot;target_body_yaw&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">target_body_yaw</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t126" href="#t126">126</a></span><span class="t">    <span class="key">if</span> <span class="nam">with_antenna_positions</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t127" href="#t127">127</a></span><span class="t">        <span class="nam">result</span><span class="op">[</span><span class="str">&quot;antennas_position&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">get_present_antenna_joint_positions</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t128" href="#t128">128</a></span><span class="t">    <span class="key">if</span> <span class="nam">with_target_antenna_positions</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t129" href="#t129">129</a></span><span class="t">        <span class="nam">result</span><span class="op">[</span><span class="str">&quot;target_antennas_position&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">target_antenna_joint_positions</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t129" href="#t129">129</a></span><span class="t">        <span class="nam">result</span><span class="op">[</span><span class="str">&quot;target_antennas_position&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">target_antenna_joint_positions</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t130" href="#t130">130</a></span><span class="t">    <span class="key">if</span> <span class="nam">with_passive_joints</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t131" href="#t131">131</a></span><span class="t">        <span class="nam">joints</span> <span class="op">=</span> <span class="nam">backend</span><span class="op">.</span><span class="nam">get_present_passive_joint_positions</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t132" href="#t132">132</a></span><span class="t">        <span class="key">if</span> <span class="nam">joints</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -285,7 +285,7 @@
             <a class="nav" href="z_5f5ce02ad5e36bc1_telemetry_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-26 13:23 +0000
+            created at 2026-10-27 15:20 +0000
         </p>
     </div>
 </footer>
