@@ -11,7 +11,10 @@ Same lightweight-fake approach as ``test_backend_idle_reset``: the method only
 touches a handful of ``self`` attributes, so it is exercised unbound.
 """
 
+import asyncio
+import time
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
@@ -34,6 +37,7 @@ def _fake_backend(*, head_pose: np.ndarray | None = None) -> SimpleNamespace:
         SLEEP_POSE_MAGIC_ATOL=Backend.SLEEP_POSE_MAGIC_ATOL,
         current_head_pose=head_pose,
         get_current_head_pose=lambda: head_pose,
+        is_move_running=False,
         calls=calls,
     )
     fake._quiesce_aim_sources = MagicMock(side_effect=lambda: calls.append("quiesce"))
@@ -108,6 +112,23 @@ async def test_sleep_still_runs_when_already_near_init() -> None:
     fake = _fake_backend(head_pose=Backend.INIT_HEAD_POSE.copy())
     await Backend.reset_to_sleep(fake)
     fake.goto_sleep.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_running_move_is_stopped_first(sim_backend: Any) -> None:
+    """A move left running (e.g. after a Wi-Fi drop) is stopped, not fought."""
+    sim_backend.goto_sleep = AsyncMock()
+    start = time.monotonic()
+    leftover = asyncio.create_task(
+        sim_backend.goto_target(head=Backend.INIT_HEAD_POSE, duration=5.0)
+    )
+    await asyncio.sleep(0.05)
+
+    await sim_backend.reset_to_sleep()
+
+    assert leftover.done()
+    assert time.monotonic() - start < 4.0
+    sim_backend.goto_sleep.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

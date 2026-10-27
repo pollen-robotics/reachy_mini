@@ -1405,6 +1405,17 @@ class Backend:
         it collapses every possible inherited pose into the one starting point
         the sleep trajectory was tuned for.
         """
+        # A move can outlive the session that started it (an uploaded dance
+        # keeps playing after a Wi-Fi drop): stop it before taking over.
+        if self.is_move_running:
+            self._stop_move_requested = True
+            token = self._active_move_token
+            if token is not None:
+                token.cancelled = True
+            deadline = time.monotonic() + 1.0
+            while self.is_move_running and time.monotonic() < deadline:
+                await asyncio.sleep(0.02)
+
         # Ordered: quiesce first so tracking can't re-aim the head between the
         # torque coming back and the lift starting.
         self._quiesce_aim_sources()
