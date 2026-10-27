@@ -127,3 +127,18 @@ def test_rescan_failure_is_non_fatal(device, sleeps):
     rescan.side_effect = Exception("Scanning not allowed")
     wifi._connect_station_with_rescan(ssid="X", password="pw")  # still succeeds
     assert connect.call_count == 1
+
+
+@pytest.mark.parametrize(
+    ("password", "expected"),
+    [("", None), ("secret", "secret")],
+)
+def test_station_password_is_normalized_for_nmcli(monkeypatch, password, expected):
+    """Open networks omit nmcli's password argument; secured ones keep it."""
+    connect = MagicMock(name="_connect_station_with_rescan")
+    monkeypatch.setattr(wifi, "check_if_connection_exists", lambda _name: False)
+    monkeypatch.setattr(wifi, "_connect_station_with_rescan", connect)
+
+    wifi.setup_wifi_connection(name="Network", ssid="Network", password=password)
+
+    connect.assert_called_once_with(ssid="Network", password=expected)
