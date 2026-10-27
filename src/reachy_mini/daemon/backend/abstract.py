@@ -1402,6 +1402,17 @@ class Backend:
         nothing snaps), gravity compensation and per-motor torque overrides
         cleared, aim sources quiesced, then a lift to the init pose.
         """
+        # A move can outlive the session that started it (an uploaded dance
+        # keeps playing after a Wi-Fi drop): stop it before taking over.
+        if self.is_move_running:
+            self._stop_move_requested = True
+            token = self._active_move_token
+            if token is not None:
+                token.cancelled = True
+            deadline = time.monotonic() + 1.0
+            while self.is_move_running and time.monotonic() < deadline:
+                await asyncio.sleep(0.02)
+
         # Ordered: quiesce first so tracking can't re-aim the head between the
         # torque coming back and the lift starting.
         self._quiesce_aim_sources()
