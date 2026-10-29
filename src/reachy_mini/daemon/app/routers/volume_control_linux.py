@@ -358,35 +358,39 @@ class VolumeControlLinux(VolumeControl):
             A dictionary containing the ID and name of each audio device: {id: int, name: str, ...}.
 
         Raises:
-            RuntimeError: If aplay or arecord fail when getting all audio devices.
+            RuntimeError: If both aplay and arecord fail when getting all audio devices.
 
         """
+        # Playback cards from aplay, capture cards from arecord.
+        output = ""
+        errors: list[str] = []
+        for tool in ("aplay", "arecord"):
+            try:
+                output += subprocess.run(
+                    [tool, "-l"],
+                    capture_output=True,
+                    text=True,
+                    timeout=AUDIO_COMMAND_TIMEOUT,
+                    check=True,
+                ).stdout
+            except (
+                subprocess.TimeoutExpired,
+                FileNotFoundError,
+                subprocess.CalledProcessError,
+            ) as e:
+                errors.append(f"{tool}: {e}")
+        if len(errors) == 2:
+            raise RuntimeError(f"Could not scan audio devices: {'; '.join(errors)}")
+        if errors:
+            logger.warning(f"Partial audio device scan: {errors[0]}")
+
         devices: dict[int | str, str] = {}
-        try:
-            scan_result = subprocess.run(
-                ["aplay", "-l", ";", "arecord", "-l"],
-                capture_output=True,
-                text=True,
-                timeout=AUDIO_COMMAND_TIMEOUT,
-                check=True,
-            )
-            pattern = re.compile(r"card\s+(\d+):\s+[^[]+\[([^\]]+)\]")
-            for line in scan_result.stdout.splitlines():
-                match = pattern.search(line)
-                if not match:
-                    continue
-                device_id = int(match.group(1))
-                device_name = match.group(2)
-                devices.setdefault(device_id, device_name)
-            return devices
-        except (
-            subprocess.TimeoutExpired,
-            FileNotFoundError,
-            subprocess.CalledProcessError,
-        ) as e:
-            raise RuntimeError(
-                f"Could not scan audio devices, aplay or arecord failed with error: {e}"
-            )
+        pattern = re.compile(r"card\s+(\d+):\s+[^[]+\[([^\]]+)\]")
+        for line in output.splitlines():
+            match = pattern.search(line)
+            if match:
+                devices.setdefault(int(match.group(1)), match.group(2))
+        return devices
 
     def _alsa_get_input_output_devices(self) -> tuple[AudioDevice, AudioDevice]:
         """Get the input and output audio devices via ALSA.
