@@ -9,11 +9,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
-import numpy as np
 import psutil
 from pydantic import BaseModel
 
-from reachy_mini.daemon.backend.robot import RobotBackend
 from reachy_mini.daemon.telemetry import app_id_for, telemetry
 from reachy_mini.io.protocol import MotorControlMode
 from reachy_mini.utils.interpolation import distance_between_poses
@@ -303,9 +301,12 @@ class AppManager:
                 # Always release the robot lock when the subprocess exits, no
                 # matter how: clean exit, crash, SIGKILL, OOM, or cancellation
                 # of this monitor task. Idempotent — stop_current_app's own
-                # release is fine too.
+                # release is fine too. A requested stop skips the daemon's idle
+                # reset: stop_current_app resets the robot itself.
                 if self.daemon is not None:
-                    self.daemon.robot_app_lock.release_local(app_name)
+                    self.daemon.robot_app_lock.release_local(
+                        app_name, cleaned_up=stop_requested.is_set()
+                    )
                 exit_code = process.returncode
                 telemetry.capture(
                     "robot_app_stopped",
@@ -387,23 +388,13 @@ class AppManager:
                     "Robot is asleep; leaving it limp in the sleep pose."
                 )
             else:
-                if isinstance(backend, RobotBackend):
-                    backend.enable_motors()
-
                 try:
-                    from reachy_mini.reachy_mini import (
-                        INIT_ANTENNAS_JOINT_POSITIONS,
-                        INIT_HEAD_POSE,
-                    )
-
                     self.logger.getChild("runner").info(
                         "Returning robot to zero position"
                     )
-                    await backend.goto_target(
-                        head=INIT_HEAD_POSE,
-                        antennas=np.array(INIT_ANTENNAS_JOINT_POSITIONS),
-                        duration=1.0,
-                    )
+                    # Not a bare goto: the app may have left gravity
+                    # compensation, limp motors or head tracking behind.
+                    await backend.reset_to_init()
                 except Exception as e:
                     self.logger.getChild("runner").warning(
                         f"Could not return to zero position: {e}"
