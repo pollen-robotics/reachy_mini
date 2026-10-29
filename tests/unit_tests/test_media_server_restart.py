@@ -9,6 +9,7 @@ pipeline itself are stubbed.
 from __future__ import annotations
 
 import logging
+from threading import Event, RLock, Thread
 from typing import Any, Dict, List, cast
 from unittest.mock import MagicMock
 
@@ -30,6 +31,7 @@ def _make_server(running: bool = True) -> GstMediaServer:
     server._mic_reopen_source_id = None
     server._pipeline_running = running
     server._pipeline_restart_source_id = None
+    server._pipeline_lock = RLock()
     server._pipeline_restart_times = []
     server._pipeline_sender = MagicMock()
     # Stubs for `__del__` -> `close()`.
@@ -139,3 +141,72 @@ def test_stop_cancels_a_pending_restart(
     assert timers["removed"] == [pending]
     assert server._pipeline_restart_source_id is None
     assert server._pipeline_running is False
+
+
+def test_restart_yields_to_a_stop_running_on_another_thread(
+    monkeypatch: pytest.MonkeyPatch, timers: Dict[str, List[Any]], clock: List[float]
+) -> None:
+    """A `release_media()` racing the restart must not be undone by it."""
+    server = _make_server()
+    calls: List[str] = []
+    monkeypatch.setattr(server, "stop", lambda: calls.append("stop"))
+    monkeypatch.setattr(server, "start", lambda: calls.append("start"))
+    _error(server)
+
+    # The daemon's `stop()` holds the lock on its own thread.
+    held, done = Event(), Event()
+
+    def hold_lock() -> None:
+        with server._pipeline_lock:
+            held.set()
+            done.wait(5)
+
+    holder = Thread(target=hold_lock)
+    holder.start()
+    held.wait(5)
+    try:
+        assert server._restart_pipeline() is False
+    finally:
+        done.set()
+        holder.join()
+
+    assert calls == []
+
+
+def test_restart_skipped_when_released_before_it_runs(
+    monkeypatch: pytest.MonkeyPatch, timers: Dict[str, List[Any]], clock: List[float]
+) -> None:
+    server = _make_server()
+    calls: List[str] = []
+    monkeypatch.setattr(server, "stop", lambda: calls.append("stop"))
+    monkeypatch.setattr(server, "start", lambda: calls.append("start"))
+    _error(server)
+
+    server._pipeline_running = False  # media released in the meantime
+    assert server._restart_pipeline() is False
+
+    assert calls == []
+
+
+def test_failed_restart_is_logged_and_leaves_media_stopped(
+    monkeypatch: pytest.MonkeyPatch,
+    timers: Dict[str, List[Any]],
+    clock: List[float],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    server = _make_server()
+
+    def failing_start() -> None:
+        raise RuntimeError("camera gone")
+
+    monkeypatch.setattr(server, "start", failing_start)
+    _error(server)
+
+    with caplog.at_level(logging.ERROR, logger="test_restart"):
+        assert server._restart_pipeline() is False
+
+    assert "restart failed" in caplog.text
+    assert server._pipeline_running is False
+    # The lock was released: a later stop() doesn't deadlock.
+    assert server._pipeline_lock.acquire(blocking=False)
+    server._pipeline_lock.release()

@@ -10,6 +10,7 @@ main loop or audio hardware.
 from __future__ import annotations
 
 import logging
+from threading import RLock
 from typing import Any, Dict, List, cast
 from unittest.mock import MagicMock
 
@@ -33,6 +34,7 @@ def _make_server() -> GstMediaServer:
     server._mic_last_failure = 0.0
     server._pipeline_running = True
     server._pipeline_restart_source_id = None
+    server._pipeline_lock = RLock()
     server._pipeline_restart_times = []
     server._pipeline_sender = MagicMock()
     # Stubs for `__del__` -> `close()`.

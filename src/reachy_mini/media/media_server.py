@@ -30,7 +30,7 @@ import os
 import platform
 import time
 from dataclasses import dataclass, field
-from threading import Lock, Thread
+from threading import Lock, RLock, Thread
 from typing import Any, Callable, Dict, Optional
 
 import gi
@@ -405,6 +405,9 @@ class GstMediaServer:
         # Whether `start()` has run without a matching `stop()`. Only a
         # running pipeline is restarted after an error.
         self._pipeline_running = False
+        # Serializes `start()` / `stop()`: the daemon calls them from its own
+        # threads, `_restart_pipeline` from the GLib main loop.
+        self._pipeline_lock = RLock()
         self._pipeline_restart_source_id: Optional[int] = None
         self._pipeline_restart_times: list[float] = []
 
@@ -1544,10 +1547,22 @@ class GstMediaServer:
         )
 
     def _restart_pipeline(self) -> bool:
-        self._pipeline_restart_source_id = None
-        if self._pipeline_running:
-            self.stop()
-            self.start()
+        # Don't block the main loop behind a `stop()` / `start()` running on
+        # another thread: that call decides the pipeline state, and a
+        # `stop()` already cancels this restart.
+        if not self._pipeline_lock.acquire(blocking=False):
+            return False
+        try:
+            self._pipeline_restart_source_id = None
+            # Re-checked under the lock: the media may have been released
+            # since the restart was scheduled.
+            if self._pipeline_running:
+                self.stop()
+                self.start()
+        except Exception:
+            self._logger.exception("Media pipeline restart failed, media stays stopped")
+        finally:
+            self._pipeline_lock.release()
         return False
 
     def _on_mic_failure(self, audiosrc: Gst.Element, reason: str) -> None:
@@ -1586,21 +1601,26 @@ class GstMediaServer:
         Rebuilding ensures a clean state after stop() released all hardware.
         """
         self._logger.debug("Starting WebRTC (rebuilding pipeline)")
-        self._build_pipeline()
-        self._pipeline_sender.set_state(Gst.State.PLAYING)
-        self._pipeline_running = True
+        with self._pipeline_lock:
+            self._build_pipeline()
+            self._pipeline_sender.set_state(Gst.State.PLAYING)
+            self._pipeline_running = True
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def stop(self) -> None:
         """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
-        self._pipeline_running = False
-        for source_id in (self._mic_reopen_source_id, self._pipeline_restart_source_id):
-            if source_id is not None:
-                GLib.source_remove(source_id)
-        self._mic_reopen_source_id = None
-        self._pipeline_restart_source_id = None
-        self._pipeline_sender.set_state(Gst.State.NULL)
+        with self._pipeline_lock:
+            self._pipeline_running = False
+            for source_id in (
+                self._mic_reopen_source_id,
+                self._pipeline_restart_source_id,
+            ):
+                if source_id is not None:
+                    GLib.source_remove(source_id)
+            self._mic_reopen_source_id = None
+            self._pipeline_restart_source_id = None
+            self._pipeline_sender.set_state(Gst.State.NULL)
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker.
