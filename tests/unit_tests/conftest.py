@@ -23,6 +23,7 @@ def _isolated_hf_credentials(
 
     root = tmp_path_factory.mktemp("hf-home")
     monkeypatch.setattr(hf_auth, "HF_TOKEN_PATH", str(root / "token"))
+    monkeypatch.setattr(hf_auth, "HF_STORED_TOKENS_PATH", str(root / "stored_tokens"))
     monkeypatch.delenv("HF_TOKEN", raising=False)
     monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
 
