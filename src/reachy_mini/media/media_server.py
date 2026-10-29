@@ -371,6 +371,9 @@ class GstMediaServer:
         self._incoming_audio: Dict[str, Dict[str, Any]] = {}
         self._playbin: Optional[Gst.Element] = None
         self._head_wobbler: Optional[HeadWobbler] = None
+        # Guards _head_wobbler between the wobbler appsink callback
+        # (GStreamer streaming thread) and (dis|en)able_wobbling.
+        self._head_wobbler_lock = Lock()
         self._pipeline_playback: Optional[Gst.Pipeline] = None
         # Software AEC: set in _configure_audio; the probe is created there and
         # reused across per-peer playback pipelines (see _on_consumer_pad_added).
@@ -813,9 +816,10 @@ class GstMediaServer:
 
         probe_id = pad.add_probe(Gst.PadProbeType.BUFFER, _buffer_probe, None)
 
-        if self._head_wobbler is not None:
-            self._head_wobbler.reset()
-            self._head_wobbler.start()
+        wobbler = self._head_wobbler
+        if wobbler is not None:
+            wobbler.reset()
+            wobbler.start()
 
         self._incoming_audio[peer_id] = {
             "playback_pipeline": self._pipeline_playback,
@@ -881,8 +885,9 @@ class GstMediaServer:
             return
         appsrc.send_event(Gst.Event.new_flush_start())
         appsrc.send_event(Gst.Event.new_flush_stop(reset_time=False))
-        if self._head_wobbler is not None:
-            self._head_wobbler.reset()
+        wobbler = self._head_wobbler
+        if wobbler is not None:
+            wobbler.reset()
         self._logger.info("Flushed incoming audio playback")
 
     @property
@@ -1523,9 +1528,10 @@ class GstMediaServer:
         playbin.set_property("uri", uri)
         playbin.set_property("audio-sink", self._build_audiosink_tee_bin())
 
-        if self._head_wobbler is not None:
-            self._head_wobbler.reset()
-            self._head_wobbler.start()
+        wobbler = self._head_wobbler
+        if wobbler is not None:
+            wobbler.reset()
+            wobbler.start()
 
         self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
@@ -1606,12 +1612,18 @@ class GstMediaServer:
         PTS on the pipeline clock — audio is playing NOW.
         """
         sample = appsink.pull_sample()
-        if sample is None or self._head_wobbler is None:
+        if sample is None:
             return Gst.FlowReturn.OK
-        buf = sample.get_buffer()
-        data = buf.extract_dup(0, buf.get_size())
-        pcm = np.frombuffer(data, dtype=np.float32)
-        self._head_wobbler.feed(pcm, time.monotonic_ns())
+        # Held until feed() returns, so (dis|en)able_wobbling cannot stop
+        # this wobbler mid-feed: hops scheduled after its stop() would fire.
+        with self._head_wobbler_lock:
+            wobbler = self._head_wobbler
+            if wobbler is None:
+                return Gst.FlowReturn.OK
+            buf = sample.get_buffer()
+            data = buf.extract_dup(0, buf.get_size())
+            pcm = np.frombuffer(data, dtype=np.float32)
+            wobbler.feed(pcm, time.monotonic_ns())
         return Gst.FlowReturn.OK
 
     def _build_audiosink_tee_bin(self) -> Gst.Bin:
@@ -1682,16 +1694,21 @@ class GstMediaServer:
                 yaw_rad)`` for each movement hop.
 
         """
-        if self._head_wobbler is not None:
-            self._head_wobbler.stop()
-        self._head_wobbler = HeadWobbler(callback, sample_rate=self.WOBBLER_SAMPLE_RATE)
+        new = HeadWobbler(callback, sample_rate=self.WOBBLER_SAMPLE_RATE)
+        # Swap under the lock, stop outside it: stop() calls back into the
+        # offsets callback, and no feed() on the old wobbler is in flight now.
+        with self._head_wobbler_lock:
+            old, self._head_wobbler = self._head_wobbler, new
+        if old is not None:
+            old.stop()
         self._logger.info("Head wobbler enabled (daemon-side)")
 
     def disable_wobbling(self) -> None:
         """Disable head wobbling."""
-        if self._head_wobbler is not None:
-            self._head_wobbler.stop()
-            self._head_wobbler = None
+        with self._head_wobbler_lock:
+            old, self._head_wobbler = self._head_wobbler, None
+        if old is not None:
+            old.stop()
             self._logger.info("Head wobbler disabled (daemon-side)")
 
     def set_message_handler(

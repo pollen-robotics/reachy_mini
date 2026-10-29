@@ -1,6 +1,7 @@
 """Unit tests for the runtime speaker-EQ gains resolution and element builder."""
 
 import logging
+import threading
 import types
 
 import gi
@@ -199,6 +200,7 @@ def _build_tee_bin(monkeypatch: pytest.MonkeyPatch) -> Gst.Bin:
     inst.logger = _LOG
     # Satisfy the wobbler callback and __del__/cleanup on this half-built instance.
     inst._head_wobbler = None
+    inst._head_wobbler_lock = threading.Lock()
     inst._doa = types.SimpleNamespace(close=lambda: None)
     inst._loop = types.SimpleNamespace(quit=lambda: None)
     inst._bus = types.SimpleNamespace(remove_watch=lambda: None)
