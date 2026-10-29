@@ -500,12 +500,12 @@ def find_video_device(
 
 
 def get_audio_device(device_type: str = "Source") -> Optional[str]:
-    """Detect the Reachy Mini audio device via ``Gst.DeviceMonitor``.
+    """Detect the Reachy Mini audio device through GStreamer device discovery.
 
     This is the high-level entry point that both ``GstMediaServer`` and
-    ``GStreamerAudio`` should call.  It handles the full monitor
-    lifecycle (start / query / stop) and delegates to
-    :func:`find_audio_device` for the actual matching.
+    ``GStreamerAudio`` should call.  It handles the device query (a
+    ``Gst.DeviceMonitor``, or a single provider on Windows) and delegates
+    to :func:`find_audio_device` for the actual matching.
 
     On Windows only :data:`WINDOWS_AUDIO_PROVIDER` is queried: the matching
     keeps WASAPI devices only, and probing the other providers can break
