@@ -1,0 +1,4 @@
+
+(python:3653): GStreamer-CRITICAL **: 10:04:04.021: gst_segment_to_stream_time: assertion 'segment->format == format' failed
+
+(python:3653): GStreamer-CRITICAL **: 10:04:04.022: gst_segment_to_stream_time: assertion 'segment->format == format' failed
