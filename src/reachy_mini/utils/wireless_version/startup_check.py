@@ -32,6 +32,18 @@ STAMP_PATH = DAEMON_VENV / ".startup_check_stamp.json"
 # systemd unit self-healed on every boot (see check_and_update_gpio_shutdown_service).
 GPIO_SHUTDOWN_UNIT_TARGET = Path("/etc/systemd/system/gpio-shutdown-daemon.service")
 
+# NetworkManager drop-in kept on every boot (see check_and_disable_wifi_powersave).
+WIFI_POWERSAVE_CONF_TARGET = Path(
+    "/etc/NetworkManager/conf.d/reachy-mini-wifi-powersave.conf"
+)
+WIFI_POWERSAVE_CONF = (
+    "# Managed by the Reachy Mini daemon (startup_check.py), rewritten on boot.\n"
+    "# 2 = disable: keep the Wi-Fi radio awake so the robot answers without delay.\n"
+    "[connection]\n"
+    "wifi.powersave = 2\n"
+)
+WIFI_INTERFACE = "wlan0"
+
 
 def check_and_fix_venvs_ownership(venvs_path: str = "/venvs") -> bool:
     """For wireless units, check if files under venvs_path are owned by user pollen and fix if needed.
@@ -406,6 +418,70 @@ def check_and_update_gpio_shutdown_service() -> None:
             _revert_gpio_unit(target, previous_unit)
 
 
+def check_and_disable_wifi_powersave() -> None:
+    """Keep Wi-Fi power save off on the robot.
+
+    NetworkManager leaves power save to the driver by default, and brcmfmac
+    turns it on: the radio dozes between beacons, so traffic to the robot
+    waits at the access point and the robot answers late or not at all.
+    Remote clients see that as stalls that starve the WebRTC data channel and
+    make them re-dial.
+
+    Two parts, both re-applied on every boot:
+    - a NetworkManager drop-in, so every activation (boot, roam, a new
+      network, the hotspot) comes up with power save off;
+    - `iw` on the current link, because NetworkManager only applies the
+      setting when a connection activates.
+    """
+    try:
+        target = WIFI_POWERSAVE_CONF_TARGET
+        if target.exists() and target.read_text() == WIFI_POWERSAVE_CONF:
+            logger.info("Wi-Fi power save drop-in is up to date")
+        else:
+            logger.info(f"Installing the Wi-Fi power save drop-in at {target}")
+            with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
+                tmp.write(WIFI_POWERSAVE_CONF)
+            try:
+                subprocess.run(
+                    ["sudo", "install", "-m", "644", tmp.name, str(target)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            finally:
+                os.unlink(tmp.name)
+            subprocess.run(
+                ["sudo", "nmcli", "general", "reload", "conf"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to install the Wi-Fi power save drop-in: {e.stderr}")
+    except Exception as e:
+        logger.error(
+            f"Unexpected error while installing the Wi-Fi power save drop-in: {e}"
+        )
+
+    try:
+        subprocess.run(
+            ["sudo", "iw", "dev", WIFI_INTERFACE, "set", "power_save", "off"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        logger.info(f"Wi-Fi power save is off on {WIFI_INTERFACE}")
+    except subprocess.CalledProcessError as e:
+        logger.warning(
+            f"Could not turn Wi-Fi power save off on {WIFI_INTERFACE}: {e.stderr}"
+        )
+    except Exception as e:
+        logger.warning(
+            f"Unexpected error while turning Wi-Fi power save off on "
+            f"{WIFI_INTERFACE}: {e}"
+        )
+
+
 def check_and_sync_apps_venv_sdk() -> bool:
     """Check if apps_venv SDK matches daemon install source and sync if needed.
 
@@ -667,7 +743,7 @@ def run_wireless_startup_checks() -> None:
     """Run wireless startup checks, skipping the expensive ones when nothing changed.
 
     Cheap checks (bluetooth service files, wireless and gpio-shutdown systemd
-    units) always run: they guard files outside /venvs that a venv-keyed stamp
+    units, Wi-Fi power save) always run: they guard files outside /venvs that a venv-keyed stamp
     cannot see. The expensive ones (full /venvs ownership scan, apps_venv SDK
     sync, restore-venv integrity) are skipped only when a stamp written by a
     previous fully-successful run matches the current install signature.
@@ -684,12 +760,14 @@ def run_wireless_startup_checks() -> None:
         check_and_update_bluetooth_service()
         check_and_update_wireless_launcher()
         check_and_update_gpio_shutdown_service()
+        check_and_disable_wifi_powersave()
         return
 
     all_ok = check_and_fix_venvs_ownership()
     check_and_update_bluetooth_service()
     check_and_update_wireless_launcher()
     check_and_update_gpio_shutdown_service()
+    check_and_disable_wifi_powersave()
     all_ok = check_and_sync_apps_venv_sdk() and all_ok
     all_ok = check_and_fix_restore_venv() and all_ok
 

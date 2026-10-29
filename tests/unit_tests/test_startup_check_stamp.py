@@ -59,7 +59,7 @@ def fake_venvs(tmp_path, monkeypatch):
 
 @pytest.fixture
 def spy_checks(monkeypatch):
-    """Replace all six checks with recording fakes (all succeed by default)."""
+    """Replace all seven checks with recording fakes (all succeed by default)."""
     calls = []
 
     def make(name, ret=True):
@@ -81,11 +81,14 @@ def spy_checks(monkeypatch):
     monkeypatch.setattr(
         sc, "check_and_update_gpio_shutdown_service", make("gpio_shutdown", None)
     )
+    monkeypatch.setattr(
+        sc, "check_and_disable_wifi_powersave", make("wifi_powersave", None)
+    )
     return calls
 
 
 EXPENSIVE = {"ownership", "apps_sync", "restore"}
-CHEAP = {"bluetooth", "launcher", "gpio_shutdown"}
+CHEAP = {"bluetooth", "launcher", "gpio_shutdown", "wifi_powersave"}
 
 
 def test_first_run_does_full_checks_and_writes_stamp(fake_venvs, spy_checks):
