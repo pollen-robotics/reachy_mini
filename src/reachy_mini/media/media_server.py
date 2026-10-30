@@ -431,6 +431,7 @@ class GstMediaServer:
             self._turn.start()
 
         self._build_pipeline()
+        self._pipeline_needs_rebuild = False
 
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
@@ -1596,13 +1597,18 @@ class GstMediaServer:
         return False
 
     def start(self) -> None:
-        """Rebuild the pipeline from scratch and start it.
+        """Start the pipeline, rebuilding it from scratch after a stop().
 
-        Rebuilding ensures a clean state after stop() released all hardware.
+        The first start reuses the pipeline built in __init__.
         """
-        self._logger.debug("Starting WebRTC (rebuilding pipeline)")
         with self._pipeline_lock:
-            self._build_pipeline()
+            if self._pipeline_needs_rebuild:
+                self._logger.debug("Starting WebRTC (rebuilding pipeline)")
+                self._bus_sender.remove_watch()
+                self._build_pipeline()
+                self._pipeline_needs_rebuild = False
+            else:
+                self._logger.debug("Starting WebRTC")
             self._pipeline_sender.set_state(Gst.State.PLAYING)
             self._pipeline_running = True
         GLib.timeout_add_seconds(5, self._dump_latency)
@@ -1621,6 +1627,7 @@ class GstMediaServer:
             self._mic_reopen_source_id = None
             self._pipeline_restart_source_id = None
             self._pipeline_sender.set_state(Gst.State.NULL)
+            self._pipeline_needs_rebuild = True
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker.

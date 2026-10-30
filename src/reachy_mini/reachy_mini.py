@@ -605,6 +605,9 @@ class ReachyMini:
                 f"Daemon at {host!r} is named {status.robot_name!r}, "
                 f"expected {self.robot_name!r}."
             )
+        # get_status() consumed the status; keep it for the media setup, which
+        # would otherwise wait for the daemon's next 1 Hz publish.
+        client.status_received.set()
         return client
 
     def set_target(

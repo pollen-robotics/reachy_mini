@@ -28,6 +28,24 @@ def test_media_server_constructs_in_mujoco_sim() -> None:
         server.close()
 
 
+def test_first_start_reuses_the_pipeline_built_in_init() -> None:
+    """Only a start() after stop() rebuilds the pipeline."""
+    server = GstMediaServer(sim_mode=SimulationMode.MUJOCO, enable_turn=False)
+    built = server._pipeline_sender
+    bus = server._bus_sender
+    try:
+        server.start()
+        assert server._pipeline_sender is built
+
+        server.stop()
+        server.start()
+        assert server._pipeline_sender is not built
+        assert bus.remove_watch() is False  # already dropped by the rebuild
+    finally:
+        server.stop()
+        server.close()
+
+
 def test_enable_turn_false_starts_no_refresher() -> None:
     """Opting out means no credentials object, hence no thread and no fetch."""
     server = GstMediaServer(sim_mode=SimulationMode.MUJOCO, enable_turn=False)

@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import configparser
 import hashlib
 import json
 import logging
@@ -17,7 +18,7 @@ from urllib.parse import urlencode
 
 import aiohttp
 from huggingface_hub import HfApi, whoami
-from huggingface_hub.constants import HF_TOKEN_PATH
+from huggingface_hub.constants import HF_STORED_TOKENS_PATH, HF_TOKEN_PATH
 from huggingface_hub.errors import DeviceCodeError, HfHubHTTPError, OAuthErrorCode
 from huggingface_hub.utils._oauth_device import (
     poll_device_token,
@@ -60,7 +61,8 @@ LOGIN_EXPIRED_MESSAGE = "Login expired. Please try again."
 _CANCELLED_SESSION_MESSAGE = "Sign-in was cancelled. Please try again."
 CREDENTIAL_SAVE_FAILED_MESSAGE = "Could not save credentials. Please try again."
 
-# CLI credentials belong to the user, so the daemon keeps and reads only its own.
+# CLI credentials belong to the user, so the daemon keeps and reads only its own
+# (bar the one-time `adopt_legacy_login` on the wireless robot).
 _STORE_FILENAME = "reachy_mini_daemon_credentials.json"
 _STORE_VERSION = 1
 _REFRESH_MARGIN_S = 300
@@ -121,6 +123,70 @@ def _read_store() -> _Stored:
             "[HF Auth] Unreadable credential store (%s)", type(error).__name__
         )
         return _Stored(signed_out=True)
+
+
+def _read_legacy_login() -> _Stored | None:
+    """Read the login a daemon before 1.12 left in huggingface_hub's files.
+
+    The active token is in HF_TOKEN_PATH; a device-code login also left its
+    refresh token and expiry in the matching section of HF_STORED_TOKENS_PATH.
+    """
+    try:
+        token = Path(HF_TOKEN_PATH).read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    if not token:
+        return None
+    # interpolation=None, as huggingface_hub reads it: a `%` in a token is literal.
+    sections = configparser.ConfigParser(interpolation=None)
+    try:
+        sections.read(HF_STORED_TOKENS_PATH, encoding="utf-8")
+    except (configparser.Error, UnicodeDecodeError):
+        return _Stored(access_token=token)
+    for name in sections.sections():
+        fields = sections[name]
+        if fields.get("hf_token") != token:
+            continue
+        try:
+            expires_at = int(fields["expires_at"]) if fields.get("expires_at") else None
+        except ValueError:
+            expires_at = None
+        return _Stored(
+            access_token=token,
+            refresh_token=fields.get("refresh_token") or None,
+            expires_at=expires_at,
+        )
+    return _Stored(access_token=token)
+
+
+def adopt_legacy_login() -> bool:
+    """Carry the robot's login over from where daemons before 1.12 kept it.
+
+    Those daemons saved it to huggingface_hub's shared token files, which this
+    store no longer reads, so an update signed the robot out: it dropped off
+    central until its owner set it up again from the phone. Runs only while
+    the daemon has no record of its own, so a sign-out is never undone, and
+    only on the wireless robot: on Lite those files hold the user's own login.
+    The legacy files are left in place. True when a login was adopted.
+
+    Never raises.
+    """
+    with _store_lock:
+        try:
+            if _store_path().exists():
+                return False
+            legacy = _read_legacy_login()
+            if legacy is None:
+                return False
+            _write_store(legacy)
+        except OSError as error:
+            logger.warning(
+                "[HF Auth] Could not adopt the earlier login (%s)",
+                type(error).__name__,
+            )
+            return False
+    logger.info("[HF Auth] Adopted the login saved by an earlier daemon version")
+    return True
 
 
 def _token_fields(response: Any, fallback_refresh: str | None) -> dict[str, Any]:
