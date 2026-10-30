@@ -1,6 +1,7 @@
 """The HF Spaces catalog listing: plain HTTP, only the fields the store reads."""
 
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from aiohttp import web
@@ -86,6 +87,8 @@ async def test_list_all_apps_requests_only_app_store_fields(
 
     query = server.requests[0].query
     assert query["filter"] == hf_space.HF_SPACES_FILTER
+    assert query["sort"] == "likes"
+    assert query["limit"] == str(hf_space.HF_SPACES_LIMIT)
     assert "full" not in query
     assert set(query.getall("expand")) == APP_STORE_FIELDS
     assert "Authorization" not in server.requests[0].headers
@@ -96,6 +99,10 @@ async def test_list_all_apps_sends_bearer_token_when_authenticated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(hf_auth, "get_hf_token", lambda: "hf_secret")
+    api = MagicMock()
+    api.whoami.return_value = {"name": "owner"}
+    api.list_spaces.return_value = []
+    monkeypatch.setattr(hf_space, "HfApi", lambda: api)
     async with _SpacesServer([[_space("owner/private-app", private=True)]]) as server:
         monkeypatch.setattr(hf_space, "HF_SPACES_API_URL", server.url)
 
@@ -103,6 +110,10 @@ async def test_list_all_apps_sends_bearer_token_when_authenticated(
 
     assert [a.name for a in apps] == ["private-app"]
     assert server.requests[0].headers["Authorization"] == "Bearer hf_secret"
+    api.whoami.assert_called_once_with(token="hf_secret")
+    api.list_spaces.assert_called_once_with(
+        filter=hf_space.HF_SPACES_FILTER, author="owner", full=True, token="hf_secret"
+    )
 
 
 @pytest.mark.asyncio
