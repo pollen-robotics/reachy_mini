@@ -9,6 +9,7 @@ each type of backend.
 """
 
 import asyncio
+import contextvars
 import json
 import logging
 import os
@@ -127,6 +128,19 @@ from reachy_mini.vision.look_at import (
 # (subjective) and also improves the orientation of the microphone when
 # speaking to it.
 _TRACKING_PITCH_TRIM_RAD = float(np.radians(15.0))
+
+MOVE_BUSY_ERROR = "a move is already running"
+
+
+class MoveBusyError(RuntimeError):
+    """Raised by ``Backend.play_move`` when another move holds the guard."""
+
+
+# Set while a play_move runs, so a nested play_move (the initial goto) can tell
+# itself apart from a sibling task re-entering the RLock on the same loop.
+_IN_MOVE: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "reachy_mini_in_move", default=False
+)
 
 
 class _PlaybackCancelToken:
@@ -489,8 +503,12 @@ class Backend:
         return self._active_move_depth > 0
 
     def _try_start_move(self) -> bool:
-        """Attempt to acquire the move guard, returning False if another client already owns it."""
+        """Attempt to acquire the move guard, returning False if another move already owns it."""
         if not self._play_move_lock.acquire(blocking=False):
+            return False
+        if self._active_move_depth > 0 and not _IN_MOVE.get():
+            # Same thread, but a sibling task rather than a nested call.
+            self._play_move_lock.release()
             return False
         self._active_move_depth += 1
         return True
@@ -843,10 +861,14 @@ class Backend:
             audio_lead_s (float): How many seconds the audio (if any) starts BEFORE the motion. Positive values compensate for the constant GStreamer playbin latency on the robot so the audio reaches the speaker at the same moment the actuator starts moving. Negative values delay audio relative to motion. No-op when the move has no sound_path. Default 0.
             cancel_token (_PlaybackCancelToken, optional): If provided, the inner loop polls ``cancel_token.cancelled`` every tick and exits when flipped. Used by ``_async_play_uploaded_move`` to wire ``cancel_move`` to a specific upload_id; direct callers (goto_target, etc.) pass None. Independently of the token, every loop also polls the global ``_stop_move_requested`` flag flipped by ``StopMoveCmd``, so any move is interruptible by ``stop_move``.
 
+        Raises:
+            MoveBusyError: If another move is already running.
+
         """
         if not self._try_start_move():
-            self.logger.warning("Ignoring play_move request: another move is running.")
-            return
+            self.logger.warning("Rejecting play_move request: another move is running.")
+            raise MoveBusyError(MOVE_BUSY_ERROR)
+        in_move = _IN_MOVE.set(True)
 
         if self._active_move_depth == 1:
             # New top-level move: clear any stop request left over from a
@@ -942,6 +964,7 @@ class Backend:
                     except Exception as e:
                         self.logger.warning(f"play_move: stop_sound failed: {e}")
         finally:
+            _IN_MOVE.reset(in_move)
             self._end_move()
 
     async def goto_target(
@@ -1405,6 +1428,17 @@ class Backend:
         it collapses every possible inherited pose into the one starting point
         the sleep trajectory was tuned for.
         """
+        # A move can outlive the session that started it (an uploaded dance
+        # keeps playing after a Wi-Fi drop): stop it before taking over.
+        if self.is_move_running:
+            self._stop_move_requested = True
+            token = self._active_move_token
+            if token is not None:
+                token.cancelled = True
+            deadline = time.monotonic() + 1.0
+            while self.is_move_running and time.monotonic() < deadline:
+                await asyncio.sleep(0.02)
+
         # Ordered: quiesce first so tracking can't re-aim the head between the
         # torque coming back and the lift starting.
         self._quiesce_aim_sources()
@@ -2782,8 +2816,17 @@ class Backend:
             )
             return
 
-        # Dispatched: ack now (fire-and-forget), then run the move. play_move
-        # self-guards against a concurrent move, so a double-tap is a no-op.
+        if self.is_move_running:
+            send_response(
+                {
+                    "command": "play_recorded_move",
+                    "status": "error",
+                    "error": MOVE_BUSY_ERROR,
+                }
+            )
+            return
+
+        # Dispatched: ack now (fire-and-forget), then run the move.
         send_response(
             {
                 "command": "play_recorded_move",
@@ -2886,9 +2929,13 @@ class Backend:
         upload_id = cmd.upload_id
         move = self._uploaded_moves.pop(upload_id, None)
         audio_path = self._uploaded_audios.pop(upload_id, None)
-        if move is None:
-            # Don't leave the audio orphaned on disk if the move side
-            # failed.
+        if move is None or self.is_move_running:
+            error = (
+                "no such uploaded move (upload first)"
+                if move is None
+                else MOVE_BUSY_ERROR
+            )
+            # Don't leave the audio orphaned on disk if the move won't play.
             if audio_path:
                 try:
                     os.remove(audio_path)
@@ -2899,7 +2946,7 @@ class Backend:
                     {
                         "type": "play_uploaded_move",
                         "upload_id": upload_id,
-                        "error": "no such uploaded move (upload first)",
+                        "error": error,
                     }
                 )
             )
@@ -2952,6 +2999,10 @@ class Backend:
                 result["cancelled"] = True
             else:
                 result["finished"] = True
+        except MoveBusyError as e:
+            # Another thread's move started after the check above.
+            self.logger.warning(f"play_uploaded_move: {e}")
+            result["error"] = str(e)
         except Exception as e:
             self.logger.exception(f"play_uploaded_move failed: {e}")
             result["error"] = str(e)
