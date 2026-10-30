@@ -1,0 +1,2 @@
+INFO     reachy_mini.media.media_server:media_server.py:449 Pipeline latency (live=False, min_latency=0, max_latency=18446744073709551615)
+INFO     reachy_mini.media.media_server:media_server.py:449 Pipeline latency (live=False, min_latency=0, max_latency=18446744073709551615)
