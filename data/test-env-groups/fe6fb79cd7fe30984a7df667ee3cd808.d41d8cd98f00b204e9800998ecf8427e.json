@@ -1,0 +1,1 @@
+{"id":"fe6fb79cd7fe30984a7df667ee3cd808.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_media_server_restart#test_restart_yields_to_a_stop_running_on_another_thread","name":"test_restart_yields_to_a_stop_running_on_another_thread","status":"passed","testResultsByEnv":{"default":"768e1141e7b27b316b0a63c4470eaeab"}}

@@ -1,0 +1,1 @@
+{"id":"ffa2541ca113db5a5237a3996fcc4389.72ec5f3b5090b8f651a748a32a347887","fullName":"tests.unit_tests.test_device_detection.TestGetAudioDeviceProviders#test_other_platforms_use_the_device_monitor","name":"test_other_platforms_use_the_device_monitor[Darwin]","status":"passed","testResultsByEnv":{"default":"586e2140ec3aa3f84931e80a0ddb1f87"}}

@@ -1,0 +1,9 @@
+ERROR    test_restart:gstreamer_utils.py:45 Error: <MagicMock id='139828180740928'> 
+WARNING  test_restart:media_server.py:1543 Restarting the media pipeline in 1s after an error
+ERROR    test_restart:media_server.py:1564 Media pipeline restart failed, media stays stopped
+Traceback (most recent call last):
+  File "/home/runner/work/reachy_mini/reachy_mini/src/reachy_mini/media/media_server.py", line 1562, in _restart_pipeline
+    self.start()
+  File "/home/runner/work/reachy_mini/reachy_mini/tests/unit_tests/test_media_server_restart.py", line 200, in failing_start
+    raise RuntimeError("camera gone")
+RuntimeError: camera gone

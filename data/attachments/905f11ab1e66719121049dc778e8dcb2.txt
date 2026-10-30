@@ -1,0 +1,8 @@
+WARNING  test_mic_recovery:media_server.py:1587 Microphone lost (invalidated), reopening in 1s
+WARNING  test_mic_recovery:media_server.py:1587 Microphone lost (invalidated), reopening in 2s
+WARNING  test_mic_recovery:media_server.py:1587 Microphone lost (invalidated), reopening in 4s
+WARNING  test_mic_recovery:media_server.py:1587 Microphone lost (invalidated), reopening in 8s
+WARNING  test_mic_recovery:media_server.py:1587 Microphone lost (invalidated), reopening in 16s
+WARNING  test_mic_recovery:media_server.py:1587 Microphone lost (invalidated), reopening in 30s
+WARNING  test_mic_recovery:media_server.py:1587 Microphone lost (invalidated), reopening in 30s
+WARNING  test_mic_recovery:media_server.py:1587 Microphone lost (invalidated), reopening in 30s
