@@ -332,16 +332,8 @@ class VolumeControlLinux(VolumeControl):
             device: The audio device. If its ID is None, uses the default audio device.
 
         """
-        cmd = self._build_amixer_set_command(device, volume=100, index=1)
         try:
-            subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=AUDIO_COMMAND_TIMEOUT,
-                check=True,
-                shell=True,
-            )
+            self._run_amixer_on_controls(device, "sset", index=1, value="100%")
         except (
             subprocess.TimeoutExpired,
             FileNotFoundError,
@@ -358,35 +350,39 @@ class VolumeControlLinux(VolumeControl):
             A dictionary containing the ID and name of each audio device: {id: int, name: str, ...}.
 
         Raises:
-            RuntimeError: If aplay or arecord fail when getting all audio devices.
+            RuntimeError: If both aplay and arecord fail when getting all audio devices.
 
         """
+        # Playback cards from aplay, capture cards from arecord.
+        output = ""
+        errors: list[str] = []
+        for tool in ("aplay", "arecord"):
+            try:
+                output += subprocess.run(
+                    [tool, "-l"],
+                    capture_output=True,
+                    text=True,
+                    timeout=AUDIO_COMMAND_TIMEOUT,
+                    check=True,
+                ).stdout
+            except (
+                subprocess.TimeoutExpired,
+                FileNotFoundError,
+                subprocess.CalledProcessError,
+            ) as e:
+                errors.append(f"{tool}: {e}")
+        if len(errors) == 2:
+            raise RuntimeError(f"Could not scan audio devices: {'; '.join(errors)}")
+        if errors:
+            logger.warning(f"Partial audio device scan: {errors[0]}")
+
         devices: dict[int | str, str] = {}
-        try:
-            scan_result = subprocess.run(
-                ["aplay", "-l", ";", "arecord", "-l"],
-                capture_output=True,
-                text=True,
-                timeout=AUDIO_COMMAND_TIMEOUT,
-                check=True,
-            )
-            pattern = re.compile(r"card\s+(\d+):\s+[^[]+\[([^\]]+)\]")
-            for line in scan_result.stdout.splitlines():
-                match = pattern.search(line)
-                if not match:
-                    continue
-                device_id = int(match.group(1))
-                device_name = match.group(2)
-                devices.setdefault(device_id, device_name)
-            return devices
-        except (
-            subprocess.TimeoutExpired,
-            FileNotFoundError,
-            subprocess.CalledProcessError,
-        ) as e:
-            raise RuntimeError(
-                f"Could not scan audio devices, aplay or arecord failed with error: {e}"
-            )
+        pattern = re.compile(r"card\s+(\d+):\s+[^[]+\[([^\]]+)\]")
+        for line in output.splitlines():
+            match = pattern.search(line)
+            if match:
+                devices.setdefault(int(match.group(1)), match.group(2))
+        return devices
 
     def _alsa_get_input_output_devices(self) -> tuple[AudioDevice, AudioDevice]:
         """Get the input and output audio devices via ALSA.
@@ -412,69 +408,48 @@ class VolumeControlLinux(VolumeControl):
             None, "Default", AudioDeviceType.OUTPUT
         )
 
-    def _build_amixer_get_command(
+    def _run_amixer_on_controls(
         self,
         device: AudioDevice,
-        controls: list[str] | None = None,
+        action: str,
         index: int = 0,
-    ) -> str:
-        """Build the amixer command to get the volume of a specific device and control.
+        value: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        """Run ``amixer sget|sset <control>,<index> [value]`` on the device's controls until one succeeds.
 
         Args:
-            device: The audio device.
-            controls: The list of ALSA control names to try. If None, resolved from the device.
+            device: The audio device. If its ID is None, uses the default card.
+            action: ``"sget"`` or ``"sset"``.
             index: The ALSA control index. Defaults to 0.
+            value: The value to set, for ``sset`` (e.g. ``"50%"``).
 
         Returns:
-            The amixer command to get the volume of the requested device.
+            The result of the first control that succeeded.
+
+        Raises:
+            subprocess.CalledProcessError: If every control failed, or the device has none.
 
         """
-        if controls is None:
-            controls = self._alsa_get_device_controls(device)
-        sub_commands = []
-        for control in controls:
-            if device.id is not None:
-                cmd = f"amixer -c {device.id} sget {control},{index}"
-            else:
-                cmd = f"amixer sget {control},{index}"
-            sub_commands.append(cmd)
-
-        full_command = " || ".join(sub_commands)
-        return full_command
-
-    def _build_amixer_set_command(
-        self,
-        device: AudioDevice,
-        volume: int,
-        controls: list[str] | None = None,
-        index: int = 0,
-    ) -> str:
-        """Build the amixer command to set the volume of a specific device and control.
-
-        Args:
-            device: The audio device.
-            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
-            controls: The list of ALSA control names to try. If None, resolved from the device.
-            index: The ALSA control index. Defaults to 0.
-
-        Returns:
-            The amixer command to set the volume of the requested device.
-
-        """
-        if controls is None:
-            controls = self._alsa_get_device_controls(device)
-        volume_percent = max(0, min(100, volume))
-
-        sub_commands = []
-        for control in controls:
-            if device.id is not None:
-                cmd = f"amixer -c {device.id} sset {control},{index} {volume_percent}%"
-            else:
-                cmd = f"amixer sset {control},{index} {volume_percent}%"
-            sub_commands.append(cmd)
-
-        full_command = " || ".join(sub_commands)
-        return full_command
+        card = ["-c", str(device.id)] if device.id is not None else []
+        error = subprocess.CalledProcessError(
+            1, ["amixer", *card, action], stderr="no ALSA volume control found"
+        )
+        for control in self._alsa_get_device_controls(device):
+            # Argument list, no shell: control names can contain spaces.
+            cmd = ["amixer", *card, action, f"{control},{index}"]
+            if value is not None:
+                cmd.append(value)
+            try:
+                return subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=AUDIO_COMMAND_TIMEOUT,
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e:
+                error = e
+        raise error
 
     def _alsa_get_device_volume(self, device: AudioDevice) -> int:
         """Get the volume of an audio device via amixer.
@@ -487,14 +462,7 @@ class VolumeControlLinux(VolumeControl):
 
         """
         try:
-            result = subprocess.run(
-                self._build_amixer_get_command(device),
-                capture_output=True,
-                text=True,
-                timeout=AUDIO_COMMAND_TIMEOUT,
-                check=True,
-                shell=True,
-            )
+            result = self._run_amixer_on_controls(device, "sget")
             for line in result.stdout.splitlines():
                 # TODO: add support for other channels ?
                 if "Left:" in line and "[" in line:
@@ -528,13 +496,8 @@ class VolumeControlLinux(VolumeControl):
 
         """
         try:
-            subprocess.run(
-                self._build_amixer_set_command(device, volume),
-                capture_output=True,
-                text=True,
-                timeout=AUDIO_COMMAND_TIMEOUT,
-                check=True,
-                shell=True,
+            self._run_amixer_on_controls(
+                device, "sset", value=f"{max(0, min(100, volume))}%"
             )
             return True
 
