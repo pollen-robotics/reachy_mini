@@ -372,3 +372,101 @@ class TestFindVideoDevice:
         path, specs = find_video_device(devices, "Linux")
         assert path == "imx708"
         assert specs is not None
+
+
+# ---------------------------------------------------------------------------
+# get_audio_device: which GStreamer providers are queried
+# ---------------------------------------------------------------------------
+
+
+class _FakeGstDevice:
+    """Bare ``Gst.Device`` stand-in for ``gst_provider_devices``."""
+
+    def __init__(self, name: str, device_class: str) -> None:
+        self._name = name
+        self._class = device_class
+
+    def has_classes(self, classes: str) -> bool:
+        return set(classes.split("/")) <= set(self._class.split("/"))
+
+    def get_display_name(self) -> str:
+        return self._name
+
+    def get_device_class(self) -> str:
+        return self._class
+
+    def get_properties(self) -> None:
+        return None
+
+
+class TestGetAudioDeviceProviders:
+    """On Windows only the WASAPI provider may be probed (ASIO breaks streams, #1210)."""
+
+    @pytest.fixture
+    def calls(self, monkeypatch: pytest.MonkeyPatch) -> dict[str, list[str]]:
+        from reachy_mini.media import device_detection as dd
+
+        calls: dict[str, list[str]] = {"monitor": [], "provider": []}
+
+        def fake_monitor(filter_class: str) -> list[DeviceInfo]:
+            calls["monitor"].append(filter_class)
+            return []
+
+        def fake_provider(provider_name: str, filter_class: str) -> list[DeviceInfo]:
+            calls["provider"].append(f"{provider_name} {filter_class}")
+            return []
+
+        monkeypatch.setattr(dd, "gst_monitor_devices", fake_monitor)
+        monkeypatch.setattr(dd, "gst_provider_devices", fake_provider)
+        return calls
+
+    def test_windows_queries_only_wasapi2(
+        self, monkeypatch: pytest.MonkeyPatch, calls: dict[str, list[str]]
+    ) -> None:
+        from reachy_mini.media import device_detection as dd
+
+        monkeypatch.setattr(dd.platform, "system", lambda: "Windows")
+        dd.get_audio_device("Sink")
+        assert calls == {
+            "monitor": [],
+            "provider": ["wasapi2deviceprovider Audio/Sink"],
+        }
+
+    @pytest.mark.parametrize("system", ["Linux", "Darwin"])
+    def test_other_platforms_use_the_device_monitor(
+        self, monkeypatch: pytest.MonkeyPatch, calls: dict[str, list[str]], system: str
+    ) -> None:
+        from reachy_mini.media import device_detection as dd
+
+        monkeypatch.setattr(dd.platform, "system", lambda: system)
+        dd.get_audio_device("Source")
+        assert calls == {"monitor": ["Audio/Source"], "provider": []}
+
+    def test_provider_devices_filters_by_class(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from reachy_mini.media import device_detection as dd
+
+        provider = type(
+            "FakeProvider",
+            (),
+            {
+                "get_devices": lambda self: [
+                    _FakeGstDevice("Speaker", "Audio/Sink"),
+                    _FakeGstDevice("Mic", "Audio/Source"),
+                ]
+            },
+        )()
+        factory = type("FakeFactory", (), {"get": lambda self: provider})()
+        monkeypatch.setattr(dd.Gst.DeviceProviderFactory, "find", lambda name: factory)
+
+        infos = dd.gst_provider_devices("wasapi2deviceprovider", "Audio/Source")
+        assert [i.display_name for i in infos] == ["Mic"]
+
+    def test_missing_provider_returns_no_devices(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from reachy_mini.media import device_detection as dd
+
+        monkeypatch.setattr(dd.Gst.DeviceProviderFactory, "find", lambda name: None)
+        assert dd.gst_provider_devices("wasapi2deviceprovider", "Audio/Sink") == []

@@ -30,7 +30,7 @@ import os
 import platform
 import time
 from dataclasses import dataclass, field
-from threading import Lock, Thread
+from threading import Lock, RLock, Thread
 from typing import Any, Callable, Dict, Optional
 
 import gi
@@ -94,6 +94,20 @@ SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 # Cap the local IPC feed below the capture rate; it also paces every client, face tracker included.
 IPC_FPS = 10
 
+# Reopening the Windows mic after Windows invalidated it (see
+# `_on_mic_failure`). Retries back off up to the cap while failures keep
+# coming, and start again from the base delay after a quiet spell.
+MIC_REOPEN_DELAY_S = 1.0
+MIC_REOPEN_MAX_DELAY_S = 30.0
+MIC_REOPEN_RESET_S = 60.0
+
+# Restarting the WebRTC pipeline after an error (see
+# `_schedule_pipeline_restart`): at most PIPELINE_RESTART_LIMIT restarts in
+# any PIPELINE_RESTART_WINDOW_S, so a permanently broken device can't loop.
+PIPELINE_RESTART_DELAY_S = 1
+PIPELINE_RESTART_LIMIT = 3
+PIPELINE_RESTART_WINDOW_S = 60.0
+
 
 @dataclass
 class _PeerWebRTCState:
@@ -144,6 +158,14 @@ def _session_id_of(webrtcbin: Gst.Element) -> Optional[str]:
     ):
         return name[len(_WEBRTCBIN_NAME_PREFIX) :]
     return None
+
+
+def _is_wasapi2src(obj: Optional[GObject.Object]) -> bool:
+    """Whether a bus message source is the Windows mic (``wasapi2src``)."""
+    if not isinstance(obj, Gst.Element):
+        return False
+    factory = obj.get_factory()
+    return factory is not None and factory.get_name() == "wasapi2src"
 
 
 _gobject_ref: Optional[Callable[[Any], int]] = None
@@ -376,6 +398,18 @@ class GstMediaServer:
         # reused across per-peer playback pipelines (see _on_consumer_pad_added).
         self._aec_enabled = False
         self._webrtcechoprobe: Optional[Gst.Element] = None
+        # Pending reopen of the Windows mic, see `_on_mic_failure`.
+        self._mic_reopen_source_id: Optional[int] = None
+        self._mic_reopen_delay_s = MIC_REOPEN_DELAY_S
+        self._mic_last_failure = 0.0
+        # Whether `start()` has run without a matching `stop()`. Only a
+        # running pipeline is restarted after an error.
+        self._pipeline_running = False
+        # Serializes `start()` / `stop()`: the daemon calls them from its own
+        # threads, `_restart_pipeline` from the GLib main loop.
+        self._pipeline_lock = RLock()
+        self._pipeline_restart_source_id: Optional[int] = None
+        self._pipeline_restart_times: list[float] = []
 
         if enable_turn is None:
             # Deferred like the speaker-EQ lookup in audio_utils, so this
@@ -1441,6 +1475,11 @@ class GstMediaServer:
             if platform.system() == "Windows":
                 audiosrc = Gst.ElementFactory.make("wasapi2src")
                 audiosrc.set_property("device", id_audio_card)
+                # When Windows invalidates the endpoint, post a warning and
+                # feed silence instead of an error that stops the whole
+                # pipeline, video included. `_on_mic_failure` reopens it.
+                if audiosrc.find_property("continue-on-error") is not None:
+                    audiosrc.set_property("continue-on-error", True)
                 self._logger.info(f"Using WASAPI device {id_audio_card} for capture.")
             elif platform.system() == "Darwin":
                 audiosrc = Gst.ElementFactory.make("osxaudiosrc")
@@ -1464,28 +1503,131 @@ class GstMediaServer:
     def _on_bus_message(
         self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
     ) -> bool:
-        return handle_default_bus_message(self._logger, msg, pipeline)
+        if msg.type == Gst.MessageType.WARNING and _is_wasapi2src(msg.src):
+            err, _ = msg.parse_warning()
+            # Device failures only; e.g. an overrun ("Can't record audio fast
+            # enough", a CORE warning) is no reason to reopen the mic.
+            if err.domain == GLib.quark_to_string(Gst.ResourceError.quark()):
+                self._on_mic_failure(msg.src, err.message)
+                return True
+        keep_watch = handle_default_bus_message(self._logger, msg, pipeline)
+        if msg.type == Gst.MessageType.ERROR and pipeline is self._pipeline_sender:
+            self._schedule_pipeline_restart()
+        return keep_watch
+
+    def _schedule_pipeline_restart(self) -> None:
+        """Rebuild the pipeline after an error instead of leaving it dead.
+
+        An error stops the whole pipeline: WebRTC clients still connect but
+        get no media until something restarts it. Restart it like
+        `stop()` / `start()` do, so clients reconnect, at most
+        ``PIPELINE_RESTART_LIMIT`` times per ``PIPELINE_RESTART_WINDOW_S``.
+        """
+        if not self._pipeline_running or self._pipeline_restart_source_id is not None:
+            return
+
+        now = time.monotonic()
+        self._pipeline_restart_times = [
+            t
+            for t in self._pipeline_restart_times
+            if now - t < PIPELINE_RESTART_WINDOW_S
+        ]
+        if len(self._pipeline_restart_times) >= PIPELINE_RESTART_LIMIT:
+            self._logger.error(
+                f"Media pipeline failed {PIPELINE_RESTART_LIMIT} times within "
+                f"{PIPELINE_RESTART_WINDOW_S:g}s, not restarting it again"
+            )
+            return
+
+        self._pipeline_restart_times.append(now)
+        self._logger.warning(
+            f"Restarting the media pipeline in {PIPELINE_RESTART_DELAY_S}s after an error"
+        )
+        self._pipeline_restart_source_id = GLib.timeout_add_seconds(
+            PIPELINE_RESTART_DELAY_S, self._restart_pipeline
+        )
+
+    def _restart_pipeline(self) -> bool:
+        # Don't block the main loop behind a `stop()` / `start()` running on
+        # another thread: that call decides the pipeline state, and a
+        # `stop()` already cancels this restart.
+        if not self._pipeline_lock.acquire(blocking=False):
+            return False
+        try:
+            self._pipeline_restart_source_id = None
+            # Re-checked under the lock: the media may have been released
+            # since the restart was scheduled.
+            if self._pipeline_running:
+                self.stop()
+                self.start()
+        except Exception:
+            self._logger.exception("Media pipeline restart failed, media stays stopped")
+        finally:
+            self._pipeline_lock.release()
+        return False
+
+    def _on_mic_failure(self, audiosrc: Gst.Element, reason: str) -> None:
+        """Schedule a reopen of the Windows mic after a device failure.
+
+        With ``continue-on-error``, ``wasapi2src`` feeds silence once Windows
+        invalidates its endpoint, and setting ``device`` again makes it reopen
+        the device. A reopen attempted while the device is still in flux fails
+        and posts another warning, which lands here again: retries back off up
+        to ``MIC_REOPEN_MAX_DELAY_S`` and start over after a quiet spell.
+        """
+        now = time.monotonic()
+        if now - self._mic_last_failure > MIC_REOPEN_RESET_S:
+            self._mic_reopen_delay_s = MIC_REOPEN_DELAY_S
+        self._mic_last_failure = now
+        if self._mic_reopen_source_id is not None:
+            return
+
+        delay_s = self._mic_reopen_delay_s
+        self._mic_reopen_delay_s = min(delay_s * 2, MIC_REOPEN_MAX_DELAY_S)
+        self._logger.warning(f"Microphone lost ({reason}), reopening in {delay_s:g}s")
+        self._mic_reopen_source_id = GLib.timeout_add(
+            int(delay_s * 1000), self._reopen_mic, audiosrc
+        )
+
+    def _reopen_mic(self, audiosrc: Gst.Element) -> bool:
+        self._mic_reopen_source_id = None
+        # Skip a source left over from a pipeline rebuilt in the meantime.
+        if audiosrc.get_parent() is self._pipeline_sender:
+            audiosrc.set_property("device", audiosrc.get_property("device"))
+        return False
 
     def start(self) -> None:
         """Start the pipeline, rebuilding it from scratch after a stop().
 
         The first start reuses the pipeline built in __init__.
         """
-        if self._pipeline_needs_rebuild:
-            self._logger.debug("Starting WebRTC (rebuilding pipeline)")
-            self._bus_sender.remove_watch()
-            self._build_pipeline()
-            self._pipeline_needs_rebuild = False
-        else:
-            self._logger.debug("Starting WebRTC")
-        self._pipeline_sender.set_state(Gst.State.PLAYING)
+        with self._pipeline_lock:
+            if self._pipeline_needs_rebuild:
+                self._logger.debug("Starting WebRTC (rebuilding pipeline)")
+                self._bus_sender.remove_watch()
+                self._build_pipeline()
+                self._pipeline_needs_rebuild = False
+            else:
+                self._logger.debug("Starting WebRTC")
+            self._pipeline_sender.set_state(Gst.State.PLAYING)
+            self._pipeline_running = True
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def stop(self) -> None:
         """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
-        self._pipeline_sender.set_state(Gst.State.NULL)
-        self._pipeline_needs_rebuild = True
+        with self._pipeline_lock:
+            self._pipeline_running = False
+            for source_id in (
+                self._mic_reopen_source_id,
+                self._pipeline_restart_source_id,
+            ):
+                if source_id is not None:
+                    GLib.source_remove(source_id)
+            self._mic_reopen_source_id = None
+            self._pipeline_restart_source_id = None
+            self._pipeline_sender.set_state(Gst.State.NULL)
+            self._pipeline_needs_rebuild = True
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker.

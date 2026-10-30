@@ -22,7 +22,8 @@ Platform audio sources / sinks are discovered at runtime:
 * **macOS**: ``osxaudiosrc`` / ``osxaudiosink``
 * **Fallback**: ``autoaudiosrc`` / ``autoaudiosink``
 
-The "Reachy Mini Audio" card is located by name via ``Gst.DeviceMonitor``.
+The "Reachy Mini Audio" card is located by name via GStreamer device
+discovery (see :func:`~reachy_mini.media.device_detection.get_audio_device`).
 If no matching card is found the platform default is used instead.
 
 Note:
