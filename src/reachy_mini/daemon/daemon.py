@@ -876,14 +876,20 @@ class Daemon:
     def _publish_status(self) -> None:
         self._thread_event_publish_status.clear()
         while self._thread_event_publish_status.is_set() is False:
+            ws_server = self.ws_server
+            if ws_server is not None:
+                # Cleared before reading the status, so a client registered
+                # from here on is woken for a status read after it connected.
+                ws_server.client_connected_event().clear()
             json_str = self.status().model_dump_json()
-            if self.ws_server is None:
+            if ws_server is None:
                 self.logger.warning(
                     f"WS server not initialized, cannot publish status: {json_str}"
                 )
+                time.sleep(1)
             else:
-                self.ws_server.publish_status(json_str)
-            time.sleep(1)
+                ws_server.publish_status(json_str)
+                ws_server.client_connected_event().wait(1)
 
     def _setup_backend(
         self,

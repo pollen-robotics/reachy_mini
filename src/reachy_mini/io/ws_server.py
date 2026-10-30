@@ -43,6 +43,7 @@ class WSServer(AbstractServer):
         """Initialize the WebSocket server."""
         self.backend = backend
         self._cmd_event = threading.Event()
+        self._client_connected_event = threading.Event()
 
         # Connected client queues (populated when clients connect via handle_client)
         self._clients: set[asyncio.Queue[str]] = set()
@@ -78,6 +79,10 @@ class WSServer(AbstractServer):
     def command_received_event(self) -> threading.Event:
         """Return the event that is set when a command is received."""
         return self._cmd_event
+
+    def client_connected_event(self) -> threading.Event:
+        """Return the event that is set when a new client is registered."""
+        return self._client_connected_event
 
     # ------------------------------------------------------------------
     # Broadcasting
@@ -125,6 +130,9 @@ class WSServer(AbstractServer):
 
         queue: asyncio.Queue[str] = asyncio.Queue(maxsize=100)
         self._clients.add(queue)
+        # Wake the daemon's status thread so this client gets a status now
+        # instead of on the next 1 Hz tick.
+        self._client_connected_event.set()
 
         send_task = asyncio.create_task(self._send_loop(websocket, queue))
         try:
