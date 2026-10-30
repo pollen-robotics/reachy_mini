@@ -1,0 +1,2 @@
+ERROR    _ble_auth_binding_under_test:bluetooth_service.py:892 Failed to emit BLE notification: 'NoneType' object has no attribute 'services'
+WARNING  _ble_forget_bonds_under_test:bluetooth_service.py:1259 Could not forget bonded device /org/bluez/hci0/dev_A:
