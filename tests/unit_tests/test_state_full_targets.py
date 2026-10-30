@@ -45,3 +45,19 @@ def test_full_state_returns_requested_targets(router_app, sim_backend) -> None:
     assert body["target_head_joints"] == [0.7, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
     assert body["target_body_yaw"] == 0.3
     assert body["target_antennas_position"] == [0.1, -0.2]
+
+
+def test_full_state_head_target_is_null_before_any_is_set(
+    router_app, sim_backend
+) -> None:
+    """Before any head command, ``target_head_pose`` comes back as null, not a 500.
+
+    The backend starts with no head target, as right after the daemon boots.
+    """
+    sim_backend.target_head_pose = None
+    client = router_app(state.router, backend=sim_backend)
+
+    resp = client.get("/state/full", params={"with_target_head_pose": True})
+
+    assert resp.status_code == 200
+    assert resp.json()["target_head_pose"] is None
