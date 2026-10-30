@@ -339,7 +339,10 @@ class FaceTracker:
                 ).reshape((frame_height, frame_width, 3))
                 if camera_matrix is None:
                     camera_matrix = intrinsics_for_size(
-                        camera_specs.K, crop_scale, (frame_width, frame_height)
+                        camera_specs.K,
+                        crop_scale,
+                        (frame_width, frame_height),
+                        camera_specs.calibration_size,
                     )
                 self._process_detections(
                     detector.detect(frame),
