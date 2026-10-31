@@ -232,6 +232,36 @@ def test_tracking_sustained_loss_recenters_to_neutral() -> None:
     np.testing.assert_allclose(backend._tracking_target_pose, np.eye(4), atol=1e-9)
 
 
+def test_tracking_sustained_loss_hands_head_back_to_client() -> None:
+    """A completed recenter releases the head while keeping detection enabled."""
+    backend = _make_backend()
+    tracker = DummyTracker()
+    backend._tracker = tracker  # type: ignore[assignment]
+    backend._tracking_enabled = True
+    backend._tracking_weight = 1.0
+    target = np.eye(4, dtype=np.float64)
+    target[:3, :3] = R.from_euler("z", 0.5).as_matrix()
+    backend._tracking_target_pose = target
+    backend._tracking_aim = target.copy()
+    backend._last_face_seen = time.monotonic() - (backend._tracking_lost_timeout + 1.0)
+
+    for _ in range(100):
+        backend.step_head_tracking()
+
+    assert backend._tracking_enabled is True
+    assert backend._tracking_weight == 0.0
+    assert backend._tracking_aim is None
+    assert backend._tracking_target_pose is None
+    assert backend._last_face_seen is None
+    assert tracker.stopped is False
+
+    backend.ik_required = False
+    client_pose = np.eye(4, dtype=np.float64)
+    client_pose[2, 3] = 0.005
+    backend.set_target_head_pose(client_pose)
+    assert backend.ik_required is True
+
+
 def test_enable_head_tracking_weight_zero_pauses_without_stopping() -> None:
     """Weight 0 pauses the tracker and frees the head without stopping it."""
     backend = _make_backend()

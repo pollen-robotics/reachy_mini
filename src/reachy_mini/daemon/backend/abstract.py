@@ -746,10 +746,11 @@ class Backend:
                     )
                     if obs.center is not None:
                         self._last_face_seen = now
-            if (
+            face_lost = (
                 self._last_face_seen is not None
                 and now - self._last_face_seen >= self._tracking_lost_timeout
-            ):
+            )
+            if face_lost:
                 self._tracking_target_pose = self.INIT_HEAD_POSE.copy()
             if self._tracking_target_pose is None:
                 return
@@ -759,6 +760,10 @@ class Backend:
                 self._tracking_aim, self._tracking_target_pose, self._tracking_alpha
             )
             self.ik_required = True
+            if face_lost and np.allclose(
+                self._tracking_aim, self.INIT_HEAD_POSE, atol=1e-3
+            ):
+                self.clear_tracking_aim()
 
     def set_tracking_face(
         self,
