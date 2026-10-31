@@ -1950,11 +1950,11 @@ wheels = [
 
 [[package]]
 name = "nmcli"
-version = "1.7.0"
+version = "1.8.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1f/fd/01e2cc2d84cf52653e59a2ce4fe0ebb79b388523be753befe843064394c5/nmcli-1.7.0.tar.gz", hash = "sha256:4fb17b6c33d276a264a27b7109fa1d70987570536fa8852b51830f9f7732f982", size = 21209, upload-time = "2026-01-03T02:15:20.137Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/35/5b/bdc90cc35438c19274911053ef378252a3c58b7756c19472292fb3b67c03/nmcli-1.8.0.tar.gz", hash = "sha256:608dd5ecb9db5052b5401d7623eaf5c0eb40e4d11a5fcca7f76cd9205756872f", size = 21553, upload-time = "2026-06-13T07:59:22.393Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8a/b7/648f9f6989c6c2860ebb403c762137578ca412fe9932b85ab33dc21517fa/nmcli-1.7.0-py3-none-any.whl", hash = "sha256:27144f03600d5e53c09cfa500cd7160dea61f83c3669ccd736401793b65ce980", size = 19905, upload-time = "2026-01-03T02:15:18.799Z" },
+    { url = "https://files.pythonhosted.org/packages/96/9d/a43b22b37f92a3047b939914d247f0f372fc3273ed58930bfb79325822b2/nmcli-1.8.0-py3-none-any.whl", hash = "sha256:4a81b1c55ada2cdc3251ae09740d6f5e4c34f2769eeb2a3380b24e8371622688", size = 20052, upload-time = "2026-06-13T07:59:21.277Z" },
 ]
 
 [[package]]
@@ -3280,7 +3280,7 @@ requires-dist = [
     { name = "libusb-package", specifier = ">=1.0.26.3" },
     { name = "log-throttling", specifier = "==0.0.3" },
     { name = "mujoco", marker = "extra == 'mujoco'", specifier = "==3.3.0" },
-    { name = "nmcli", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.5" },
+    { name = "nmcli", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.8.0" },
     { name = "numpy", specifier = ">=2.2.5" },
     { name = "onnxruntime", specifier = "==1.27.0" },
     { name = "opencv-python", marker = "extra == 'examples'", specifier = "<=5.0" },
