@@ -374,42 +374,47 @@ class AppManager:
             except asyncio.CancelledError:
                 pass
 
-        # Return to zero after an app stops, unless the app left it asleep.
-        if self.daemon is not None and self.daemon.backend is not None:
-            backend = self.daemon.backend
-            _, _, dist_to_sleep = distance_between_poses(
-                backend.get_current_head_pose(), backend.SLEEP_HEAD_POSE
-            )
-            if dist_to_sleep <= SLEEP_POSE_MAGIC_DISTANCE:
-                # pose check only; ensure limp (idempotent)
-                backend.set_motor_control_mode(MotorControlMode.Disabled)
-                self.logger.getChild("runner").info(
-                    "Robot is asleep; leaving it limp in the sleep pose."
+        try:
+            # Return to zero after an app stops, unless the app left it asleep.
+            if self.daemon is not None and self.daemon.backend is not None:
+                backend = self.daemon.backend
+                _, _, dist_to_sleep = distance_between_poses(
+                    backend.get_current_head_pose(), backend.SLEEP_HEAD_POSE
                 )
-            else:
-                if isinstance(backend, RobotBackend):
-                    backend.enable_motors()
-
-                try:
-                    from reachy_mini.reachy_mini import (
-                        INIT_ANTENNAS_JOINT_POSITIONS,
-                        INIT_HEAD_POSE,
-                    )
-
+                if dist_to_sleep <= SLEEP_POSE_MAGIC_DISTANCE:
+                    # pose check only; ensure limp (idempotent)
+                    backend.set_motor_control_mode(MotorControlMode.Disabled)
                     self.logger.getChild("runner").info(
-                        "Returning robot to zero position"
+                        "Robot is asleep; leaving it limp in the sleep pose."
                     )
-                    await backend.goto_target(
-                        head=INIT_HEAD_POSE,
-                        antennas=np.array(INIT_ANTENNAS_JOINT_POSITIONS),
-                        duration=1.0,
-                    )
-                except Exception as e:
-                    self.logger.getChild("runner").warning(
-                        f"Could not return to zero position: {e}"
-                    )
+                else:
+                    if isinstance(backend, RobotBackend):
+                        backend.enable_motors()
 
-        self.current_app = None
+                    try:
+                        from reachy_mini.reachy_mini import (
+                            INIT_ANTENNAS_JOINT_POSITIONS,
+                            INIT_HEAD_POSE,
+                        )
+
+                        self.logger.getChild("runner").info(
+                            "Returning robot to zero position"
+                        )
+                        await backend.goto_target(
+                            head=INIT_HEAD_POSE,
+                            antennas=np.array(INIT_ANTENNAS_JOINT_POSITIONS),
+                            duration=1.0,
+                        )
+                    except Exception as e:
+                        self.logger.getChild("runner").warning(
+                            f"Could not return to zero position: {e}"
+                        )
+        except Exception as e:
+            self.logger.getChild("runner").warning(
+                f"Could not handle post-stop pose: {e}"
+            )
+        finally:
+            self.current_app = None
 
     async def restart_current_app(self, keep_remote: bool = False) -> AppStatus:
         """Restart the current app.

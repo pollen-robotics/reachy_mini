@@ -52,3 +52,20 @@ async def test_stop_returns_to_zero_when_awake() -> None:
     await mngr.stop_current_app()
     goto_target.assert_awaited_once()
     assert mngr.current_app is None
+
+
+@pytest.mark.asyncio
+async def test_stop_clears_current_app_when_pose_read_fails(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    mngr, goto_target = _manager_with_head_pose(np.eye(4))
+    mngr.daemon.backend.get_current_head_pose = MagicMock(
+        side_effect=RuntimeError("pose unavailable")
+    )
+
+    with caplog.at_level("WARNING"):
+        await mngr.stop_current_app()
+
+    goto_target.assert_not_awaited()
+    assert "Could not handle post-stop pose: pose unavailable" in caplog.text
+    assert mngr.current_app is None
