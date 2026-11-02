@@ -341,6 +341,9 @@ class GstMediaServer:
         # `_push_pose`). Kept separate from `_data_channels` so a stale pose
         # frame is never head-of-line-blocking a reliable control message.
         self._pose_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
+        # peer_id -> the webrtcbin its pose channel was opened on, so a
+        # reconnect's old session can't drop the new session's pose stream.
+        self._pose_channel_bins: dict[str, Gst.Element] = {}
         # Each peer's `webrtcbin`, kept so the pose channel can be opened
         # lazily on `subscribe_pose` rather than eagerly for every peer.
         self._peer_webrtcbins: dict[str, Gst.Element] = {}  # peer_id -> bin
@@ -681,11 +684,12 @@ class GstMediaServer:
         self._logger.info(f"consumer removed: {peer_id} (session {session_id})")
         if session_id is not None:
             self._forget_session_liveness(session_id)
-        self._cleanup_incoming_audio(peer_id)
-        self._drop_pose_peer(peer_id)
         # A reconnect's new session may already own this peer id: an old
-        # session going away must not tear down the live one's state.
+        # session going away only tears down what it owned itself.
         stale = self._peer_webrtcbins.get(peer_id) not in (None, webrtcbin)
+        self._cleanup_incoming_audio(peer_id, webrtcbin if stale else None)
+        if not stale or self._pose_channel_bins.get(peer_id) is webrtcbin:
+            self._drop_pose_peer(peer_id)
         if not stale:
             self._peer_webrtcbins.pop(peer_id, None)
         # `on-close` may never fire for a peer that vanished. Only this
@@ -860,6 +864,7 @@ class GstMediaServer:
             "playback_pipeline": self._pipeline_playback,
             "probe_id": probe_id,
             "pad": pad,
+            "webrtcbin": webrtcbin,  # identity only: which session owns it
         }
         self._logger.info(f"Audio playback pipeline started for peer {peer_id}")
 
@@ -876,11 +881,20 @@ class GstMediaServer:
             return False
         return True
 
-    def _cleanup_incoming_audio(self, peer_id: str) -> None:
-        """Remove the incoming-audio pad probe and playback pipeline for a peer."""
-        info = self._incoming_audio.pop(peer_id, None)
-        if info is None:
+    def _cleanup_incoming_audio(
+        self, peer_id: str, webrtcbin: Optional[Gst.Element] = None
+    ) -> None:
+        """Remove the incoming-audio pad probe and playback pipeline for a peer.
+
+        With *webrtcbin*, only if that session owns it: a reconnect's new
+        session may already play its audio under the same peer id.
+        """
+        info = self._incoming_audio.get(peer_id)
+        if info is None or (
+            webrtcbin is not None and info.get("webrtcbin") is not webrtcbin
+        ):
             return
+        del self._incoming_audio[peer_id]
 
         pad = info.get("pad")
         probe_id = info.get("probe_id")
@@ -2242,14 +2256,15 @@ class GstMediaServer:
         leaving it there would keep the timer armed, building a state frame
         30 times a second and sending it nowhere until the peer disconnects.
         """
-        if peer_id in self._pose_channels:
-            return False
         webrtcbin = self._peer_webrtcbins.get(peer_id)
         if webrtcbin is None:
             self._logger.warning(
                 f"No webrtcbin for peer {peer_id}, cannot open pose channel"
             )
             self._drop_pose_subscription(peer_id)
+            return False
+        # A channel left by a reconnect's old session is replaced, not reused.
+        if self._pose_channel_bins.get(peer_id) is webrtcbin:
             return False
         if not self._setup_pose_channel(peer_id, webrtcbin):
             self._drop_pose_subscription(peer_id)
@@ -2272,6 +2287,7 @@ class GstMediaServer:
             return False
         self._logger.debug(f"Pose channel created for peer {peer_id}")
         self._pose_channels[peer_id] = channel
+        self._pose_channel_bins[peer_id] = webrtcbin
         channel.connect("on-open", self._on_pose_channel_open, peer_id)
         channel.connect("on-close", self._on_pose_channel_close, peer_id)
         channel.connect("on-error", self._on_data_channel_error, peer_id)
@@ -2324,7 +2340,9 @@ class GstMediaServer:
 
     def _on_pose_channel_close(self, channel: Gst.Element, peer_id: str) -> None:
         self._logger.info(f"Pose channel closed for peer {peer_id}")
-        self._drop_pose_peer(peer_id)
+        # Only the current channel: a replaced one belongs to an old session.
+        if self._pose_channels.get(peer_id) is channel:
+            self._drop_pose_peer(peer_id)
 
     def _drop_pose_peer(self, peer_id: str) -> None:
         """Forget a peer's pose channel and subscription.
@@ -2336,6 +2354,7 @@ class GstMediaServer:
         whose pose channel closed can still re-subscribe.
         """
         self._pose_channels.pop(peer_id, None)
+        self._pose_channel_bins.pop(peer_id, None)
         self._drop_pose_subscription(peer_id)
 
     def _drop_pose_subscription(self, peer_id: str) -> None:

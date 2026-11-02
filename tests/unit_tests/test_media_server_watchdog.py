@@ -436,6 +436,7 @@ def _removable_server() -> GstMediaServer:
     server = _make_server()
     server._peer_webrtcbins = {}
     server._open_data_channels = set()
+    server._pose_channel_bins = {}
     for name in (
         "_forget_session_liveness",
         "_cleanup_incoming_audio",
@@ -465,3 +466,49 @@ def test_stale_session_removal_keeps_the_live_session(
     server._consumer_removed(MagicMock(), "p1", new_bin)
     assert "p1" not in server._peer_webrtcbins
     server._on_peer_disconnect.assert_called_once_with("p1")  # type: ignore[attr-defined]
+
+
+def test_stale_session_removal_only_frees_its_own_audio_and_pose(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The old session's audio and pose go; the new session's stay."""
+    from reachy_mini.media import media_server as ms
+
+    monkeypatch.setattr(ms, "_session_id_of", lambda bin: None)
+    server = _make_server()
+    server._peer_webrtcbins = {}
+    server._open_data_channels = set()
+    server._pose_channels = {}
+    server._pose_channel_bins = {}
+    server._pose_subscribers = set()
+    server._pose_lock = Lock()
+    server._webrtcechoprobe = None
+    server._on_peer_disconnect = None
+    server._forget_session_liveness = MagicMock()
+    server._teardown_negotiation_watchdog = MagicMock()
+    old_bin, new_bin = MagicMock(), MagicMock()
+
+    def audio(bin: MagicMock) -> dict[str, Any]:
+        return {
+            "playback_pipeline": MagicMock(),
+            "probe_id": 1,
+            "pad": MagicMock(),
+            "webrtcbin": bin,
+        }
+
+    # The new session already plays audio and streams pose.
+    server._peer_webrtcbins["p1"] = new_bin
+    server._incoming_audio = {"p1": audio(new_bin)}
+    server._pose_channels["p1"] = MagicMock()
+    server._pose_channel_bins["p1"] = new_bin
+    server._pose_subscribers.add("p1")
+    server._consumer_removed(MagicMock(), "p1", old_bin)
+    assert server._incoming_audio["p1"]["webrtcbin"] is new_bin
+    assert "p1" in server._pose_channels and "p1" in server._pose_subscribers
+
+    # The old session still owns them: they go with it.
+    server._incoming_audio = {"p1": audio(old_bin)}
+    server._pose_channel_bins["p1"] = old_bin
+    server._consumer_removed(MagicMock(), "p1", old_bin)
+    assert "p1" not in server._incoming_audio
+    assert "p1" not in server._pose_channels and "p1" not in server._pose_subscribers
