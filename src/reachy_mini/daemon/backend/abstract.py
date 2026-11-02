@@ -1188,6 +1188,10 @@ class Backend:
             False if the media server could not play the file (see
             ``NO_SUCH_SOUND``); True otherwise, including in no_media mode.
 
+        Raises:
+            RuntimeError: If the media server found the file but could not
+                start playback.
+
         """
         if self._media_server is None:
             return True
@@ -1730,7 +1734,12 @@ class Backend:
             asyncio.create_task(self._async_goto_sleep(send_response))
 
         elif isinstance(cmd, PlaySoundCmd):
-            if self.play_sound(cmd.file):
+            try:
+                played = self.play_sound(cmd.file)
+            except RuntimeError as e:
+                send_response({"error": str(e), "command": "play_sound"})
+                return
+            if played:
                 send_response({"status": "ok", "command": "play_sound"})
             else:
                 send_response({"error": NO_SUCH_SOUND, "command": "play_sound"})

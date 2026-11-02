@@ -1640,13 +1640,15 @@ class GstMediaServer:
                 found at the given path, it is looked up in the assets directory.
 
         Returns:
-            False if nothing was played: the file was not found, or playbin
-            is missing.
+            False if the file was not found, True once playback has started.
+
+        Raises:
+            RuntimeError: If the playbin element cannot be created.
 
         """
-        if not os.path.exists(sound_file):
+        if not os.path.isfile(sound_file):
             file_path = f"{ASSETS_ROOT_PATH}/{sound_file}"
-            if not os.path.exists(file_path):
+            if not os.path.isfile(file_path):
                 self._logger.error(
                     f"Sound file {sound_file} not found in assets directory "
                     "or given path."
@@ -1660,8 +1662,7 @@ class GstMediaServer:
 
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
-            self._logger.error("Failed to create playbin element")
-            return False
+            raise RuntimeError("Failed to create playbin element")
 
         # Build file URI
         if os.name == "nt":

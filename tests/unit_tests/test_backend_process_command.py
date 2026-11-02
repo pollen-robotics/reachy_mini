@@ -191,6 +191,13 @@ def test_play_sound_unknown_file_errors(sim_backend: Any) -> None:
     assert "status" not in responses[0]
 
 
+def test_play_sound_playback_failure_errors(sim_backend: Any) -> None:
+    """A playback failure is an error reply naming the command."""
+    sim_backend.play_sound = Mock(side_effect=RuntimeError("no playbin"))
+    responses = _dispatch(sim_backend, PlaySoundCmd(file="wake_up.wav"))
+    assert responses == [{"error": "no playbin", "command": "play_sound"}]
+
+
 def test_clear_incoming_audio_delegates(sim_backend: Any) -> None:
     """ClearIncomingAudioCmd forwards to clear_incoming_audio."""
     sim_backend.clear_incoming_audio = Mock()

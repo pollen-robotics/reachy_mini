@@ -101,7 +101,11 @@ async def play_sound(
         if os.path.isfile(tmp_candidate):
             sound_file = tmp_candidate
 
-    if not backend.play_sound(sound_file):
+    try:
+        played = backend.play_sound(sound_file)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    if not played:
         raise HTTPException(status_code=404, detail=NO_SUCH_SOUND)
     return {"status": "ok"}
 
