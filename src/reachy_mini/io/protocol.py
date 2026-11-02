@@ -1133,7 +1133,8 @@ MOVE_BUSY_ERROR = "a move is already running"
 class MoveBusyError(RuntimeError):
     """A move was rejected because another move is already running.
 
-    Raised by the daemon's ``play_move``.
+    Raised by the daemon's ``play_move`` and, client side, by
+    ``ReachyMini.goto_target`` when the daemon answers with this error.
     """
 
 

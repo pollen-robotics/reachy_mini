@@ -5,15 +5,18 @@ import json
 import threading
 from typing import Any
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import numpy as np
 import pytest
 
+from reachy_mini import MoveBusyError
 from reachy_mini.io.protocol import (
     MOVE_BUSY_ERROR,
     PlayRecordedMoveCmd,
     PlayUploadedMoveCmd,
 )
+from reachy_mini.io.ws_client import TaskState, WSClient
 
 
 def _up(z: float) -> np.ndarray:
@@ -116,6 +119,19 @@ async def test_uploaded_move_while_busy_is_kept_for_retry(
     assert sim_backend._uploaded_moves["m1"] is move
     assert sim_backend._uploaded_audios["m1"] == str(audio)
     assert audio.exists()
+
+
+def test_sdk_raises_move_busy_error() -> None:
+    """The SDK client turns the daemon's busy reply into a MoveBusyError."""
+    client = WSClient.__new__(WSClient)
+    client._tasks_lock = threading.Lock()
+    uid = uuid4()
+    client.tasks = {uid: TaskState(event=threading.Event(), error=MOVE_BUSY_ERROR)}
+    client.tasks[uid].event.set()
+
+    with pytest.raises(MoveBusyError, match=MOVE_BUSY_ERROR):
+        client.wait_for_task_completion(uid)
+    assert uid not in client.tasks
 
 
 @pytest.mark.asyncio
