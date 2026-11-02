@@ -1629,7 +1629,7 @@ class GstMediaServer:
             self._pipeline_sender.set_state(Gst.State.NULL)
             self._pipeline_needs_rebuild = True
 
-    def play_sound(self, sound_file: str) -> None:
+    def play_sound(self, sound_file: str) -> bool:
         """Play a sound file on the robot's speaker.
 
         Uses GStreamer's playbin element with a platform-aware audio sink.
@@ -1639,6 +1639,10 @@ class GstMediaServer:
             sound_file: Path to the sound file to play. If the file is not
                 found at the given path, it is looked up in the assets directory.
 
+        Returns:
+            False if nothing was played: the file was not found, or playbin
+            is missing.
+
         """
         if not os.path.exists(sound_file):
             file_path = f"{ASSETS_ROOT_PATH}/{sound_file}"
@@ -1647,7 +1651,7 @@ class GstMediaServer:
                     f"Sound file {sound_file} not found in assets directory "
                     "or given path."
                 )
-                return
+                return False
         else:
             file_path = sound_file
 
@@ -1657,7 +1661,7 @@ class GstMediaServer:
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
             self._logger.error("Failed to create playbin element")
-            return
+            return False
 
         # Build file URI
         if os.name == "nt":
@@ -1678,6 +1682,7 @@ class GstMediaServer:
 
         self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
+        return True
 
     def stop_sound(self) -> None:
         """Stop the currently playing sound file.

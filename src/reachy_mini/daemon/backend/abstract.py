@@ -128,6 +128,9 @@ from reachy_mini.vision.look_at import (
 # speaking to it.
 _TRACKING_PITCH_TRIM_RAD = float(np.radians(15.0))
 
+# Same wording as the Rust daemon.
+NO_SUCH_SOUND = "no such sound: not uploaded, not a file, not an asset"
+
 
 class _PlaybackCancelToken:
     """Per-run cancellation handle for ``Backend.play_move``.
@@ -1172,7 +1175,7 @@ class Backend:
             return f.read()
 
     # Multimedia methods
-    def play_sound(self, sound_file: str) -> None:
+    def play_sound(self, sound_file: str) -> bool:
         """Play a sound file from the assets directory.
 
         Delegates to the media server's play_sound method.  If the server
@@ -1181,9 +1184,15 @@ class Backend:
         Args:
             sound_file (str): The name of the sound file to play (e.g., "wake_up.wav").
 
+        Returns:
+            False if the media server could not play the file (see
+            ``NO_SUCH_SOUND``); True otherwise, including in no_media mode.
+
         """
-        if self._media_server is not None:
-            self._media_server.play_sound(sound_file)
+        if self._media_server is None:
+            return True
+        played: bool = self._media_server.play_sound(sound_file)
+        return played
 
     def stop_sound(self) -> None:
         """Stop the currently playing sound file.
@@ -1721,8 +1730,10 @@ class Backend:
             asyncio.create_task(self._async_goto_sleep(send_response))
 
         elif isinstance(cmd, PlaySoundCmd):
-            self.play_sound(cmd.file)
-            send_response({"status": "ok", "command": "play_sound"})
+            if self.play_sound(cmd.file):
+                send_response({"status": "ok", "command": "play_sound"})
+            else:
+                send_response({"error": NO_SUCH_SOUND, "command": "play_sound"})
 
         elif isinstance(cmd, PlayRecordedMoveCmd):
             asyncio.create_task(self._async_play_recorded_move(cmd, send_response))

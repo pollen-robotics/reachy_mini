@@ -175,10 +175,20 @@ async def test_goto_sleep_completes(sim_backend: Any) -> None:
 
 def test_play_sound_delegates(sim_backend: Any) -> None:
     """PlaySoundCmd forwards the file name to play_sound."""
-    sim_backend.play_sound = Mock()
+    sim_backend.play_sound = Mock(return_value=True)
     responses = _dispatch(sim_backend, PlaySoundCmd(file="wake_up.wav"))
     sim_backend.play_sound.assert_called_once_with("wake_up.wav")
     assert responses == [{"status": "ok", "command": "play_sound"}]
+
+
+def test_play_sound_unknown_file_errors(sim_backend: Any) -> None:
+    """An unknown sound file is an error reply naming the command."""
+    sim_backend.play_sound = Mock(return_value=False)
+    responses = _dispatch(sim_backend, PlaySoundCmd(file="does_not_exist.wav"))
+    assert len(responses) == 1
+    assert responses[0]["command"] == "play_sound"
+    assert "no such sound" in responses[0]["error"]
+    assert "status" not in responses[0]
 
 
 def test_clear_incoming_audio_delegates(sim_backend: Any) -> None:

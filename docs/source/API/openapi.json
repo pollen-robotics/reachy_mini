@@ -1527,7 +1527,7 @@
     "/api/media/play_sound": {
       "post": {
         "summary": "Play Sound",
-        "description": "Play a sound file on the robot's speaker.\n\nThe *file* field can be:\n- An absolute path on the daemon's filesystem.\n- A filename relative to the built-in assets directory.\n- A filename previously uploaded to the sounds temp directory.",
+        "description": "Play a sound file on the robot's speaker.\n\nThe *file* field can be:\n- An absolute path on the daemon's filesystem.\n- A filename relative to the built-in assets directory.\n- A filename previously uploaded to the sounds temp directory.\n\nAnswers 404 when the file is none of these.",
         "operationId": "play_sound_api_media_play_sound_post",
         "requestBody": {
           "content": {
