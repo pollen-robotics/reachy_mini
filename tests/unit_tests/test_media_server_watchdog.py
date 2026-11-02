@@ -525,3 +525,44 @@ def test_stale_session_removal_only_frees_its_own_audio_and_pose(
     assert "p1" not in server._incoming_audio
     assert "p1" not in server._pose_channels and "p1" not in server._pose_subscribers
 
+
+def test_new_audio_pad_stops_the_peers_previous_playback() -> None:
+    """A reconnect's audio replaces the old session's: the old pipeline stops."""
+    from reachy_mini.media import media_server as ms
+
+    server = _make_server()
+    server._webrtcechoprobe = None
+    old_pipe, old_pad = MagicMock(), MagicMock()
+    server._incoming_audio = {
+        "p1": {
+            "playback_pipeline": old_pipe,
+            "probe_id": 7,
+            "pad": old_pad,
+            "webrtcbin": MagicMock(),
+        }
+    }
+
+    caps = MagicMock()
+    caps.get_size.return_value = 1
+    caps.get_structure.return_value.has_field.return_value = True
+    caps.get_structure.return_value.get_string.return_value = "audio"
+    pad = MagicMock()
+    pad.get_direction.return_value = ms.Gst.PadDirection.SRC
+    pad.get_current_caps.return_value = caps
+
+    class _Stop(Exception):
+        pass
+
+    real_cleanup = server._cleanup_incoming_audio
+
+    def cleanup_then_stop(peer_id: str, *args: Any) -> None:
+        real_cleanup(peer_id, *args)
+        raise _Stop  # don't build a real playback pipeline
+
+    server._cleanup_incoming_audio = cleanup_then_stop  # type: ignore[method-assign]
+    with pytest.raises(_Stop):
+        server._on_consumer_pad_added(MagicMock(), pad, "p1")
+
+    assert "p1" not in server._incoming_audio
+    old_pad.remove_probe.assert_called_once_with(7)
+    old_pipe.set_state.assert_called_once_with(ms.Gst.State.NULL)

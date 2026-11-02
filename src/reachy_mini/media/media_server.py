@@ -751,6 +751,9 @@ class GstMediaServer:
         if media != "audio":
             return
 
+        # A reconnect's new session replaces the old one's playback: stop it
+        # first, or its pipeline and pad probe keep running, orphaned.
+        self._cleanup_incoming_audio(peer_id)
         self._logger.info(f"Setting up incoming audio playback for peer {peer_id}")
 
         # Build playback pipeline element-by-element
