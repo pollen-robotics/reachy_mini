@@ -1,2 +1,0 @@
-ERROR    test_restart:gstreamer_utils.py:45 Error: <MagicMock id='139733018382976'> 
-ERROR    test_restart:gstreamer_utils.py:45 Error: <MagicMock id='139733013026368'>

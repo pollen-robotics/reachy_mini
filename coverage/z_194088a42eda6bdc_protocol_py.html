@@ -54,8 +54,8 @@
             </div>
         </aside>
         <h2>
-            <span class="text">303 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">303<span class="text"> run</span></button>
+            <span class="text">305 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">305<span class="text"> run</span></button>
             <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">0<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_194088a42eda6bdc_publisher_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.0">coverage.py v7.17.0</a>,
-            created at 2026-11-02 14:11 +0000
+            created at 2026-11-02 14:47 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -1209,29 +1209,40 @@
     <p class="run"><span class="n"><a id="t1127" href="#t1127">1127</a></span><span class="t"><span class="nam">message_adapter</span><span class="op">:</span> <span class="nam">TypeAdapter</span><span class="op">[</span><span class="nam">AnyMessage</span><span class="op">]</span> <span class="op">=</span> <span class="nam">TypeAdapter</span><span class="op">(</span><span class="nam">AnyMessage</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1128" href="#t1128">1128</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1129" href="#t1129">1129</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1130" href="#t1130">1130</a></span><span class="t"><span class="key">class</span> <span class="nam">TaskProgress</span><span class="op">(</span><span class="nam">BaseModel</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1131" href="#t1131">1131</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Task progress (broadcast to all clients).&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1130" href="#t1130">1130</a></span><span class="t"><span class="nam">MOVE_BUSY_ERROR</span> <span class="op">=</span> <span class="str">&quot;a move is already running&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1131" href="#t1131">1131</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1132" href="#t1132">1132</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1133" href="#t1133">1133</a></span><span class="t">    <span class="nam">type</span><span class="op">:</span> <span class="nam">Literal</span><span class="op">[</span><span class="str">&quot;task_progress&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="str">&quot;task_progress&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1134" href="#t1134">1134</a></span><span class="t">    <span class="nam">uuid</span><span class="op">:</span> <span class="nam">UUID</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1135" href="#t1135">1135</a></span><span class="t">    <span class="nam">finished</span><span class="op">:</span> <span class="nam">bool</span> <span class="op">=</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1136" href="#t1136">1136</a></span><span class="t">    <span class="nam">error</span><span class="op">:</span> <span class="nam">str</span> <span class="op">|</span> <span class="key">None</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1137" href="#t1137">1137</a></span><span class="t">    <span class="nam">timestamp</span><span class="op">:</span> <span class="nam">datetime</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1138" href="#t1138">1138</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1133" href="#t1133">1133</a></span><span class="t"><span class="key">class</span> <span class="nam">MoveBusyError</span><span class="op">(</span><span class="nam">RuntimeError</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1134" href="#t1134">1134</a></span><span class="t">    <span class="str">&quot;&quot;&quot;A move was rejected because another move is already running.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1135" href="#t1135">1135</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1136" href="#t1136">1136</a></span><span class="t"><span class="str">    Raised by the daemon&#x27;s ``play_move`` and, client side, by</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1137" href="#t1137">1137</a></span><span class="t"><span class="str">    ``ReachyMini.goto_target`` when the daemon answers with this error.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1138" href="#t1138">1138</a></span><span class="t"><span class="str">    &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1139" href="#t1139">1139</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1140" href="#t1140">1140</a></span><span class="t"><span class="nam">AnyServerMsg</span> <span class="op">=</span> <span class="nam">Annotated</span><span class="op">[</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1141" href="#t1141">1141</a></span><span class="t">    <span class="nam">JointPositionsMsg</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1142" href="#t1142">1142</a></span><span class="t">    <span class="op">|</span> <span class="nam">HeadPoseMsg</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1143" href="#t1143">1143</a></span><span class="t">    <span class="op">|</span> <span class="nam">ImuDataMsg</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1144" href="#t1144">1144</a></span><span class="t">    <span class="op">|</span> <span class="nam">RecordedDataMsg</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1145" href="#t1145">1145</a></span><span class="t">    <span class="op">|</span> <span class="nam">DaemonStatus</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1146" href="#t1146">1146</a></span><span class="t">    <span class="op">|</span> <span class="nam">TaskProgress</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1147" href="#t1147">1147</a></span><span class="t">    <span class="op">|</span> <span class="nam">LogLineMsg</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1148" href="#t1148">1148</a></span><span class="t">    <span class="op">|</span> <span class="nam">LogStreamErrorMsg</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1149" href="#t1149">1149</a></span><span class="t">    <span class="op">|</span> <span class="nam">UpdateProgressMsg</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1150" href="#t1150">1150</a></span><span class="t">    <span class="nam">Field</span><span class="op">(</span><span class="nam">discriminator</span><span class="op">=</span><span class="str">&quot;type&quot;</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1151" href="#t1151">1151</a></span><span class="t"><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1152" href="#t1152">1152</a></span><span class="t"><span class="nam">server_msg_adapter</span><span class="op">:</span> <span class="nam">TypeAdapter</span><span class="op">[</span><span class="nam">AnyServerMsg</span><span class="op">]</span> <span class="op">=</span> <span class="nam">TypeAdapter</span><span class="op">(</span><span class="nam">AnyServerMsg</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1140" href="#t1140">1140</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1141" href="#t1141">1141</a></span><span class="t"><span class="key">class</span> <span class="nam">TaskProgress</span><span class="op">(</span><span class="nam">BaseModel</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1142" href="#t1142">1142</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Task progress (broadcast to all clients).&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1143" href="#t1143">1143</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1144" href="#t1144">1144</a></span><span class="t">    <span class="nam">type</span><span class="op">:</span> <span class="nam">Literal</span><span class="op">[</span><span class="str">&quot;task_progress&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="str">&quot;task_progress&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1145" href="#t1145">1145</a></span><span class="t">    <span class="nam">uuid</span><span class="op">:</span> <span class="nam">UUID</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1146" href="#t1146">1146</a></span><span class="t">    <span class="nam">finished</span><span class="op">:</span> <span class="nam">bool</span> <span class="op">=</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1147" href="#t1147">1147</a></span><span class="t">    <span class="nam">error</span><span class="op">:</span> <span class="nam">str</span> <span class="op">|</span> <span class="key">None</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1148" href="#t1148">1148</a></span><span class="t">    <span class="nam">timestamp</span><span class="op">:</span> <span class="nam">datetime</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1149" href="#t1149">1149</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1150" href="#t1150">1150</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1151" href="#t1151">1151</a></span><span class="t"><span class="nam">AnyServerMsg</span> <span class="op">=</span> <span class="nam">Annotated</span><span class="op">[</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1152" href="#t1152">1152</a></span><span class="t">    <span class="nam">JointPositionsMsg</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1153" href="#t1153">1153</a></span><span class="t">    <span class="op">|</span> <span class="nam">HeadPoseMsg</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1154" href="#t1154">1154</a></span><span class="t">    <span class="op">|</span> <span class="nam">ImuDataMsg</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1155" href="#t1155">1155</a></span><span class="t">    <span class="op">|</span> <span class="nam">RecordedDataMsg</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1156" href="#t1156">1156</a></span><span class="t">    <span class="op">|</span> <span class="nam">DaemonStatus</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1157" href="#t1157">1157</a></span><span class="t">    <span class="op">|</span> <span class="nam">TaskProgress</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1158" href="#t1158">1158</a></span><span class="t">    <span class="op">|</span> <span class="nam">LogLineMsg</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1159" href="#t1159">1159</a></span><span class="t">    <span class="op">|</span> <span class="nam">LogStreamErrorMsg</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1160" href="#t1160">1160</a></span><span class="t">    <span class="op">|</span> <span class="nam">UpdateProgressMsg</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1161" href="#t1161">1161</a></span><span class="t">    <span class="nam">Field</span><span class="op">(</span><span class="nam">discriminator</span><span class="op">=</span><span class="str">&quot;type&quot;</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1162" href="#t1162">1162</a></span><span class="t"><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1163" href="#t1163">1163</a></span><span class="t"><span class="nam">server_msg_adapter</span><span class="op">:</span> <span class="nam">TypeAdapter</span><span class="op">[</span><span class="nam">AnyServerMsg</span><span class="op">]</span> <span class="op">=</span> <span class="nam">TypeAdapter</span><span class="op">(</span><span class="nam">AnyServerMsg</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -1241,7 +1252,7 @@
             <a class="nav" href="z_194088a42eda6bdc_publisher_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.0">coverage.py v7.17.0</a>,
-            created at 2026-11-02 14:11 +0000
+            created at 2026-11-02 14:47 +0000
         </p>
     </div>
 </footer>

@@ -1,38 +1,39 @@
 {
   "stats": {
-    "total": 1245,
-    "passed": 1228,
-    "skipped": 17,
-    "new": 7
+    "total": 1253,
+    "passed": 1236,
+    "new": 8,
+    "skipped": 17
   },
   "status": "passed",
   "newTests": [
-    "05b7ddeddb6b001125c43406b53a0aa6",
-    "9f3f48dc7ae698320e4c5a89e49ce497",
-    "60521eed673dff35c0f493431e67a9a4",
-    "b297c3b64073c9fb1a0834731dde84c9",
-    "d6e310a07f8888a69e74918db1707de8",
-    "8ec3e78a95dbedaa99d4068dfc5558a3",
-    "e9397df116d46aa57838543212bc71ce"
+    "5c6c750ebf28a19100d38d97bb117582",
+    "0210aaf044c775b2a968579b587f9bd9",
+    "ea1b2744e311a7719a4af51601da8d69",
+    "4dfa5e9e2118521b27536b8f2207d5e2",
+    "0c1da41d0f59ac5779c86d1ffe032f63",
+    "29598eb6bccf0060f92b9b70672e00b9",
+    "a7ca8a06c251154f9bb7fc8ee3fbd466",
+    "71bf7ff327b59fce44559d43c814c74e"
   ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 112410,
-  "createdAt": 1793628704759,
+  "duration": 127161,
+  "createdAt": 1793630823421,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "266ea53b-e113-4cb9-9588-e3ab5f4b4a14",
+    "reportId": "14e713a4-4e72-437f-a582-5d198d769473",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/41459024783",
-  "commitSha": "cac26b66f04c75fb132ac5b7ea4a1326a2d354e8",
-  "commitHref": "https://github.com/pollen-robotics/reachy_mini/commit/cac26b66f04c75fb132ac5b7ea4a1326a2d354e8",
-  "ciRunHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/41459024783",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/41464566940",
+  "commitSha": "acda4593da4f5533123c26150b86030037b5b4d2",
+  "commitHref": "https://github.com/pollen-robotics/reachy_mini/commit/acda4593da4f5533123c26150b86030037b5b4d2",
+  "ciRunHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/41464566940",
   "ciRunName": "Allure Report",
   "href": "awesome/",
   "coverage": 62
