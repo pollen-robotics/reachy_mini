@@ -2,7 +2,6 @@ import asyncio
 import threading
 from pathlib import Path
 from threading import Event
-import time
 import pytest
 import uvicorn
 
@@ -21,7 +20,7 @@ pytestmark = pytest.mark.usefixtures("no_daemon_mdns_advertising")
 async def test_app() -> None:
     class MockApp(ReachyMiniApp):
         def run(self, reachy_mini: ReachyMini, stop_event: Event) -> None:
-            time.sleep(1)  # Simulate some processing time
+            reachy_mini.get_current_joint_positions()  # use the robot, then return
 
     args = Args(
         sim=True,
@@ -147,10 +146,10 @@ async def test_faulty_app() -> None:
         status = await app_mngr.start_app("faulty_app", media_backend="no_media")
 
         success = False
-        for _ in range(10):
+        for _ in range(100):  # same 10 s budget, polled finely
             status = await app_mngr.current_app_status()
             if status is None or status.state in (AppState.STARTING, AppState.RUNNING):
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(0.1)
                 continue
 
             if status is not None and status.state == AppState.ERROR:
