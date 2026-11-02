@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import aiohttp
 import pytest
 from aiohttp import web
 
@@ -138,8 +139,12 @@ async def test_list_all_apps_returns_empty_on_http_error(
 async def test_list_all_apps_returns_empty_when_unreachable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Port 9 (discard) refuses connections on loopback.
-    monkeypatch.setattr(hf_space, "HF_SPACES_API_URL", "http://127.0.0.1:9/api/spaces")
+    # Raised rather than provoked: a real refused connection takes ~2 s on
+    # Windows, which retries it before giving up.
+    async def refused(*args: Any) -> None:
+        raise aiohttp.ClientConnectionError("Connection refused")
+
+    monkeypatch.setattr(hf_space, "_fetch_all_spaces", refused)
 
     apps = await hf_space.list_all_apps()
 
