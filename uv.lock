@@ -1,12 +1,14 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 
 [options]
-exclude-newer = "2026-08-04T16:07:08.454537Z"
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
+certifi = "2026-10-21T00:00:00Z"
+pip = "2026-10-21T00:00:00Z"
 pollen-bmi088-imu-library = false
 
 [[package]]
@@ -290,11 +292,11 @@ wheels = [
 
 [[package]]
 name = "certifi"
-version = "2026.1.4"
+version = "2026.10.19"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e0/2d/a891ca51311197f6ad14a7ef42e2399f36cf2f9bd44752b3dc4eab60fdc5/certifi-2026.1.4.tar.gz", hash = "sha256:ac726dd470482006e014ad384921ed6438c457018f4b3d204aea4281258b2120", size = 154268, upload-time = "2026-01-04T02:42:41.825Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/bd/1436c50cc46699de0230fbaacc1d1de7bfec413176099949e9d5112e88f2/certifi-2026.10.19.tar.gz", hash = "sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae", size = 137598, upload-time = "2026-10-20T02:24:16.604Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e6/ad/3cc14f097111b4de0040c83a525973216457bbeeb63739ef1ed275c1c021/certifi-2026.1.4-py3-none-any.whl", hash = "sha256:9943707519e4add1115f44c2bc244f782c0249876bf51b6599fee1ffbedd685c", size = 152900, upload-time = "2026-01-04T02:42:40.15Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/51/29046e48f693c54e5b7412216d447a1d8362c9653148d98c02cdf65fa733/certifi-2026.10.19-py3-none-any.whl", hash = "sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b", size = 136464, upload-time = "2026-10-20T02:24:15.072Z" },
 ]
 
 [[package]]
@@ -896,7 +898,7 @@ wheels = [
 
 [[package]]
 name = "fastapi"
-version = "0.129.0"
+version = "0.141.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -905,9 +907,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/48/47/75f6bea02e797abff1bca968d5997793898032d9923c1935ae2efdece642/fastapi-0.129.0.tar.gz", hash = "sha256:61315cebd2e65df5f97ec298c888f9de30430dd0612d59d6480beafbc10655af", size = 375450, upload-time = "2026-02-12T13:54:52.541Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8a/02/91e3416a8fdd715abb903a952a6bec7cdd8d14eed55d415fc8595524c319/fastapi-0.141.1.tar.gz", hash = "sha256:e8822fc40db1e1858054d7a949a888695bc9bdce70139178e33bd2871a453ca1", size = 425799, upload-time = "2026-07-29T17:18:05.568Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/dd/d0ee25348ac58245ee9f90b6f3cbb666bf01f69be7e0911f9851bddbda16/fastapi-0.129.0-py3-none-any.whl", hash = "sha256:b4946880e48f462692b31c083be0432275cbfb6e2274566b1be91479cc1a84ec", size = 102950, upload-time = "2026-02-12T13:54:54.528Z" },
+    { url = "https://files.pythonhosted.org/packages/cb/03/10388a42375ee7e4ac9b94eb2c5c569c8b5795e377e701c9ac3ad63de890/fastapi-0.141.1-py3-none-any.whl", hash = "sha256:bfb91aa2d334c61cb35ba9a116fc123b3d3df31640b801cf57a7a78ec3f603b3", size = 131954, upload-time = "2026-07-29T17:18:04.364Z" },
 ]
 
 [[package]]
@@ -1496,12 +1498,12 @@ name = "ipython"
 version = "9.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "python_version < '0'" },
     { name = "decorator" },
     { name = "ipython-pygments-lexers" },
     { name = "jedi" },
     { name = "matplotlib-inline" },
-    { name = "pexpect", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "pexpect", marker = "sys_platform != 'emscripten'" },
     { name = "prompt-toolkit" },
     { name = "pygments" },
     { name = "stack-data" },
@@ -2249,11 +2251,11 @@ wheels = [
 
 [[package]]
 name = "pip"
-version = "26.1.2"
+version = "26.2.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/01/91/47e7d486260f618783899587af63ccf7980fb60245c3e63dd4571c6b57ad/pip-26.1.2.tar.gz", hash = "sha256:f49cd134c61cf2fd75e0ce2676db03e4054504a5a4986d00f8299ae632dc4605", size = 1840799, upload-time = "2026-05-31T17:33:58.56Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fa/e8/0842d757e483e895e670f655084cfe8b8c72580c6769a76b30b2789a0608/pip-26.2.2.tar.gz", hash = "sha256:3a8e5c800492787f33a4114ef54444546c340df428974ebba17e0fd47e11af2f", size = 1863336, upload-time = "2026-10-20T16:36:29.008Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5d/95/6b5cb3461ea5673ba0995989746db58eb18b91b54dbf331e72f569540946/pip-26.1.2-py3-none-any.whl", hash = "sha256:382ff9f685ee3bc25864f820aa50505825f10f5458ffff07e30a6d96e5715cab", size = 1813144, upload-time = "2026-05-31T17:33:56.772Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl", hash = "sha256:fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70", size = 1819850, upload-time = "2026-10-20T16:36:27.046Z" },
 ]
 
 [[package]]
@@ -2304,16 +2306,16 @@ wheels = [
 
 [[package]]
 name = "pollen-bmi088-imu-library"
-version = "1.0.0rc1"
+version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ahrs" },
     { name = "numpy" },
     { name = "smbus3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/64/ca/f74143ec89fbc502c7d9fc6a4d20a7f56fad822389716daee5e2bfe9e364/pollen_bmi088_imu_library-1.0.0rc1.tar.gz", hash = "sha256:6a82eafa448807a87c7a9e1ed8ef395b0ce5f2f57fa536b5b3a3f428e72d8fcf", size = 3273, upload-time = "2025-10-30T08:57:43.422Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/93/00a9cecb17b9d2b7224247155cca03bbc4b7f50266611114b4bdeea488db/pollen_bmi088_imu_library-1.0.0.tar.gz", hash = "sha256:08e8a93ed3a70f0a08ab447fdaddb4a8780b4f1320c40fbea2d4660938398654", size = 8352, upload-time = "2026-11-02T14:41:18.07Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/0a/86991b5db3acb88bbe83ba1e586c1c401830c8dc3b95cb6e0637e60cd26d/pollen_bmi088_imu_library-1.0.0rc1-py3-none-any.whl", hash = "sha256:d13e7297a3042879c36b48f78c6d0e8426af2c5ca31efe312003c7cf74b657c8", size = 3748, upload-time = "2025-10-30T08:57:42.136Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/69/35e5af2a444b8735cd0639f7642a64e51c5d2ca9a87dd65a4f939949203d/pollen_bmi088_imu_library-1.0.0-py3-none-any.whl", hash = "sha256:7193cbac8854d55ca89028b8c5c66a0d4f7d3c1bd02d02e6728d0336f2b14f20", size = 8132, upload-time = "2026-11-02T14:41:16.476Z" },
 ]
 
 [[package]]
@@ -3152,11 +3154,12 @@ wheels = [
 
 [[package]]
 name = "reachy-mini"
-version = "1.11.0.dev0"
+version = "1.14.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "asgiref" },
+    { name = "certifi" },
     { name = "fastapi" },
     { name = "gstreamer-bundle", marker = "sys_platform != 'linux'" },
     { name = "huggingface-hub" },
@@ -3263,6 +3266,7 @@ requires-dist = [
     { name = "aiortc", marker = "extra == 'central-consumer'", specifier = ">=1.9" },
     { name = "asgiref" },
     { name = "av", marker = "extra == 'central-consumer'", specifier = ">=12" },
+    { name = "certifi", specifier = ">=2026.10.19" },
     { name = "cryptography", marker = "extra == 'wireless-version'", specifier = ">=42.0" },
     { name = "cv2-enumerate-cameras", marker = "extra == 'examples'", specifier = ">=1.2.1" },
     { name = "cv2-enumerate-cameras", marker = "extra == 'opencv'", specifier = ">=1.2.1" },
@@ -3281,10 +3285,10 @@ requires-dist = [
     { name = "onnxruntime", specifier = "==1.27.0" },
     { name = "opencv-python", marker = "extra == 'examples'", specifier = "<=5.0" },
     { name = "opencv-python", marker = "extra == 'opencv'", specifier = "<=5.0" },
-    { name = "pip", specifier = ">=26.1" },
+    { name = "pip", specifier = ">=26.2.2" },
     { name = "placo", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = "==0.9.14" },
     { name = "platformdirs" },
-    { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux' and extra == 'wireless-version'" },
+    { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.0.0" },
     { name = "psutil" },
     { name = "pulsectl", marker = "sys_platform == 'linux'", specifier = ">=24.1.0" },
     { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20240210" },
@@ -3311,7 +3315,7 @@ requires-dist = [
     { name = "rustypot", specifier = ">=1.4.2" },
     { name = "semver", marker = "extra == 'wireless-version'", specifier = ">=3,<4" },
     { name = "soundfile", marker = "extra == 'examples'" },
-    { name = "starlette", specifier = "<1.0.0" },
+    { name = "starlette", specifier = ">=1.3.1,<2.0.0" },
     { name = "toml" },
     { name = "tornado", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = ">=6.5.5" },
     { name = "uvicorn", extras = ["standard"] },
@@ -3762,15 +3766,15 @@ wheels = [
 
 [[package]]
 name = "starlette"
-version = "0.52.1"
+version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
     { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c4/68/79977123bb7be889ad680d79a40f339082c1978b5cfcf62c2d8d196873ac/starlette-0.52.1.tar.gz", hash = "sha256:834edd1b0a23167694292e94f597773bc3f89f362be6effee198165a35d62933", size = 2653702, upload-time = "2026-01-18T13:34:11.062Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/eb/e3/7c1dc7381d9f8ab7d854328ebfa884e62cb3f3d8549ddfd37c7814f42afa/starlette-1.3.1.tar.gz", hash = "sha256:05d0213193f2fbaae60e2ecb593b4add4262ad4e46536b54abe36f11a71724e0", size = 2703240, upload-time = "2026-06-12T09:23:11.602Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/81/0d/13d1d239a25cbfb19e740db83143e95c772a1fe10202dda4b76792b114dd/starlette-0.52.1-py3-none-any.whl", hash = "sha256:0029d43eb3d273bc4f83a08720b4912ea4b071087a3b48db01b7c839f7954d74", size = 74272, upload-time = "2026-01-18T13:34:09.188Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/bb/2799cc2ede3ed41131f8975621e7213dfc7ef4acbbaadfa440f32500c370/starlette-1.3.1-py3-none-any.whl", hash = "sha256:c7372aae11c3c3f26a42df7bd626cec2f47d03483d261d369516a615a53714c6", size = 73632, upload-time = "2026-06-12T09:23:10.017Z" },
 ]
 
 [[package]]

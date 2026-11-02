@@ -130,7 +130,7 @@ Choose the appropriate media backend based on your Reachy Mini version and requi
 
 > **💡 Tip:** For most setups, the backend is automatically selected based on whether you're running locally or remotely. No need to specify the `media_backend` value!
 
-> **💡 Tip:** The WebRTC backend requires GStreamer to be installed on the client machine. See [GStreamer Installation](gstreamer-installation.md). For now only Linux is fully supported as a remote client. Other platforms (Windows, macOS) will be supported in [future releases](https://github.com/pollen-robotics/reachy_mini/issues/572).
+> **💡 Tip:** The WebRTC backend requires GStreamer to be installed on the client machine. See [GStreamer Installation](gstreamer-installation.md). It ships as Python wheels on macOS and Windows, so it works out of the box there; Linux requires a manual installation.
 
 ## Recording Moves
 You can record a motion by moving the robot (compliant mode) or sending commands, and save it for later replay.

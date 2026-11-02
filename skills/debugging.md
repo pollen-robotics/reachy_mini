@@ -23,13 +23,13 @@ reachy-mini-daemon
 # Or in simulation mode
 reachy-mini-daemon --sim
 ```
-- Access dashboard to verify robot is awake
+- Open Reachy Mini Control to verify the robot is connected and awake
 
 
 **For Wireless:**
 - Ensure robot is powered on
 - Check WiFi connection
-- Access dashboard to verify robot is awake
+- Open Reachy Mini Control to verify the robot is connected and awake
 
 ### Step 2: Test Basic Motion
 
@@ -200,7 +200,7 @@ For comprehensive troubleshooting (hardware issues, motor errors, audio problems
 
 This covers:
 - Motor diagnosis and "Overload Error" fixes
-- Connection issues (WiFi, USB, dashboard)
+- Connection issues (WiFi, USB, Reachy Mini Control)
 - Audio/camera problems
 - Common error messages and solutions
 

@@ -605,6 +605,9 @@ class ReachyMini:
                 f"Daemon at {host!r} is named {status.robot_name!r}, "
                 f"expected {self.robot_name!r}."
             )
+        # get_status() consumed the status; keep it for the media setup, which
+        # would otherwise wait for the daemon's next 1 Hz publish.
+        client.status_received.set()
         return client
 
     def set_target(
@@ -690,6 +693,7 @@ class ReachyMini:
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
+            MoveBusyError: If another move (from the dashboard, another client, or the daemon itself) is already running.
 
         """
         if head is None and antennas is None and body_yaw is None:

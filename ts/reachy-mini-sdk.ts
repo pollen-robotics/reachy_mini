@@ -88,6 +88,7 @@ export type {
     RobotInfo,
     RobotState,
     ImuData,
+    TelemetryStatus,
     ReachyMiniOptions,
     ReachyMiniInstance,
     ReachyMiniConstructor,
@@ -120,6 +121,7 @@ export type {
     SessionRejectedEventDetail,
     StateEventDetail,
     VideoTrackEventDetail,
+    AudioTrackEventDetail,
     MicSupportedEventDetail,
     ErrorEventDetail,
 } from './lib/types.js';

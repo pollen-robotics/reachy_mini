@@ -67,7 +67,7 @@ RC left it, so the final release is the code you actually tested.
   `pull_requests:write` on **both** `reachy_mini` and `reachy_mini_conversation_app`
   (used to open the RC-test PR and the post-release bump PR so their CI runs).
 - **Secret `RELEASE_NOTES_HF_TOKEN`** — HF token scoped to Inference Providers.
-- **Var `RELEASE_NOTES_MODEL`** — e.g. `huggingface/zai-org/GLM-5.2`.
+- **Var `RELEASE_NOTES_MODEL`** — e.g. `huggingface/zai-org/GLM-5.3`.
 - **Var `OPENCODE_VERSION`** — pinned OpenCode version installed in CI.
 - Add a `rc-testing` label in `reachy_mini_conversation_app` (optional; the PR still
   opens without it).
@@ -86,7 +86,7 @@ Run locally to preview:
 ```bash
 export GITHUB_TOKEN=...            # repo read
 export HF_TOKEN=...                # Inference Providers
-export RELEASE_NOTES_MODEL=huggingface/zai-org/GLM-5.2
+export RELEASE_NOTES_MODEL=huggingface/zai-org/GLM-5.3
 python -m utils.release_notes.generate_release_notes --since v1.9.0 --minor
 # → .release-notes/RELEASE_NOTES_v1.10.0.md
 ```

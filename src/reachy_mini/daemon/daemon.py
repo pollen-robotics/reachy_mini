@@ -14,12 +14,14 @@ from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import TYPE_CHECKING, Any, Optional
 
+from reachy_mini.apps.sources import hf_auth
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
 from reachy_mini.daemon.utils import (
     SimulationMode,
     find_serial_port,
     get_ip_address,
 )
+from reachy_mini.io.jsonrpc import JsonRpcError, make_error, parse_request
 from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from reachy_mini.io.ws_server import WSServer
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
@@ -96,6 +98,9 @@ class Daemon:
         # JSON-RPC app relay (apps.* + conversation.* over the DataChannel).
         self.app_manager: "AppManager | None" = None
         self._jsonrpc_relay: "JsonRpcRelay | None" = None
+        # Loop the JSON-RPC relay runs on, set by the FastAPI factory because
+        # `start()` may itself run on a throwaway one (see `set_rpc_loop`).
+        self._jsonrpc_loop: "asyncio.AbstractEventLoop | None" = None
 
         # Single source of truth for which managed app (local Python app or
         # remote WebRTC client) currently holds the robot's app slot. Shared
@@ -146,8 +151,9 @@ class Daemon:
             return
 
         self.logger.info("Releasing media hardware for direct access...")
-        self._media_server.stop()
+        # Relay first: it ends its sessions on central while they still exist.
         await self._stop_central_signaling_relay()
+        self._media_server.stop()
         self._media_released = True
         self._status.media_released = True
         self.logger.info("Media hardware released.")
@@ -168,22 +174,67 @@ class Daemon:
         self._status.media_released = False
         self.logger.info("Media hardware re-acquired.")
 
+    def set_rpc_loop(self, loop: "asyncio.AbstractEventLoop") -> None:
+        """Record the loop the JSON-RPC app relay must run on.
+
+        It has to outlive `start()`. Starting the daemon over HTTP runs it as a
+        background job, and those get a throwaway loop (`asyncio.run` in a
+        thread) that closes the moment the job finishes; a relay scheduled onto
+        it never answers again, so every `rpcCall` from a client times out until
+        the process restarts. The app's own loop lives as long as the process,
+        so the FastAPI factory hands it over here.
+        """
+        self._jsonrpc_loop = loop
+
+    async def start_central_relay_if_running(self) -> None:
+        """Start the relay after a login, but only while RUNNING with media acquired.
+
+        Elsewhere the local signalling server is down and the relay would loop
+        on connection errors; start()/acquire_media() start it themselves.
+        """
+        if self._status.state != DaemonState.RUNNING or self._media_released:
+            self.logger.info("Daemon not running, relay starts with it")
+            return
+        await self._start_central_signaling_relay()
+
     def _setup_jsonrpc_relay(
         self, backend: "Backend", app_manager: "AppManager"
     ) -> None:
         """Create the JSON-RPC app relay and wire it into the backend.
 
         The relay routes ``apps.*`` locally and relays every other namespace
-        (``conversation.*`` ...) to the running app's ``/rpc``. It runs on this
-        loop; the DataChannel handler (which fires on the media thread) hops
-        frames onto it with ``run_coroutine_threadsafe``.
+        (``conversation.*`` ...) to the running app's ``/rpc``. The DataChannel
+        handler fires on the media thread and hops frames onto the relay's loop
+        with ``run_coroutine_threadsafe``.
         """
-        loop = asyncio.get_running_loop()
+        loop = self._jsonrpc_loop or asyncio.get_running_loop()
         relay = JsonRpcRelay(app_manager, backend.broadcast_to_all_clients)
         self._jsonrpc_relay = relay
 
         def handler(raw: str, reply: Callable[[dict[str, Any]], None]) -> None:
-            asyncio.run_coroutine_threadsafe(relay.handle(raw, reply), loop)
+            coro = relay.handle(raw, reply)
+            try:
+                asyncio.run_coroutine_threadsafe(coro, loop)
+                return
+            except RuntimeError:
+                # The loop is closed (shutdown). Checking is_closed() first
+                # would still race with it, so catch the failure instead.
+                coro.close()
+            # Answer rather than drop the frame: a silent drop costs the
+            # caller its whole timeout and reads as an unreachable robot.
+            self.logger.error("JSON-RPC relay loop is closed, refusing %s", raw[:120])
+            try:
+                req = parse_request(raw)
+            except JsonRpcError:
+                return
+            if not req.is_notification:
+                reply(
+                    make_error(
+                        req.id,
+                        message="daemon relay is not available",
+                        reason="relay_unavailable",
+                    )
+                )
 
         backend.set_jsonrpc_handler(handler)
         self.logger.info("JSON-RPC app relay wired to the DataChannel")
@@ -195,14 +246,7 @@ class Daemon:
         if not self._media_server:
             return
 
-        try:
-            from huggingface_hub import get_token
-
-            hf_token = get_token()
-        except Exception as e:
-            self.logger.debug(f"No HF token available, central signaling disabled: {e}")
-            return
-
+        hf_token = hf_auth.get_hf_token()
         if not hf_token:
             self.logger.info("No HF token found, central signaling relay disabled")
             return
@@ -237,6 +281,10 @@ class Daemon:
                 self._media_server.set_session_failed_handler(
                     relay.notify_peer_session_failed
                 )
+                # Let the relay judge each session's liveness on its own
+                # peer-to-peer link (client RTCP + data channel) rather
+                # than on central's signaling.
+                relay.set_session_idle_probe(self._media_server.session_idle_seconds)
         except Exception as e:
             self.logger.warning(f"Failed to start central signaling relay: {e}")
 
@@ -547,12 +595,14 @@ class Daemon:
                 self._jsonrpc_relay = None
 
             if self._media_server and not self._media_released:
+                # Stop the central signaling relay first: it ends its
+                # sessions on central while they still exist, so clients
+                # are told the robot is going away.
+                await self._stop_central_signaling_relay()
                 # Stop pipeline (NULL) to release camera/audio hardware so
                 # external tools (rpicam-still, etc.) can access them.
                 # start() will rebuild the pipeline from scratch.
                 self._media_server.stop()
-                # Stop the central signaling relay
-                await self._stop_central_signaling_relay()
 
             if goto_sleep_on_stop:
                 try:
@@ -829,14 +879,20 @@ class Daemon:
     def _publish_status(self) -> None:
         self._thread_event_publish_status.clear()
         while self._thread_event_publish_status.is_set() is False:
+            ws_server = self.ws_server
+            if ws_server is not None:
+                # Cleared before reading the status, so a client registered
+                # from here on is woken for a status read after it connected.
+                ws_server.client_connected_event().clear()
             json_str = self.status().model_dump_json()
-            if self.ws_server is None:
+            if ws_server is None:
                 self.logger.warning(
                     f"WS server not initialized, cannot publish status: {json_str}"
                 )
+                time.sleep(1)
             else:
-                self.ws_server.publish_status(json_str)
-            time.sleep(1)
+                ws_server.publish_status(json_str)
+                ws_server.client_connected_event().wait(1)
 
     def _setup_backend(
         self,

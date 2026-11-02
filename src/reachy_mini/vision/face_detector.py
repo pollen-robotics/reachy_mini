@@ -64,7 +64,9 @@ class FaceDetector:
         self, score_threshold: float = 0.6, nms_threshold: float = 0.3
     ) -> None:
         """Create the YuNet detector, confined to one CPU thread."""
-        model_path = hf_hub_download(_MODEL_REPO, _MODEL_FILE, revision=_MODEL_REVISION)
+        model_path = hf_hub_download(
+            _MODEL_REPO, _MODEL_FILE, revision=_MODEL_REVISION, token=False
+        )
         options = ort.SessionOptions()
         # Confine the detector to one thread so it can't spread across cores and starve the loop.
         options.intra_op_num_threads = 1

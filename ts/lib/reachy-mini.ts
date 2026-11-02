@@ -11,6 +11,7 @@ import {
 
 import { createLogger } from './logger.js';
 import { degToRad, rpyToMatrix } from './math.js';
+import { MessageReassembler } from './message-chunks.js';
 import { BroadcastTimeoutError, PendingReplies, SLOT_ROUNDTRIP_TIMEOUT_MS } from './pending-replies.js';
 import type { MotionCommand, ReplySlotKey, ReplySlotValues } from './pending-replies.js';
 import { SessionSupervisor } from './session-supervisor.js';
@@ -57,6 +58,7 @@ import type {
     RequestOptions,
     RobotInfo,
     RobotState,
+    TelemetryStatus,
     SessionRejectError,
     StartDaemonUpdateOptions,
     SubscribeLogsOptions,
@@ -119,6 +121,49 @@ interface OAuthRedirectResult {
 const POSE_STREAM_FRESH_MS = 750;
 
 /**
+ * A streaming peer link counts as live when the robot was heard from this
+ * recently (it answers the ~500 ms state poll). Past it, a reason-less
+ * endSession from central is believed again.
+ */
+const PEER_LINK_LIVE_MS = 2500;
+
+/** How many closed session ids to remember, to ignore their late endSession. */
+const RETIRED_SESSIONS_MAX = 8;
+
+/**
+ * Central pings an idle signaling stream every 30 s. Silence well past that
+ * means the stream stalled without closing (seen after a phone screen lock or
+ * a network drop): it would never deliver again while our POSTs still go out,
+ * so every startSession times out unanswered. Abort it and reconnect instead.
+ */
+const SIGNALING_STALL_MS = 75_000;
+/** A stall timer this late means a frozen page; re-judge after the grace. */
+const SIGNALING_FROZEN_SLACK_MS = 15_000;
+const SIGNALING_FROZEN_GRACE_MS = 5_000;
+
+/**
+ * Every call to central is bounded: a path that stalls without failing
+ * (lossy Wi-Fi, a half-dead connection) would otherwise hang a re-dial,
+ * a session start or a stop for as long as the browser's TCP timeout.
+ * `/send` and the robot list get CENTRAL_REQUEST_TIMEOUT_MS; opening the
+ * event stream gets SIGNALING_OPEN_TIMEOUT_MS for the response, then
+ * SIGNALING_WELCOME_TIMEOUT_MS for central's `welcome`.
+ */
+const CENTRAL_REQUEST_TIMEOUT_MS = 10_000;
+const SIGNALING_OPEN_TIMEOUT_MS = 15_000;
+const SIGNALING_WELCOME_TIMEOUT_MS = 15_000;
+
+/**
+ * A robot's stable identity across central re-registrations (its peer id
+ * changes each time): `install_id`, else `hardware_id`. Never the name,
+ * which users often leave at the default and share across robots.
+ */
+function robotIdentity(r: RobotInfo | undefined): string | null {
+    const meta = r?.meta as { install_id?: string; hardware_id?: string } | undefined;
+    return meta?.install_id ?? meta?.hardware_id ?? null;
+}
+
+/**
  * Upper bound on how long `ensureAwake()` waits for the wake trajectory to
  * complete. The emote itself takes ~2-3 s on hardware; the extra headroom
  * covers a cold trajectory player. Deliberately shorter than `wakeUp()`'s
@@ -164,16 +209,34 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
 
     // ─── Signaling ───────────────────────────────────────────────────────
     private _sseAbortController: AbortController | null = null;
+    /** The open in flight (fetch → welcome): a second open joins it. */
+    private _signalingOpening: Promise<void> | null = null;
+    private _signalingOpeningController: AbortController | null = null;
 
     // ─── WebRTC ──────────────────────────────────────────────────────────
     _pc: RTCPeerConnection | null = null;
     private _dc: RTCDataChannel | null = null;
     private _sessionId: string | null = null;
+    /** Our session after central dropped it while the peer link lived on. */
+    private _staleSessionId: string | null = null;
+    /** Sessions we closed: a late endSession for one must not end the next. */
+    private _retiredSessionIds = new Set<string>();
     private _selectedRobotId: string | null = null;
     private _pendingRemoteIce: NonNullable<SignalingMessage['ice']>[] = [];
 
     // ─── Audio ───────────────────────────────────────────────────────────
     _micStream: MediaStream | null = null;
+    private _robotAudioTrack: MediaStreamTrack | null = null;
+    private _outgoingAudioTrack: MediaStreamTrack | null = null;
+    /** Context driving the silent placeholder track; closed with it. */
+    private _micCtx: AudioContext | null = null;
+    /** Robot dialed last and its stable identity (see `_redialTargetResolver`). */
+    private _dialedRobotId: string | null = null;
+    private _dialedRobotIdentity: string | null = null;
+    /** Signaling (SSE) dropped while streaming; reconnecting in the background. */
+    private _signalingDown = false;
+    private _signalingRetryTimer: ReturnType<typeof setTimeout> | null = null;
+    private _signalingRetryAttempt = 0;
     private _micMuted = true;
     private _audioMuted = true;
     private _micSupported = false;
@@ -235,7 +298,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             hasPc: () => !!this._pc,
             isStreaming: () => this._state === 'streaming',
             isMidSetup: () => !!(this._sessionResolve || this._sessionReject),
-            isSignalingDown: () => this._state === 'disconnected',
+            isSignalingDown: () => this._state === 'disconnected' || this._signalingDown,
             selectedRobotId: () => this._selectedRobotId,
             rejectPendingSession: (err) => {
                 if (!this._sessionReject) return false;
@@ -249,6 +312,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             // The private dial skips the public startSession()'s
             // cancelRedial, so the loop's own attempts don't cancel it.
             dial: (robotId) => this._startSessionInternal(robotId),
+            redialTargetResolver: (robotId) => this._redialTargetResolver(robotId),
             teardownForRedial: () => this._teardownForRedial(),
             nudgeState: () => { this.requestState(); },
             emit: (name, detail) => this._emit(name, detail),
@@ -274,6 +338,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * use — never capture it across ticks.
      */
     get peerConnection(): RTCPeerConnection | null { return this._pc; }
+    /**
+     * The robot's microphone as a live audio track, or `null` until the
+     * session's audio arrives (see the `audioTrack` event). Feed it to Web
+     * Audio, `MediaRecorder` or `SpeechRecognition.start(track)`.
+     */
+    get robotAudioTrack(): MediaStreamTrack | null { return this._robotAudioTrack; }
 
     /**
      * Build version of this SDK (npm package `version`), injected from
@@ -388,23 +458,60 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._state !== 'disconnected') throw new Error('Already connected');
         if (token) this._token = token;
         if (!this._token) throw new Error('No token — call authenticate() first or pass a token');
+        return this._openSignaling();
+    }
+
+    /**
+     * Open the signaling SSE stream and resolve on central's `welcome`.
+     * Shared by `connect()` and the background reconnect that runs while a
+     * session keeps streaming without signaling (see `signalingLost`).
+     */
+    private _openSignaling(): Promise<void> {
+        // Two opens at once (an app reconnect racing the supervisor's) would
+        // run two streams, each handling every message: join the first.
+        // Never join an open that was aborted on purpose (disconnect(), a
+        // dropped background retry): it is about to reject, and the caller
+        // asked for a fresh connection.
+        if (this._signalingOpening && !this._signalingOpeningController?.signal.aborted) {
+            return this._signalingOpening;
+        }
+        const opening = this._openSignalingOnce().finally(() => {
+            if (this._signalingOpening === opening) {
+                this._signalingOpening = null;
+                this._signalingOpeningController = null;
+            }
+        });
+        this._signalingOpening = opening;
+        return opening;
+    }
+
+    private async _openSignalingOnce(): Promise<void> {
         this._sseAbortController = new AbortController();
+        this._signalingOpeningController = this._sseAbortController;
+        const openController = this._sseAbortController;
+        let openTimedOut = false;
+        const openTimer = setTimeout(() => {
+            openTimedOut = true;
+            openController.abort();
+        }, SIGNALING_OPEN_TIMEOUT_MS);
 
         let res: Response;
         try {
             res = await fetch(
                 `${this._signalingUrl}/events`,
                 {
-                    signal: this._sseAbortController.signal,
+                    signal: openController.signal,
                     headers: { 'Authorization': `Bearer ${this._token}` },
                 },
             );
         } catch (e) {
-            this._sseAbortController = null;
-            throw e;
+            if (this._sseAbortController === openController) this._sseAbortController = null;
+            throw openTimedOut ? new Error('signaling: no answer from central') : e;
+        } finally {
+            clearTimeout(openTimer);
         }
         if (!res.ok) {
-            this._sseAbortController = null;
+            if (this._sseAbortController === openController) this._sseAbortController = null;
             throw new Error(`HTTP ${res.status}`);
         }
 
@@ -414,11 +521,43 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             const decoder = new TextDecoder();
             let buffer = '';
 
+            const controller = openController;
+            // Central greets every stream at once: no welcome means a stream
+            // that will never work, and connect() must not wait on it.
+            let welcomeTimedOut = false;
+            const welcomeTimer = setTimeout(() => {
+                if (welcomed) return;
+                welcomeTimedOut = true;
+                log.warn('signaling: no welcome from central; aborting the stream');
+                controller?.abort();
+            }, SIGNALING_WELCOME_TIMEOUT_MS);
+            let stallTimer: ReturnType<typeof setTimeout> | null = null;
+            const armStallTimer = (delayMs = SIGNALING_STALL_MS): void => {
+                if (stallTimer !== null) clearTimeout(stallTimer);
+                const armedAt = Date.now();
+                stallTimer = setTimeout(() => {
+                    // Fired far later than asked: the page was frozen (screen
+                    // lock, background tab), and bytes buffered meanwhile have
+                    // not been read yet. Give them a moment before judging.
+                    // While timers stay heavily throttled (hidden tab) this can
+                    // re-arm repeatedly; a dead stream is then aborted within
+                    // the grace once the page runs normally again.
+                    if (Date.now() - armedAt > delayMs + SIGNALING_FROZEN_SLACK_MS) {
+                        armStallTimer(SIGNALING_FROZEN_GRACE_MS);
+                        return;
+                    }
+                    log.warn('signaling stream silent for too long; reconnecting');
+                    controller?.abort();
+                }, delayMs);
+            };
+
             const readLoop = async (): Promise<void> => {
                 try {
+                    armStallTimer();
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
+                        armStallTimer();
                         buffer += decoder.decode(value, { stream: true });
                         const lines = buffer.split('\n');
                         buffer = lines.pop() ?? '';
@@ -428,13 +567,24 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                                 const msg = JSON.parse(line.slice(5).trim()) as SignalingMessage;
                                 if (!welcomed && msg.type === 'welcome' && msg.peerId) {
                                     welcomed = true;
-                                    this._state = 'connected';
+                                    clearTimeout(welcomeTimer);
+                                    // A background reconnect lands mid-session:
+                                    // the session state is left alone.
+                                    const restoring = this._state !== 'disconnected';
+                                    if (!restoring) this._state = 'connected';
+                                    this._signalingDown = false;
+                                    this._signalingRetryAttempt = 0;
                                     await this._sendToServer({
                                         type: 'setPeerStatus',
                                         roles: ['listener'],
                                         meta: { name: this._appName },
                                     });
-                                    this._emit('connected', { peerId: msg.peerId });
+                                    if (restoring) {
+                                        log.info('signaling restored while streaming');
+                                        this._emit('signalingRestored', { peerId: msg.peerId });
+                                    } else {
+                                        this._emit('connected', { peerId: msg.peerId });
+                                    }
                                     resolve();
                                 }
                                 this._handleSignalingMessage(msg);
@@ -445,9 +595,27 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     if ((e as Error).name !== 'AbortError') {
                         this._emit('error', { source: 'signaling', error: e as Error });
                     }
-                    if (!welcomed) { reject(e as Error); return; }
+                    if (!welcomed) {
+                        reject(welcomeTimedOut ? new Error('signaling: no welcome from central') : e as Error);
+                        return;
+                    }
+                } finally {
+                    clearTimeout(welcomeTimer);
+                    if (stallTimer !== null) clearTimeout(stallTimer);
                 }
-                if (this._state !== 'disconnected') {
+                if (this._state === 'streaming') {
+                    // Signaling is only needed to SET UP a session: a live
+                    // one is peer-to-peer. Keep it, reconnect in the
+                    // background (same token: central's reconnect grace
+                    // keeps our peer id).
+                    this._sseAbortController = null;
+                    if (!this._signalingDown) {
+                        this._signalingDown = true;
+                        log.warn('signaling lost while streaming; keeping the session');
+                        this._emit('signalingLost', { reason: 'SSE closed' });
+                    }
+                    this._scheduleSignalingRetry();
+                } else if (this._state !== 'disconnected') {
                     this._state = 'disconnected';
                     this._emit('disconnected', { reason: 'SSE closed' });
                 }
@@ -539,9 +707,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private async _fetchOwnedRobots(
         { filterBusy = true }: { filterBusy?: boolean } = {},
     ): Promise<AutoConnectRobotChoice[]> {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), CENTRAL_REQUEST_TIMEOUT_MS);
         try {
             const res = await fetch(`${this._signalingUrl}/api/robot-status`, {
                 headers: { 'Authorization': `Bearer ${this._token}` },
+                signal: controller.signal,
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const json = await res.json() as {
@@ -580,6 +751,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 meta: (r.meta ?? {}) as Record<string, unknown>,
                 lastSeenAgeSeconds: null,
             }));
+        } finally {
+            clearTimeout(timer);
         }
     }
 
@@ -613,6 +786,20 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private async _startSessionInternal(robotId: string): Promise<void> {
         if (this._state !== 'connected') throw new Error('Not connected');
         this._selectedRobotId = robotId;
+        // Remember who this is while it is surely listed (see
+        // `_redialTargetResolver`). Kept across redial attempts that dial
+        // the same robot under a fresh id.
+        const dialedIdentity = robotIdentity(this._robots.find((r) => r.id === robotId));
+        if (dialedIdentity) this._dialedRobotIdentity = dialedIdentity;
+        else if (this._dialedRobotId !== robotId) this._dialedRobotIdentity = null;
+        this._dialedRobotId = robotId;
+        // A new dial owns no session id until central's reply: anything
+        // left over from an earlier attempt is retired, so its late
+        // endSession cannot end this one, nor make us drop this one's own.
+        this._retireSession(this._sessionId);
+        this._sessionId = null;
+        this._retireSession(this._staleSessionId);
+        this._staleSessionId = null;
         this._iceConnected = false;
         this._dcOpen = false;
         this._micSupported = false;
@@ -638,7 +825,11 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             };
             const Ctx = w.AudioContext ?? w.webkitAudioContext;
             if (!Ctx) throw new Error('AudioContext not supported');
+            // A dial can follow a teardown that skipped the release
+            // (e.g. a rejected attempt): never keep two contexts alive.
+            this._releaseMicPlaceholder();
             const ctx = new Ctx();
+            this._micCtx = ctx;
             const dst = ctx.createMediaStreamDestination();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
@@ -678,6 +869,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                             .playoutDelayHint = ms / 1000;
                     } catch { /* ignore */ }
                     this._emit('videoTrack', { track: e.track, stream: e.streams[0]! });
+                } else if (e.track.kind === 'audio') {
+                    this._robotAudioTrack = e.track;
+                    this._emit('audioTrack', { track: e.track, stream: e.streams[0]! });
                 }
             };
 
@@ -754,15 +948,65 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     this._dcOpen = true;
                     this._checkSessionReady();
                 };
-                this._dc.onmessage = (ev) => this._handleRobotMessage(JSON.parse(ev.data));
+                // Replies over 64 KiB arrive as ordered chunks; one
+                // reassembler per channel, so nothing leaks across sessions.
+                const reassembler = new MessageReassembler();
+                this._dc.onmessage = (ev) => {
+                    const msg = reassembler.accept(JSON.parse(ev.data));
+                    if (msg) this._handleRobotMessage(msg);
+                };
+                // The robot ending the session closes the channel in an
+                // orderly way while ICE is still up: that, not central's
+                // signaling, is how a live session learns it is over. A dead
+                // network doesn't close it (ICE fails first and the
+                // supervisor re-dials), nor does our own teardown (the
+                // channel is no longer `this._dc` by then).
+                ch.onclose = () => {
+                    if (this._dc !== ch || this._state !== 'streaming') return;
+                    const ice = this._pc?.iceConnectionState;
+                    if (ice !== 'connected' && ice !== 'completed') return;
+                    log.info('robot closed the session');
+                    this._endedByRobot('remote_end', null);
+                };
             };
 
+            const dialPc = this._pc;
             this._sendToServer({ type: 'startSession', peerId: robotId }).then((r) => {
+                if (this._pc !== dialPc) {
+                    // This dial was abandoned (stopped, rejected, re-dialed)
+                    // before central answered: the reply is not the current
+                    // dial's. Retire its id and free the robot-side slot.
+                    if (r?.sessionId) {
+                        // Should a stray frame have made it current, drop it too.
+                        if (this._sessionId === r.sessionId) this._sessionId = null;
+                        this._retireSession(r.sessionId);
+                        void this._sendToServer({ type: 'endSession', sessionId: r.sessionId, reason: 'client_stop' });
+                    }
+                    return;
+                }
                 if (r?.type === 'sessionRejected') {
                     this._failSessionRejected(r);
                     return;
                 }
-                if (r?.sessionId) this._sessionId = r.sessionId;
+                if (r?.sessionId) {
+                    this._sessionId = r.sessionId;
+                    return;
+                }
+                // Central never took the request (unreachable, timed out,
+                // refused): no offer will come, so fail this dial now rather
+                // than leave it to the caller's timeout. Only if it is still
+                // the pending dial.
+                if (r === null && this._sessionReject) {
+                    const sessionId = this._closeTransport(new Error('Could not reach central to start the session'));
+                    // Central may have taken it anyway (reply lost, SSE gave
+                    // us the id): release the robot-side slot.
+                    if (sessionId) {
+                        void this._sendToServer({ type: 'endSession', sessionId, reason: 'client_stop' });
+                    }
+                } else if (r?.type === 'error' && this._sessionReject) {
+                    // e.g. "Producer not found": the robot re-registered.
+                    this._closeTransport(new Error(`Central refused the session: ${r.message ?? 'error'}`));
+                }
             });
         });
     }
@@ -794,7 +1038,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._supervisor.stopDcWatchdog();
         if (this._stateRefreshInterval) { clearInterval(this._stateRefreshInterval); this._stateRefreshInterval = null; }
         if (this._latencyMonitorId) { clearInterval(this._latencyMonitorId); this._latencyMonitorId = null; }
-        if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
+        this._releaseMicPlaceholder();
+        this._robotAudioTrack = null;
         this._micMuted = true;
         this._micSupported = false;
         if (this._pc) { this._pc.close(); this._pc = null; }
@@ -803,7 +1048,33 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._dcOpen = false;
         const sessionId = this._sessionId;
         this._sessionId = null;
+        this._retireSession(sessionId);
+        this._retireSession(this._staleSessionId);
+        this._staleSessionId = null;
         return sessionId;
+    }
+
+    private _retireSession(sessionId: string | null): void {
+        if (!sessionId) return;
+        this._retiredSessionIds.add(sessionId);
+        // Only recent ones matter: drop the oldest beyond a handful.
+        if (this._retiredSessionIds.size > RETIRED_SESSIONS_MAX) {
+            const oldest = this._retiredSessionIds.values().next().value;
+            if (oldest !== undefined) this._retiredSessionIds.delete(oldest);
+        }
+    }
+
+    /**
+     * Whether an endSession is about another session than ours: one we
+     * already closed (a re-dial's old session, ended late by the robot as
+     * superseded), or any id but the current one. With no id known yet
+     * (startSession in flight) it is ours: rejections arrive that way.
+     */
+    private _isOtherSession(sessionId: string | undefined): boolean {
+        if (!sessionId) return false;
+        if (this._retiredSessionIds.has(sessionId)) return true;
+        const current = this._sessionId ?? this._staleSessionId;
+        return current !== null && sessionId !== current;
     }
 
     private _failSessionRejected(msg: SignalingMessage): void {
@@ -833,10 +1104,14 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._supervisor.cancelRedial();
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
+        this._outgoingAudioTrack = null;
 
         const sessionId = this._closeTransport(new Error('Session stopped'));
         if (sessionId) {
-            await this._sendToServer({ type: 'endSession', sessionId });
+            // A reason marks a deliberate hang-up: the robot ends the session
+            // on it, whereas a reason-less endSession (central's own
+            // eviction) is advisory while the peer link is live.
+            await this._sendToServer({ type: 'endSession', sessionId, reason: 'client_stop' });
         }
 
         const wasStreaming = this._state === 'streaming';
@@ -844,6 +1119,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._state = 'connected';
             this._emit('sessionStopped', { reason: 'user' });
         }
+        this._dropToDisconnectedIfSignalingDown();
     }
 
     disconnect(): void {
@@ -852,9 +1128,12 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         this._logSubscribers.clear();
         this._updateProgressSubscribers.clear();
 
+        this._outgoingAudioTrack = null;
+        this._clearSignalingRetry();
+        this._signalingDown = false;
         const sessionId = this._closeTransport(new Error('Disconnected'));
         if (sessionId && this._token) {
-            void this._sendToServer({ type: 'endSession', sessionId });
+            void this._sendToServer({ type: 'endSession', sessionId, reason: 'client_disconnect' });
         }
 
         this._robots = [];
@@ -895,6 +1174,42 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
      * armed, and a late signaling reply could otherwise settle them
      * against a closed pc).
      */
+    /**
+     * Resolver for the redial loop. Matches on the robot's stable
+     * identity (`install_id`, else `hardware_id`; never the name, which
+     * users often leave at the default and share across robots). A
+     * listed robot with that identity under a NEW id is the same robot,
+     * re-registered; otherwise keep dialing the original id.
+     */
+    private _redialTargetResolver(robotId: string): () => string {
+        // Prefer the identity recorded when the session was dialed: by the
+        // time a redial starts, central may already have dropped the old
+        // entry from the list (it evicts a robot whose signaling went
+        // silent), leaving nothing to match against.
+        const key = (this._dialedRobotId === robotId ? this._dialedRobotIdentity : null)
+            ?? robotIdentity(this._robots.find((r) => r.id === robotId));
+        if (!key) return () => robotId;
+        return () =>
+            this._robots.find((r) => r.id !== robotId && robotIdentity(r) === key)?.id ?? robotId;
+    }
+
+    /**
+     * Stop the placeholder sender track AND close its AudioContext.
+     * Stopping the track alone left the context (and its oscillator)
+     * running: one leaked context per dial, and browsers cap open audio
+     * outputs (Chromium: 10 per page), so after a few re-dials every
+     * new AudioContext in the host app fails silently.
+     */
+    private _releaseMicPlaceholder(): void {
+        if (this._micStream) {
+            this._micStream.getTracks().forEach((t) => t.stop());
+            this._micStream = null;
+        }
+        const ctx = this._micCtx;
+        this._micCtx = null;
+        if (ctx && ctx.state !== 'closed') void ctx.close().catch(() => {});
+    }
+
     private _teardownForRedial(): void {
         const sessionId = this._closeTransport(new Error('Session reconnecting'));
         // Free the robot-side slot: the relay refuses a second session
@@ -902,9 +1217,82 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         // own consent-freshness timeout, ~30 s) clears it. Fire and
         // forget — _sendToServer never throws.
         if (sessionId && this._token) {
-            void this._sendToServer({ type: 'endSession', sessionId });
+            void this._sendToServer({ type: 'endSession', sessionId, reason: 'client_redial' });
         }
         if (this._state === 'streaming') this._state = 'connected';
+        // The redial loop reconnects signaling itself (isSignalingDown).
+        if (this._signalingDown) {
+            this._clearSignalingRetry();
+            this._signalingDown = false;
+            this._state = 'disconnected';
+        }
+    }
+
+    /**
+     * The robot (or central on its behalf) ended a streaming session:
+     * tear our side down and emit ONE `sessionStopped` carrying the
+     * robot's reason (`stopSession()` would add a second, `user`, one).
+     * No endSession goes back: the other side already ended it.
+     */
+    private _endedByRobot(reason: string, message: string | null): void {
+        this._supervisor.cancelRedial();
+        this._logSubscribers.clear();
+        this._updateProgressSubscribers.clear();
+        this._outgoingAudioTrack = null;
+        this._closeTransport(new Error('Session ended by the robot'));
+        if (this._state === 'streaming') this._state = 'connected';
+        this._emit('sessionStopped', { reason, message });
+        this._dropToDisconnectedIfSignalingDown();
+    }
+
+    /** Session over while signaling is down: surface the real state. */
+    private _dropToDisconnectedIfSignalingDown(): void {
+        if (!this._signalingDown) return;
+        this._clearSignalingRetry();
+        this._signalingDown = false;
+        if (this._state !== 'disconnected') {
+            this._state = 'disconnected';
+            this._emit('disconnected', { reason: 'SSE closed' });
+        }
+    }
+
+    private _clearSignalingRetry(): void {
+        if (this._signalingRetryTimer !== null) {
+            clearTimeout(this._signalingRetryTimer);
+            this._signalingRetryTimer = null;
+        }
+        if (this._signalingDown && this._sseAbortController) {
+            this._sseAbortController.abort();
+            this._sseAbortController = null;
+        }
+        this._signalingRetryAttempt = 0;
+    }
+
+    /** Background signaling reconnect while a session keeps streaming. */
+    private _scheduleSignalingRetry(): void {
+        if (this._signalingRetryTimer !== null) return;
+        const delays = [1000, 2000, 4000, 8000, 15000];
+        const delay = delays[Math.min(this._signalingRetryAttempt, delays.length - 1)]!;
+        this._signalingRetryAttempt += 1;
+        this._signalingRetryTimer = setTimeout(() => {
+            this._signalingRetryTimer = null;
+            if (!this._signalingDown || this._state !== 'streaming') return;
+            this._openSignaling().catch(() => {
+                if (this._signalingDown && this._state === 'streaming') this._scheduleSignalingRetry();
+            });
+        }, delay);
+    }
+
+    /**
+     * Liveness of the peer link itself: data channel open, ICE up, and the
+     * robot heard from recently (it answers the ~500 ms state poll).
+     */
+    private _peerLinkLive(): boolean {
+        const ice = this._pc?.iceConnectionState;
+        return this._dcOpen
+            && this._dc?.readyState === 'open'
+            && (ice === 'connected' || ice === 'completed')
+            && this._supervisor.dcInboundAgeMs < PEER_LINK_LIVE_MS;
     }
 
     // ─── Commands ────────────────────────────────────────────────────────
@@ -1317,6 +1705,22 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     /**
+     * Read the robot's anonymous telemetry choice. Resolves `null` when the
+     * channel isn't open or the daemon predates the `get_telemetry` command.
+     */
+    getTelemetry(): Promise<TelemetryStatus | null> {
+        return this._slotRoundtrip('telemetry', { type: 'get_telemetry' });
+    }
+
+    /**
+     * Enable or disable telemetry on the robot, applied live. Disabling also
+     * forgets the robot id. Resolves the stored choice, or `null` on error.
+     */
+    setTelemetry(enabled: boolean): Promise<TelemetryStatus | null> {
+        return this._slotRoundtrip('set_telemetry', { type: 'set_telemetry', enabled });
+    }
+
+    /**
      * Sign this robot out of Hugging Face: asks the daemon to delete its
      * stored HF token, which de-registers the robot from the central
      * signaling relay (it disappears from its owner's robot list until it
@@ -1468,6 +1872,37 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         if (this._micStream) {
             this._micStream.getAudioTracks().forEach((t) => { t.enabled = !muted; });
         }
+    }
+
+    /**
+     * Stream an audio track to the robot's speaker in real time (TTS output,
+     * a WebAudio graph, the user's own mic for teleop…). Pass `null` to go
+     * back to silence. The track survives auto-reconnects; the app keeps
+     * ownership of it (the SDK never stops it).
+     *
+     * Resolves `true` once the track is on the wire, `false` when there is
+     * no live session yet (it is then applied as soon as one starts) or when
+     * the robot didn't offer two-way audio. Cleared by `stopSession()` /
+     * `disconnect()`. `setMicMuted()` only mutes the SDK's placeholder, not
+     * this track — stop or disable the track itself to go quiet.
+     * For clips that must stay in sync with motion, prefer
+     * `playMove(motion, { audioBlob })` or `uploadAudio` + `playUploadedAudio`.
+     */
+    async setOutgoingAudioTrack(track: MediaStreamTrack | null): Promise<boolean> {
+        if (track && track.kind !== 'audio') {
+            throw new TypeError(`setOutgoingAudioTrack: expected an audio track, got "${track.kind}"`);
+        }
+        this._outgoingAudioTrack = track;
+        return this._applyOutgoingAudioTrack();
+    }
+
+    private async _applyOutgoingAudioTrack(): Promise<boolean> {
+        const sender = this._pc?.getTransceivers()
+            .find((t) => t.receiver.track.kind === 'audio')?.sender;
+        if (!sender || !this._micSupported) return false;
+        const fallback = this._micStream?.getAudioTracks()[0] ?? null;
+        await sender.replaceTrack(this._outgoingAudioTrack ?? fallback);
+        return true;
     }
 
     // ─── Video helper ────────────────────────────────────────────────────
@@ -1765,6 +2200,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         message: Record<string, unknown>,
     ): Promise<SignalingMessage | null> {
         if (!this._token) throw new Error('No token — authenticate() first');
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), CENTRAL_REQUEST_TIMEOUT_MS);
         try {
             const res = await fetch(`${this._signalingUrl}/send`, {
                 method: 'POST',
@@ -1773,6 +2210,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     'Authorization': `Bearer ${this._token}`,
                 },
                 body: JSON.stringify(message),
+                signal: controller.signal,
             });
             if (!res.ok) {
                 let body = '';
@@ -1786,6 +2224,8 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         } catch (e) {
             log.error('signaling /send failed:', e);
             return null;
+        } finally {
+            clearTimeout(timer);
         }
     }
 
@@ -1893,6 +2333,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 break;
             }
             case 'sessionStarted':
+                if (msg.sessionId && this._retiredSessionIds.has(msg.sessionId)) break;
                 this._sessionId = msg.sessionId ?? null;
                 break;
             case 'sessionRejected':
@@ -1908,6 +2349,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     }
 
     private _handleEndSession(msg: SignalingMessage): void {
+        if (this._isOtherSession(msg.sessionId)) {
+            log.info(`ignoring endSession for session ${msg.sessionId}: not the current one`);
+            return;
+        }
         const reason = msg.reason;
         const friendly = reason === 'robot_busy_local_app'
             ? 'Robot is busy: a local Python app is running'
@@ -1931,11 +2376,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._supervisor.clearIceGrace();
             this._supervisor.uninstallNetworkListeners();
             if (this._pc) { this._pc.close(); this._pc = null; }
-            if (this._micStream) { this._micStream.getTracks().forEach((t) => t.stop()); this._micStream = null; }
+            this._releaseMicPlaceholder();
+            this._robotAudioTrack = null;
             this._iceConnected = false;
             this._dcOpen = false;
             this._micMuted = true;
             this._micSupported = false;
+            // Same bookkeeping as _closeTransport: this id is over.
+            this._retireSession(this._sessionId);
+            this._sessionId = null;
             const reject = this._sessionReject;
             this._sessionResolve = null;
             this._sessionReject = null;
@@ -1944,16 +2393,26 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         }
 
         if (this._state === 'streaming') {
-            this._emit('sessionStopped', {
-                reason: reason || 'remote_end',
-                message: friendly,
-            });
-            this.stopSession().catch(() => { /* swallow */ });
+            // Without a reason this is central's own bookkeeping (our
+            // signaling timed out and it evicted us), not the robot hanging
+            // up: the robot gives a reason, or closes the data channel. The
+            // session lives as long as the peer link does.
+            if (!reason && this._peerLinkLive()) {
+                log.info('central ended the session but the peer link is live; keeping it');
+                this._staleSessionId = this._sessionId;
+                this._sessionId = null; // stale on central
+                this._emit('signalingSessionEnded', { reason: null });
+                return;
+            }
+            this._endedByRobot(reason || 'remote_end', friendly);
         }
     }
 
     private async _handlePeerMessage(msg: SignalingMessage): Promise<void> {
         if (!this._pc) return;
+        // An offer or candidate for a session we closed (e.g. a dial whose
+        // startSession reply was abandoned) must not land on the current pc.
+        if (msg.sessionId && this._retiredSessionIds.has(msg.sessionId)) return;
         try {
             if (msg.sdp) {
                 const sdp = msg.sdp;
@@ -1971,6 +2430,13 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                     await this._pc.setRemoteDescription(new RTCSessionDescription(sdp));
                     const answer = await this._pc.createAnswer();
                     await this._pc.setLocalDescription(answer);
+                    // Re-dials build a fresh peer connection: carry the app's
+                    // outgoing audio over instead of reverting to the placeholder.
+                    if (this._outgoingAudioTrack) {
+                        // Best-effort: a failed swap must not keep the answer from going out.
+                        await this._applyOutgoingAudioTrack()
+                            .catch((e: unknown) => log.warn('re-applying outgoing audio failed:', e));
+                    }
                     await this._sendToServer({
                         type: 'peer',
                         sessionId: this._sessionId,
@@ -2057,6 +2523,15 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._pending.settleReplySlot(
                 'robot_name',
                 data.status === 'error' ? null : ((data.name as string | null) ?? null),
+            );
+            return;
+        }
+        if (data.command === 'get_telemetry' || data.command === 'set_telemetry') {
+            this._pending.settleReplySlot(
+                data.command === 'get_telemetry' ? 'telemetry' : 'set_telemetry',
+                data.status === 'error'
+                    ? null
+                    : { enabled: !!data.enabled, disabled_by_env: !!data.disabled_by_env },
             );
             return;
         }

@@ -3,7 +3,7 @@
 Provides endpoints to get and set the motor control mode.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from reachy_mini.io.protocol import MotorControlMode
@@ -38,6 +38,9 @@ async def set_motor_mode(
     backend: Backend = Depends(get_backend),
 ) -> dict[str, str]:
     """Set the motor control mode."""
-    backend.set_motor_control_mode(mode)
+    try:
+        backend.set_motor_control_mode(mode)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
     return {"status": f"motors changed to {mode} mode"}

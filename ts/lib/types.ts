@@ -75,6 +75,13 @@ export interface ImuData {
     temperature: number;
 }
 
+/** The robot's anonymous telemetry choice (wire shape of `get_telemetry`). */
+export interface TelemetryStatus {
+    enabled: boolean;
+    /** An environment variable on the robot forces telemetry off, whatever `enabled` says. */
+    disabled_by_env: boolean;
+}
+
 export interface RobotState {
     /** Flat row-major 4×4 head pose (16 numbers). */
     head?: number[];
@@ -340,6 +347,8 @@ export interface SessionRejectedEventDetail {
 }
 export type StateEventDetail = RobotState;
 export interface VideoTrackEventDetail { track: MediaStreamTrack; stream: MediaStream; }
+/** The robot's microphone track. */
+export interface AudioTrackEventDetail { track: MediaStreamTrack; stream: MediaStream; }
 export interface MicSupportedEventDetail { supported: boolean; }
 export interface ErrorEventDetail {
     source: 'signaling' | 'webrtc' | 'robot';
@@ -387,6 +396,7 @@ export interface ReachyMiniEventMap {
     sessionRejected: CustomEvent<SessionRejectedEventDetail>;
     state: CustomEvent<StateEventDetail>;
     videoTrack: CustomEvent<VideoTrackEventDetail>;
+    audioTrack: CustomEvent<AudioTrackEventDetail>;
     micSupported: CustomEvent<MicSupportedEventDetail>;
     error: CustomEvent<ErrorEventDetail>;
     iceStateChange: CustomEvent<IceStateChangeEventDetail>;
@@ -403,6 +413,21 @@ export interface ReachyMiniEventMap {
      * replaced audio sender track, …) must be re-asserted by the app.
      */
     sessionReconnected: CustomEvent<{ attempt: number }>;
+    /**
+     * The signaling channel (central SSE) dropped while a session is
+     * streaming. The session is NOT affected: once up, its media and data
+     * channel are peer-to-peer. The SDK reconnects signaling in the
+     * background (`signalingRestored`); `state` stays `streaming`.
+     */
+    signalingLost: CustomEvent<{ reason: string }>;
+    /** Background signaling reconnect succeeded while streaming. */
+    signalingRestored: CustomEvent<{ peerId: string }>;
+    /**
+     * Central ended the session on its side (typically after this
+     * client's signaling timed out) while the peer link was still live,
+     * so the session was kept. Informational; the robot decides.
+     */
+    signalingSessionEnded: CustomEvent<{ reason: string | null }>;
 }
 
 /** Public surface of a ReachyMini SDK instance. */
@@ -430,6 +455,8 @@ export interface ReachyMiniInstance extends EventTarget {
      * use — never capture it across ticks.
      */
     readonly peerConnection: RTCPeerConnection | null;
+    /** The robot's microphone track, or `null` until the session's audio arrives. */
+    readonly robotAudioTrack: MediaStreamTrack | null;
     /**
      * Build version of this SDK (npm package `version`), injected from
      * package.json at build time. The JS SDK's OWN version — distinct from
@@ -444,9 +471,9 @@ export interface ReachyMiniInstance extends EventTarget {
      *  app bundles that predate the getter. */
     _pc: RTCPeerConnection | null;
     /** Silent placeholder MediaStream the SDK feeds the WebRTC audio
-     *  sender so robot-speaker output can negotiate sendrecv. Apps inject
-     *  their own audio (TTS, files, the user's mic for teleop) by calling
-     *  `replaceTrack()` on the audio sender from `_pc.getSenders()`. */
+     *  sender so robot-speaker output can negotiate sendrecv. Apps send
+     *  their own audio (TTS, files, the user's mic for teleop) with
+     *  `setOutgoingAudioTrack(track)`. */
     _micStream: MediaStream | null;
 
     authenticate(): Promise<boolean>;
@@ -575,6 +602,11 @@ export interface ReachyMiniInstance extends EventTarget {
 
     setAudioMuted(muted: boolean): void;
     setMicMuted(muted: boolean): void;
+    /**
+     * Stream an audio track to the robot's speaker (`null` = silence).
+     * Survives auto-reconnects; resolves `false` when no session is live yet.
+     */
+    setOutgoingAudioTrack(track: MediaStreamTrack | null): Promise<boolean>;
 
     getVolume(): Promise<number | null>;
     setVolume(volume: number): Promise<number | null>;
@@ -601,6 +633,14 @@ export interface ReachyMiniInstance extends EventTarget {
      * restart. Resolves with the stored name, or `null` on error.
      */
     setRobotName(name: string): Promise<string | null>;
+
+    /**
+     * Read the robot's anonymous telemetry choice. `null` when the channel
+     * isn't open or the daemon predates the `get_telemetry` command.
+     */
+    getTelemetry(): Promise<TelemetryStatus | null>;
+    /** Enable or disable telemetry. Disabling also forgets the robot id. */
+    setTelemetry(enabled: boolean): Promise<TelemetryStatus | null>;
 
     /**
      * Apply a batch of XVF3800 audio-board parameters on the robot.

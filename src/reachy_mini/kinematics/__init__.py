@@ -5,8 +5,6 @@ from typing import Annotated
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.kinematics.nn_kinematics import NNKinematics  # noqa: F401
-
 try:
     from reachy_mini.kinematics.placo_kinematics import PlacoKinematics  # noqa: F401
 except ImportError:
@@ -39,5 +37,5 @@ from reachy_mini.kinematics.analytical_kinematics import (  # noqa: F401
     AnalyticalKinematics,
 )
 
-AnyKinematics = NNKinematics | PlacoKinematics | AnalyticalKinematics
-__all__ = ["NNKinematics", "PlacoKinematics", "AnalyticalKinematics"]
+AnyKinematics = PlacoKinematics | AnalyticalKinematics
+__all__ = ["PlacoKinematics", "AnalyticalKinematics"]

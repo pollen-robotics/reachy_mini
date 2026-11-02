@@ -67,6 +67,8 @@
       title: Cloud-Backend Consumer
     - local: SDK/gstreamer-installation
       title: GStreamer Installation
+    - local: SDK/telemetry
+      title: Telemetry
   title: Software guide
 - sections:
     - local: troubleshooting

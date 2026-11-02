@@ -6,10 +6,12 @@ fire-and-forget commands, and task request/progress tracking.
 
 import ipaddress
 import logging
+import platform
 import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from importlib.metadata import version
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
@@ -22,12 +24,14 @@ from pydantic import ValidationError
 
 from reachy_mini.io.abstract import AbstractClient
 from reachy_mini.io.protocol import (
+    MOVE_BUSY_ERROR,
     AnyCommand,
     AnyTaskRequest,
     DaemonStatus,
     HeadPoseMsg,
     ImuDataMsg,
     JointPositionsMsg,
+    MoveBusyError,
     RecordedDataMsg,
     TaskProgress,
     TaskRequest,
@@ -47,6 +51,25 @@ def _is_loopback_host(host: str) -> bool:
         return False
 
 
+def _pin_localhost_to_ipv4(host: str) -> str:
+    """Replace ``localhost`` with ``127.0.0.1``; leave any other host untouched.
+
+    ``localhost`` resolves to ``::1`` first, but the daemon only listens on
+    IPv4 (``127.0.0.1``, or ``0.0.0.0`` on the wireless). Linux and macOS
+    refuse the IPv6 attempt instantly; Windows retries a refused connection
+    for ~2 s before falling back to IPv4, which delayed every local SDK
+    connection and every HTTP call built from ``WSClient.host``.
+    """
+    return "127.0.0.1" if host.strip().lower() == "localhost" else host
+
+
+def _client_header() -> str:
+    """Identify this SDK to the daemon's anonymous telemetry."""
+    system = platform.system().lower()
+    os_name = "macos" if system == "darwin" else system
+    return f"python_sdk/{version('reachy_mini')} ({os_name})"
+
+
 class WSClient(AbstractClient):
     """WebSocket client for Reachy Mini."""
 
@@ -58,6 +81,7 @@ class WSClient(AbstractClient):
             port: Port of the daemon's FastAPI server.
 
         """
+        host = _pin_localhost_to_ipv4(host)
         self.host = host
         self.port = port
 
@@ -87,7 +111,11 @@ class WSClient(AbstractClient):
         # bandwidth on) and costs CPU at the daemon's 50 Hz state stream rate.
         compression = None if _is_loopback_host(host) else "deflate"
         try:
-            self._ws = ws_sync.connect(uri, compression=compression)
+            self._ws = ws_sync.connect(
+                uri,
+                compression=compression,
+                additional_headers={"X-Reachy-Client": _client_header()},
+            )
         except (OSError, websockets.exceptions.InvalidHandshake, TimeoutError) as e:
             raise ConnectionError(f"Failed to connect to {uri}: {e}") from e
 
@@ -293,6 +321,8 @@ class WSClient(AbstractClient):
         if task.error is not None:
             with self._tasks_lock:
                 del self.tasks[task_uid]
+            if task.error == MOVE_BUSY_ERROR:
+                raise MoveBusyError(f"Task failed with error: {task.error}")
             raise Exception(f"Task failed with error: {task.error}")
 
         with self._tasks_lock:

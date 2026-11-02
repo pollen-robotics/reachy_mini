@@ -13,6 +13,7 @@ Same lightweight-fake approach as ``test_backend_idle_reset``: the method
 only touches a handful of ``self`` attributes, so it is exercised unbound.
 """
 
+import contextlib
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -46,6 +47,7 @@ def _fake_backend(
         goto_target=AsyncMock(),
         play_sound=MagicMock(),
         _on_wake_up_callback=MagicMock(),
+        _move_guard=contextlib.nullcontext,
     )
     # Bind the real predicate so these tests exercise it, not a stub.
     fake.is_awake_at_init_pose = lambda: Backend.is_awake_at_init_pose(fake)

@@ -39,6 +39,7 @@ function makeSupervisor(
         rejectPendingSession: vi.fn().mockReturnValue(false),
         reconnectSignaling: vi.fn().mockResolvedValue(undefined),
         dial: vi.fn().mockResolvedValue(undefined),
+        redialTargetResolver: vi.fn((id: string) => () => id),
         teardownForRedial: vi.fn(),
         nudgeState: vi.fn(),
         emit: vi.fn(),

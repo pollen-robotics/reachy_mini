@@ -108,50 +108,67 @@ USER_DESCRIPTION_UUID = "00002901-0000-1000-8000-00805f9b34fb"
 # BLE Agent for Just Works
 # =======================
 class NoInputAgent(dbus.service.Object):
-    """BLE Agent for Just Works pairing."""
+    """BLE Agent for Just Works pairing.
+
+    Nothing in our GATT app requires encryption, so a bond with the robot adds
+    no security: phones only end up bonded when a user pairs from the OS
+    Bluetooth settings. The agent's job is therefore to never be the reason a
+    pairing fails. The kernel asks user space to confirm every LE Secure
+    Connections Just Works pairing, and BlueZ forwards that to
+    `RequestAuthorization` (for a peer it already holds keys for,
+    `JustWorksRepairing` in main.conf decides first). An agent without that
+    method rejects every such pairing, including the re-pairing a phone with a
+    stale bond attempts, which leaves the phone with a bond it can't use (SMP
+    "numeric comparison failed").
+
+    The signatures are the org.bluez.Agent1 ones: dbus-python advertises them
+    in the introspection data BlueZ reads.
+    """
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
-    def Release(self, *args):
+    def Release(self):
         """Handle release of the agent."""
         logger.info("Agent released")
 
-    @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="s")
-    def RequestPinCode(self, *args):
+    @dbus.service.method("org.bluez.Agent1", in_signature="o", out_signature="s")
+    def RequestPinCode(self, device):
         """Automatically provide an empty pin code for Just Works pairing."""
-        logger.info(f"RequestPinCode called with args: {args}, returning empty")
+        logger.info(f"RequestPinCode for {device}, returning empty")
         return ""
 
-    @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="u")
-    def RequestPasskey(self, *args):
+    @dbus.service.method("org.bluez.Agent1", in_signature="o", out_signature="u")
+    def RequestPasskey(self, device):
         """Automatically provide a passkey of 0 for Just Works pairing."""
-        logger.info(f"RequestPasskey called with args: {args}, returning 0")
+        logger.info(f"RequestPasskey for {device}, returning 0")
         return dbus.UInt32(0)
 
-    @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
-    def RequestConfirmation(self, *args):
+    @dbus.service.method("org.bluez.Agent1", in_signature="ou", out_signature="")
+    def RequestConfirmation(self, device, passkey):
         """Automatically confirm the pairing request."""
-        logger.info(
-            f"RequestConfirmation called with args: {args}, accepting automatically"
-        )
-        return
+        logger.info(f"RequestConfirmation for {device}, accepting automatically")
 
-    @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
-    def DisplayPinCode(self, *args):
+    @dbus.service.method("org.bluez.Agent1", in_signature="o", out_signature="")
+    def RequestAuthorization(self, device):
+        """Accept Just Works pairing and re-pairing (see the class docstring)."""
+        logger.info(f"RequestAuthorization for {device}, accepting automatically")
+
+    @dbus.service.method("org.bluez.Agent1", in_signature="os", out_signature="")
+    def DisplayPinCode(self, device, pincode):
         """Handle displaying the pin code (not used in Just Works)."""
-        logger.info(f"DisplayPinCode called with args: {args}")
+        logger.info(f"DisplayPinCode for {device}")
 
-    @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
-    def DisplayPasskey(self, *args):
+    @dbus.service.method("org.bluez.Agent1", in_signature="ouq", out_signature="")
+    def DisplayPasskey(self, device, passkey, entered):
         """Handle displaying the passkey (not used in Just Works)."""
-        logger.info(f"DisplayPasskey called with args: {args}")
+        logger.info(f"DisplayPasskey for {device}")
 
-    @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
-    def AuthorizeService(self, *args):
+    @dbus.service.method("org.bluez.Agent1", in_signature="os", out_signature="")
+    def AuthorizeService(self, device, uuid):
         """Handle service authorization requests."""
-        logger.info(f"AuthorizeService called with args: {args}")
+        logger.info(f"AuthorizeService for {device}: {uuid}")
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
-    def Cancel(self, *args):
+    def Cancel(self):
         """Handle cancellation of the agent request."""
         logger.info("Agent request canceled")
 
@@ -316,7 +333,9 @@ class Characteristic(dbus.service.Object):
 class CommandCharacteristic(Characteristic):
     """Command Characteristic."""
 
-    def __init__(self, bus, index, service, command_handler: Callable[[bytes], str]):
+    def __init__(
+        self, bus, index, service, command_handler: Callable[[bytes, "str | None"], str]
+    ):
         """Initialize the Command Characteristic."""
         super().__init__(bus, index, COMMAND_CHAR_UUID, ["write"], service)
         self.command_handler = command_handler
@@ -324,7 +343,12 @@ class CommandCharacteristic(Characteristic):
     def WriteValue(self, value, options):
         """Handle write to the Command Characteristic."""
         command_bytes = bytes(value)
-        response = self.command_handler(command_bytes)
+        # BlueZ passes the connecting central's Device1 object path in
+        # `options["device"]` — the only per-connection identity we get.
+        # Thread it to the handler so auth stays bound to the caller that
+        # entered the PIN (see GHSA-993g-hgjh-whmf).
+        device = options.get("device") if options else None
+        response = self.command_handler(command_bytes, device)
         self.service.response_char.value = [
             dbus.Byte(b) for b in response.encode("utf-8")
         ]
@@ -376,7 +400,12 @@ class Service(dbus.service.Object):
     PATH_BASE = "/org/bluez/service"
 
     def __init__(
-        self, bus, index, uuid, primary, command_handler: Callable[[bytes], str]
+        self,
+        bus,
+        index,
+        uuid,
+        primary,
+        command_handler: Callable[[bytes, "str | None"], str],
     ):
         """Initialize the GATT Service."""
         self.path = self.PATH_BASE + str(index)
@@ -630,7 +659,7 @@ class ReachyStatusService(dbus.service.Object):
 class Application(dbus.service.Object):
     """GATT Application."""
 
-    def __init__(self, bus, command_handler: Callable[[bytes], str]):
+    def __init__(self, bus, command_handler: Callable[[bytes, "str | None"], str]):
         """Initialize the GATT Application."""
         self.path = "/"
         self.services = []
@@ -692,6 +721,10 @@ class BluetoothCommandService:
         self.connected = False
         # monotonic deadline for the TTL-bounded WiFi session (see _is_authed).
         self._authed_until = 0.0
+        # BlueZ Device1 path of the central that entered the PIN. Auth is bound
+        # to it so a second nearby central can't inherit the session (the race
+        # in GHSA-993g-hgjh-whmf). Cleared on TTL expiry and on disconnect.
+        self._authed_device = None
         # Wrong-PIN throttle state (see PIN_* constants and _handle_command).
         # Both deliberately persist across disconnects so reconnecting does
         # not reset an in-progress lockout.
@@ -801,9 +834,22 @@ class BluetoothCommandService:
             self._journal_buffer = ""
             logger.info("Journal streaming stopped")
 
-    def _is_authed(self) -> bool:
-        """Return whether the TTL-bounded authenticated session is still valid."""
-        return self._authed_until > time.monotonic()
+    def _is_authed(self, device) -> bool:
+        """Whether the caller holds a live authenticated session.
+
+        Bound to the device that entered the PIN: the TTL must be unexpired AND
+        the write must come from that same central. `device` is the BlueZ
+        Device1 path from `options["device"]`; a write with no identifiable
+        device (None) is untrusted and fails closed. Closes the auth-bypass
+        race in GHSA-993g-hgjh-whmf.
+        """
+        if device is None:
+            # BlueZ supplies "device" for server-side writes, so this should not
+            # happen; log it because the gate fails closed and would otherwise
+            # look like an unexplained "Not connected" in the field.
+            logger.warning("BLE write with no device path in options; refusing auth")
+            return False
+        return self._authed_until > time.monotonic() and device == self._authed_device
 
     def _pin_lockout_remaining(self) -> float:
         """Seconds left on the wrong-PIN lockout (0.0 if not locked).
@@ -866,7 +912,7 @@ class BluetoothCommandService:
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _handle_command(self, value: bytes) -> str:
+    def _handle_command(self, value: bytes, device: "str | None" = None) -> str:
         command_str = value.decode("utf-8").strip()
         upper = command_str.upper()
         # WIFI_STATUS and JOURNAL_READ are polled by clients; don't spam logs.
@@ -901,6 +947,9 @@ class BluetoothCommandService:
             if pin == self.pin_code:
                 self._reset_pin_throttle()
                 self.connected = True
+                # Bind the session to the central that authenticated so no
+                # other nearby central can ride it (GHSA-993g-hgjh-whmf).
+                self._authed_device = device
                 # Open a TTL-bounded session for the WiFi commands so the
                 # client can chain scan → connect → status without re-auth.
                 self._authed_until = time.monotonic() + self.SESSION_TTL_S
@@ -931,19 +980,19 @@ class BluetoothCommandService:
         # Daemons that predate this argument ECHO the command back, which
         # clients treat as "retry without PRE".
         elif upper in ("UPDATE_CHECK", "UPDATE_CHECK PRE"):
-            if not self._is_authed():
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             pre_release = upper.endswith(" PRE")
             self._run_async(lambda: _update_check(pre_release))
             return "OK: working"
         elif upper in ("UPDATE_START", "UPDATE_START PRE"):
-            if not self._is_authed():
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             pre_release = upper.endswith(" PRE")
             self._run_async(lambda: _update_start(pre_release))
             return "OK: working"
         elif upper.startswith("UPDATE_INFO "):
-            if not self._is_authed():
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             job_id = command_str[len("UPDATE_INFO ") :].strip()
             self._run_async(lambda: _update_info(job_id))
@@ -959,22 +1008,22 @@ class BluetoothCommandService:
             self._run_async(_wifi_keyex)
             return "OK: working"
         elif upper == "WIFI_STATUS":
-            authed = self._is_authed()
+            authed = self._is_authed(device)
             self._run_async(lambda: _wifi_status(authed))
             return "OK: working"
         elif upper == "WIFI_SCAN":
-            if not self._is_authed():
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             self._run_async(_wifi_scan)
             return "OK: working"
         elif upper.startswith("WIFI_CONNECT_ENC "):
-            if not self._is_authed():
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             blob = command_str[len("WIFI_CONNECT_ENC ") :]
             self._run_async(lambda: _wifi_connect_sealed(blob))
             return "OK: working"
         elif upper.startswith("WIFI_FORGET "):
-            if not self._is_authed():
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             ssid = command_str[len("WIFI_FORGET ") :]
             self._run_async(lambda: _wifi_forget(ssid))
@@ -983,7 +1032,7 @@ class BluetoothCommandService:
         # so it requires a live TTL session like the WiFi commands. The name can
         # contain spaces, so everything after "SET_NAME " is the raw value.
         elif upper.startswith("SET_NAME "):
-            if not self._is_authed():
+            if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             name = command_str[len("SET_NAME ") :].strip()
             self._run_async(lambda: _set_robot_name(name))
@@ -991,7 +1040,11 @@ class BluetoothCommandService:
 
         # else if command starts with "CMD_xxxxx" check if  commands directory contains the said named script command xxxx.sh and run its, show output or/and send to read
         elif command_str.startswith("CMD_"):
-            if not self.connected:
+            # Bound to the authenticated central: the one-shot `connected` flag
+            # is not enough on its own — a second central racing in would ride
+            # it (GHSA-993g-hgjh-whmf). Require the write to come from the
+            # device that entered the PIN.
+            if not self.connected or device is None or device != self._authed_device:
                 return "ERROR: Not connected. Please authenticate first."
             try:
                 # Constrain to a bare filename so it cannot escape commands/.
@@ -1041,7 +1094,14 @@ class BluetoothCommandService:
         adapter_props.Set("org.bluez.Adapter1", "Powered", dbus.Boolean(True))
         adapter_props.Set("org.bluez.Adapter1", "Discoverable", dbus.Boolean(True))
         adapter_props.Set("org.bluez.Adapter1", "DiscoverableTimeout", dbus.UInt32(0))
+        # Stays pairable although nothing here needs a bond: a phone that still
+        # holds a bond from an earlier pairing encrypts the link on connect and,
+        # once the robot's keys are gone (see `_forget_phone_bonds`), re-pairs.
+        # With Pairable off that re-pairing is refused and the phone can't
+        # connect until its user forgets the robot by hand, which iOS apps
+        # can't do for them.
         adapter_props.Set("org.bluez.Adapter1", "Pairable", dbus.Boolean(True))
+        self._forget_phone_bonds(adapter)
 
         # Register GATT application
         service_manager = dbus.Interface(adapter, GATT_MANAGER_IFACE)
@@ -1101,10 +1161,16 @@ class BluetoothCommandService:
             logger.info(f"BLE central connected: {path}")
         else:
             logger.info(f"BLE central disconnected: {path}")
-            # Only act on the device we tracked as connected, so a stale
+            # Only untrack the device we tracked as connected, so a stale
             # disconnect signal can't clobber a client that just reconnected.
-            if self._connected_device_path in (None, path):
+            is_tracked = self._connected_device_path in (None, path)
+            if is_tracked:
                 self._connected_device_path = None
+            # Clear the session when the AUTHENTICATED central drops, even if
+            # another central has since become the tracked one — otherwise its
+            # session outlives it for the rest of SESSION_TTL_S and a reconnect
+            # spoofing its address inherits it (the Device1 path is MAC-derived).
+            if is_tracked or path == self._authed_device:
                 self._on_central_disconnected()
 
     def _on_central_disconnected(self):
@@ -1121,6 +1187,7 @@ class BluetoothCommandService:
         """
         self.connected = False
         self._authed_until = 0.0
+        self._authed_device = None
         self._stop_journal()
         self._reassert_advertising()
 
@@ -1151,6 +1218,45 @@ class BluetoothCommandService:
             )
         except dbus.exceptions.DBusException as e:
             logger.warning(f"Re-assert advertisement raised (non-fatal): {e}")
+
+    def _forget_phone_bonds(self, adapter):
+        """Drop the keys of every bonded peer that isn't an input or audio device.
+
+        Bonds come from users pairing a phone from its Bluetooth settings; our
+        GATT app never needs them. Each one is a liability: once either side
+        loses or renews its keys, BlueZ (`JustWorksRepairing = never`, the
+        default on images that predate the main.conf change) refuses to
+        re-pair a peer it still has keys for, and the phone fails every
+        connect with GATT_INSUFFICIENT_AUTHENTICATION. Without keys here the
+        phone's automatic re-pairing goes through instead.
+
+        Gamepads, keyboards and speakers a user paired with the robot on
+        purpose are kept.
+        """
+        adapter_path = adapter.object_path
+        adapter_iface = dbus.Interface(adapter, "org.bluez.Adapter1")
+        remote_om = dbus.Interface(
+            self.bus.get_object(BLUEZ_SERVICE_NAME, "/"), DBUS_OM_IFACE
+        )
+        try:
+            objects = remote_om.GetManagedObjects()
+        except dbus.exceptions.DBusException as e:
+            logger.warning(f"Could not list bonded devices: {e}")
+            return
+        for path, ifaces in objects.items():
+            props = ifaces.get("org.bluez.Device1")
+            if props is None or not path.startswith(adapter_path + "/"):
+                continue
+            if not (props.get("Paired", False) or props.get("Bonded", False)):
+                continue
+            icon = str(props.get("Icon", ""))
+            if icon.startswith(("input-", "audio-")):
+                continue
+            try:
+                adapter_iface.RemoveDevice(path)
+                logger.info(f"Forgot bonded device {props.get('Address', path)}")
+            except dbus.exceptions.DBusException as e:
+                logger.warning(f"Could not forget bonded device {path}: {e}")
 
     def _find_adapter(self):
         remote_om = dbus.Interface(

@@ -1,3 +1,5 @@
+"""Tests for camera and video handling."""
+
 import time
 
 import numpy as np
@@ -5,13 +7,13 @@ import numpy.typing as npt
 import pytest
 
 from reachy_mini.daemon.utils import is_local_camera_available
+from reachy_mini.media.camera_base import CameraBase
 from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
-from reachy_mini.media.camera_base import CameraBase
 
 SIGNALING_HOST = "reachy-mini.local"
 
@@ -163,6 +165,16 @@ def test_read_jpeg_encodes_bgr_frame() -> None:
 
     assert jpeg is not None
     assert jpeg[:2] == b"\xff\xd8"
+
+    # Browsers expect YCbCr JPEG components even though libjpeg can also decode
+    # RGB-component JPEGs. The latter render with incorrect colors in browsers.
+    sof0 = jpeg.find(b"\xff\xc0")
+    assert sof0 >= 0, "expected a baseline JPEG frame header"
+    component_count = jpeg[sof0 + 9]
+    component_ids = tuple(
+        jpeg[sof0 + 10 + 3 * index] for index in range(component_count)
+    )
+    assert component_ids == (1, 2, 3)
 
     decoded = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
     blue, green, red = (int(c) for c in decoded[16, 16])
