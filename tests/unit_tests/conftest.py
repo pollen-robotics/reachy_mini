@@ -28,6 +28,31 @@ def _isolated_hf_credentials(
     monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
 
 
+@pytest.fixture(scope="session")
+def no_daemon_mdns_advertising() -> Generator[None, None, None]:
+    """Keep the daemons started by tests off the LAN's mDNS.
+
+    A real registration probes the network for ~1.5 s and the daemon's shutdown
+    waits for it, which was most of the cost of every full daemon start/stop in
+    these tests. It also advertised each test daemon on the local network.
+    test_discovery.py still exercises the real registration directly.
+    """
+    from reachy_mini.daemon.app import main
+
+    class _NoMdnsRegistration(main.MdnsServiceRegistration):
+        """The real class (so the daemon's calls are checked), minus the network."""
+
+        def register(self) -> None:
+            pass
+
+        def unregister(self) -> None:
+            pass
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(main, "MdnsServiceRegistration", _NoMdnsRegistration)
+        yield
+
+
 def _webrtc_plugin_available() -> bool:
     """True when the gst-plugins-rs webrtc elements register (libgstrswebrtc.so)."""
     try:

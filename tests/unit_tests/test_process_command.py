@@ -136,3 +136,47 @@ async def test_goto_target_via_webrtc_json_message() -> None:
     assert isinstance(head, np.ndarray)
     assert head.shape == (4, 4)
     np.testing.assert_array_equal(head, pose)
+
+
+def _webrtc_replies(backend: MockupSimBackend, message: str) -> list[dict]:
+    replies: list[dict] = []
+    backend._send_webrtc_response = lambda _peer, resp: replies.append(resp)  # type: ignore[method-assign]
+    backend._handle_webrtc_message(peer_id="test-peer", message=message)
+    return replies
+
+
+@pytest.mark.parametrize(
+    ("message", "command"),
+    [
+        # A command this daemon doesn't know (newer SDK, older robot).
+        ('{"type": "set_something_new", "value": 1}', "set_something_new"),
+        # A known command with bad fields.
+        ('{"type": "goto_target", "duration": "soon"}', "goto_target"),
+        ("not json", None),
+        ('["goto_target"]', None),
+    ],
+)
+def test_invalid_webrtc_command_reply_names_the_command(
+    message: str, command: str | None
+) -> None:
+    """The error echoes `command` when known, so the client can match it."""
+    replies = _webrtc_replies(_make_backend(), message)
+
+    assert len(replies) == 1
+    assert replies[0]["status"] == "error"
+    assert replies[0]["error"].startswith("Invalid command")
+    assert replies[0].get("command") == command
+
+
+def test_failing_webrtc_command_reply_names_the_command() -> None:
+    """A command that raises in process_command answers an error with its type."""
+    backend = _make_backend()
+
+    def boom(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("boom")
+
+    backend.process_command = boom  # type: ignore[method-assign]
+
+    replies = _webrtc_replies(backend, '{"type": "get_state"}')
+
+    assert replies == [{"command": "get_state", "status": "error", "error": "boom"}]

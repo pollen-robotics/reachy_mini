@@ -1139,6 +1139,17 @@ AnyMessage = Annotated[AnyCommand | TaskRequest, Field(discriminator="type")]
 message_adapter: TypeAdapter[AnyMessage] = TypeAdapter(AnyMessage)
 
 
+MOVE_BUSY_ERROR = "a move is already running"
+
+
+class MoveBusyError(RuntimeError):
+    """A move was rejected because another move is already running.
+
+    Raised by the daemon's ``play_move`` and, client side, by
+    ``ReachyMini.goto_target`` when the daemon answers with this error.
+    """
+
+
 class TaskProgress(BaseModel):
     """Task progress (broadcast to all clients)."""
 

@@ -1,6 +1,8 @@
 import asyncio
 import re
 import threading
+import time
+from typing import Generator
 
 import numpy as np
 import pytest
@@ -11,8 +13,12 @@ from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.reachy_mini import ReachyMini
 from reachy_mini.utils.discovery import DiscoveredRobot
 
+pytestmark = pytest.mark.usefixtures("no_daemon_mdns_advertising")
 
-async def _start_app_server(
+SHARED_ROBOT_NAME = "shared_robot"
+
+
+def _start_app_server(
     robot_name: str = "reachy_mini",
 ) -> tuple[Daemon, uvicorn.Server, threading.Thread, int]:
     """Start a full FastAPI + daemon server in a background thread.
@@ -38,7 +44,7 @@ async def _start_app_server(
 
     # Wait until the server is accepting connections
     while not server.started:
-        await asyncio.sleep(0.05)
+        time.sleep(0.05)
 
     sockets = server.servers[0].sockets
     port: int = sockets[0].getsockname()[1]
@@ -46,60 +52,61 @@ async def _start_app_server(
     return app.state.daemon, server, thread, port
 
 
-async def _stop_app_server(server: uvicorn.Server, thread: threading.Thread) -> None:
+def _stop_app_server(server: uvicorn.Server, thread: threading.Thread) -> None:
     """Gracefully shut down the uvicorn server."""
     server.should_exit = True
     thread.join(timeout=10)
 
 
-@pytest.mark.asyncio
-async def test_daemon_start_stop() -> None:
-    daemon, server, thread, _port = await _start_app_server()
-    await daemon.stop(goto_sleep_on_stop=False)
-    await _stop_app_server(server, thread)
+@pytest.fixture(scope="module")
+def shared_daemon() -> Generator[tuple[Daemon, int], None, None]:
+    """One daemon for every test that only connects to it, instead of one each.
+
+    Tests using it must leave it running and as they found it. Those that stop
+    the daemon or test its start/stop start their own.
+    """
+    daemon, server, thread, port = _start_app_server(robot_name=SHARED_ROBOT_NAME)
+    try:
+        yield daemon, port
+    finally:
+        asyncio.run(daemon.stop(goto_sleep_on_stop=False))
+        _stop_app_server(server, thread)
 
 
 @pytest.mark.asyncio
 async def test_daemon_multiple_start_stop() -> None:
-    daemon, server, thread, _port = await _start_app_server()
+    daemon, server, thread, _port = _start_app_server()
     await daemon.stop(goto_sleep_on_stop=False)
-    await _stop_app_server(server, thread)
+    _stop_app_server(server, thread)
 
     # Start a second time with a fresh server
-    daemon2, server2, thread2, _port2 = await _start_app_server()
+    daemon2, server2, thread2, _port2 = _start_app_server()
     await daemon2.stop(goto_sleep_on_stop=False)
-    await _stop_app_server(server2, thread2)
+    _stop_app_server(server2, thread2)
 
 
-@pytest.mark.asyncio
-async def test_daemon_client_disconnection() -> None:
-    daemon, server, thread, port = await _start_app_server()
+def test_daemon_client_disconnection(shared_daemon: tuple[Daemon, int]) -> None:
+    daemon, port = shared_daemon
 
-    client_connected = asyncio.Event()
+    with ReachyMini(host="localhost", port=port, media_backend="no_media") as mini:
+        status = mini.client.get_status()
+        assert status.state == "running"
+        assert status.simulation_enabled
+        assert status.error is None
+        assert status.backend_status is not None
+        assert status.backend_status.motor_control_mode == "enabled"
+        assert status.backend_status.error is None
+        assert status.wlan_ip is None
 
-    async def simple_client() -> None:
-        with ReachyMini(host="localhost", port=port, media_backend="no_media") as mini:
-            status = mini.client.get_status()
-            assert status.state == "running"
-            assert status.simulation_enabled
-            assert status.error is None
-            assert status.backend_status is not None
-            assert status.backend_status.motor_control_mode == "enabled"
-            assert status.backend_status.error is None
-            assert status.wlan_ip is None
-            client_connected.set()
-
-    async def wait_for_client() -> None:
-        await client_connected.wait()
-        await daemon.stop(goto_sleep_on_stop=False)
-        await _stop_app_server(server, thread)
-
-    await asyncio.gather(simple_client(), wait_for_client())
+    # The client leaving doesn't take the daemon down with it.
+    assert daemon.status().state == "running"
 
 
-@pytest.mark.asyncio
-async def test_sdk_warns_on_daemon_version_mismatch() -> None:
-    daemon, server, thread, port = await _start_app_server()
+def test_sdk_warns_on_daemon_version_mismatch(
+    shared_daemon: tuple[Daemon, int],
+) -> None:
+    daemon, port = shared_daemon
+    real_version = daemon._status.version
     daemon._status.version = "0.0.0"
 
     try:
@@ -110,46 +117,40 @@ async def test_sdk_warns_on_daemon_version_mismatch() -> None:
             with ReachyMini(host="localhost", port=port, media_backend="no_media"):
                 pass
     finally:
-        await daemon.stop(goto_sleep_on_stop=False)
-        await _stop_app_server(server, thread)
+        daemon._status.version = real_version
 
 
-@pytest.mark.asyncio
-async def test_named_local_daemon_is_validated() -> None:
-    daemon, server, thread, port = await _start_app_server(robot_name="local_robot")
+def test_named_local_daemon_is_validated(shared_daemon: tuple[Daemon, int]) -> None:
+    _daemon, port = shared_daemon
 
-    try:
-        with ReachyMini(
-            robot_name="local_robot",
+    with ReachyMini(
+        robot_name=SHARED_ROBOT_NAME,
+        port=port,
+        media_backend="no_media",
+    ) as mini:
+        assert mini.connection_mode == "localhost_only"
+        assert mini.client.host == "127.0.0.1"
+        assert mini.robot_name == SHARED_ROBOT_NAME
+
+    with pytest.raises(
+        ConnectionError,
+        match="local Reachy Mini daemon named 'other_robot'",
+    ):
+        ReachyMini(
+            robot_name="other_robot",
             port=port,
+            connection_mode="localhost_only",
             media_backend="no_media",
-        ) as mini:
-            assert mini.connection_mode == "localhost_only"
-            assert mini.client.host == "localhost"
-            assert mini.robot_name == "local_robot"
-
-        with pytest.raises(
-            ConnectionError,
-            match="local Reachy Mini daemon named 'other_robot'",
-        ):
-            ReachyMini(
-                robot_name="other_robot",
-                port=port,
-                connection_mode="localhost_only",
-                media_backend="no_media",
-            )
-    finally:
-        await daemon.stop(goto_sleep_on_stop=False)
-        await _stop_app_server(server, thread)
+        )
 
 
-@pytest.mark.asyncio
-async def test_named_daemon_auto_discovers_and_tries_all_addresses(
+def test_named_daemon_auto_discovers_and_tries_all_addresses(
+    shared_daemon: tuple[Daemon, int],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    daemon, server, thread, port = await _start_app_server(robot_name="remote_robot")
+    _daemon, port = shared_daemon
     discovered = DiscoveredRobot(
-        name="remote_robot",
+        name=SHARED_ROBOT_NAME,
         host="",
         port=port,
         addresses=["127.0.0.2", "127.0.0.1"],
@@ -159,73 +160,61 @@ async def test_named_daemon_auto_discovers_and_tries_all_addresses(
         lambda timeout: [discovered],
     )
 
-    try:
-        with ReachyMini(
-            robot_name="remote_robot",
-            port=1,
-            media_backend="no_media",
-        ) as mini:
-            assert mini.connection_mode == "network"
-            assert mini.client.host == "127.0.0.1"
-            assert mini.client.port == port
-    finally:
-        await daemon.stop(goto_sleep_on_stop=False)
-        await _stop_app_server(server, thread)
+    with ReachyMini(
+        robot_name=SHARED_ROBOT_NAME,
+        port=1,
+        media_backend="no_media",
+    ) as mini:
+        assert mini.connection_mode == "network"
+        assert mini.client.host == "127.0.0.1"
+        assert mini.client.port == port
 
 
-@pytest.mark.asyncio
-async def test_named_daemon_falls_back_to_host_when_mdns_misses(
+def test_named_daemon_falls_back_to_host_when_mdns_misses(
+    shared_daemon: tuple[Daemon, int],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    daemon, server, thread, port = await _start_app_server(robot_name="remote_robot")
+    _daemon, port = shared_daemon
     monkeypatch.setattr(
         "reachy_mini.reachy_mini.find_robots",
         lambda timeout: [],
     )
 
-    try:
-        with ReachyMini(
-            robot_name="remote_robot",
+    with ReachyMini(
+        robot_name=SHARED_ROBOT_NAME,
+        host="127.0.0.1",
+        port=port,
+        connection_mode="network",
+        media_backend="no_media",
+    ) as mini:
+        assert mini.connection_mode == "network"
+        assert mini.client.host == "127.0.0.1"
+        assert mini.client.port == port
+
+
+def test_named_daemon_host_fallback_rejects_wrong_name(
+    shared_daemon: tuple[Daemon, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _daemon, port = shared_daemon
+    monkeypatch.setattr(
+        "reachy_mini.reachy_mini.find_robots",
+        lambda timeout: [],
+    )
+
+    with pytest.raises(ConnectionError, match="via mDNS or host"):
+        ReachyMini(
+            robot_name="wanted_robot",
             host="127.0.0.1",
             port=port,
             connection_mode="network",
             media_backend="no_media",
-        ) as mini:
-            assert mini.connection_mode == "network"
-            assert mini.client.host == "127.0.0.1"
-            assert mini.client.port == port
-    finally:
-        await daemon.stop(goto_sleep_on_stop=False)
-        await _stop_app_server(server, thread)
-
-
-@pytest.mark.asyncio
-async def test_named_daemon_host_fallback_rejects_wrong_name(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    daemon, server, thread, port = await _start_app_server(robot_name="actual_robot")
-    monkeypatch.setattr(
-        "reachy_mini.reachy_mini.find_robots",
-        lambda timeout: [],
-    )
-
-    try:
-        with pytest.raises(ConnectionError, match="via mDNS or host"):
-            ReachyMini(
-                robot_name="wanted_robot",
-                host="127.0.0.1",
-                port=port,
-                connection_mode="network",
-                media_backend="no_media",
-            )
-    finally:
-        await daemon.stop(goto_sleep_on_stop=False)
-        await _stop_app_server(server, thread)
+        )
 
 
 @pytest.mark.asyncio
 async def test_daemon_early_stop() -> None:
-    daemon, server, thread, port = await _start_app_server()
+    daemon, server, thread, port = _start_app_server()
 
     client_connected = asyncio.Event()
     daemon_stopped = asyncio.Event()
@@ -249,20 +238,21 @@ async def test_daemon_early_stop() -> None:
     async def will_stop_soon() -> None:
         await client_connected.wait()
         await daemon.stop(goto_sleep_on_stop=False)
-        await _stop_app_server(server, thread)
+        _stop_app_server(server, thread)
         daemon_stopped.set()
 
     await asyncio.gather(client_bg(), will_stop_soon())
 
 
 @pytest.mark.asyncio
-async def test_multi_robot_isolation() -> None:
+async def test_multi_robot_isolation(shared_daemon: tuple[Daemon, int]) -> None:
     """Two daemons on different ports must be fully independent.
 
-    Commands sent to one robot must not affect the other.
+    Commands sent to one robot must not affect the other. The shared daemon is
+    the robot that must stay still, so it is left as the other tests expect.
     """
-    daemon1, server1, thread1, port1 = await _start_app_server()
-    daemon2, server2, thread2, port2 = await _start_app_server()
+    daemon1, server1, thread1, port1 = _start_app_server()
+    _daemon2, port2 = shared_daemon
 
     try:
         with (
@@ -303,9 +293,7 @@ async def test_multi_robot_isolation() -> None:
 
     finally:
         await daemon1.stop(goto_sleep_on_stop=False)
-        await daemon2.stop(goto_sleep_on_stop=False)
-        await _stop_app_server(server1, thread1)
-        await _stop_app_server(server2, thread2)
+        _stop_app_server(server1, thread1)
 
 
 def test_cors_origin_regex():
