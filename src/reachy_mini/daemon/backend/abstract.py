@@ -109,7 +109,7 @@ from reachy_mini.media.audio_doa import AudioDoA
 from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
 from reachy_mini.utils import create_head_pose
-from reachy_mini.utils.constants import MODELS_ROOT_PATH, URDF_ROOT_PATH
+from reachy_mini.utils.constants import URDF_ROOT_PATH
 from reachy_mini.utils.interpolation import (
     InterpolationTechnique,
     compose_world_offset,
@@ -206,17 +206,13 @@ class Backend:
             self.head_kinematics: AnyKinematics = PlacoKinematics(
                 URDF_ROOT_PATH, check_collision=self.check_collision
             )
-        elif self.kinematics_engine == "NN":
-            from reachy_mini.kinematics import NNKinematics
-
-            self.head_kinematics = NNKinematics(MODELS_ROOT_PATH)
         elif self.kinematics_engine == "AnalyticalKinematics":
             from reachy_mini.kinematics import AnalyticalKinematics
 
             self.head_kinematics = AnalyticalKinematics()
         else:
             raise ValueError(
-                f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo', 'NN' or 'AnalyticalKinematics'."
+                f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo' or 'AnalyticalKinematics'."
             )
 
         self.current_head_pose: Annotated[NDArray[np.float64], (4, 4)] | None = (

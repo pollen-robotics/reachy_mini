@@ -10,7 +10,7 @@ from reachy_mini.io.protocol import MotorControlMode
 def test_gravity_compensation_without_placo_returns_409(router_app):
     """Non-Placo engine: a 409 naming the cause, pending override kept."""
     backend = SimpleNamespace(
-        kinematics_engine="NN",
+        kinematics_engine="AnalyticalKinematics",
         motor_control_mode=MotorControlMode.Enabled,
         _partial_torque_override=True,
     )
