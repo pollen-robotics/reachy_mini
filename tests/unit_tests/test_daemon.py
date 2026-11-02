@@ -125,7 +125,7 @@ async def test_named_local_daemon_is_validated() -> None:
             media_backend="no_media",
         ) as mini:
             assert mini.connection_mode == "localhost_only"
-            assert mini.client.host == "localhost"
+            assert mini.client.host == "127.0.0.1"
             assert mini.robot_name == "local_robot"
 
         with pytest.raises(

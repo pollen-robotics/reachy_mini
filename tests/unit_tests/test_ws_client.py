@@ -59,8 +59,36 @@ def test_connect_disables_compression_for_localhost(mock_connect: MagicMock) -> 
     client.disconnect()
 
     mock_connect.assert_called_once_with(
-        "ws://localhost:1234/ws/sdk", compression=None, additional_headers=ANY
+        "ws://127.0.0.1:1234/ws/sdk", compression=None, additional_headers=ANY
     )
+
+
+@pytest.mark.parametrize("host", ["localhost", "LOCALHOST", " Localhost "])
+@patch("reachy_mini.io.ws_client.ws_sync.connect")
+def test_localhost_is_pinned_to_ipv4(mock_connect: MagicMock, host: str) -> None:
+    """localhost -> 127.0.0.1, so Windows doesn't wait ~2 s on a refused ::1 first.
+
+    ``host`` is what the HTTP calls (media requests, daemon URL) are built from.
+    """
+    mock_connect.return_value = _make_fake_ws()
+
+    client = WSClient(host=host, port=1234)
+    client.disconnect()
+
+    assert client.host == "127.0.0.1"
+    assert mock_connect.call_args.args[0] == "ws://127.0.0.1:1234/ws/sdk"
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "::1", "192.168.1.50", "reachy.local"])
+@patch("reachy_mini.io.ws_client.ws_sync.connect")
+def test_other_hosts_are_left_untouched(mock_connect: MagicMock, host: str) -> None:
+    """Only the localhost name is rewritten: explicit addresses and names are kept."""
+    mock_connect.return_value = _make_fake_ws()
+
+    client = WSClient(host=host, port=1234)
+    client.disconnect()
+
+    assert client.host == host
 
 
 @patch("reachy_mini.io.ws_client.ws_sync.connect")

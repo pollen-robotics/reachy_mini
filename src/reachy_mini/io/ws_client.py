@@ -49,6 +49,18 @@ def _is_loopback_host(host: str) -> bool:
         return False
 
 
+def _pin_localhost_to_ipv4(host: str) -> str:
+    """Replace ``localhost`` with ``127.0.0.1``; leave any other host untouched.
+
+    ``localhost`` resolves to ``::1`` first, but the daemon only listens on
+    IPv4 (``127.0.0.1``, or ``0.0.0.0`` on the wireless). Linux and macOS
+    refuse the IPv6 attempt instantly; Windows retries a refused connection
+    for ~2 s before falling back to IPv4, which delayed every local SDK
+    connection and every HTTP call built from ``WSClient.host``.
+    """
+    return "127.0.0.1" if host.strip().lower() == "localhost" else host
+
+
 def _client_header() -> str:
     """Identify this SDK to the daemon's anonymous telemetry."""
     system = platform.system().lower()
@@ -67,6 +79,7 @@ class WSClient(AbstractClient):
             port: Port of the daemon's FastAPI server.
 
         """
+        host = _pin_localhost_to_ipv4(host)
         self.host = host
         self.port = port
 
