@@ -11,6 +11,8 @@ from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.reachy_mini import ReachyMini
 from reachy_mini.utils.discovery import DiscoveredRobot
 
+pytestmark = pytest.mark.usefixtures("no_daemon_mdns_advertising")
+
 
 async def _start_app_server(
     robot_name: str = "reachy_mini",

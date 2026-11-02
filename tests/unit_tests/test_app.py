@@ -14,6 +14,8 @@ from reachy_mini.daemon.app.main import Args, create_app
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.reachy_mini import ReachyMini
 
+pytestmark = pytest.mark.usefixtures("no_daemon_mdns_advertising")
+
 
 @pytest.mark.asyncio
 async def test_app() -> None:
