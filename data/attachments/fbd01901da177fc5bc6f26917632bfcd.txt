@@ -1,0 +1,4 @@
+INFO     reachy_mini.reachy_mini:reachy_mini.py:483 No matching local daemon found (Failed to connect to ws://127.0.0.1:1/ws/sdk: [Errno 111] Connection refused). Discovering 'shared_robot' via mDNS.
+INFO     reachy_mini.reachy_mini:reachy_mini.py:522 Connection mode selected: network
+INFO     reachy_mini.reachy_mini:reachy_mini.py:351 No media backend requested by user.
+INFO     reachy_mini.media.media_manager:media_manager.py:161 No media backend selected.
