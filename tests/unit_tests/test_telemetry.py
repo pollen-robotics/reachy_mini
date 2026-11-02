@@ -428,7 +428,7 @@ def test_usage_tick_counts_anything_seen_in_the_window(client: tm.Telemetry) -> 
     ticks = _props(client, "usage_tick")
     assert [t["kinds"] for t in ticks] == [["python_app", "web"], ["web"], ["web"]]
     assert ticks[0]["apps"] == ["pollen-robotics/hello", "private"]
-    assert ticks[0]["interval_s"] == 900
+    assert ticks[0]["interval_s"] == int(tm.USAGE_TICK_S)
 
 
 def test_usage_tick_hides_a_python_apps_own_sdk(client: tm.Telemetry) -> None:
@@ -522,6 +522,57 @@ def test_move_updates_socket_counts_as_use(
     assert [c["client_type"] for c in connected] == (["desktop"] if query else [])
 
 
+def test_use_while_opted_out_is_not_reported_after_opting_in(
+    client: tm.Telemetry,
+) -> None:
+    """Off, use, on, tick: only what is still running counts, nothing piles up."""
+    _start(client)
+    client.set_enabled(False)
+    client.session_begin("app:x", "python_app", "pollen-robotics/hello")
+    for i in range(300):
+        client.session_begin(f"peer:{i}", "web", "pollen-robotics/emotions")
+        client.session_end(f"peer:{i}")
+    assert client._window == {}
+
+    client.set_enabled(True)
+    client._usage_tick()
+    ticks = _props(client, "usage_tick")
+    assert [t["kinds"] for t in ticks] == [["python_app"]]
+    assert ticks[0]["apps"] == ["pollen-robotics/hello"]
+
+
+def test_usage_tick_reports_the_seconds_in_use(client: tm.Telemetry) -> None:
+    """active_s is the time anything was open, overlaps counted once."""
+    now = [0.0]
+    client._clock = lambda: now[0]
+    _start(client)
+
+    def at(t: float) -> None:
+        now[0] = t
+
+    at(10)
+    client.session_begin("app:x", "python_app")
+    at(20)
+    client.session_begin("sdk:1", "python_sdk")  # the app's own SDK: overlaps
+    at(30)
+    client.session_end("app:x")
+    at(40)
+    client.session_end("sdk:1")
+    at(150)
+    client.session_begin("peer:p", "mobile")
+    at(200)
+    client._usage_tick()  # 10..40 and 150..200
+    at(260)
+    client._usage_tick()  # the phone stays connected for the whole window
+    at(300)
+    client._usage_tick()  # still connected
+    client.peer_closed("p")
+    at(400)
+    client._usage_tick()  # it left exactly at the last tick: 0 s, no tick
+
+    assert [t["active_s"] for t in _props(client, "usage_tick")] == [80, 60, 40]
+
+
 def test_hello_queued_before_a_disconnect_leaves_no_session(
     client: tm.Telemetry, monkeypatch: pytest.MonkeyPatch, sim_backend: Any
 ) -> None:
@@ -544,22 +595,3 @@ def test_hello_queued_before_a_disconnect_leaves_no_session(
         loop.close()
     assert not client._sessions
     assert len(_props(client, "js_app_stopped")) == 1
-
-
-def test_use_while_opted_out_is_not_reported_after_opting_in(
-    client: tm.Telemetry,
-) -> None:
-    """Off, use, on, tick: only what is still running counts, nothing piles up."""
-    _start(client)
-    client.set_enabled(False)
-    client.session_begin("app:x", "python_app", "pollen-robotics/hello")
-    for i in range(300):
-        client.session_begin(f"peer:{i}", "web", "pollen-robotics/emotions")
-        client.session_end(f"peer:{i}")
-    assert client._window == {}
-
-    client.set_enabled(True)
-    client._usage_tick()
-    ticks = _props(client, "usage_tick")
-    assert [t["kinds"] for t in ticks] == [["python_app"]]
-    assert ticks[0]["apps"] == ["pollen-robotics/hello"]

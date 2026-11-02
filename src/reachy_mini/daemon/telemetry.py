@@ -38,7 +38,7 @@ OS_IMAGE_VERSION_PATH = Path("/home/pollen/VERSION.txt")
 
 FLUSH_INTERVAL_S = 60.0
 HEARTBEAT_INTERVAL_S = 24 * 3600.0
-USAGE_TICK_S = 900.0
+USAGE_TICK_S = 3600.0
 _MAX_QUEUE = 500
 _MAX_CLIENTS_SEEN = 50
 _MAX_SESSIONS = 50
@@ -218,6 +218,10 @@ class Telemetry:
         # and everything seen since the last usage tick.
         self._sessions: dict[str, tuple[str, str | None, float]] = {}
         self._window: dict[str, tuple[str, str | None]] = {}
+        # Seconds with at least one session open since the last tick.
+        self._clock = time.monotonic
+        self._busy_since: float | None = None
+        self._busy_s = 0.0
 
     @property
     def active(self) -> bool:
@@ -302,17 +306,25 @@ class Telemetry:
 
     def session_begin(self, key: str, kind: str, app_id: str | None = None) -> None:
         """Count *key* as using the robot until ``session_end``."""
+        now = self._clock()
         with self._lock:
             if key not in self._sessions and len(self._sessions) >= _MAX_SESSIONS:
                 return
-            self._sessions[key] = (kind, app_id, time.monotonic())
+            if not self._sessions:
+                self._busy_since = now
+            self._sessions[key] = (kind, app_id, now)
             if self._envelope is not None:  # nothing piles up while opted out
                 self._window[key] = (kind, app_id)
 
     def session_end(self, key: str) -> tuple[str, str | None, float] | None:
         """Stop counting *key*; return its session, or None if unknown."""
         with self._lock:
-            return self._sessions.pop(key, None)
+            session = self._sessions.pop(key, None)
+            ended_last = session is not None and not self._sessions
+            if ended_last and self._busy_since is not None:
+                self._busy_s += self._clock() - self._busy_since
+                self._busy_since = None
+            return session
 
     def note_hello(self, peer_id: str, client: str, app: str | None) -> None:
         """Track a data-channel client and the JS app it runs, if any."""
@@ -341,7 +353,7 @@ class Telemetry:
             self.capture(
                 "js_app_stopped",
                 app_id=session[1],
-                duration_s=int(time.monotonic() - session[2]),
+                duration_s=int(self._clock() - session[2]),
             )
 
     def note_move(self, dataset: str, move: str) -> None:
@@ -352,12 +364,18 @@ class Telemetry:
             self.capture("move_played", dataset="other")
 
     def _usage_tick(self) -> None:
+        now = self._clock()
         with self._lock:
             window = self._window
             self._window = {
                 k: (kind, app) for k, (kind, app, _) in self._sessions.items()
             }
-        if window:
+            active_s = self._busy_s
+            if self._busy_since is not None:
+                active_s += now - self._busy_since
+                self._busy_since = now
+            self._busy_s = 0.0
+        if window and active_s > 0:  # a session ending right at the last tick
             kinds = {kind for kind, _ in window.values()}
             if "python_app" in kinds:
                 # The app's own SDK connection: not a second client.
@@ -365,6 +383,7 @@ class Telemetry:
             self.capture(
                 "usage_tick",
                 interval_s=int(USAGE_TICK_S),
+                active_s=round(active_s),
                 kinds=sorted(kinds),
                 apps=sorted({app for _, app in window.values() if app}),
             )
@@ -399,6 +418,8 @@ class Telemetry:
             self._window = {
                 k: (kind, app) for k, (kind, app, _) in self._sessions.items()
             }
+            self._busy_since = self._clock() if self._sessions else None
+            self._busy_s = 0.0
             self._robot_id = robot_id
             self._envelope = envelope
         started: dict[str, Any] = {"previous_exit_clean": previous_exit_clean}
