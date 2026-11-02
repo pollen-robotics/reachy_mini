@@ -24,12 +24,14 @@ from pydantic import ValidationError
 
 from reachy_mini.io.abstract import AbstractClient
 from reachy_mini.io.protocol import (
+    MOVE_BUSY_ERROR,
     AnyCommand,
     AnyTaskRequest,
     DaemonStatus,
     HeadPoseMsg,
     ImuDataMsg,
     JointPositionsMsg,
+    MoveBusyError,
     RecordedDataMsg,
     TaskProgress,
     TaskRequest,
@@ -47,6 +49,18 @@ def _is_loopback_host(host: str) -> bool:
         return ipaddress.ip_address(normalized_host).is_loopback
     except ValueError:
         return False
+
+
+def _pin_localhost_to_ipv4(host: str) -> str:
+    """Replace ``localhost`` with ``127.0.0.1``; leave any other host untouched.
+
+    ``localhost`` resolves to ``::1`` first, but the daemon only listens on
+    IPv4 (``127.0.0.1``, or ``0.0.0.0`` on the wireless). Linux and macOS
+    refuse the IPv6 attempt instantly; Windows retries a refused connection
+    for ~2 s before falling back to IPv4, which delayed every local SDK
+    connection and every HTTP call built from ``WSClient.host``.
+    """
+    return "127.0.0.1" if host.strip().lower() == "localhost" else host
 
 
 def _client_header() -> str:
@@ -67,6 +81,7 @@ class WSClient(AbstractClient):
             port: Port of the daemon's FastAPI server.
 
         """
+        host = _pin_localhost_to_ipv4(host)
         self.host = host
         self.port = port
 
@@ -306,6 +321,8 @@ class WSClient(AbstractClient):
         if task.error is not None:
             with self._tasks_lock:
                 del self.tasks[task_uid]
+            if task.error == MOVE_BUSY_ERROR:
+                raise MoveBusyError(f"Task failed with error: {task.error}")
             raise Exception(f"Task failed with error: {task.error}")
 
         with self._tasks_lock:

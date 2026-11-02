@@ -693,6 +693,7 @@ class ReachyMini:
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
+            MoveBusyError: If another move (from the dashboard, another client, or the daemon itself) is already running.
 
         """
         if head is None and antennas is None and body_yaw is None:

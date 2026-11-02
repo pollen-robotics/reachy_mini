@@ -187,14 +187,15 @@ def test_close_joins_poller_and_releases_device() -> None:
 def test_close_waits_for_inflight_read() -> None:
     """close() must not dispose the device while a read is in flight.
 
-    The blocking tail is longer than close()'s 1 s join timeout, so only
+    The blocking tail is longer than close()'s join timeout, so only
     taking `_doa_usb_lock` before disposing makes this pass: past the join
     timeout, the fake would otherwise be closed mid-read (a libusb
     use-after-free on real hardware).
     """
-    fake = FakeDoA(reading=(2.0, True), read_delay=1.5)
+    fake = FakeDoA(reading=(2.0, True), read_delay=0.3)
     backend = _make_backend(fake)
     backend.DOA_POLL_INTERVAL_S = 0.01  # type: ignore[misc]
+    backend.DOA_CLOSE_JOIN_TIMEOUT_S = 0.1  # type: ignore[misc]
 
     backend.read_doa()
     assert _wait_for(lambda: fake.reads_in_flight > 0)

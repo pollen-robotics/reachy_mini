@@ -862,7 +862,7 @@ def main() -> None:
         "--kinematics-engine",
         type=str,
         default=default_args.kinematics_engine,
-        choices=["Placo", "NN", "AnalyticalKinematics"],
+        choices=["Placo", "AnalyticalKinematics"],
         help="Set the kinematics engine (default: AnalyticalKinematics).",
     )
     # FastAPI server options
