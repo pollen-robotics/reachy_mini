@@ -478,7 +478,7 @@ class Backend:
         # Stop the DoA poller and release the ReSpeaker USB handle.
         self._doa_stop.set()
         if self._doa_thread is not None:
-            self._doa_thread.join(timeout=1.0)
+            self._doa_thread.join(timeout=self.DOA_CLOSE_JOIN_TIMEOUT_S)
             self._doa_thread = None
         # `join(timeout=...)` can return with a wedged USB read still in
         # flight, so only the lock proves the poller isn't mid-`ctrl_transfer`
@@ -1571,6 +1571,9 @@ class Backend:
     # ~10 Hz: fast enough to track a speaker turning, slow enough to keep the
     # blocking ReSpeaker USB reads off the ~30 Hz pose-push loop.
     DOA_POLL_INTERVAL_S = 0.1
+    # How long close() waits for the poller thread before disposing the device
+    # anyway (under `_doa_usb_lock`, so never mid-read).
+    DOA_CLOSE_JOIN_TIMEOUT_S = 1.0
     # The poller exits after this long without a cache consumer. DoA rides
     # the state snapshot, so "demand" means any connected client reading
     # state; the gain is that an idle daemon (no client at all - the common
