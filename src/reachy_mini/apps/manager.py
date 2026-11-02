@@ -399,6 +399,10 @@ class AppManager:
                     self.logger.getChild("runner").warning(
                         f"Could not return to zero position: {e}"
                     )
+                    # The idle reset was skipped for this requested stop: fall
+                    # back to it so the robot isn't left in whatever state the
+                    # app (or the failed lift) left behind.
+                    backend.request_idle_reset()
 
         self.current_app = None
 

@@ -34,6 +34,7 @@ def _manager_with_head_pose(head_pose: np.ndarray) -> tuple[AppManager, AsyncMoc
         SLEEP_HEAD_POSE=Backend.SLEEP_HEAD_POSE,
         reset_to_init=reset_to_init,
         set_motor_control_mode=MagicMock(),
+        request_idle_reset=MagicMock(),
     )
     mngr = AppManager(daemon=SimpleNamespace(backend=backend))
     mngr.current_app = _fake_current_app()  # type: ignore[assignment]
@@ -57,6 +58,17 @@ async def test_stop_returns_to_zero_when_awake() -> None:
     mngr, reset_to_init = _manager_with_head_pose(np.eye(4))
     await mngr.stop_current_app()
     reset_to_init.assert_awaited_once()
+    mngr.daemon.backend.request_idle_reset.assert_not_called()
+    assert mngr.current_app is None
+
+
+@pytest.mark.asyncio
+async def test_failed_stop_reset_falls_back_to_the_idle_reset() -> None:
+    """The requested stop skipped the idle reset, so a failed lift must request it."""
+    mngr, reset_to_init = _manager_with_head_pose(np.eye(4))
+    reset_to_init.side_effect = RuntimeError("motor bus error")
+    await mngr.stop_current_app()
+    mngr.daemon.backend.request_idle_reset.assert_called_once_with()
     assert mngr.current_app is None
 
 
