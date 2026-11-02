@@ -1,1 +1,0 @@
-WARNING  _ble_forget_bonds_under_test:bluetooth_service.py:1259 Could not forget bonded device /org/bluez/hci0/dev_A:
