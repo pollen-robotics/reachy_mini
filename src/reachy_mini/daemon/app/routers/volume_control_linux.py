@@ -326,7 +326,10 @@ class VolumeControlLinux(VolumeControl):
         return controls
 
     def _initialize_device(self, device: AudioDevice) -> None:
-        """Set all ALSA mixer controls with index 1 to 100% for a given audio device.
+        """Set the first index-1 ALSA volume control that accepts it to 100%.
+
+        Tries the device's volume controls in order and stops at the first one
+        that has an index 1, like the ``||`` chain this replaced.
 
         Args:
             device: The audio device. If its ID is None, uses the default audio device.
@@ -338,10 +341,9 @@ class VolumeControlLinux(VolumeControl):
             subprocess.TimeoutExpired,
             FileNotFoundError,
             subprocess.CalledProcessError,
+            RuntimeError,
         ) as e:
-            logger.warning(
-                f"Failed to initialize {device.id} device, amixer failed with error: {e}"
-            )
+            logger.warning(f"Failed to initialize {device.id} device: {e}")
 
     def _alsa_get_all_devices(self) -> dict[int | str, str]:
         """Get all available audio devices IDs and names via ALSA.
@@ -427,12 +429,16 @@ class VolumeControlLinux(VolumeControl):
             The result of the first control that succeeded.
 
         Raises:
-            subprocess.CalledProcessError: If every control failed, or the device has none.
+            subprocess.CalledProcessError: If every control failed.
+            subprocess.TimeoutExpired: If amixer hangs. The next controls are not
+                tried: like the old ``||`` chain, a hang fails the whole command.
+            RuntimeError: If the device has no volume control.
 
         """
         card = ["-c", str(device.id)] if device.id is not None else []
-        error = subprocess.CalledProcessError(
-            1, ["amixer", *card, action], stderr="no ALSA volume control found"
+        error: Exception = RuntimeError(
+            f"no ALSA {device.device_type.value} volume control found on card "
+            f"{device.id if device.id is not None else 'default'}"
         )
         for control in self._alsa_get_device_controls(device):
             # Argument list, no shell: control names can contain spaces.
@@ -477,10 +483,9 @@ class VolumeControlLinux(VolumeControl):
             FileNotFoundError,
             ValueError,
             subprocess.CalledProcessError,
+            RuntimeError,
         ) as e:
-            logger.error(
-                f"Failed to get volume on device {device.id} - amixer failed with error: {e}"
-            )
+            logger.error(f"Failed to get volume on device {device.id}: {e}")
 
         return -1
 
@@ -505,10 +510,9 @@ class VolumeControlLinux(VolumeControl):
             subprocess.TimeoutExpired,
             FileNotFoundError,
             subprocess.CalledProcessError,
+            RuntimeError,
         ) as e:
-            logger.error(
-                f"Failed to set volume on device {device.id} - amixer failed with error: {e}"
-            )
+            logger.error(f"Failed to set volume on device {device.id}: {e}")
             return False
 
     # ---- Public API ----

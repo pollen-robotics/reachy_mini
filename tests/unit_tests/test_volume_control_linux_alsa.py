@@ -115,11 +115,17 @@ def test_set_volume_falls_through_to_the_next_control(
     assert [c[4] for c in calls[1:]] == ["Master Playback,0", "PCM,0"]
 
 
-def test_set_volume_without_controls_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_set_volume_without_controls_fails(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """No volume control on the card is a failure, not a silent success."""
-    _fake_run(monkeypatch, _amixer(scontents=""))
+    calls = _fake_run(monkeypatch, _amixer(scontents=""))
 
     assert not _volume_control()._alsa_set_device_volume(OUTPUT, 40)
+
+    # Only the control listing ran, and the log says why, not "amixer failed".
+    assert calls == [["amixer", "-c", "0", "scontents"]]
+    assert "no ALSA output volume control found on card 0" in caplog.text
 
 
 def test_get_volume_reads_the_first_working_control(
