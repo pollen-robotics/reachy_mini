@@ -437,6 +437,8 @@ def _removable_server() -> GstMediaServer:
     server._peer_webrtcbins = {}
     server._open_data_channels = set()
     server._pose_channel_bins = {}
+    server._pose_subscribed_on = {}
+    server._pose_lock = Lock()
     for name in (
         "_forget_session_liveness",
         "_cleanup_incoming_audio",
@@ -481,6 +483,7 @@ def test_stale_session_removal_only_frees_its_own_audio_and_pose(
     server._pose_channels = {}
     server._pose_channel_bins = {}
     server._pose_subscribers = set()
+    server._pose_subscribed_on = {}
     server._pose_lock = Lock()
     server._webrtcechoprobe = None
     server._on_peer_disconnect = None
@@ -506,9 +509,19 @@ def test_stale_session_removal_only_frees_its_own_audio_and_pose(
     assert server._incoming_audio["p1"]["webrtcbin"] is new_bin
     assert "p1" in server._pose_channels and "p1" in server._pose_subscribers
 
-    # The old session still owns them: they go with it.
-    server._incoming_audio = {"p1": audio(old_bin)}
+    # The new session subscribed, but its channel isn't open yet: the old
+    # session's channel goes, the new subscription stays.
     server._pose_channel_bins["p1"] = old_bin
+    server._pose_subscribed_on["p1"] = new_bin
+    server._consumer_removed(MagicMock(), "p1", old_bin)
+    assert "p1" not in server._pose_channels and "p1" in server._pose_subscribers
+
+    # The old session still owns them all: they go with it.
+    server._incoming_audio = {"p1": audio(old_bin)}
+    server._pose_channels["p1"] = MagicMock()
+    server._pose_channel_bins["p1"] = old_bin
+    server._pose_subscribed_on["p1"] = old_bin
     server._consumer_removed(MagicMock(), "p1", old_bin)
     assert "p1" not in server._incoming_audio
     assert "p1" not in server._pose_channels and "p1" not in server._pose_subscribers
+

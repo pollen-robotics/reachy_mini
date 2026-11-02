@@ -351,6 +351,9 @@ class GstMediaServer:
         # push timer only exists while this set is non-empty, so an idle
         # session (no 3D mirror on screen) costs nothing - not even a wakeup.
         self._pose_subscribers: set[str] = set()
+        # peer_id -> the webrtcbin live when it subscribed: a reconnect's old
+        # session must not drop a subscription the new one already made.
+        self._pose_subscribed_on: dict[str, Optional[Gst.Element]] = {}
         # Callback returning the JSON pose frame to push (set by the backend
         # via `set_pose_provider`), and the GLib source id of the push timer.
         self._pose_provider: Optional[Callable[[], Optional[str]]] = None
@@ -688,8 +691,17 @@ class GstMediaServer:
         # session going away only tears down what it owned itself.
         stale = self._peer_webrtcbins.get(peer_id) not in (None, webrtcbin)
         self._cleanup_incoming_audio(peer_id, webrtcbin if stale else None)
-        if not stale or self._pose_channel_bins.get(peer_id) is webrtcbin:
+        if not stale:
             self._drop_pose_peer(peer_id)
+        else:
+            if self._pose_channel_bins.get(peer_id) is webrtcbin:
+                self._pose_channels.pop(peer_id, None)
+                self._pose_channel_bins.pop(peer_id, None)
+            # The new session may have subscribed before its channel opened.
+            with self._pose_lock:
+                old_subscription = self._pose_subscribed_on.get(peer_id) is webrtcbin
+            if old_subscription:
+                self._drop_pose_subscription(peer_id)
         if not stale:
             self._peer_webrtcbins.pop(peer_id, None)
         # `on-close` may never fire for a peer that vanished. Only this
@@ -2233,10 +2245,12 @@ class GstMediaServer:
         with self._pose_lock:
             if enabled:
                 self._pose_subscribers.add(peer_id)
+                self._pose_subscribed_on[peer_id] = self._peer_webrtcbins.get(peer_id)
                 if self._pose_provider is not None:
                     self._arm_pose_push_locked()
             else:
                 self._pose_subscribers.discard(peer_id)
+                self._pose_subscribed_on.pop(peer_id, None)
         if enabled:
             # Touching the peer's webrtcbin has to happen on the GLib main
             # loop, not on the caller's asyncio thread.
@@ -2361,6 +2375,7 @@ class GstMediaServer:
         """Forget a peer's pose subscription."""
         with self._pose_lock:
             self._pose_subscribers.discard(peer_id)
+            self._pose_subscribed_on.pop(peer_id, None)
 
     def _on_data_channel_open(
         self, channel: Gst.Element, peer_id: str, key: Optional[str] = None

@@ -36,6 +36,7 @@ def _make_server() -> GstMediaServer:
     server._pose_channel_bins = {}
     server._peer_webrtcbins = {}
     server._pose_subscribers = set()
+    server._pose_subscribed_on = {}
     server._pose_provider = None
     server._pose_push_source_id = None
     server._pose_lock = Lock()
