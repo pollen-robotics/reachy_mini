@@ -425,3 +425,43 @@ def test_set_session_failed_handler_records_callback() -> None:
     server._dispatch_session_failed("peer-9", "x", {"a": 1})
 
     assert captured == [("peer-9", "x", {"a": 1})]
+
+
+# ---------------------------------------------------------------------------
+# _consumer_removed with a reconnect overlap
+# ---------------------------------------------------------------------------
+
+
+def _removable_server() -> GstMediaServer:
+    server = _make_server()
+    server._peer_webrtcbins = {}
+    server._open_data_channels = set()
+    for name in (
+        "_forget_session_liveness",
+        "_cleanup_incoming_audio",
+        "_drop_pose_peer",
+        "_teardown_negotiation_watchdog",
+    ):
+        setattr(server, name, MagicMock())
+    server._on_peer_disconnect = MagicMock()
+    return server
+
+
+def test_stale_session_removal_keeps_the_live_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An old session leaving after a reconnect must not end the new one."""
+    from reachy_mini.media import media_server as ms
+
+    monkeypatch.setattr(ms, "_session_id_of", lambda bin: None)
+    server = _removable_server()
+    old_bin, new_bin = MagicMock(), MagicMock()
+    server._peer_webrtcbins["p1"] = new_bin
+
+    server._consumer_removed(MagicMock(), "p1", old_bin)
+    assert server._peer_webrtcbins["p1"] is new_bin
+    server._on_peer_disconnect.assert_not_called()  # type: ignore[attr-defined]
+
+    server._consumer_removed(MagicMock(), "p1", new_bin)
+    assert "p1" not in server._peer_webrtcbins
+    server._on_peer_disconnect.assert_called_once_with("p1")  # type: ignore[attr-defined]

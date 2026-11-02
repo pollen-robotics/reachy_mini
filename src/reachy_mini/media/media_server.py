@@ -683,14 +683,18 @@ class GstMediaServer:
             self._forget_session_liveness(session_id)
         self._cleanup_incoming_audio(peer_id)
         self._drop_pose_peer(peer_id)
-        self._peer_webrtcbins.pop(peer_id, None)
+        # A reconnect's new session may already own this peer id: an old
+        # session going away must not tear down the live one's state.
+        stale = self._peer_webrtcbins.get(peer_id) not in (None, webrtcbin)
+        if not stale:
+            self._peer_webrtcbins.pop(peer_id, None)
         # `on-close` may never fire for a peer that vanished. Only this
         # session's flag: another session of the same peer may be live.
         self._open_data_channels.discard(session_id or peer_id)
         # Cancel any outstanding watchdog for this session; the consumer
         # is gone so there's nothing left to police.
         self._teardown_negotiation_watchdog(session_id or peer_id)
-        if self._on_peer_disconnect is not None:
+        if self._on_peer_disconnect is not None and not stale:
             try:
                 self._on_peer_disconnect(peer_id)
             except Exception as e:
