@@ -153,8 +153,9 @@ def parse_client_header(raw: str) -> dict[str, str] | None:
     client = {
         "client_type": client_type if client_type in CLIENT_TYPES else "other",
         "client_version": client_version,
-        "client_os": client_os if client_os in CLIENT_OSES else "other",
     }
+    if client_os is not None:  # browsers don't say: leave it out, not "other"
+        client["client_os"] = client_os if client_os in CLIENT_OSES else "other"
     if client["client_type"] == "other":
         # Already limited to 16 lowercase letters by the regex.
         client["client_type_raw"] = client_type

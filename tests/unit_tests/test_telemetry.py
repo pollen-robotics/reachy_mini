@@ -73,6 +73,10 @@ def test_parse_client_header() -> None:
         "client_type_raw": "toaster",
     }
     assert tm.parse_client_header("<script>/1 (x)") is None
+    assert tm.parse_client_header("web/1.2.0") == {
+        "client_type": "web",
+        "client_version": "1.2.0",
+    }
     assert tm.parse_client_header("desktop/" + "9" * 40) is None
 
 
