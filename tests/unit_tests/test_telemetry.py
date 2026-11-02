@@ -384,6 +384,24 @@ def test_hello_without_app_tracks_usage_only(client: tm.Telemetry) -> None:
     assert _props(client, "client_connected")[0]["client_type"] == "mobile"
 
 
+def test_repeated_hello_keeps_the_session(client: tm.Telemetry) -> None:
+    """The same hello again is not a new run; a different app replaces it."""
+    _start(client)
+    for _ in range(3):
+        client.note_hello("p1", "web/1.2.0", "pollen-robotics/emotions")
+    assert len(_props(client, "js_app_started")) == 1
+    assert not _props(client, "js_app_stopped")
+
+    client.note_hello("p1", "web/1.2.0", "pollen-robotics/radio")
+    assert [e["app_id"] for e in _props(client, "js_app_stopped")] == [
+        "pollen-robotics/emotions"
+    ]
+    assert [e["app_id"] for e in _props(client, "js_app_started")] == [
+        "pollen-robotics/emotions",
+        "pollen-robotics/radio",
+    ]
+
+
 def test_garbage_hello_is_ignored(client: tm.Telemetry) -> None:
     """A malformed client string reports nothing and opens no session."""
     _start(client)
@@ -411,6 +429,19 @@ def test_usage_tick_counts_anything_seen_in_the_window(client: tm.Telemetry) -> 
     assert [t["kinds"] for t in ticks] == [["python_app", "web"], ["web"], ["web"]]
     assert ticks[0]["apps"] == ["pollen-robotics/hello", "private"]
     assert ticks[0]["interval_s"] == 900
+
+
+def test_usage_tick_hides_a_python_apps_own_sdk(client: tm.Telemetry) -> None:
+    """A Python app talks through the SDK: that's one client, not two."""
+    _start(client)
+    client.session_begin("sdk:1", "python_sdk")
+    client._usage_tick()
+    client.session_begin("app:x", "python_app", "pollen-robotics/hello")
+    client._usage_tick()
+    assert [t["kinds"] for t in _props(client, "usage_tick")] == [
+        ["python_sdk"],
+        ["python_app"],
+    ]
 
 
 def test_sessions_are_capped(client: tm.Telemetry) -> None:
@@ -460,11 +491,19 @@ def test_client_hello_over_the_data_channel(
 
 
 @pytest.mark.parametrize(
-    "query,kind",
-    [("?client=desktop/0.9.5%20(macos)", "desktop"), ("", "move_listener")],
+    "query,headers,kind",
+    [
+        ("?client=desktop/0.9.5%20(macos)", {}, "desktop"),
+        ("", {tm.CLIENT_HEADER: "desktop/0.9.5 (macos)"}, "desktop"),
+        ("", {}, "move_listener"),
+    ],
 )
 def test_move_updates_socket_counts_as_use(
-    client: tm.Telemetry, monkeypatch: pytest.MonkeyPatch, query: str, kind: str
+    client: tm.Telemetry,
+    monkeypatch: pytest.MonkeyPatch,
+    query: str,
+    headers: dict[str, str],
+    kind: str,
 ) -> None:
     """The desktop's long-lived socket is a usage session, named if it says so."""
     from reachy_mini.daemon.app.routers import move as move_router
@@ -473,8 +512,11 @@ def test_move_updates_socket_counts_as_use(
     _start(client)
     app = FastAPI()
     app.include_router(move_router.router, prefix="/api")
-    with TestClient(app).websocket_connect(f"/api/move/ws/updates{query}"):
+    with TestClient(app).websocket_connect(
+        f"/api/move/ws/updates{query}", headers=headers
+    ):
         assert [s[0] for s in client._sessions.values()] == [kind]
     assert not client._sessions
+    # The header is reported by the middleware, not this route.
     connected = _props(client, "client_connected")
     assert [c["client_type"] for c in connected] == (["desktop"] if query else [])

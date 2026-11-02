@@ -321,8 +321,15 @@ class Telemetry:
         self.note_client(client)
         if app is not None and (app == "private" or not _HF_ID_RE.match(app)):
             app = "private"  # the SDK only names Spaces it found public
-        self.peer_closed(peer_id)  # a repeated hello replaces the session
-        self.session_begin(f"peer:{peer_id}", parsed["client_type"], app)
+        key = f"peer:{peer_id}"
+        with self._lock:
+            session = self._sessions.get(key)
+        if session is not None and session[:2] == (parsed["client_type"], app):
+            return  # same client again (e.g. a reconnect): keep its session
+        # Relayed sessions share one peer id, but the relay runs one at a
+        # time: a different hello is a new session replacing the old one.
+        self.peer_closed(peer_id)
+        self.session_begin(key, parsed["client_type"], app)
         if app is not None:
             self.capture("js_app_started", app_id=app)
 
@@ -350,10 +357,14 @@ class Telemetry:
                 k: (kind, app) for k, (kind, app, _) in self._sessions.items()
             }
         if window:
+            kinds = {kind for kind, _ in window.values()}
+            if "python_app" in kinds:
+                # The app's own SDK connection: not a second client.
+                kinds.discard("python_sdk")
             self.capture(
                 "usage_tick",
                 interval_s=int(USAGE_TICK_S),
-                kinds=sorted({kind for kind, _ in window.values()}),
+                kinds=sorted(kinds),
                 apps=sorted({app for _, app in window.values() if app}),
             )
 

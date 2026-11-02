@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from huggingface_hub.errors import RepositoryNotFoundError
 from pydantic import BaseModel
 
-from reachy_mini.daemon.telemetry import parse_client_header, telemetry
+from reachy_mini.daemon.telemetry import CLIENT_HEADER, parse_client_header, telemetry
 from reachy_mini.motion.recorded_move import RecordedMoves, dataset_token
 from reachy_mini.utils.interpolation import InterpolationTechnique
 
@@ -208,7 +208,8 @@ async def ws_move_updates(
     """WebSocket route to stream move updates.
 
     Browsers can't set headers on a WebSocket, so a client may name itself
-    with ``?client=<type>/<version> (<os>)`` for the anonymous telemetry.
+    with ``?client=<type>/<version> (<os>)`` for the anonymous telemetry;
+    the ``X-Reachy-Client`` header is used otherwise.
     """
     await websocket.accept()
     # Long-lived (the desktop app keeps it open while connected): counts as use.
@@ -217,6 +218,8 @@ async def ws_move_updates(
     client = parse_client_header(raw_client)
     if client is not None:
         telemetry.note_client(raw_client)
+    else:  # the middleware already noted the header
+        client = parse_client_header(websocket.headers.get(CLIENT_HEADER, ""))
     telemetry.session_begin(
         session_key, client["client_type"] if client else "move_listener"
     )
