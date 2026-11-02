@@ -2644,9 +2644,14 @@ class Backend:
         """
         from reachy_mini.daemon.telemetry import telemetry
 
-        telemetry.peer_closed(peer_id)  # thread-safe
         loop = self._log_loop
-        if loop is None or peer_id not in self._log_tasks:
+        if loop is None:
+            telemetry.peer_closed(peer_id)
+            return
+        # Same queue as data-channel messages: a hello still waiting there
+        # is handled first, instead of opening a session nothing closes.
+        loop.call_soon_threadsafe(telemetry.peer_closed, peer_id)
+        if peer_id not in self._log_tasks:
             return
         loop.call_soon_threadsafe(self._cancel_log_subscription, peer_id)
 

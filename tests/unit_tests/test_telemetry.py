@@ -520,3 +520,27 @@ def test_move_updates_socket_counts_as_use(
     # The header is reported by the middleware, not this route.
     connected = _props(client, "client_connected")
     assert [c["client_type"] for c in connected] == (["desktop"] if query else [])
+
+
+def test_hello_queued_before_a_disconnect_leaves_no_session(
+    client: tm.Telemetry, monkeypatch: pytest.MonkeyPatch, sim_backend: Any
+) -> None:
+    """The media server's disconnect (GLib thread) runs after a queued hello."""
+    monkeypatch.setattr(tm, "telemetry", client)
+    _start(client)
+    loop = asyncio.new_event_loop()
+    try:
+        sim_backend._log_loop = loop
+        hello = ClientHelloCmd(client="web/1.2.0", app="pollen-robotics/emotions")
+        # As the media server does: messages go through the loop's queue...
+        loop.call_soon_threadsafe(
+            sim_backend._handle_webrtc_message, "p1", hello.model_dump_json()
+        )
+        # ...while the disconnect arrives first, from another thread.
+        sim_backend._on_peer_disconnect("p1")
+        loop.run_until_complete(asyncio.sleep(0))
+    finally:
+        sim_backend._log_loop = None
+        loop.close()
+    assert not client._sessions
+    assert len(_props(client, "js_app_stopped")) == 1
