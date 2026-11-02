@@ -1,1 +1,0 @@
-WARNING  reachy_mini.utils.robot_name:robot_name.py:63 Could not write robot name: read-only filesystem
