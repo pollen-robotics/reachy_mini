@@ -366,13 +366,19 @@ def test_get_state(sim_backend: Any) -> None:
     assert state["is_move_running"] is False
 
 
-def test_get_version(sim_backend: Any) -> None:
-    """GetVersionCmd returns the installed reachy_mini version string."""
+@pytest.mark.parametrize("active", [True, False])
+def test_get_version(
+    sim_backend: Any, monkeypatch: pytest.MonkeyPatch, active: bool
+) -> None:
+    """GetVersionCmd returns the version, and client_hello only while telemetry runs."""
+    from reachy_mini.daemon import telemetry as tm
+
+    monkeypatch.setattr(tm.Telemetry, "active", property(lambda self: active))
     responses = _dispatch(sim_backend, GetVersionCmd())
     assert len(responses) == 1
     assert isinstance(responses[0]["version"], str)
-    # The JS SDK only sends client_hello to daemons that advertise it.
-    assert responses[0]["client_hello"] is True
+    # The JS SDK only sends client_hello (and checks the Hub) when advertised.
+    assert responses[0]["client_hello"] is active
 
 
 def test_get_hardware_id(sim_backend: Any, monkeypatch: pytest.MonkeyPatch) -> None:

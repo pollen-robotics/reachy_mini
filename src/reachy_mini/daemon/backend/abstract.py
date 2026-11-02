@@ -1832,8 +1832,12 @@ class Backend:
         elif isinstance(cmd, GetVersionCmd):
             from importlib.metadata import version
 
-            # client_hello: tells the JS SDK it may send that command.
-            send_response({"version": version("reachy_mini"), "client_hello": True})
+            from reachy_mini.daemon.telemetry import telemetry
+
+            # client_hello: the JS SDK may send it (no Hub lookup when opted out).
+            send_response(
+                {"version": version("reachy_mini"), "client_hello": telemetry.active}
+            )
 
         elif isinstance(cmd, GetHardwareIdCmd):
             from reachy_mini.utils.hardware_id import get_hardware_id
