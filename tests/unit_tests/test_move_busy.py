@@ -72,6 +72,27 @@ async def test_nested_initial_goto_still_runs(sim_backend: Any) -> None:
 
 
 @pytest.mark.asyncio
+async def test_goto_between_wake_up_steps_is_rejected(sim_backend: Any) -> None:
+    """A client goto can't slip between wake_up's gotos and abort it halfway."""
+    woke = MagicMock()
+    sim_backend._on_wake_up_callback = woke
+    replies: list[dict] = []
+    wake = asyncio.create_task(sim_backend.wake_up(force=True))
+    await asyncio.sleep(0.15)  # past wake_up's initial 0.1 s settle
+    while not wake.done():
+        await sim_backend._async_goto(replies.append, None, [0.1, -0.1], 0.05, None)
+        await asyncio.sleep(0.01)
+    await wake
+
+    woke.assert_called_once()
+    assert replies
+    assert all(
+        r == {"error": MOVE_BUSY_ERROR, "command": "goto_target"} for r in replies
+    )
+    assert not sim_backend.is_move_running
+
+
+@pytest.mark.asyncio
 async def test_uploaded_move_while_busy_is_kept_for_retry(
     sim_backend: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
 ) -> None:

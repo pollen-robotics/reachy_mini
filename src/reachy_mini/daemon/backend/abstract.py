@@ -9,6 +9,7 @@ each type of backend.
 """
 
 import asyncio
+import contextlib
 import contextvars
 import json
 import logging
@@ -20,7 +21,7 @@ import time
 import typing
 from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated, Any, Callable, Dict, Optional
+from typing import Annotated, Any, Callable, Dict, Iterator, Optional
 
 import numpy as np
 from numpy.typing import NDArray
@@ -513,6 +514,50 @@ class Backend:
             self._active_move_depth -= 1
         self._play_move_lock.release()
 
+    def _enter_move(self) -> contextvars.Token[bool]:
+        """Take the move guard (nesting if already inside a move), or raise MoveBusyError."""
+        if not self._try_start_move():
+            self.logger.warning("Rejecting move request: another move is running.")
+            raise MoveBusyError(MOVE_BUSY_ERROR)
+        if self._active_move_depth == 1:
+            # New top-level move: clear any stop request left over from a
+            # previous run so a stale stop_move can't kill this one. Nested
+            # moves keep the flag so one stop interrupts the whole stack.
+            self._stop_move_requested = False
+        return _IN_MOVE.set(True)
+
+    def _exit_move(self, in_move: contextvars.Token[bool]) -> None:
+        """Release the guard taken by _enter_move()."""
+        _IN_MOVE.reset(in_move)
+        self._end_move()
+
+    @contextlib.contextmanager
+    def _move_guard(self) -> Iterator[None]:
+        """Hold the move guard over a multi-goto sequence.
+
+        Without it a client move can slip in between the gotos and the next
+        one fails, aborting the sequence halfway.
+        """
+        in_move = self._enter_move()
+        try:
+            yield
+        finally:
+            self._exit_move(in_move)
+
+    async def _stop_running_move(self) -> None:
+        """Stop a move left running by another session, waiting up to 1 s."""
+        # A move can outlive the session that started it (an uploaded dance
+        # keeps playing after a Wi-Fi drop). Our own enclosing move is not one.
+        if not self.is_move_running or _IN_MOVE.get():
+            return
+        self._stop_move_requested = True
+        token = self._active_move_token
+        if token is not None:
+            token.cancelled = True
+        deadline = time.monotonic() + 1.0
+        while self.is_move_running and time.monotonic() < deadline:
+            await asyncio.sleep(0.02)
+
     def get_status(
         self,
     ) -> "RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus":
@@ -859,18 +904,7 @@ class Backend:
             MoveBusyError: If another move is already running.
 
         """
-        if not self._try_start_move():
-            self.logger.warning("Rejecting play_move request: another move is running.")
-            raise MoveBusyError(MOVE_BUSY_ERROR)
-        in_move = _IN_MOVE.set(True)
-
-        if self._active_move_depth == 1:
-            # New top-level move: clear any stop request left over from a
-            # previous run so a stale stop_move can't kill this one. Nested
-            # play_moves (initial goto, goto_target inside a recorded move)
-            # keep the flag so one stop interrupts the whole stack.
-            self._stop_move_requested = False
-
+        in_move = self._enter_move()
         try:
             if initial_goto_duration > 0.0:
                 start_head_pose, start_antennas_positions, start_body_yaw = (
@@ -958,8 +992,7 @@ class Backend:
                     except Exception as e:
                         self.logger.warning(f"play_move: stop_sound failed: {e}")
         finally:
-            _IN_MOVE.reset(in_move)
-            self._end_move()
+            self._exit_move(in_move)
 
     async def goto_target(
         self,
@@ -1328,27 +1361,29 @@ class Backend:
                 self._on_wake_up_callback()
             return
 
-        _, _, magic_distance = distance_between_poses(
-            self.get_current_head_pose(), self.INIT_HEAD_POSE
-        )
-        await self.goto_target(
-            self.INIT_HEAD_POSE,
-            antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
-            duration=magic_distance * 20 / 1000,  # ms_per_magic_mm = 10
-        )
-        await asyncio.sleep(0.1)
+        with self._move_guard():
+            _, _, magic_distance = distance_between_poses(
+                self.get_current_head_pose(), self.INIT_HEAD_POSE
+            )
+            await self.goto_target(
+                self.INIT_HEAD_POSE,
+                antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
+                duration=magic_distance * 20 / 1000,  # ms_per_magic_mm = 10
+            )
+            await asyncio.sleep(0.1)
 
-        # Toudoum
-        self.play_sound("wake_up.wav")
+            # Toudoum
+            self.play_sound("wake_up.wav")
 
-        # Roll 20° to the left
-        pose = self.INIT_HEAD_POSE.copy()
-        pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
-        await self.goto_target(pose, duration=0.2)
+            # Roll 20° to the left
+            pose = self.INIT_HEAD_POSE.copy()
+            pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
+            await self.goto_target(pose, duration=0.2)
 
-        # Go back to the initial position
-        await self.goto_target(self.INIT_HEAD_POSE, duration=0.2)
+            # Go back to the initial position
+            await self.goto_target(self.INIT_HEAD_POSE, duration=0.2)
 
+        # Outside the guard: the callback may start an app that moves at once.
         if self._on_wake_up_callback is not None:
             self._on_wake_up_callback()
 
@@ -1362,44 +1397,46 @@ class Backend:
         """
         self._quiesce_aim_sources()
 
-        # Magic units
-        _, _, dist_to_sleep_pose = distance_between_poses(
-            self.get_current_head_pose(), self.SLEEP_HEAD_POSE
-        )
-        _, _, dist_to_init_pose = distance_between_poses(
-            self.get_current_head_pose(), self.INIT_HEAD_POSE
-        )
-        sleep_time = 2.0
-
-        # Thresholds found empirically.
-        if dist_to_sleep_pose > self.SLEEP_POSE_MAGIC_ATOL:
-            if dist_to_init_pose > 30:
-                # Move to the initial position
-                await self.goto_target(
-                    self.INIT_HEAD_POSE,
-                    antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
-                    duration=1,
-                )
-                await asyncio.sleep(0.2)
-
-            self.play_sound("go_sleep.wav")
-
-            # Move to the sleep position
-            await self.goto_target(
-                self.SLEEP_HEAD_POSE,
-                antennas=self.SLEEP_ANTENNAS_JOINT_POSITIONS,
-                duration=2,
+        # Guard held until the torque cut, so no move lands on a limp robot.
+        with self._move_guard():
+            # Magic units
+            _, _, dist_to_sleep_pose = distance_between_poses(
+                self.get_current_head_pose(), self.SLEEP_HEAD_POSE
             )
-        else:
-            # The sound doesn't play fully if we don't wait enough
-            self.play_sound("go_sleep.wav")
-            sleep_time += 3
+            _, _, dist_to_init_pose = distance_between_poses(
+                self.get_current_head_pose(), self.INIT_HEAD_POSE
+            )
+            sleep_time = 2.0
 
-        self._last_head_pose = self.SLEEP_HEAD_POSE
-        await asyncio.sleep(sleep_time)
+            # Thresholds found empirically.
+            if dist_to_sleep_pose > self.SLEEP_POSE_MAGIC_ATOL:
+                if dist_to_init_pose > 30:
+                    # Move to the initial position
+                    await self.goto_target(
+                        self.INIT_HEAD_POSE,
+                        antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
+                        duration=1,
+                    )
+                    await asyncio.sleep(0.2)
 
-        # Rest limp at the sleep pose, like a fresh boot.
-        self.set_motor_control_mode(MotorControlMode.Disabled)
+                self.play_sound("go_sleep.wav")
+
+                # Move to the sleep position
+                await self.goto_target(
+                    self.SLEEP_HEAD_POSE,
+                    antennas=self.SLEEP_ANTENNAS_JOINT_POSITIONS,
+                    duration=2,
+                )
+            else:
+                # The sound doesn't play fully if we don't wait enough
+                self.play_sound("go_sleep.wav")
+                sleep_time += 3
+
+            self._last_head_pose = self.SLEEP_HEAD_POSE
+            await asyncio.sleep(sleep_time)
+
+            # Rest limp at the sleep pose, like a fresh boot.
+            self.set_motor_control_mode(MotorControlMode.Disabled)
 
     def _quiesce_aim_sources(self) -> None:
         """Silence every secondary head-aim source before a scripted move.
@@ -1420,16 +1457,7 @@ class Backend:
         nothing snaps), gravity compensation and per-motor torque overrides
         cleared, aim sources quiesced, then a lift to the init pose.
         """
-        # A move can outlive the session that started it (an uploaded dance
-        # keeps playing after a Wi-Fi drop): stop it before taking over.
-        if self.is_move_running:
-            self._stop_move_requested = True
-            token = self._active_move_token
-            if token is not None:
-                token.cancelled = True
-            deadline = time.monotonic() + 1.0
-            while self.is_move_running and time.monotonic() < deadline:
-                await asyncio.sleep(0.02)
+        await self._stop_running_move()
 
         # Ordered: quiesce first so tracking can't re-aim the head between the
         # torque coming back and the lift starting.
@@ -1466,10 +1494,12 @@ class Backend:
         inherited pose into the one starting point the sleep trajectory was
         tuned for.
         """
-        await self.reset_to_init()
-        await asyncio.sleep(0.2)
+        await self._stop_running_move()
+        with self._move_guard():
+            await self.reset_to_init()
+            await asyncio.sleep(0.2)
 
-        await self.goto_sleep()
+            await self.goto_sleep()
 
     # Motor control modes
     @abstractmethod

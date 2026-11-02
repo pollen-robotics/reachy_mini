@@ -12,6 +12,7 @@ touches a handful of ``self`` attributes, so it is exercised unbound.
 """
 
 import asyncio
+import contextlib
 import time
 from types import SimpleNamespace
 from typing import Any
@@ -37,7 +38,6 @@ def _fake_backend(*, head_pose: np.ndarray | None = None) -> SimpleNamespace:
         SLEEP_POSE_MAGIC_ATOL=Backend.SLEEP_POSE_MAGIC_ATOL,
         current_head_pose=head_pose,
         get_current_head_pose=lambda: head_pose,
-        is_move_running=False,
         calls=calls,
     )
     fake._quiesce_aim_sources = MagicMock(side_effect=lambda: calls.append("quiesce"))
@@ -46,6 +46,8 @@ def _fake_backend(*, head_pose: np.ndarray | None = None) -> SimpleNamespace:
     )
     fake.goto_target = AsyncMock(side_effect=lambda *a, **kw: calls.append("goto"))
     fake.goto_sleep = AsyncMock(side_effect=lambda: calls.append("sleep"))
+    fake._stop_running_move = AsyncMock()
+    fake._move_guard = contextlib.nullcontext
     # Bind the real lift so these tests exercise it, not a stub.
     fake.reset_to_init = lambda: Backend.reset_to_init(fake)
     return fake
