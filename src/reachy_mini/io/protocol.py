@@ -9,6 +9,7 @@ Client->Server command types:
     set_gravity_compensation, set_automatic_body_yaw,
     get_state, get_version, get_imu, start_recording, stop_recording, append_record,
     get_robot_name, set_robot_name, delete_hf_token, get_telemetry, set_telemetry,
+    client_hello,
     subscribe_logs, unsubscribe_logs, subscribe_pose, unsubscribe_pose,
     restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
@@ -470,6 +471,16 @@ class SetTelemetryCmd(BaseModel):
 
     type: Literal["set_telemetry"] = "set_telemetry"
     enabled: bool
+
+
+class ClientHelloCmd(BaseModel):
+    """Identify the client to the anonymous telemetry, once per session."""
+
+    type: Literal["client_hello"] = "client_hello"
+    # Same format as the X-Reachy-Client header: "<type>/<version> (<os>)".
+    client: str = Field(..., max_length=64)
+    # Public Hugging Face Space id of the JS app, "private", or None.
+    app: Optional[str] = Field(None, max_length=200)
 
 
 class SetSpeechOffsetsCmd(BaseModel):
@@ -978,6 +989,7 @@ AnyCommand = Annotated[
     | SetFirstWakeUpCmd
     | GetTelemetryCmd
     | SetTelemetryCmd
+    | ClientHelloCmd
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
     | SubscribePoseCmd

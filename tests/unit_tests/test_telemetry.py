@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon import telemetry as tm
 from reachy_mini.daemon.app.routers import telemetry as telemetry_router
-from reachy_mini.io.protocol import GetTelemetryCmd, SetTelemetryCmd
+from reachy_mini.io.protocol import ClientHelloCmd, GetTelemetryCmd, SetTelemetryCmd
 
 FORBIDDEN_KEYS = {"robot_name", "hostname", "hardware_id", "ip", "ssid", "username"}
 
@@ -70,6 +70,7 @@ def test_parse_client_header() -> None:
         "client_type": "other",
         "client_version": "1.0",
         "client_os": "other",
+        "client_type_raw": "toaster",
     }
     assert tm.parse_client_header("<script>/1 (x)") is None
     assert tm.parse_client_header("desktop/" + "9" * 40) is None
@@ -234,7 +235,6 @@ def test_opt_in_again_does_not_revive_old_sender(client: tm.Telemetry) -> None:
     assert client._stop is not old_stop and not client._stop.is_set()
 
 
-
 def test_opt_out_does_not_wait_for_a_stuck_send(
     client: tm.Telemetry, isolated: MagicMock
 ) -> None:
@@ -257,6 +257,7 @@ def test_opt_out_does_not_wait_for_a_stuck_send(
     assert time.monotonic() - started < 0.5
     assert not client.active
     release.set()
+
 
 def test_flush_posts_batch_and_requeues_when_offline(
     client: tm.Telemetry, isolated: MagicMock
@@ -327,3 +328,149 @@ async def test_data_channel_get_and_set(
         },
     ]
     assert startup_app_config.get_telemetry_enabled() is False
+
+
+def _props(t: tm.Telemetry, event: str) -> list[dict[str, Any]]:
+    return [e["properties"] for e in t._queue if e["event"] == event]
+
+
+def test_unknown_client_type_keeps_its_raw_name() -> None:
+    """An unknown client is still bucketed as other, but we learn its name."""
+    assert tm.parse_client_header("toaster/1.0 (ios)") == {
+        "client_type": "other",
+        "client_version": "1.0",
+        "client_os": "ios",
+        "client_type_raw": "toaster",
+    }
+    assert "client_type_raw" not in tm.parse_client_header("mobile/1.0 (ios)")  # type: ignore[operator]
+
+
+def test_hello_reports_client_and_js_app_lifecycle(client: tm.Telemetry) -> None:
+    """A data-channel hello names the client; the peer leaving ends the JS app."""
+    _start(client)
+    client.note_hello("p1", "web/1.2.0", "pollen-robotics/emotions")
+    client.peer_closed("p1")
+    client.peer_closed("p1")  # second disconnect notice: no duplicate stop
+
+    assert _props(client, "client_connected")[0]["client_type"] == "web"
+    assert _props(client, "js_app_started") == [
+        {**_props(client, "js_app_started")[0], "app_id": "pollen-robotics/emotions"}
+    ]
+    stopped = _props(client, "js_app_stopped")
+    assert len(stopped) == 1 and stopped[0]["duration_s"] >= 0
+
+
+@pytest.mark.parametrize(
+    "app", ["private", "../../etc", "a" * 150, "no-slash", "x/y z", "john/<b>"]
+)
+def test_hello_never_reports_an_unvetted_app_id(client: tm.Telemetry, app: str) -> None:
+    """Anything that isn't a plain owner/name id is sent as private."""
+    _start(client)
+    client.note_hello("p1", "web/1.2.0", app)
+    assert _props(client, "js_app_started")[0]["app_id"] == "private"
+
+
+def test_hello_without_app_tracks_usage_only(client: tm.Telemetry) -> None:
+    """The mobile app itself is a client, not a JS app."""
+    _start(client)
+    client.note_hello("p1", "mobile/0.11.4 (android)", None)
+    client.peer_closed("p1")
+    assert not _props(client, "js_app_started")
+    assert not _props(client, "js_app_stopped")
+    assert _props(client, "client_connected")[0]["client_type"] == "mobile"
+
+
+def test_garbage_hello_is_ignored(client: tm.Telemetry) -> None:
+    """A malformed client string reports nothing and opens no session."""
+    _start(client)
+    client.note_hello("p1", "<script>", "pollen-robotics/emotions")
+    assert _events(client) == ["daemon_started"]
+    assert not client._sessions
+
+
+def test_usage_tick_counts_anything_seen_in_the_window(client: tm.Telemetry) -> None:
+    """A session that started and ended between two ticks still counts once."""
+    _start(client)
+    client._usage_tick()
+    assert not _props(client, "usage_tick")  # idle robot: nothing sent
+
+    client.session_begin("app:x", "python_app", "pollen-robotics/hello")
+    client.note_hello("p1", "web/1.2.0", "private")
+    client.session_end("app:x")
+    client._usage_tick()
+    client._usage_tick()  # p1 still connected
+    client.peer_closed("p1")
+    client._usage_tick()  # p1 was seen in this window
+    client._usage_tick()  # nothing left
+
+    ticks = _props(client, "usage_tick")
+    assert [t["kinds"] for t in ticks] == [["python_app", "web"], ["web"], ["web"]]
+    assert ticks[0]["apps"] == ["pollen-robotics/hello", "private"]
+    assert ticks[0]["interval_s"] == 900
+
+
+def test_sessions_are_capped(client: tm.Telemetry) -> None:
+    """Peers whose disconnect never arrives can't grow memory without bound."""
+    for i in range(200):
+        client.session_begin(f"peer:{i}", "web")
+    assert len(client._sessions) == tm._MAX_SESSIONS
+
+
+@pytest.mark.parametrize(
+    "dataset,move,expected",
+    [
+        (
+            "pollen-robotics/reachy-mini-emotions-library",
+            "happy1",
+            {
+                "dataset": "pollen-robotics/reachy-mini-emotions-library",
+                "move": "happy1",
+            },
+        ),
+        ("john/secret-moves", "happy1", {"dataset": "other"}),
+        ("pollen-robotics/reachy-mini-emotions-library", "../x", {"dataset": "other"}),
+    ],
+)
+def test_moves_are_named_only_for_pollen_libraries(
+    client: tm.Telemetry, dataset: str, move: str, expected: dict[str, str]
+) -> None:
+    """Other datasets may be private: only Pollen's own libraries are named."""
+    _start(client)
+    client.note_move(dataset, move)
+    props = _props(client, "move_played")[0]
+    assert {k: props[k] for k in ("dataset", "move") if k in props} == expected
+
+
+def test_client_hello_over_the_data_channel(
+    client: tm.Telemetry, monkeypatch: pytest.MonkeyPatch, sim_backend: Any
+) -> None:
+    """The backend routes a WebRTC hello to telemetry, and peer loss ends it."""
+    monkeypatch.setattr(tm, "telemetry", client)
+    _start(client)
+    hello = ClientHelloCmd(client="web/1.2.0", app="pollen-robotics/emotions")
+    sim_backend.process_command(hello, send_response=lambda r: None, peer_id="p1")
+    sim_backend.process_command(hello, send_response=lambda r: None)  # no peer
+    sim_backend._on_peer_disconnect("p1")
+    assert len(_props(client, "js_app_started")) == 1
+    assert len(_props(client, "js_app_stopped")) == 1
+
+
+@pytest.mark.parametrize(
+    "query,kind",
+    [("?client=desktop/0.9.5%20(macos)", "desktop"), ("", "move_listener")],
+)
+def test_move_updates_socket_counts_as_use(
+    client: tm.Telemetry, monkeypatch: pytest.MonkeyPatch, query: str, kind: str
+) -> None:
+    """The desktop's long-lived socket is a usage session, named if it says so."""
+    from reachy_mini.daemon.app.routers import move as move_router
+
+    monkeypatch.setattr(move_router, "telemetry", client)
+    _start(client)
+    app = FastAPI()
+    app.include_router(move_router.router, prefix="/api")
+    with TestClient(app).websocket_connect(f"/api/move/ws/updates{query}"):
+        assert [s[0] for s in client._sessions.values()] == [kind]
+    assert not client._sessions
+    connected = _props(client, "client_connected")
+    assert [c["client_type"] for c in connected] == (["desktop"] if query else [])

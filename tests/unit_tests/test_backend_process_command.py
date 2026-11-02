@@ -371,6 +371,8 @@ def test_get_version(sim_backend: Any) -> None:
     responses = _dispatch(sim_backend, GetVersionCmd())
     assert len(responses) == 1
     assert isinstance(responses[0]["version"], str)
+    # The JS SDK only sends client_hello to daemons that advertise it.
+    assert responses[0]["client_hello"] is True
 
 
 def test_get_hardware_id(sim_backend: Any, monkeypatch: pytest.MonkeyPatch) -> None:

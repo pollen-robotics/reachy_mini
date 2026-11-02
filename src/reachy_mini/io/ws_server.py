@@ -22,6 +22,7 @@ import numpy as np
 from fastapi import WebSocket, WebSocketDisconnect
 
 from reachy_mini.daemon.backend.abstract import Backend
+from reachy_mini.daemon.telemetry import telemetry
 from reachy_mini.io.abstract import AbstractServer
 from reachy_mini.io.protocol import (
     AnyCommand,
@@ -130,6 +131,8 @@ class WSServer(AbstractServer):
 
         queue: asyncio.Queue[str] = asyncio.Queue(maxsize=100)
         self._clients.add(queue)
+        session_key = f"sdk:{id(queue)}"
+        telemetry.session_begin(session_key, "python_sdk")
         # Wake the daemon's status thread so this client gets a status now
         # instead of on the next 1 Hz tick.
         self._client_connected_event.set()
@@ -144,6 +147,7 @@ class WSServer(AbstractServer):
         finally:
             send_task.cancel()
             self._clients.discard(queue)
+            telemetry.session_end(session_key)
 
     async def _send_loop(self, websocket: WebSocket, queue: asyncio.Queue[str]) -> None:
         """Forward queued messages to the WebSocket client."""
