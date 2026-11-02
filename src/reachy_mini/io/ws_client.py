@@ -24,12 +24,14 @@ from pydantic import ValidationError
 
 from reachy_mini.io.abstract import AbstractClient
 from reachy_mini.io.protocol import (
+    MOVE_BUSY_ERROR,
     AnyCommand,
     AnyTaskRequest,
     DaemonStatus,
     HeadPoseMsg,
     ImuDataMsg,
     JointPositionsMsg,
+    MoveBusyError,
     RecordedDataMsg,
     TaskProgress,
     TaskRequest,
@@ -306,6 +308,8 @@ class WSClient(AbstractClient):
         if task.error is not None:
             with self._tasks_lock:
                 del self.tasks[task_uid]
+            if task.error == MOVE_BUSY_ERROR:
+                raise MoveBusyError(f"Task failed with error: {task.error}")
             raise Exception(f"Task failed with error: {task.error}")
 
         with self._tasks_lock:
