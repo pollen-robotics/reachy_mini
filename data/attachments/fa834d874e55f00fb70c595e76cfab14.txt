@@ -1,0 +1,1 @@
+ERROR    reachy_mini.daemon.app.routers.volume_control_linux:volume_control_linux.py:515 Failed to set volume on device 0: no ALSA output volume control found on card 0

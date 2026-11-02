@@ -1,41 +1,39 @@
 {
   "stats": {
-    "total": 1259,
-    "passed": 1242,
-    "skipped": 17,
-    "new": 9
+    "total": 1266,
+    "passed": 1249,
+    "new": 7,
+    "skipped": 17
   },
   "status": "passed",
   "newTests": [
-    "ff38f503206c5563d0e9782f542331a6",
-    "ea06bcbff83e8f10f45e0d27f711a4fc",
-    "8c0d2d15bbda2bb0389cc5d7b907d5d1",
-    "7defa5e128b4b0c71add20385121dc88",
-    "9d97ac0bb1a379b0b6f383ab8e971be2",
-    "48440f91a5e52660f049772a3e7fd1e0",
-    "bb202d4f7a9faa1a44c9cccb7da833f1",
-    "f2646e62b943ceddbd9080b67059a4b6",
-    "b6779dd5e90b98f366d748c62905c49b"
+    "2d51ba48da1bf48150e218d9f0fff2ab",
+    "492cc7ffe86af0726a961d78dc3e2ca6",
+    "6d16c141efbb73750fa1fd573d1bd681",
+    "78be01df894ecbfb6bcb984e83903cff",
+    "1769abe7ff2b318c6fd6b1a011e60545",
+    "f13610c0f34fca668c0b61e2fe13700d",
+    "6f5ab7f7b1382a48e914a780167f5b09"
   ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 92376,
-  "createdAt": 1793633456187,
+  "duration": 92829,
+  "createdAt": 1793634780591,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "2f3345c2-385c-4ea3-8953-498876ff8778",
+    "reportId": "957e28f0-864c-46ff-9c1f-26a38ba6a4b8",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/41471772919",
-  "commitSha": "36878138aae0b2444e5c3e0cb2cb742a7e58dc27",
-  "commitHref": "https://github.com/pollen-robotics/reachy_mini/commit/36878138aae0b2444e5c3e0cb2cb742a7e58dc27",
-  "ciRunHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/41471772919",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/41475384734",
+  "commitSha": "e26c6c30e723d80b1ecdaa3ace80f7e84f4d15f2",
+  "commitHref": "https://github.com/pollen-robotics/reachy_mini/commit/e26c6c30e723d80b1ecdaa3ace80f7e84f4d15f2",
+  "ciRunHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/41475384734",
   "ciRunName": "Allure Report",
   "href": "awesome/",
-  "coverage": 62
+  "coverage": 63
 }

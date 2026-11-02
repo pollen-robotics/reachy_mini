@@ -1,0 +1,1 @@
+WARNING  reachy_mini.daemon.app.routers.volume_control_linux:volume_control_linux.py:379 Partial audio device scan: aplay: Command 'aplay' returned non-zero exit status 1.
