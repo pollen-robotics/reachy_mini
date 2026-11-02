@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from ....media.gstreamer_utils import is_valid_audio_file
+from ...backend.abstract import NO_SUCH_SOUND
 from ...daemon import Daemon
 from ..dependencies import get_daemon
 
@@ -85,6 +86,8 @@ async def play_sound(
     - An absolute path on the daemon's filesystem.
     - A filename relative to the built-in assets directory.
     - A filename previously uploaded to the sounds temp directory.
+
+    Answers 404 when the file is none of these.
     """
     backend = daemon.backend
     if backend is None or not backend.ready.is_set():
@@ -98,7 +101,12 @@ async def play_sound(
         if os.path.isfile(tmp_candidate):
             sound_file = tmp_candidate
 
-    backend.play_sound(sound_file)
+    try:
+        played = backend.play_sound(sound_file)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    if not played:
+        raise HTTPException(status_code=404, detail=NO_SUCH_SOUND)
     return {"status": "ok"}
 
 
