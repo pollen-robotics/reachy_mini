@@ -306,7 +306,8 @@ class Telemetry:
             if key not in self._sessions and len(self._sessions) >= _MAX_SESSIONS:
                 return
             self._sessions[key] = (kind, app_id, time.monotonic())
-            self._window[key] = (kind, app_id)
+            if self._envelope is not None:  # nothing piles up while opted out
+                self._window[key] = (kind, app_id)
 
     def session_end(self, key: str) -> tuple[str, str | None, float] | None:
         """Stop counting *key*; return its session, or None if unknown."""
@@ -394,6 +395,10 @@ class Telemetry:
             # A flush still in flight from a previous identity may have requeued.
             self._queue.clear()
             self._clients_seen.clear()
+            # Report only what is in use from now on, not what ran while off.
+            self._window = {
+                k: (kind, app) for k, (kind, app, _) in self._sessions.items()
+            }
             self._robot_id = robot_id
             self._envelope = envelope
         started: dict[str, Any] = {"previous_exit_clean": previous_exit_clean}
@@ -423,6 +428,7 @@ class Telemetry:
         with self._lock:
             self._envelope = None
             self._robot_id = None
+            self._window = {}
             if not flush:
                 self._queue.clear()
         self._stop.set()

@@ -544,3 +544,22 @@ def test_hello_queued_before_a_disconnect_leaves_no_session(
         loop.close()
     assert not client._sessions
     assert len(_props(client, "js_app_stopped")) == 1
+
+
+def test_use_while_opted_out_is_not_reported_after_opting_in(
+    client: tm.Telemetry,
+) -> None:
+    """Off, use, on, tick: only what is still running counts, nothing piles up."""
+    _start(client)
+    client.set_enabled(False)
+    client.session_begin("app:x", "python_app", "pollen-robotics/hello")
+    for i in range(300):
+        client.session_begin(f"peer:{i}", "web", "pollen-robotics/emotions")
+        client.session_end(f"peer:{i}")
+    assert client._window == {}
+
+    client.set_enabled(True)
+    client._usage_tick()
+    ticks = _props(client, "usage_tick")
+    assert [t["kinds"] for t in ticks] == [["python_app"]]
+    assert ticks[0]["apps"] == ["pollen-robotics/hello"]
