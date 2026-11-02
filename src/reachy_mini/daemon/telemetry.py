@@ -252,6 +252,7 @@ class Telemetry:
         """Flush what is pending and mark a clean daemon exit."""
         if not self.active:
             return
+        self._usage_tick()  # the use since the last tick, sent with the final flush
         self._halt(flush=True)
         try:
             _write_state({**_read_state(), "running": False})
@@ -363,6 +364,24 @@ class Telemetry:
         else:
             self.capture("move_played", dataset="other")
 
+    def _maybe_tick(self, next_tick: float) -> float:
+        """Tick when use stops, or hourly while it goes on; return the next deadline.
+
+        Ticking only on the hour would never send a run shorter than an hour,
+        nor the last partial hour, since a daemon often exits uncleanly.
+        """
+        now = self._clock()
+        with self._lock:
+            idle = not self._sessions
+            used = bool(self._window)
+        if not used:
+            return now + USAGE_TICK_S  # the hour starts with the next use
+        if idle or now >= next_tick:
+            self._usage_tick()
+            # From now, not +=: no burst of ticks after a suspend.
+            return now + USAGE_TICK_S
+        return next_tick
+
     def _usage_tick(self) -> None:
         now = self._clock()
         with self._lock:
@@ -460,7 +479,7 @@ class Telemetry:
 
     def _run(self, stop: threading.Event) -> None:
         next_heartbeat = time.monotonic() + HEARTBEAT_INTERVAL_S
-        next_tick = time.monotonic() + USAGE_TICK_S
+        next_tick = self._clock() + USAGE_TICK_S
         started = time.monotonic()
         while not stop.is_set():
             self._wake.wait(FLUSH_INTERVAL_S)
@@ -469,10 +488,7 @@ class Telemetry:
             if now >= next_heartbeat:
                 self.capture("daily_heartbeat", uptime_s=int(now - started))
                 next_heartbeat += HEARTBEAT_INTERVAL_S
-            if now >= next_tick:
-                self._usage_tick()
-                # From now, not +=: no burst of ticks after a suspend.
-                next_tick = now + USAGE_TICK_S
+            next_tick = self._maybe_tick(next_tick)
             self._flush(timeout=10.0)
         self._flush(timeout=2.0)
 

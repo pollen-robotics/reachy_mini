@@ -595,3 +595,56 @@ def test_hello_queued_before_a_disconnect_leaves_no_session(
         loop.close()
     assert not client._sessions
     assert len(_props(client, "js_app_stopped")) == 1
+
+
+def _run_ticks(
+    client: tm.Telemetry, now: list[float], until: float, events: dict[float, Any]
+) -> None:
+    """Drive _maybe_tick like the sender thread does: once a flush interval."""
+    next_tick = now[0] + tm.USAGE_TICK_S
+    while now[0] < until:
+        now[0] += tm.FLUSH_INTERVAL_S
+        for t in [t for t in sorted(events) if t <= now[0]]:
+            events.pop(t)()
+        next_tick = client._maybe_tick(next_tick)
+
+
+def test_a_short_run_ticks_once_when_use_stops(client: tm.Telemetry) -> None:
+    """A 2-minute run is sent at the next flush, not lost waiting for the hour."""
+    now = [0.0]
+    client._clock = lambda: now[0]
+    _start(client)
+    events = {
+        100.0: lambda: client.session_begin("app:x", "python_app"),
+        220.0: lambda: client.session_end("app:x"),
+    }
+    # One flush after use stops: the daemon may well be gone by the hour.
+    _run_ticks(client, now, 220.0 + tm.FLUSH_INTERVAL_S, events)
+    assert [t["active_s"] for t in _props(client, "usage_tick")] == [120]
+
+
+def test_a_long_run_ticks_hourly_then_when_it_stops(client: tm.Telemetry) -> None:
+    """Hourly while use goes on, then the last partial hour when it stops."""
+    now = [0.0]
+    client._clock = lambda: now[0]
+    _start(client)
+    client.session_begin("app:x", "python_app")
+    events = {9000.0: lambda: client.session_end("app:x")}  # 2.5 hours
+    _run_ticks(client, now, 9000.0 + tm.FLUSH_INTERVAL_S, events)
+    ticks = [t["active_s"] for t in _props(client, "usage_tick")]
+    assert ticks == [3600, 3600, 1800]
+
+
+def test_stop_sends_the_use_since_the_last_tick(
+    client: tm.Telemetry, isolated: MagicMock
+) -> None:
+    """A 40-minute app then a clean stop: the final flush carries its tick."""
+    now = [0.0]
+    client._clock = lambda: now[0]
+    _start(client)
+    client.session_begin("app:x", "python_app", "pollen-robotics/hello")
+    now[0] = 2400.0
+    client.stop()
+    sent = [e for call in isolated.call_args_list for e in call.kwargs["json"]["batch"]]
+    ticks = [e["properties"] for e in sent if e["event"] == "usage_tick"]
+    assert [t["active_s"] for t in ticks] == [2400]
