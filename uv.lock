@@ -3249,6 +3249,7 @@ wireless-version = [
     { name = "nmcli", marker = "sys_platform == 'linux'" },
     { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux'" },
     { name = "semver" },
+    { name = "winnie-nfc" },
 ]
 
 [package.dev-dependencies]
@@ -3309,6 +3310,7 @@ requires-dist = [
     { name = "reachy-mini", extras = ["examples"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["mujoco"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["nfc"], marker = "extra == 'all'" },
+    { name = "reachy-mini", extras = ["nfc"], marker = "extra == 'wireless-version'" },
     { name = "reachy-mini", extras = ["opencv"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["placo-kinematics"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["rerun"], marker = "extra == 'all'" },

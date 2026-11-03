@@ -85,6 +85,7 @@ wireless-version = [
     "pollen_BMI088_imu_library>=1.0.0; sys_platform == 'linux'",
     "gpiozero>=2.0.0; sys_platform == 'linux'",
     "lgpio>=0.2.2.0; sys_platform == 'linux'",
+    "reachy_mini[nfc]",
 ]
 opencv = ["opencv-python<=5.0", "cv2_enumerate_cameras>=1.2.1"]
 # Optional NFC reader accessory: the host driver for the CLRC663 board. Kept
