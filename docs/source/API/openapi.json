@@ -2301,7 +2301,7 @@
     "/api/nfc/dump": {
       "get": {
         "summary": "Dump Tag",
-        "description": "Read the whole user memory of the tag on the reader, as hex.\n\nFor tags that carry a bare code rather than an NDEF message \u2014 a badge\nprogrammed with an ASCII identifier in page 4, say. ``GET /tag`` reports\nthe first bytes of such a payload in ``raw_hex``; this returns all of it.\n\nCosts a full transfer (~130 ms on an NTAG215), hence a separate endpoint\ninstead of a field served on every poll.",
+        "description": "Read the whole user memory of the tag on the reader, as hex.\n\nFor tags that carry a bare code rather than an NDEF message \u2014 a badge\nprogrammed with an ASCII identifier in page 4, say. ``GET /tag`` reports\nthe first bytes of such a payload in ``raw_hex``; this returns all of it.\n\nCosts a full transfer (~180 ms on an NTAG215), hence a separate endpoint\ninstead of a field served on every poll.",
         "operationId": "dump_tag_api_nfc_dump_get",
         "responses": {
           "200": {
