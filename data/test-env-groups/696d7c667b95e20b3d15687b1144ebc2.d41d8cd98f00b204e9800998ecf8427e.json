@@ -1,1 +1,1 @@
-{"id":"696d7c667b95e20b3d15687b1144ebc2.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_daemon#test_daemon_client_disconnection","name":"test_daemon_client_disconnection","status":"passed","testResultsByEnv":{"default":"35dfbe172a48ada4145dfb45b1148847"}}
+{"id":"696d7c667b95e20b3d15687b1144ebc2.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_daemon#test_daemon_client_disconnection","name":"test_daemon_client_disconnection","status":"passed","testResultsByEnv":{"default":"3fa9cffdba990a45604d72306133365a"}}
