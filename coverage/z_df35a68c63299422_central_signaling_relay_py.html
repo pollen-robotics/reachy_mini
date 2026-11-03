@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/reachy_mini/media/central_signaling_relay.py: 81%</title>
+    <title>Coverage for src/reachy_mini/media/central_signaling_relay.py: 80%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_54cfdca1.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src<span class="sep">/</span>reachy_mini<span class="sep">/</span>media<span class="sep">/</span>central_signaling_relay.py</b>:
-            <span class="pc_cov">81%</span>
+            <span class="pc_cov">80%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">891 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">724<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">167<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">717<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">174<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_df35a68c63299422_device_detection_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.0">coverage.py v7.17.0</a>,
-            created at 2026-11-03 14:20 +0000
+            created at 2026-11-03 16:29 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -862,7 +862,7 @@
     <p class="run"><span class="n"><a id="t780" href="#t780">780</a></span><span class="t">            <span class="key">if</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_local_ws</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t781" href="#t781">781</a></span><span class="t">                <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t782" href="#t782">782</a></span><span class="t">                    <span class="key">await</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_local_ws</span><span class="op">.</span><span class="nam">close</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t783" href="#t783">783</a></span><span class="t">                <span class="key">except</span> <span class="nam">Exception</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t783" href="#t783">783</a></span><span class="t">                <span class="key">except</span> <span class="nam">Exception</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t784" href="#t784">784</a></span><span class="t">                    <span class="key">pass</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t785" href="#t785">785</a></span><span class="t">                <span class="nam">self</span><span class="op">.</span><span class="nam">_local_ws</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t786" href="#t786">786</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -1453,11 +1453,11 @@
     <p class="run run2"><span class="n"><a id="t1371" href="#t1371">1371</a></span><span class="t">                    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1372" href="#t1372">1372</a></span><span class="t">                    <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1373" href="#t1373">1373</a></span><span class="t">                <span class="nam">data</span> <span class="op">=</span> <span class="key">await</span> <span class="nam">response</span><span class="op">.</span><span class="nam">json</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1374" href="#t1374">1374</a></span><span class="t">        <span class="key">except</span> <span class="nam">asyncio</span><span class="op">.</span><span class="nam">CancelledError</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1374" href="#t1374">1374</a></span><span class="t">        <span class="key">except</span> <span class="nam">asyncio</span><span class="op">.</span><span class="nam">CancelledError</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1375" href="#t1375">1375</a></span><span class="t">            <span class="key">raise</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1376" href="#t1376">1376</a></span><span class="t">        <span class="key">except</span> <span class="op">(</span><span class="nam">aiohttp</span><span class="op">.</span><span class="nam">ClientError</span><span class="op">,</span> <span class="nam">asyncio</span><span class="op">.</span><span class="nam">TimeoutError</span><span class="op">)</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1377" href="#t1377">1377</a></span><span class="t">            <span class="nam">logger</span><span class="op">.</span><span class="nam">debug</span><span class="op">(</span><span class="str">&quot;[Central Relay] producer health check transient error: %s&quot;</span><span class="op">,</span> <span class="nam">e</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1378" href="#t1378">1378</a></span><span class="t">            <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1376" href="#t1376">1376</a></span><span class="t">        <span class="key">except</span> <span class="op">(</span><span class="nam">aiohttp</span><span class="op">.</span><span class="nam">ClientError</span><span class="op">,</span> <span class="nam">asyncio</span><span class="op">.</span><span class="nam">TimeoutError</span><span class="op">)</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1377" href="#t1377">1377</a></span><span class="t">            <span class="nam">logger</span><span class="op">.</span><span class="nam">debug</span><span class="op">(</span><span class="str">&quot;[Central Relay] producer health check transient error: %s&quot;</span><span class="op">,</span> <span class="nam">e</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1378" href="#t1378">1378</a></span><span class="t">            <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1379" href="#t1379">1379</a></span><span class="t">        <span class="key">except</span> <span class="nam">Exception</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1380" href="#t1380">1380</a></span><span class="t">            <span class="nam">logger</span><span class="op">.</span><span class="nam">warning</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t1381" href="#t1381">1381</a></span><span class="t">                <span class="str">&quot;[Central Relay] producer health check unexpected error: %s&quot;</span><span class="op">,</span> <span class="nam">e</span>&nbsp;</span><span class="r"></span></p>
@@ -1780,9 +1780,9 @@
     <p class="mis show_mis"><span class="n"><a id="t1698" href="#t1698">1698</a></span><span class="t">                    <span class="nam">logger</span><span class="op">.</span><span class="nam">warning</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t1699" href="#t1699">1699</a></span><span class="t">                        <span class="fst">f&quot;</span><span class="fst">[Central Relay] Invalid JSON from local GStreamer: </span><span class="op">{</span><span class="nam">str</span><span class="op">(</span><span class="nam">message</span><span class="op">)</span><span class="op">[</span><span class="op">:</span><span class="num">100</span><span class="op">]</span><span class="op">}</span><span class="fst">&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t1700" href="#t1700">1700</a></span><span class="t">                    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1701" href="#t1701">1701</a></span><span class="t">        <span class="key">except</span> <span class="nam">websockets</span><span class="op">.</span><span class="nam">ConnectionClosed</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1701" href="#t1701">1701</a></span><span class="t">        <span class="key">except</span> <span class="nam">websockets</span><span class="op">.</span><span class="nam">ConnectionClosed</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1702" href="#t1702">1702</a></span><span class="t">            <span class="nam">logger</span><span class="op">.</span><span class="nam">info</span><span class="op">(</span><span class="str">&quot;[Central Relay] Local GStreamer WebSocket connection closed&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1703" href="#t1703">1703</a></span><span class="t">        <span class="key">except</span> <span class="nam">Exception</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1703" href="#t1703">1703</a></span><span class="t">        <span class="key">except</span> <span class="nam">Exception</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1704" href="#t1704">1704</a></span><span class="t">            <span class="nam">logger</span><span class="op">.</span><span class="nam">error</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t1705" href="#t1705">1705</a></span><span class="t">                <span class="fst">f&quot;</span><span class="fst">[Central Relay] Error handling local GStreamer messages: </span><span class="op">{</span><span class="nam">e</span><span class="op">}</span><span class="fst">&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t1706" href="#t1706">1706</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -2420,7 +2420,7 @@
             <a class="nav" href="z_df35a68c63299422_device_detection_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.0">coverage.py v7.17.0</a>,
-            created at 2026-11-03 14:20 +0000
+            created at 2026-11-03 16:29 +0000
         </p>
     </div>
 </footer>

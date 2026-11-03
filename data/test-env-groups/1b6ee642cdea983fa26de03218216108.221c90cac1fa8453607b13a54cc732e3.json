@@ -1,1 +1,1 @@
-{"id":"1b6ee642cdea983fa26de03218216108.221c90cac1fa8453607b13a54cc732e3","fullName":"tests.unit_tests.test_video#test_change_resolution_errors","name":"test_change_resolution_errors[MediaBackend.LOCAL]","status":"passed","testResultsByEnv":{"default":"5155cca9456e8af9809d41a06f0707b0"}}
+{"id":"1b6ee642cdea983fa26de03218216108.221c90cac1fa8453607b13a54cc732e3","fullName":"tests.unit_tests.test_video#test_change_resolution_errors","name":"test_change_resolution_errors[MediaBackend.LOCAL]","status":"passed","testResultsByEnv":{"default":"a8540b931ac9338abf1484fa25cb5e27"}}

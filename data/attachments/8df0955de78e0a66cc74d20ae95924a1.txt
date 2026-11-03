@@ -1,0 +1,3 @@
+INFO     reachy_mini.daemon.daemon:daemon.py:584 Stopping Reachy Mini daemon...
+INFO     reachy_mini.daemon.daemon:daemon.py:645 Daemon stopped successfully.
+WARNING  reachy_mini.daemon.daemon:daemon.py:570 Daemon is already stopped.
