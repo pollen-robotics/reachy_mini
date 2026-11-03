@@ -101,6 +101,11 @@ class Daemon:
         # Loop the JSON-RPC relay runs on, set by the FastAPI factory because
         # `start()` may itself run on a throwaway one (see `set_rpc_loop`).
         self._jsonrpc_loop: "asyncio.AbstractEventLoop | None" = None
+        # Antenna watcher of the startup app; re-armed live by REST and JSON-RPC.
+        self.startup_app_watcher_task: "asyncio.Task[None] | None" = None
+        # Serializes those re-arms: two overlapping ones would both cancel the
+        # old watcher and both start a new one, leaking one that still fires.
+        self.startup_app_lock = asyncio.Lock()
 
         # Single source of truth for which managed app (local Python app or
         # remote WebRTC client) currently holds the robot's app slot. Shared
@@ -208,7 +213,7 @@ class Daemon:
         with ``run_coroutine_threadsafe``.
         """
         loop = self._jsonrpc_loop or asyncio.get_running_loop()
-        relay = JsonRpcRelay(app_manager, backend.broadcast_to_all_clients)
+        relay = JsonRpcRelay(app_manager, backend.broadcast_to_all_clients, daemon=self)
         self._jsonrpc_relay = relay
 
         def handler(raw: str, reply: Callable[[dict[str, Any]], None]) -> None:

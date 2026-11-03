@@ -17,7 +17,7 @@ from reachy_mini.apps.manager import AppManager, AppStatus
 from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.dependencies import get_app_manager
-from reachy_mini.daemon.app.startup_app import rearm_startup_app_watcher
+from reachy_mini.daemon.app.startup_app import apply_startup_app
 
 router = APIRouter(prefix="/apps")
 
@@ -101,11 +101,7 @@ async def remove_app(
     # Clear the startup app if it's the one being removed, so the watcher stops
     # trying to launch (and reinstall) it.
     if startup_app_config.get_startup_app() == app_name:
-        startup_app_config.set_startup_app(None)
-        state = request.app.state
-        state.startup_app_antenna_watcher_task = await rearm_startup_app_watcher(
-            app_manager, state.daemon, None, state.startup_app_antenna_watcher_task
-        )
+        await apply_startup_app(app_manager, request.app.state.daemon, None)
 
     job_id = bg_job_register.run_command("remove", app_manager.remove_app, app_name)
     return {"job_id": job_id}
@@ -207,19 +203,10 @@ async def set_startup_app(
     no daemon restart is needed.
     """
     name = body.startup_app
-    if name:
-        installed = await app_manager.list_available_apps(SourceKind.INSTALLED)
-        if not any(a.name == name for a in installed):
-            raise HTTPException(
-                status_code=400, detail=f"App '{name}' is not installed"
-            )
-
-    startup_app_config.set_startup_app(name)
-
-    state = request.app.state
-    state.startup_app_antenna_watcher_task = await rearm_startup_app_watcher(
-        app_manager, state.daemon, name, state.startup_app_antenna_watcher_task
-    )
+    try:
+        await apply_startup_app(app_manager, request.app.state.daemon, name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return StartupApp(startup_app=name)
 
 

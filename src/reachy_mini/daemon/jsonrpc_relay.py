@@ -4,10 +4,11 @@ Incoming JSON-RPC frames from any client transport (WebRTC DataChannel,
 ``/ws/sdk``) are routed here by namespace:
 
 * ``apps.*`` — handled locally against the :class:`AppManager`: lifecycle of
-  the single running app (start / stop / restart / status) and the installed
+  the single running app (start / stop / restart / status), the installed
   set (list / install / remove / update, as background jobs whose progress is
   pushed as ``apps.job_progress`` notifications; check_update reports the
-  installed version, whether the Hub has a newer one, and a running update). This *is* the "apps API"
+  installed version, whether the Hub has a newer one, and a running update)
+  and the startup app the antennas launch. This *is* the "apps API"
   exposed over WebRTC, for clients that can't reach the LAN-only REST API.
 * anything else (e.g. ``conversation.*``) — relayed to the running app's
   ``/rpc`` WebSocket. The relay holds one persistent connection to that
@@ -25,7 +26,7 @@ import asyncio
 import json
 import logging
 from importlib.metadata import Distribution, distributions
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 from urllib.parse import urlparse
 
 from websockets.asyncio.client import ClientConnection, connect
@@ -36,7 +37,10 @@ from reachy_mini.apps.sources import app_update_checker, local_common_venv
 from reachy_mini.apps.sources.hf_space import get_python_app_info
 from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.app import bg_job_register
-from reachy_mini.daemon.app.startup_app import ensure_startup_app_installed
+from reachy_mini.daemon.app.startup_app import (
+    apply_startup_app,
+    ensure_startup_app_installed,
+)
 from reachy_mini.io.jsonrpc import (
     JsonRpcError,
     RpcErrorResponse,
@@ -49,6 +53,9 @@ from reachy_mini.io.jsonrpc import (
     parse_inbound,
     parse_request,
 )
+
+if TYPE_CHECKING:
+    from reachy_mini.daemon.daemon import Daemon
 
 Reply = Callable[[dict[str, Any]], None]
 
@@ -67,6 +74,7 @@ class JsonRpcRelay:
         app_manager: AppManager,
         broadcast: Callable[[str], None],
         logger: Optional[logging.Logger] = None,
+        daemon: Optional["Daemon"] = None,
     ) -> None:
         """Create the relay.
 
@@ -76,10 +84,12 @@ class JsonRpcRelay:
                 backend's ``broadcast_to_all_clients``). Used to fan app
                 notifications out.
             logger: optional logger.
+            daemon: owner of the startup-app watcher, for ``apps.set_startup``.
 
         """
         self._apps = app_manager
         self._broadcast = broadcast
+        self._daemon = daemon
         self.logger = logger or logging.getLogger("reachy_mini.jsonrpc_relay")
 
         self._app_ws: Optional[ClientConnection] = None
@@ -221,6 +231,10 @@ class JsonRpcRelay:
             result = {"installed": True}
         elif verb == "status":
             result = self._current_status_dict()
+        elif verb == "get_startup":
+            result = {"name": startup_app_config.get_startup_app()}
+        elif verb == "set_startup":
+            result = await self._set_startup(req)
         else:
             raise JsonRpcError(
                 f"unknown method: {req.method}",
@@ -260,13 +274,15 @@ class JsonRpcRelay:
         self._ensure_no_active_job()
         await self._ensure_not_running(name)
         if startup_app_config.get_startup_app() == name:
-            # The REST route clears it and re-arms the antenna watcher, which
-            # needs the FastAPI app state; refuse rather than leave a watcher
-            # that would reinstall the app on the next wake-up.
-            raise JsonRpcError(
-                f"{name!r} is the startup app; unset it before removing it",
-                reason="startup_app",
-            )
+            # Clear it like the REST route, so the watcher stops trying to
+            # launch (and reinstall) it. Without a daemon there is no watcher
+            # to disarm; refuse rather than leave one that would.
+            if self._daemon is None:
+                raise JsonRpcError(
+                    f"{name!r} is the startup app; unset it before removing it",
+                    reason="startup_app",
+                )
+            await apply_startup_app(self._apps, self._daemon, None)
         # Again, as in update: _ensure_not_running may have awaited.
         self._ensure_no_active_job()
         job_id = bg_job_register.run_command(
@@ -275,6 +291,24 @@ class JsonRpcRelay:
         self._job_apps[job_id] = name
         _invalidate_rest_update_cache()
         return {"job_id": job_id}
+
+    async def _set_startup(self, req: RpcRequest) -> dict[str, Any]:
+        """Set (``name``) or clear (``null``) the app the antennas start on wake-up."""
+        # The key is required: a bare {} must not silently clear it.
+        name = req.params.get("name", "")
+        if name is not None and (not isinstance(name, str) or not name):
+            raise JsonRpcError(
+                "apps.set_startup takes a 'name' or null",
+                reason="invalid_params",
+                code=-32602,
+            )
+        if self._daemon is None:
+            raise JsonRpcError("no daemon to arm the startup app", reason="unavailable")
+        try:
+            await apply_startup_app(self._apps, self._daemon, name)
+        except ValueError as e:
+            raise JsonRpcError(str(e), reason="not_installed") from e
+        return {"name": name}
 
     # -- apps.check_update / apps.update ----------------------------------
 
