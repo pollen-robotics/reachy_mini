@@ -97,7 +97,7 @@ async def dump_tag(reader: NfcReader = Depends(_enabled_reader)) -> NfcDump:
     programmed with an ASCII identifier in page 4, say. ``GET /tag`` reports
     the first bytes of such a payload in ``raw_hex``; this returns all of it.
 
-    Costs a full transfer (~130 ms on an NTAG215), hence a separate endpoint
+    Costs a full transfer (~180 ms on an NTAG215), hence a separate endpoint
     instead of a field served on every poll.
     """
     return await asyncio.to_thread(reader.dump)
