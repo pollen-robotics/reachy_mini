@@ -16,6 +16,7 @@ import { BroadcastTimeoutError, PendingReplies, SLOT_ROUNDTRIP_TIMEOUT_MS } from
 import type { MotionCommand, ReplySlotKey, ReplySlotValues } from './pending-replies.js';
 import { SessionSupervisor } from './session-supervisor.js';
 import { SDK_VERSION } from './version.js';
+import { resolvePublicSpaceId } from './client-hello.js';
 import {
     consumeFragmentCredentials,
     readPreselectedRobotIdFromUrl,
@@ -179,6 +180,9 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
     private readonly _signalingUrl: string;
     private readonly _clientId: string | null;
     private readonly _appName: string;
+    private readonly _client: string;
+    /** Hello already sent on the current control channel. */
+    private _helloSent = false;
     private readonly _videoJitterBufferTargetMs: number;
     private _autoStartFromUrl: boolean;
     private _autoStartAttempted: boolean;
@@ -288,6 +292,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
         // the @deprecated annotation on the option type.
         this._clientId = options.clientId || null;
         this._appName = options.appName || 'unknown';
+        this._client = options.client || `web/${SDK_VERSION}`;
         this._videoJitterBufferTargetMs = options.videoJitterBufferTargetMs ?? 0;
         this._autoStartFromUrl = options.autoStartFromUrl === true;
         this._autoStartAttempted = false;
@@ -947,6 +952,10 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
                 this._dc.onopen = () => {
                     this._dcOpen = true;
                     this._checkSessionReady();
+                    // No reply slot: an app's own getVersion() must not be superseded.
+                    // The reply says whether this daemon knows client_hello.
+                    this._helloSent = false;
+                    this._sendCommand({ type: 'get_version' });
                 };
                 // Replies over 64 KiB arrive as ordered chunks; one
                 // reassembler per channel, so nothing leaks across sessions.
@@ -2493,6 +2502,7 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._handleRpcMessage(data);
             return;
         }
+        if (data.client_hello === true) this._sendClientHello();
         // Bare `version` / `hardware_id` replies carry no `command` key:
         // only swallow them when a waiter is actually pending, otherwise
         // let the message fall through to the branches below.
@@ -2651,6 +2661,17 @@ export class ReachyMini extends EventTarget implements ReachyMiniInstance {
             this._emit('error', { source: 'robot', error: data.error as string });
         }
         if (this._pending.matchBroadcast(data)) return;
+    }
+
+    /** Identify this client (and its public Space, if any) once per channel. */
+    private _sendClientHello(): void {
+        const ch = this._dc;
+        if (this._helloSent || !ch || ch.readyState !== 'open') return;
+        this._helloSent = true;
+        void resolvePublicSpaceId().then((app) => {
+            if (this._dc !== ch || ch.readyState !== 'open') return;
+            this._sendCommand({ type: 'client_hello', client: this._client, ...(app && { app }) });
+        });
     }
 
     /** Snap video playback to live edge if buffered lag exceeds 0.5 s. */

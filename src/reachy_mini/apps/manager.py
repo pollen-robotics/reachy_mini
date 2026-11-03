@@ -240,6 +240,7 @@ class AppManager:
         started_at = time.monotonic()
         stop_requested = asyncio.Event()
         telemetry.capture("robot_app_started", app_id=app_id)
+        telemetry.session_begin(f"app:{app_name}", "python_app", app_id)
 
         async def monitor_process() -> None:
             """Monitor the subprocess and update status."""
@@ -308,6 +309,7 @@ class AppManager:
                         app_name, cleaned_up=stop_requested.is_set()
                     )
                 exit_code = process.returncode
+                telemetry.session_end(f"app:{app_name}")
                 telemetry.capture(
                     "robot_app_stopped",
                     app_id=app_id,
