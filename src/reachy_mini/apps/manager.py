@@ -9,11 +9,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
-import numpy as np
 import psutil
 from pydantic import BaseModel
 
-from reachy_mini.daemon.backend.robot import RobotBackend
 from reachy_mini.daemon.telemetry import app_id_for, telemetry
 from reachy_mini.io.protocol import MotorControlMode
 from reachy_mini.utils.interpolation import distance_between_poses
@@ -242,6 +240,7 @@ class AppManager:
         started_at = time.monotonic()
         stop_requested = asyncio.Event()
         telemetry.capture("robot_app_started", app_id=app_id)
+        telemetry.session_begin(f"app:{app_name}", "python_app", app_id)
 
         async def monitor_process() -> None:
             """Monitor the subprocess and update status."""
@@ -303,10 +302,14 @@ class AppManager:
                 # Always release the robot lock when the subprocess exits, no
                 # matter how: clean exit, crash, SIGKILL, OOM, or cancellation
                 # of this monitor task. Idempotent — stop_current_app's own
-                # release is fine too.
+                # release is fine too. A requested stop skips the daemon's idle
+                # reset: stop_current_app resets the robot itself.
                 if self.daemon is not None:
-                    self.daemon.robot_app_lock.release_local(app_name)
+                    self.daemon.robot_app_lock.release_local(
+                        app_name, cleaned_up=stop_requested.is_set()
+                    )
                 exit_code = process.returncode
+                telemetry.session_end(f"app:{app_name}")
                 telemetry.capture(
                     "robot_app_stopped",
                     app_id=app_id,
@@ -377,6 +380,9 @@ class AppManager:
         # Return to zero after an app stops, unless the app left it asleep.
         if self.daemon is not None and self.daemon.backend is not None:
             backend = self.daemon.backend
+            # Stop the app's move first: the asleep branch below would leave it
+            # running and holding the move guard (#1401).
+            await backend.stop_running_move()
             _, _, dist_to_sleep = distance_between_poses(
                 backend.get_current_head_pose(), backend.SLEEP_HEAD_POSE
             )
@@ -387,27 +393,21 @@ class AppManager:
                     "Robot is asleep; leaving it limp in the sleep pose."
                 )
             else:
-                if isinstance(backend, RobotBackend):
-                    backend.enable_motors()
-
                 try:
-                    from reachy_mini.reachy_mini import (
-                        INIT_ANTENNAS_JOINT_POSITIONS,
-                        INIT_HEAD_POSE,
-                    )
-
                     self.logger.getChild("runner").info(
                         "Returning robot to zero position"
                     )
-                    await backend.goto_target(
-                        head=INIT_HEAD_POSE,
-                        antennas=np.array(INIT_ANTENNAS_JOINT_POSITIONS),
-                        duration=1.0,
-                    )
+                    # Not a bare goto: the app may have left gravity
+                    # compensation, limp motors or head tracking behind.
+                    await backend.reset_to_init()
                 except Exception as e:
                     self.logger.getChild("runner").warning(
                         f"Could not return to zero position: {e}"
                     )
+                    # The idle reset was skipped for this requested stop: fall
+                    # back to it so the robot isn't left in whatever state the
+                    # app (or the failed lift) left behind.
+                    backend.request_idle_reset()
 
         self.current_app = None
 

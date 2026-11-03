@@ -15,7 +15,7 @@ import json
 import logging
 import threading
 import time
-from typing import Any
+from typing import Any, Optional
 
 import pytest
 
@@ -294,7 +294,13 @@ def test_meta_shape_with_hardware_id(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(relay_module, "get_hardware_id", lambda: "deadbeef00112233")
     relay = _make_relay()
     meta = relay._build_producer_meta()
-    assert set(meta.keys()) == {"name", "transport", "hardware_id"}
+    assert set(meta.keys()) == {
+        "name",
+        "transport",
+        "hardware_id",
+        "session_liveness",
+        "session_active",
+    }
 
 
 def test_meta_shape_without_hardware_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -309,7 +315,12 @@ def test_meta_shape_without_hardware_id(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(relay_module, "get_hardware_id", lambda: None)
     relay = _make_relay()
     meta = relay._build_producer_meta()
-    assert set(meta.keys()) == {"name", "transport"}
+    assert set(meta.keys()) == {
+        "name",
+        "transport",
+        "session_liveness",
+        "session_active",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +366,7 @@ def _make_relay_with_session(
     relay = _make_relay()
     journal = _SendJournal()
     relay._send_to_central = journal  # type: ignore[method-assign]
+    relay._send_to_local = _SendJournal()  # type: ignore[method-assign]
     relay._local_to_central_session[local_session_id] = central_session_id
     relay._central_to_local_session[central_session_id] = local_session_id
     relay._session_to_local_peer[central_session_id] = client_peer_id
@@ -407,6 +419,49 @@ def test_notify_peer_session_failed_drops_pending_central_session() -> None:
 
     assert "central-p" not in relay._pending_central_sessions
     assert journal.sent[0]["sessionId"] == "central-p"
+
+
+def test_notify_peer_session_failed_resolves_relay_consumer_id_to_newest_session() -> (
+    None
+):
+    """Relayed sessions all share the relay's own consumer id.
+
+    webrtcsink reports the consumer's signalling peer id, which is the
+    relay's local peer id for every relayed session - so the failure is
+    pinned on the newest session, the one still negotiating.
+    """
+    relay, journal = _make_relay_with_session(
+        local_session_id="local-old", central_session_id="central-old"
+    )
+    relay._local_peer_id = "relay-consumer"
+    relay._local_to_central_session["local-new"] = "central-new"
+    relay._central_to_local_session["central-new"] = "local-new"
+
+    asyncio.run(
+        relay._notify_peer_session_failed(
+            "relay-consumer", "ice_negotiation_timeout", {}
+        )
+    )
+
+    assert journal.sent == [
+        {
+            "type": "endSession",
+            "sessionId": "central-new",
+            "reason": "ice_negotiation_timeout",
+        }
+    ]
+    assert "local-new" not in relay._local_to_central_session
+    assert relay._local_to_central_session == {"local-old": "central-old"}
+
+
+def test_notify_peer_session_failed_ends_the_session_locally() -> None:
+    """A session stuck before ICE is ended on the GStreamer side too."""
+    relay, _journal = _make_relay_with_session()
+    local = relay._send_to_local
+
+    asyncio.run(relay._notify_peer_session_failed("local-1", "any", {}))
+
+    assert local.sent == [{"type": "endSession", "sessionId": "local-1"}]  # type: ignore[attr-defined]
 
 
 def test_notify_peer_session_failed_no_op_when_session_unknown() -> None:
@@ -535,6 +590,69 @@ def test_run_loop_backs_off_when_connect_returns_in_error_state(
     assert elapsed >= 0.1
 
 
+def test_run_loop_backs_off_when_connect_ends_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An attempt that dies right away (no ERROR state) still gets a backoff."""
+    monkeypatch.setattr(
+        "reachy_mini.media.central_signaling_relay.RECONNECT_INTERVAL", 0.05
+    )
+
+    relay = _make_relay()
+    relay._running = True
+
+    call_count = 0
+
+    async def fake_connect_and_relay() -> None:
+        nonlocal call_count
+        call_count += 1
+        # e.g. central accepts the SSE stream and closes it at once.
+        relay._set_state(RelayState.RECONNECTING, "Connection lost, reconnecting...")
+        if call_count >= 3:
+            relay._running = False
+
+    relay._connect_and_relay = fake_connect_and_relay  # type: ignore[method-assign]
+
+    start = time.monotonic()
+    asyncio.run(relay._run_loop())
+    elapsed = time.monotonic() - start
+
+    assert call_count == 3
+    assert relay._connection_attempts == 2
+    assert elapsed >= 0.1
+
+
+def test_connect_after_token_update_does_not_tear_itself_down() -> None:
+    """A login's token signal is consumed, not replayed on every reconnect.
+
+    Regression: the event stayed set after the login reconnect, so each new
+    attempt's token watcher fired at once and closed its own HTTP session.
+    """
+    relay = _make_relay()
+    relay._running = True
+    relay.hf_token = "hf_token"
+    relay._refresh_token = lambda force_refresh=False: relay.hf_token  # type: ignore[method-assign]
+    relay._token_updated.set()
+
+    async def forever() -> None:
+        await asyncio.Event().wait()
+
+    async def fake_connect_local() -> None:
+        relay._local_ws = _FakeWebsocket()  # type: ignore[assignment]
+        relay._local_task = asyncio.create_task(forever())
+
+    relay._connect_local = fake_connect_local  # type: ignore[method-assign]
+    relay._handle_central_sse = forever  # type: ignore[method-assign]
+    relay._producer_health_loop = forever  # type: ignore[method-assign]
+    relay._heartbeat_loop = forever  # type: ignore[method-assign]
+
+    async def run() -> None:
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(relay._connect_and_relay(), timeout=0.2)
+
+    asyncio.run(run())
+
+
 def test_reconnect_delay_grows_and_is_capped() -> None:
     """``_reconnect_delay`` backs off exponentially and stays under the cap."""
     relay = _make_relay()
@@ -555,6 +673,21 @@ def test_reconnect_delay_grows_and_is_capped() -> None:
     assert (
         relay._reconnect_delay()
         <= MAX_RECONNECT_INTERVAL * (1 + RECONNECT_BACKOFF_JITTER) + 1e-9
+    )
+
+
+def test_reconnect_delay_stays_short_while_sessions_are_kept() -> None:
+    """Clients of kept sessions need the robot back on central quickly."""
+    from reachy_mini.media.central_signaling_relay import (
+        KEPT_SESSIONS_MAX_RECONNECT_INTERVAL,
+    )
+
+    relay = _make_relay()
+    relay._connection_attempts = 1000
+    relay._local_to_central_session["local-1"] = "s1"
+    assert (
+        relay._reconnect_delay()
+        <= KEPT_SESSIONS_MAX_RECONNECT_INTERVAL * (1 + RECONNECT_BACKOFF_JITTER) + 1e-9
     )
 
 
@@ -591,6 +724,166 @@ def test_startsession_acquires_lock_when_free() -> None:
     assert lock.status().state == RobotAppLockState.REMOTE_SESSION
     assert not any(m.get("type") == "endSession" for m in central.sent)
     assert any(m.get("type") == "list" for m in local.sent)  # session proceeds
+
+
+def _local_starts(local: _SendJournal) -> int:
+    return sum(1 for m in local.sent if m.get("type") == "startSession")
+
+
+def test_quick_redial_starts_one_local_session() -> None:
+    """Two list replies for one pending request start ONE local session.
+
+    Right after a daemon restart a phone can send two requests about 1 ms
+    apart: central ends the first at once, the second stays pending, and
+    both requests' list replies arrive afterwards. Each used to start a
+    local session for the pending request: an orphan webrtcbin whose data
+    channel then replaced the real one.
+    """
+    relay, _central, local = _relay_with_lock(RobotAppLock())
+    producers = {"type": "list", "producers": [{"id": "producer-1"}]}
+
+    async def run() -> None:
+        await relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s1"}
+        )
+        await relay._process_central_message({"type": "endSession", "sessionId": "s1"})
+        await relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s2"}
+        )
+        await relay._process_local_message(producers)
+        await relay._process_local_message(producers)
+
+    asyncio.run(run())
+    assert _local_starts(local) == 1
+    asyncio.run(
+        relay._process_local_message({"type": "sessionStarted", "sessionId": "local-2"})
+    )
+    assert relay._central_to_local_session == {"s2": "local-2"}
+
+
+def test_orphan_local_session_is_ended() -> None:
+    """A local session nobody waits for is ended, whatever ordering made it.
+
+    Here the first request's list reply lands before central ends that
+    request, so a start goes out for each request; the second local
+    sessionStarted then finds nothing pending.
+    """
+    relay, _central, local = _relay_with_lock(RobotAppLock())
+    producers = {"type": "list", "producers": [{"id": "producer-1"}]}
+
+    async def run() -> None:
+        await relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s1"}
+        )
+        await relay._process_local_message(producers)
+        await relay._process_central_message({"type": "endSession", "sessionId": "s1"})
+        await relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s2"}
+        )
+        await relay._process_local_message(producers)
+        await relay._process_local_message(
+            {"type": "sessionStarted", "sessionId": "L1"}
+        )
+        await relay._process_local_message(
+            {"type": "sessionStarted", "sessionId": "L2"}
+        )
+
+    asyncio.run(run())
+    # The second list reply found a start still unanswered: no second start.
+    assert _local_starts(local) == 1
+    assert relay._central_to_local_session == {"s2": "L1"}
+    # A stray local session (injected here as L2) is ended all the same.
+    assert {"type": "endSession", "sessionId": "L2"} in local.sent
+
+
+def test_request_waiting_for_a_late_producer_is_started() -> None:
+    """A request accepted before the media pipeline registered still starts.
+
+    After a daemon restart the relay can be back on central before
+    GStreamer's producer is up: the list reply is empty, and the request
+    used to stay pending forever, the robot answering "busy" to everyone.
+    """
+    relay, _central, local = _relay_with_lock(RobotAppLock())
+
+    async def run() -> None:
+        await relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s1"}
+        )
+        await relay._process_local_message({"type": "list", "producers": []})
+        assert _local_starts(local) == 0
+        await relay._process_local_message(
+            {"type": "peerStatusChanged", "peerId": "producer-1", "roles": ["producer"]}
+        )
+
+    asyncio.run(run())
+    assert _local_starts(local) == 1
+
+
+def test_lost_local_start_is_resent_after_the_answer_delay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A start the local server never answered no longer blocks the next one."""
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    relay, _central, local = _relay_with_lock(RobotAppLock())
+    producers = {"type": "list", "producers": [{"id": "producer-1"}]}
+    clock = [1000.0]
+    monkeypatch.setattr(relay_module.time, "monotonic", lambda: clock[0])
+    _start_session(relay)
+    asyncio.run(relay._process_local_message(producers))
+    asyncio.run(relay._process_local_message(producers))
+    assert _local_starts(local) == 1
+    clock[0] += relay_module.LOCAL_START_ANSWER_S + 1
+    asyncio.run(relay._process_local_message(producers))
+    assert _local_starts(local) == 2
+
+
+def test_eviction_only_ends_the_sessions_up_when_it_was_asked() -> None:
+    """A session accepted after the local app took the robot is left alone."""
+    relay, central, local = _make_relay_with_journals()
+    relay._central_to_local_session.update({"old": "L-old", "new": "L-new"})
+    relay._local_to_central_session.update({"L-old": "old", "L-new": "new"})
+
+    asyncio.run(
+        relay._tear_down_active_sessions(reason="local_app_started", only={"old"})
+    )
+
+    assert central.sent == [
+        {"type": "endSession", "sessionId": "old", "reason": "local_app_started"}
+    ]
+    assert local.sent == [{"type": "endSession", "sessionId": "L-old"}]
+    assert relay._central_to_local_session == {"new": "L-new"}
+    assert relay._local_to_central_session == {"L-new": "new"}
+
+
+def test_a_new_producer_is_not_blocked_by_starts_sent_to_the_old_one() -> None:
+    """Starts sent to a producer that left cover nothing once a new one registers.
+
+    The local server answers such a start with an error the relay ignores;
+    counted as unanswered, it used to keep the pending request from being
+    started on the re-registered producer for 5 s (and nothing retried).
+    """
+    relay, _central, local = _relay_with_lock(RobotAppLock())
+
+    async def run() -> None:
+        await relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s1"}
+        )
+        await relay._process_local_message(
+            {"type": "list", "producers": [{"id": "old-producer"}]}
+        )
+        assert _local_starts(local) == 1
+        await relay._process_local_message(
+            {
+                "type": "peerStatusChanged",
+                "peerId": "new-producer",
+                "roles": ["producer"],
+            }
+        )
+
+    asyncio.run(run())
+    assert _local_starts(local) == 2
+    assert local.sent[-1] == {"type": "startSession", "peerId": "new-producer"}
 
 
 def test_startsession_control_only_while_local_app_runs() -> None:
@@ -934,6 +1227,7 @@ class _FakeHTTPSession:
     def __init__(self, status: int = 200) -> None:
         self._status = status
         self.posts: list[tuple[str, Any, Any]] = []
+        self.timeouts: list[Any] = []
         self.closed = False
 
     def post(
@@ -943,8 +1237,10 @@ class _FakeHTTPSession:
         headers: Any = None,
         allow_redirects: bool = True,
         proxy: Any = None,
+        timeout: Any = None,
     ) -> _FakeResponse:
         self.posts.append((url, json, headers))
+        self.timeouts.append(timeout)
         return _FakeResponse(self._status)
 
     def get(self, url: str, **_kwargs: Any) -> _FakeResponse:
@@ -996,6 +1292,57 @@ def test_send_to_central_posts_with_bearer_token() -> None:
     assert headers == {"Authorization": "Bearer tok"}
 
 
+def test_send_to_central_bounds_each_request() -> None:
+    """Every POST carries its own budget, not the session's 300 s default."""
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    relay = _make_relay()
+    relay._http_session = _FakeHTTPSession(status=200)  # type: ignore[assignment]
+    relay.hf_token = "tok"
+    asyncio.run(relay._send_to_central({"type": "setPeerStatus"}))
+    assert relay._http_session.timeouts[0].total == relay_module.CENTRAL_SEND_TIMEOUT_S
+
+
+def test_send_to_central_fails_fast_when_central_goes_silent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A server that accepts and never answers (packets dropped) is a failure.
+
+    This is what a heartbeat sees when the network stalls under a
+    kept-alive connection; without a budget the POST hangs and the
+    heartbeat never counts a failure.
+    """
+    import aiohttp
+
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    monkeypatch.setattr(relay_module, "CENTRAL_SEND_TIMEOUT_S", 0.3)
+
+    async def run() -> tuple[bool, float]:
+        async def swallow(
+            reader: asyncio.StreamReader, _w: asyncio.StreamWriter
+        ) -> None:
+            await reader.read(-1)  # read the request, never reply
+
+        server = await asyncio.start_server(swallow, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        relay = _make_relay()
+        relay.central_uri = f"http://127.0.0.1:{port}"
+        relay.hf_token = "tok"
+        relay._http_session = aiohttp.ClientSession()
+        try:
+            start = time.monotonic()
+            ok = await relay._send_to_central({"type": "setPeerStatus"})
+            return ok, time.monotonic() - start
+        finally:
+            await relay._http_session.close()
+            server.close()
+
+    ok, elapsed = asyncio.run(run())
+    assert ok is False
+    assert elapsed < 2.0
+
+
 def test_send_to_central_non_200_does_not_raise() -> None:
     """A non-200 response is logged, not raised."""
     relay = _make_relay()
@@ -1045,6 +1392,126 @@ def test_tear_down_active_sessions_notifies_both_and_clears() -> None:
     assert relay._local_to_central_session == {}
     assert relay._session_to_local_peer == {}
     assert relay._pending_central_sessions == []
+
+
+class _RunningLoop:
+    """An event loop running in a thread, standing in for the relay's own."""
+
+    def __enter__(self) -> asyncio.AbstractEventLoop:
+        self.loop = asyncio.new_event_loop()
+        self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
+        self.thread.start()
+        return self.loop
+
+    def __exit__(self, *_exc: Any) -> None:
+        self.loop.call_soon_threadsafe(self.loop.stop)
+        self.thread.join(timeout=2.0)
+        self.loop.close()
+
+
+def test_stop_ends_sessions_on_central_first() -> None:
+    """A stopping relay tells central, with a reason, that its sessions are over.
+
+    Central keeps a session across the robot's disconnect, so without this
+    the client only learns from its own link timeouts.
+    """
+    relay, central, local = _make_relay_with_journals()
+    relay._central_to_local_session["cs1"] = "ls1"
+    relay._local_to_central_session["ls1"] = "cs1"
+    with _RunningLoop() as loop:
+        relay._thread_loop = loop
+        asyncio.run(relay.stop())
+
+    assert central.sent == [
+        {"type": "endSession", "sessionId": "cs1", "reason": "robot_stopping"}
+    ]
+    assert local.sent == [{"type": "endSession", "sessionId": "ls1"}]
+
+
+def test_stop_does_not_wait_on_an_unreachable_central(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ending the sessions is bounded: a hung central cannot hold up a stop."""
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    monkeypatch.setattr(relay_module, "STOP_END_SESSIONS_TIMEOUT_S", 0.2)
+    relay, _central, _local = _make_relay_with_journals()
+
+    async def hang(_msg: dict[str, Any]) -> bool:
+        await asyncio.sleep(30)
+        return True
+
+    relay._send_to_central = hang  # type: ignore[method-assign]
+    relay._central_to_local_session["cs1"] = "ls1"
+    relay._local_to_central_session["ls1"] = "cs1"
+    with _RunningLoop() as loop:
+        relay._thread_loop = loop
+        start = time.monotonic()
+        asyncio.run(relay.stop())
+        elapsed = time.monotonic() - start
+
+    assert elapsed < 2.0
+    assert relay.state == RelayState.STOPPED
+
+
+def test_remote_eviction_never_hangs_the_local_app_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tear-down that never completes cannot hold up a local app's start.
+
+    If the relay loop exits before running it, the eviction future never
+    resolves: the app start, already holding the lock, used to hang there
+    and every later start was refused until a daemon restart.
+    """
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    monkeypatch.setattr(relay_module, "EVICTION_TIMEOUT_S", 0.2)
+    relay = _make_relay()
+
+    async def never_finishes(reason: str, **_kw: Any) -> None:
+        await asyncio.sleep(30)
+
+    relay._tear_down_active_sessions = never_finishes  # type: ignore[method-assign]
+    with _RunningLoop() as loop:
+        relay._thread_loop = loop
+        start = time.monotonic()
+        asyncio.run(relay._handle_remote_eviction())
+        elapsed = time.monotonic() - start
+    assert elapsed < 2.0
+
+
+def test_a_slow_remote_eviction_still_completes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Past the bound the app start stops waiting, but the tear-down finishes.
+
+    Cancelling it instead could leave the remote session half torn down
+    (central told, the local peer connection never closed) next to the app.
+    """
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    monkeypatch.setattr(relay_module, "EVICTION_TIMEOUT_S", 0.1)
+    relay = _make_relay()
+    finished = threading.Event()
+
+    async def slow(reason: str, **_kw: Any) -> None:
+        await asyncio.sleep(0.4)
+        finished.set()
+
+    relay._tear_down_active_sessions = slow  # type: ignore[method-assign]
+    with _RunningLoop() as loop:
+        relay._thread_loop = loop
+        asyncio.run(relay._handle_remote_eviction())
+        assert finished.wait(timeout=2.0)
+
+
+def test_stop_without_sessions_sends_nothing() -> None:
+    """No session, nothing to tell central."""
+    relay, central, _local = _make_relay_with_journals()
+    with _RunningLoop() as loop:
+        relay._thread_loop = loop
+        asyncio.run(relay.stop())
+    assert central.sent == []
 
 
 def test_close_connections_closes_and_clears() -> None:
@@ -1221,6 +1688,49 @@ def test_relay_backs_off_when_central_rejects_every_token(
     assert relay.state is RelayState.ERROR
 
 
+def test_run_loop_retries_at_once_after_a_refreshed_401(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The short-attempt backoff must not delay the first 401's retry."""
+    from reachy_mini.apps.sources import hf_auth
+
+    relay = _make_relay()
+    relay._running = True
+    relay.hf_token = "expired"
+    monkeypatch.setattr(hf_auth, "get_hf_token", lambda force_refresh=False: "fresh")
+    calls = 0
+
+    async def fake_connect_and_relay() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            relay._http_session = _FakeHTTPSession(status=401)  # type: ignore[assignment]
+            await relay._handle_central_sse()
+        else:
+            relay._running = False
+
+    relay._connect_and_relay = fake_connect_and_relay  # type: ignore[method-assign]
+
+    start = time.monotonic()
+    asyncio.run(relay._run_loop())
+
+    assert calls == 2
+    assert time.monotonic() - start < 1.0
+
+
+def test_connect_skipped_when_stop_raced_the_attempt() -> None:
+    """stop()'s wake-up is cleared by a starting attempt: it must not connect."""
+    relay = _make_relay()
+    relay._running = False
+    relay._token_updated.set()
+    refreshed: list[bool] = []
+    relay._refresh_token = lambda force_refresh=False: refreshed.append(True)  # type: ignore[method-assign,func-returns-value]
+
+    asyncio.run(relay._connect_and_relay())
+
+    assert refreshed == []
+
+
 def test_relay_recovers_after_a_failed_refresh(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1241,3 +1751,333 @@ def test_relay_recovers_after_a_failed_refresh(
     asyncio.run(relay._handle_central_sse())
 
     assert relay.hf_token == "fresh"
+
+
+# ---------------------------------------------------------------------------
+# Central-only drop: established sessions survive peer-to-peer
+# ---------------------------------------------------------------------------
+
+
+def _relay_with_live_session(
+    lock: RobotAppLock,
+) -> tuple[CentralSignalingRelay, _SendJournal, _SendJournal]:
+    """Relay holding one established session (s1 <-> local-1) and the lock."""
+    relay, central, local = _relay_with_lock(lock)
+    _start_session(relay)
+    asyncio.run(
+        relay._process_local_message({"type": "sessionStarted", "sessionId": "local-1"})
+    )
+    local.sent.clear()
+    central.sent.clear()
+    return relay, central, local
+
+
+def test_central_loss_keeps_established_sessions_and_the_lock() -> None:
+    """Losing central doesn't end a live session or free the robot."""
+    lock = RobotAppLock()
+    relay, _central, local = _relay_with_live_session(lock)
+    relay._pending_central_sessions.append("s2")
+    relay._session_to_local_peer["s2"] = "p2"
+
+    relay._keep_sessions_on_central_loss()
+
+    assert relay._local_to_central_session == {"local-1": "s1"}
+    assert relay._orphaned_local_sessions == {"local-1"}
+    assert relay._pending_central_sessions == []
+    assert "s2" not in relay._session_to_local_peer
+    assert local.sent == []  # nothing ended locally
+    assert lock.status().state == RobotAppLockState.REMOTE_SESSION
+
+
+def test_central_loss_with_only_pending_sessions_frees_the_robot() -> None:
+    """A session that never got past central can't complete: drop it and its lock."""
+    lock = RobotAppLock()
+    relay, _central, _local = _relay_with_lock(lock)
+    _start_session(relay)  # pending only, lock taken
+
+    relay._keep_sessions_on_central_loss()
+
+    assert relay._pending_central_sessions == []
+    assert lock.status().state == RobotAppLockState.FREE
+
+
+def test_new_session_supersedes_orphaned_ones() -> None:
+    """A fresh request (e.g. the phone re-dialing) replaces a kept session."""
+    lock = RobotAppLock()
+    relay, central, local = _relay_with_live_session(lock)
+    relay._keep_sessions_on_central_loss()
+
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p", "sessionId": "s9"}
+        )
+    )
+
+    assert {"type": "endSession", "sessionId": "local-1"} in local.sent
+    assert relay._orphaned_local_sessions == set()
+    assert "local-1" not in relay._local_to_central_session
+    assert relay._pending_central_sessions == ["s9"]
+    assert not any(m.get("reason", "").startswith("robot_busy") for m in central.sent)
+    assert lock.status().state == RobotAppLockState.REMOTE_SESSION
+
+
+def test_orphan_ending_locally_frees_the_robot() -> None:
+    """When WebRTC drops the kept session (peer gone), the robot is released."""
+    lock = RobotAppLock()
+    relay, _central, _local = _relay_with_live_session(lock)
+    relay._keep_sessions_on_central_loss()
+
+    asyncio.run(
+        relay._process_local_message({"type": "endSession", "sessionId": "local-1"})
+    )
+
+    assert relay._orphaned_local_sessions == set()
+    assert relay._local_to_central_session == {}
+    assert lock.status().state == RobotAppLockState.FREE
+
+
+# ---------------------------------------------------------------------------
+# Liveness judged on the peer-to-peer link (data channel), not on central
+# ---------------------------------------------------------------------------
+
+
+def _settled_live_session(
+    lock: RobotAppLock, idle_s: Optional[float]
+) -> tuple[CentralSignalingRelay, _SendJournal, _SendJournal]:
+    """Build an established, settled session whose link probe reports ``idle_s``."""
+    relay, central, local = _relay_with_live_session(lock)
+    relay._local_session_started_at["local-1"] = time.monotonic() - 60.0
+    relay.set_session_idle_probe(lambda _sid: idle_s)
+    return relay, central, local
+
+
+def test_central_end_without_reason_keeps_a_live_session() -> None:
+    """Central evicting the client (no reason) doesn't end a session whose link is live."""
+    lock = RobotAppLock()
+    relay, _central, local = _settled_live_session(lock, idle_s=0.4)
+
+    asyncio.run(
+        relay._process_central_message({"type": "endSession", "sessionId": "s1"})
+    )
+
+    assert local.sent == []
+    assert relay._local_to_central_session == {"local-1": "s1"}
+    assert relay._orphaned_local_sessions == {"local-1"}
+    assert lock.status().state == RobotAppLockState.REMOTE_SESSION
+
+
+def test_central_end_with_reason_is_honoured() -> None:
+    """A deliberate end (reason given) still ends the session locally."""
+    lock = RobotAppLock()
+    relay, _central, local = _settled_live_session(lock, idle_s=0.4)
+
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "endSession", "sessionId": "s1", "reason": "client_stop"}
+        )
+    )
+
+    assert {"type": "endSession", "sessionId": "local-1"} in local.sent
+    assert relay._local_to_central_session == {}
+
+
+def test_central_end_without_reason_ends_an_idle_session() -> None:
+    """With a quiet link the eviction is believed, as before."""
+    lock = RobotAppLock()
+    relay, _central, local = _settled_live_session(lock, idle_s=30.0)
+
+    asyncio.run(
+        relay._process_central_message({"type": "endSession", "sessionId": "s1"})
+    )
+
+    assert {"type": "endSession", "sessionId": "local-1"} in local.sent
+
+
+def test_new_request_is_refused_while_the_link_is_live() -> None:
+    """Another device can't take the robot from a session that is in use."""
+    lock = RobotAppLock()
+    relay, central, local = _settled_live_session(lock, idle_s=0.4)
+
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p2", "sessionId": "s9"}
+        )
+    )
+
+    assert {
+        "type": "endSession",
+        "sessionId": "s9",
+        "reason": "robot_busy_local",
+    } in central.sent
+    assert relay._local_to_central_session == {"local-1": "s1"}
+    assert {"type": "endSession", "sessionId": "local-1"} not in local.sent
+
+
+def test_new_request_replaces_a_ghost_session() -> None:
+    """A settled session whose data channel went quiet is superseded."""
+    lock = RobotAppLock()
+    relay, central, local = _settled_live_session(lock, idle_s=30.0)
+
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p2", "sessionId": "s9"}
+        )
+    )
+
+    assert {"type": "endSession", "sessionId": "local-1"} in local.sent
+    assert relay._pending_central_sessions == ["s9"]
+    assert not any(m.get("reason", "").startswith("robot_busy") for m in central.sent)
+
+
+def test_a_young_session_is_never_taken_as_a_ghost() -> None:
+    """A session still negotiating (no data channel yet) is protected."""
+    lock = RobotAppLock()
+    relay, central, _local = _relay_with_live_session(lock)
+    # Quiet so far, but mapped moments ago: still negotiating.
+    relay.set_session_idle_probe(lambda _sid: 30.0)
+
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p2", "sessionId": "s9"}
+        )
+    )
+
+    assert {
+        "type": "endSession",
+        "sessionId": "s9",
+        "reason": "robot_busy_local",
+    } in central.sent
+    assert relay._local_to_central_session == {"local-1": "s1"}
+
+
+def test_meta_reports_session_liveness_and_activity() -> None:
+    """Central keeps our sessions across SSE drops and can list us busy."""
+    relay = _make_relay()
+    meta = relay._build_producer_meta()
+    assert meta["session_liveness"] == "peer"
+    assert meta["session_active"] is False
+
+    relay._local_to_central_session["local-1"] = "s1"
+    assert relay._build_producer_meta()["session_active"] is True
+
+
+def test_ghost_takeover_tells_central_the_old_session_was_superseded() -> None:
+    """Central (and the old client) learn the ghost was replaced."""
+    lock = RobotAppLock()
+    relay, central, _local = _settled_live_session(lock, idle_s=30.0)
+
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p2", "sessionId": "s9"}
+        )
+    )
+
+    assert {
+        "type": "endSession",
+        "sessionId": "s1",
+        "reason": "superseded",
+    } in central.sent
+
+
+def test_one_live_session_keeps_the_robot_even_beside_a_ghost() -> None:
+    """Liveness is per session: a live one blocks a takeover of the others."""
+    lock = RobotAppLock()
+    relay, central, local = _settled_live_session(lock, idle_s=0.0)
+    relay._local_to_central_session["local-2"] = "s2"
+    relay._central_to_local_session["s2"] = "local-2"
+    relay._local_session_started_at["local-2"] = time.monotonic() - 60.0
+    relay.set_session_idle_probe(lambda sid: 0.5 if sid == "local-1" else 30.0)
+
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p3", "sessionId": "s9"}
+        )
+    )
+
+    assert local.sent == []
+    assert set(relay._local_to_central_session) == {"local-1", "local-2"}
+    assert {
+        "type": "endSession",
+        "sessionId": "s9",
+        "reason": "robot_busy_local",
+    } in central.sent
+
+
+def test_an_unjudgeable_session_is_never_taken_as_a_ghost() -> None:
+    """A session the media server doesn't track (probe None) keeps the robot."""
+    lock = RobotAppLock()
+    relay, central, local = _settled_live_session(lock, idle_s=None)
+
+    asyncio.run(
+        relay._process_central_message(
+            {"type": "startSession", "peerId": "p2", "sessionId": "s9"}
+        )
+    )
+
+    assert local.sent == []
+    assert {
+        "type": "endSession",
+        "sessionId": "s9",
+        "reason": "robot_busy_local",
+    } in central.sent
+
+
+def test_failed_heartbeats_end_the_central_leg() -> None:
+    """Two failed heartbeats in a row return, triggering a central-only reconnect."""
+    relay = _make_relay()
+    relay._running = True
+    relay._state = RelayState.CONNECTED
+    relay._heartbeat_interval_seconds = 0.0
+    sent: list[dict[str, Any]] = []
+
+    async def failing_send(msg: dict[str, Any]) -> bool:
+        sent.append(msg)
+        return False
+
+    relay._send_to_central = failing_send  # type: ignore[method-assign]
+
+    asyncio.run(asyncio.wait_for(relay._heartbeat_loop(), timeout=2.0))
+
+    assert len(sent) == 2
+
+
+def test_close_connections_cancels_the_kept_local_handler() -> None:
+    """The local handler kept across central drops doesn't leak past a close."""
+
+    async def scenario() -> asyncio.Task[None]:
+        relay = _make_relay()
+        relay._local_task = asyncio.create_task(asyncio.sleep(3600))
+        task = relay._local_task
+        await relay._close_connections()
+        return task
+
+    task = asyncio.run(scenario())
+    assert task.cancelled()
+
+
+def test_rebuilt_local_websocket_drops_stale_sessions_and_the_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sessions mapped on a dead local websocket are forgotten on reconnect."""
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    lock = RobotAppLock()
+    relay, _central, _local = _relay_with_live_session(lock)
+
+    class _FakeHTTP:
+        async def close(self) -> None:
+            return None
+
+    relay._http_session = _FakeHTTP()  # type: ignore[assignment]
+
+    def refuse(*_a: Any, **_k: Any) -> Any:
+        raise OSError("local signalling down")
+
+    monkeypatch.setattr(relay_module.websockets, "connect", refuse)
+
+    with pytest.raises(OSError):
+        asyncio.run(relay._connect_local())
+
+    assert relay._local_to_central_session == {}
+    assert lock.status().state == RobotAppLockState.FREE
+    assert relay._build_producer_meta()["session_active"] is False

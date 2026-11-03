@@ -154,8 +154,9 @@ class Daemon:
             return
 
         self.logger.info("Releasing media hardware for direct access...")
-        self._media_server.stop()
+        # Relay first: it ends its sessions on central while they still exist.
         await self._stop_central_signaling_relay()
+        self._media_server.stop()
         self._media_released = True
         self._status.media_released = True
         self.logger.info("Media hardware released.")
@@ -285,6 +286,10 @@ class Daemon:
                 self._media_server.set_session_failed_handler(
                     relay.notify_peer_session_failed
                 )
+                # Let the relay judge each session's liveness on its own
+                # peer-to-peer link (client RTCP + data channel) rather
+                # than on central's signaling.
+                relay.set_session_idle_probe(self._media_server.session_idle_seconds)
         except Exception as e:
             self.logger.warning(f"Failed to start central signaling relay: {e}")
 
@@ -595,12 +600,14 @@ class Daemon:
                 self._jsonrpc_relay = None
 
             if self._media_server and not self._media_released:
+                # Stop the central signaling relay first: it ends its
+                # sessions on central while they still exist, so clients
+                # are told the robot is going away.
+                await self._stop_central_signaling_relay()
                 # Stop pipeline (NULL) to release camera/audio hardware so
                 # external tools (rpicam-still, etc.) can access them.
                 # start() will rebuild the pipeline from scratch.
                 self._media_server.stop()
-                # Stop the central signaling relay
-                await self._stop_central_signaling_relay()
 
             if goto_sleep_on_stop:
                 try:
@@ -877,14 +884,20 @@ class Daemon:
     def _publish_status(self) -> None:
         self._thread_event_publish_status.clear()
         while self._thread_event_publish_status.is_set() is False:
+            ws_server = self.ws_server
+            if ws_server is not None:
+                # Cleared before reading the status, so a client registered
+                # from here on is woken for a status read after it connected.
+                ws_server.client_connected_event().clear()
             json_str = self.status().model_dump_json()
-            if self.ws_server is None:
+            if ws_server is None:
                 self.logger.warning(
                     f"WS server not initialized, cannot publish status: {json_str}"
                 )
+                time.sleep(1)
             else:
-                self.ws_server.publish_status(json_str)
-            time.sleep(1)
+                ws_server.publish_status(json_str)
+                ws_server.client_connected_event().wait(1)
 
     def _setup_backend(
         self,

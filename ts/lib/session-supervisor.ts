@@ -105,6 +105,14 @@ export interface SessionSupervisorDeps {
     reconnectSignaling(): Promise<void>;
     /** One dial attempt: the class's full startSession() flow. */
     dial(robotId: string): Promise<void>;
+    /**
+     * Snapshot the identity of the robot behind `robotId` and return a
+     * resolver giving the peer id to dial NOW. The robot's central peer
+     * id changes whenever its daemon re-registers (relay reconnect after
+     * a network drop, daemon restart), so re-dialing the original id
+     * can never succeed once that happened.
+     */
+    redialTargetResolver(robotId: string): () => string;
     /** Transport-only teardown between attempts (owned by the class). */
     teardownForRedial(): void;
     /** Send one `get_state` probe over the data channel. */
@@ -152,6 +160,11 @@ export class SessionSupervisor {
     }
 
     /** True while the re-dial loop is running. */
+    /** Milliseconds since the last inbound data-channel message. */
+    get dcInboundAgeMs(): number {
+        return Date.now() - this._lastDcInboundAt;
+    }
+
     get redialing(): boolean {
         return this._redialing;
     }
@@ -436,6 +449,9 @@ export class SessionSupervisor {
      */
     private async _runRedialLoop(robotId: string, cause: string): Promise<void> {
         const maxAttempts = REDIAL_BACKOFF_MS.length;
+        // Taken before the teardown, while the robot list still holds the
+        // entry the session was dialed against.
+        const resolveTarget = this._deps.redialTargetResolver(robotId);
         this._deps.teardownForRedial();
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             if (!this._redialing) return;
@@ -449,8 +465,12 @@ export class SessionSupervisor {
                     await this._deps.reconnectSignaling();
                 }
                 if (!this._redialing) return;
+                const target = resolveTarget();
+                if (target !== robotId) {
+                    log.info(`auto-reconnect: robot re-registered as ${target} (was ${robotId})`);
+                }
                 await withTimeout(
-                    this._deps.dial(robotId),
+                    this._deps.dial(target),
                     REDIAL_DIAL_TIMEOUT_MS,
                     'auto-reconnect dial timed out',
                 );

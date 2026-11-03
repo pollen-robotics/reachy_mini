@@ -96,6 +96,28 @@ def test_move_upload_gzip_base64_happy(sim_backend):
 # --------------------------------------------------------------------------
 
 
+def test_recorded_move_accepts_flat_heads():
+    """Flat row-major 16-float heads (what state/set_target carry) evaluate like nested 4x4."""
+    nested = _minimal_move_dict()
+    flat = _minimal_move_dict()
+    yaw = np.array(
+        [
+            [0.0, -1.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+    for move in (nested, flat):
+        move["set_target_data"][1]["head"] = yaw.tolist()
+    for frame in flat["set_target_data"]:
+        frame["head"] = np.array(frame["head"]).flatten().tolist()
+    head_nested, _, _ = RecordedMove(nested).evaluate(0.05)
+    head_flat, _, _ = RecordedMove(flat).evaluate(0.05)
+    assert head_flat.shape == (4, 4)
+    np.testing.assert_allclose(head_flat, head_nested)
+
+
 def test_move_chunk_no_slot_dropped(sim_backend):
     """Chunk for an unopened slot is dropped without crashing."""
     sim_backend._handle_upload_chunk(

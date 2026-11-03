@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from huggingface_hub.errors import RepositoryNotFoundError
 from pydantic import BaseModel
 
+from reachy_mini.daemon.telemetry import CLIENT_HEADER, parse_client_header, telemetry
 from reachy_mini.motion.recorded_move import RecordedMoves, dataset_token
 from reachy_mini.utils.interpolation import InterpolationTechnique
 
@@ -189,6 +190,8 @@ async def play_recorded_move_dataset(
         move = recorded_moves.get(move_name)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    if not backend.is_move_running:  # play_move ignores it otherwise
+        telemetry.note_move(dataset_name, move_name)
     return create_move_task(backend.play_move(move))
 
 
@@ -202,14 +205,32 @@ async def stop_move(uuid: MoveUUID) -> dict[str, str]:
 async def ws_move_updates(
     websocket: WebSocket,
 ) -> None:
-    """WebSocket route to stream move updates."""
+    """WebSocket route to stream move updates.
+
+    Browsers can't set headers on a WebSocket, so a client may name itself
+    with ``?client=<type>/<version> (<os>)`` for the anonymous telemetry;
+    the ``X-Reachy-Client`` header is used otherwise.
+    """
     await websocket.accept()
+    # Long-lived (the desktop app keeps it open while connected): counts as use.
+    session_key = f"move_ws:{id(websocket)}"
+    raw_client = websocket.query_params.get("client", "")
+    client = parse_client_header(raw_client)
+    if client is not None:
+        telemetry.note_client(raw_client)
+    else:  # the middleware already noted the header
+        client = parse_client_header(websocket.headers.get(CLIENT_HEADER, ""))
+    telemetry.session_begin(
+        session_key, client["client_type"] if client else "move_listener"
+    )
     try:
         move_listeners.append(websocket)
         while True:
             _ = await websocket.receive_text()
     except WebSocketDisconnect:
         move_listeners.remove(websocket)
+    finally:
+        telemetry.session_end(session_key)
 
 
 # --- FullBodyTarget streaming and single set_target ---

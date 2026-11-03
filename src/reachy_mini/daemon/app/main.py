@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.apps.sources.hf_auth import adopt_legacy_login
 from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.app.middleware import (
     ClientTelemetryMiddleware,
@@ -915,7 +916,7 @@ def main() -> None:
         "--kinematics-engine",
         type=str,
         default=default_args.kinematics_engine,
-        choices=["Placo", "NN", "AnalyticalKinematics"],
+        choices=["Placo", "AnalyticalKinematics"],
         help="Set the kinematics engine (default: AnalyticalKinematics).",
     )
     # FastAPI server options
@@ -970,6 +971,8 @@ def main() -> None:
         # the startup stamp proves nothing changed since the last full run;
         # the cheap file checks (bluetooth, systemd units) run on every boot.
         run_wireless_startup_checks()
+        # Before the app starts: the relay signs in to central with this login.
+        adopt_legacy_login()
 
         if check_reachymini_asoundrc():
             logging.getLogger().info(

@@ -1,14 +1,15 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 
 [options]
-exclude-newer = "2026-10-27T11:12:44.638302471Z"
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
+certifi = "2026-10-21T00:00:00Z"
+pip = "2026-10-21T00:00:00Z"
 pollen-bmi088-imu-library = false
-winnie-nfc = false
 
 [[package]]
 name = "absl-py"
@@ -291,11 +292,11 @@ wheels = [
 
 [[package]]
 name = "certifi"
-version = "2026.1.4"
+version = "2026.10.19"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e0/2d/a891ca51311197f6ad14a7ef42e2399f36cf2f9bd44752b3dc4eab60fdc5/certifi-2026.1.4.tar.gz", hash = "sha256:ac726dd470482006e014ad384921ed6438c457018f4b3d204aea4281258b2120", size = 154268, upload-time = "2026-01-04T02:42:41.825Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/bd/1436c50cc46699de0230fbaacc1d1de7bfec413176099949e9d5112e88f2/certifi-2026.10.19.tar.gz", hash = "sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae", size = 137598, upload-time = "2026-10-20T02:24:16.604Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e6/ad/3cc14f097111b4de0040c83a525973216457bbeeb63739ef1ed275c1c021/certifi-2026.1.4-py3-none-any.whl", hash = "sha256:9943707519e4add1115f44c2bc244f782c0249876bf51b6599fee1ffbedd685c", size = 152900, upload-time = "2026-01-04T02:42:40.15Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/51/29046e48f693c54e5b7412216d447a1d8362c9653148d98c02cdf65fa733/certifi-2026.10.19-py3-none-any.whl", hash = "sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b", size = 136464, upload-time = "2026-10-20T02:24:15.072Z" },
 ]
 
 [[package]]
@@ -1497,12 +1498,12 @@ name = "ipython"
 version = "9.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "python_version < '0'" },
     { name = "decorator" },
     { name = "ipython-pygments-lexers" },
     { name = "jedi" },
     { name = "matplotlib-inline" },
-    { name = "pexpect", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "pexpect", marker = "sys_platform != 'emscripten'" },
     { name = "prompt-toolkit" },
     { name = "pygments" },
     { name = "stack-data" },
@@ -2250,11 +2251,11 @@ wheels = [
 
 [[package]]
 name = "pip"
-version = "26.1.2"
+version = "26.2.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/01/91/47e7d486260f618783899587af63ccf7980fb60245c3e63dd4571c6b57ad/pip-26.1.2.tar.gz", hash = "sha256:f49cd134c61cf2fd75e0ce2676db03e4054504a5a4986d00f8299ae632dc4605", size = 1840799, upload-time = "2026-05-31T17:33:58.56Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fa/e8/0842d757e483e895e670f655084cfe8b8c72580c6769a76b30b2789a0608/pip-26.2.2.tar.gz", hash = "sha256:3a8e5c800492787f33a4114ef54444546c340df428974ebba17e0fd47e11af2f", size = 1863336, upload-time = "2026-10-20T16:36:29.008Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5d/95/6b5cb3461ea5673ba0995989746db58eb18b91b54dbf331e72f569540946/pip-26.1.2-py3-none-any.whl", hash = "sha256:382ff9f685ee3bc25864f820aa50505825f10f5458ffff07e30a6d96e5715cab", size = 1813144, upload-time = "2026-05-31T17:33:56.772Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl", hash = "sha256:fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70", size = 1819850, upload-time = "2026-10-20T16:36:27.046Z" },
 ]
 
 [[package]]
@@ -2305,16 +2306,16 @@ wheels = [
 
 [[package]]
 name = "pollen-bmi088-imu-library"
-version = "1.0.0rc1"
+version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ahrs" },
     { name = "numpy" },
     { name = "smbus3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/64/ca/f74143ec89fbc502c7d9fc6a4d20a7f56fad822389716daee5e2bfe9e364/pollen_bmi088_imu_library-1.0.0rc1.tar.gz", hash = "sha256:6a82eafa448807a87c7a9e1ed8ef395b0ce5f2f57fa536b5b3a3f428e72d8fcf", size = 3273, upload-time = "2025-10-30T08:57:43.422Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/93/00a9cecb17b9d2b7224247155cca03bbc4b7f50266611114b4bdeea488db/pollen_bmi088_imu_library-1.0.0.tar.gz", hash = "sha256:08e8a93ed3a70f0a08ab447fdaddb4a8780b4f1320c40fbea2d4660938398654", size = 8352, upload-time = "2026-11-02T14:41:18.07Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/0a/86991b5db3acb88bbe83ba1e586c1c401830c8dc3b95cb6e0637e60cd26d/pollen_bmi088_imu_library-1.0.0rc1-py3-none-any.whl", hash = "sha256:d13e7297a3042879c36b48f78c6d0e8426af2c5ca31efe312003c7cf74b657c8", size = 3748, upload-time = "2025-10-30T08:57:42.136Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/69/35e5af2a444b8735cd0639f7642a64e51c5d2ca9a87dd65a4f939949203d/pollen_bmi088_imu_library-1.0.0-py3-none-any.whl", hash = "sha256:7193cbac8854d55ca89028b8c5c66a0d4f7d3c1bd02d02e6728d0336f2b14f20", size = 8132, upload-time = "2026-11-02T14:41:16.476Z" },
 ]
 
 [[package]]
@@ -3153,11 +3154,12 @@ wheels = [
 
 [[package]]
 name = "reachy-mini"
-version = "1.13.0.dev0"
+version = "1.14.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "asgiref" },
+    { name = "certifi" },
     { name = "fastapi" },
     { name = "gstreamer-bundle", marker = "sys_platform != 'linux'" },
     { name = "huggingface-hub" },
@@ -3209,7 +3211,6 @@ all = [
     { name = "semver" },
     { name = "soundfile" },
     { name = "tornado", marker = "sys_platform != 'win32'" },
-    { name = "winnie-nfc" },
 ]
 central-consumer = [
     { name = "aiortc" },
@@ -3224,9 +3225,6 @@ examples = [
 ]
 mujoco = [
     { name = "mujoco" },
-]
-nfc = [
-    { name = "winnie-nfc" },
 ]
 opencv = [
     { name = "cv2-enumerate-cameras" },
@@ -3268,6 +3266,7 @@ requires-dist = [
     { name = "aiortc", marker = "extra == 'central-consumer'", specifier = ">=1.9" },
     { name = "asgiref" },
     { name = "av", marker = "extra == 'central-consumer'", specifier = ">=12" },
+    { name = "certifi", specifier = ">=2026.10.19" },
     { name = "cryptography", marker = "extra == 'wireless-version'", specifier = ">=42.0" },
     { name = "cv2-enumerate-cameras", marker = "extra == 'examples'", specifier = ">=1.2.1" },
     { name = "cv2-enumerate-cameras", marker = "extra == 'opencv'", specifier = ">=1.2.1" },
@@ -3286,10 +3285,10 @@ requires-dist = [
     { name = "onnxruntime", specifier = "==1.27.0" },
     { name = "opencv-python", marker = "extra == 'examples'", specifier = "<=5.0" },
     { name = "opencv-python", marker = "extra == 'opencv'", specifier = "<=5.0" },
-    { name = "pip", specifier = ">=26.1" },
+    { name = "pip", specifier = ">=26.2.2" },
     { name = "placo", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = "==0.9.14" },
     { name = "platformdirs" },
-    { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux' and extra == 'wireless-version'" },
+    { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.0.0" },
     { name = "psutil" },
     { name = "pulsectl", marker = "sys_platform == 'linux'", specifier = ">=24.1.0" },
     { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20240210" },
@@ -3304,7 +3303,6 @@ requires-dist = [
     { name = "reachy-mini", extras = ["central-consumer"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["examples"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["mujoco"], marker = "extra == 'all'" },
-    { name = "reachy-mini", extras = ["nfc"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["opencv"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["placo-kinematics"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["rerun"], marker = "extra == 'all'" },
@@ -3322,10 +3320,9 @@ requires-dist = [
     { name = "tornado", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = ">=6.5.5" },
     { name = "uvicorn", extras = ["standard"] },
     { name = "websockets", specifier = ">=12,<16" },
-    { name = "winnie-nfc", marker = "extra == 'nfc'", specifier = ">=1.0.0" },
     { name = "zeroconf", specifier = ">=0.149.7,<1" },
 ]
-provides-extras = ["examples", "mujoco", "placo-kinematics", "rerun", "wireless-version", "opencv", "nfc", "central-consumer", "all"]
+provides-extras = ["examples", "mujoco", "placo-kinematics", "rerun", "wireless-version", "opencv", "central-consumer", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -4132,18 +4129,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/86/eb/20b6cdf273913d0ad05a6a14aed4b9a85591c18a987a3d47f20fa13dcc47/websockets-15.0.1-cp313-cp313-win32.whl", hash = "sha256:ba9e56e8ceeeedb2e080147ba85ffcd5cd0711b89576b83784d8605a7df455fa", size = 176393, upload-time = "2025-03-05T20:02:53.814Z" },
     { url = "https://files.pythonhosted.org/packages/1b/6c/c65773d6cab416a64d191d6ee8a8b1c68a09970ea6909d16965d26bfed1e/websockets-15.0.1-cp313-cp313-win_amd64.whl", hash = "sha256:e09473f095a819042ecb2ab9465aee615bd9c2028e4ef7d933600a8401c79561", size = 176837, upload-time = "2025-03-05T20:02:55.237Z" },
     { url = "https://files.pythonhosted.org/packages/fa/a8/5b41e0da817d64113292ab1f8247140aac61cbf6cfd085d6a0fa77f4984f/websockets-15.0.1-py3-none-any.whl", hash = "sha256:f7a866fbc1e97b5c617ee4116daaa09b722101d4a3c170c787450ba409f9736f", size = 169743, upload-time = "2025-03-05T20:03:39.41Z" },
-]
-
-[[package]]
-name = "winnie-nfc"
-version = "1.0.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pyserial" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b3/9f/9deb8222f9db440dbda41241f67a4dc713303ad018e6ef25e4955d4d478c/winnie_nfc-1.0.0.tar.gz", hash = "sha256:a208a63c368c2b727b69c924695233ba46f308086e2f035455c325f2162fffaa", size = 50697, upload-time = "2026-11-03T11:05:25.355Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/95/69/ec42481a5021a4fa2802476bcb43f976a67947a3e472387b99af0984ce1e/winnie_nfc-1.0.0-py3-none-any.whl", hash = "sha256:3f97093d9a37a77ae035cbea97deb79780f2d31f419ab31da0f97b9e2c42097e", size = 39345, upload-time = "2026-11-03T11:05:24.002Z" },
 ]
 
 [[package]]

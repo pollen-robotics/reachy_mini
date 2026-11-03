@@ -73,8 +73,8 @@ new ReachyMini({
     videoJitterBufferTargetMs: 0,    // optional — 0 = render ASAP (teleop); omit for default browser buffering
     autoStartFromUrl: false,         // optional — auto startSession() when the URL carries a robot_peer_id hint
     // NOTE: `enableMicrophone` is deprecated and ignored. The SDK never grabs
-    // the user's mic; it always wires a silent placeholder audio sender you
-    // can replaceTrack() with your own audio (TTS, files, or the user's mic).
+    // the user's mic; it always wires a silent placeholder audio sender —
+    // swap in your own audio with setOutgoingAudioTrack(track).
 })
 ```
 
@@ -107,6 +107,8 @@ new ReachyMini({
 | `audioMuted` | `boolean` | Robot speaker mute state (local only) |
 | `preselectedRobotId` | `string\|null` | Robot id read from `?robot_peer_id=` / `#robot_peer_id=` (set by the host iframe) |
 | `isEmbedded` | `boolean` | `true` iff `preselectedRobotId !== null` — UX branching helper (embed vs standalone) |
+| `robotAudioTrack` | `MediaStreamTrack\|null` | The robot's microphone, once the session's audio arrives (see the `audioTrack` event). Embedded (host-shell) apps use `handle.media.robotStream` instead |
+| `peerConnection` | `RTCPeerConnection\|null` | Read-only, for `getStats()`; replaced on every auto-reconnect, so re-read it each time |
 
 ### Methods
 
@@ -126,9 +128,9 @@ new ReachyMini({
 | `setHeadRpyDeg(roll, pitch, yaw)` | `boolean` | Set head orientation in degrees (wraps `setTarget`) |
 | `setAntennasDeg(right, left)` | `boolean` | Set antenna positions in degrees (wraps `setTarget`) |
 | `setBodyYawDeg(yaw)` | `boolean` | Set body yaw in degrees (wraps `setTarget`) |
-| `startHeadTracking(weight?)` / `stopHeadTracking()` | `boolean` | Enable / disable daemon-side visual head tracking. `weight` in `[0,1]` blends tracking with app motion (default `1.0`) |
+| `startHeadTracking(weight?)` / `stopHeadTracking()` | `boolean` | Enable / disable daemon-side visual head tracking. `weight` in `[0,1]` blends tracking with app motion (default `1.0`). At weight `1` tracking overrides every app head target (`setTarget`, `gotoTarget`, moves); `safelyReturnToPose` stops it for you |
 | `getTrackedFace()` | `Promise<FaceTarget\|null>` | Latest face seen by head tracking — `{ detected, x, y, roll }` |
-| `setMotorMode(mode)` | `boolean` | `"enabled"` (position control), `"disabled"` (limp), or `"gravity_compensation"` (float by hand) |
+| `setMotorMode(mode)` | `boolean` | `"enabled"` (position control), `"disabled"` (limp), or `"gravity_compensation"` (float by hand — needs a daemon running the Placo kinematics engine, which stock Wireless robots don't ship; otherwise refused with an `error` event, so use `"disabled"` and support the head) |
 | `setMotorTorque(on, ids?)` | `boolean` | Toggle torque; per-motor when `ids` is given, else global |
 | `wakeUp(opts?)` / `gotoSleep(opts?)` | `Promise<void>` | Play the wake-up / sleep trajectory; resolves on daemon completion (rejects after `opts.timeoutMs`, default 8000). `wakeUp` enables motors first |
 | `isAwake()` | `boolean` | Awake state derived from the cached `motor_mode` (`gravity_compensation` counts as awake) |
@@ -139,6 +141,8 @@ new ReachyMini({
 | `requestState()` | `boolean` | Request a state snapshot |
 | `setAudioMuted(muted)` | — | Mute/unmute robot speaker (local) |
 | `setMicMuted(muted)` | — | Mute/unmute your microphone |
+| `setOutgoingAudioTrack(track)` | `Promise<boolean>` | Stream an audio track (TTS, Web Audio graph, the user's mic) to the robot speaker in real time; `null` = silence. Survives auto-reconnects, cleared by `stopSession()`; resolves `false` if the robot offered no two-way audio. `setMicMuted` doesn't affect it. For clips synced with motion prefer `playMove(…, { audioBlob })` |
+| `getImu()` | `Promise<ImuData\|null>` | Accelerometer / gyroscope / quaternion / temperature; `null` on IMU-less robots (Lite, sim) |
 | `getVolume()` / `setVolume(v)` | `Promise<number\|null>` | Read / set speaker volume (integer `0..100`, clamped); resolves the applied value or `null` if unavailable |
 | `getMicrophoneVolume()` / `setMicrophoneVolume(v)` | `Promise<number\|null>` | Read / set microphone gain (integer `0..100`, clamped) |
 | `getVersion()` | `Promise<string\|null>` | Daemon version string |
@@ -149,6 +153,8 @@ new ReachyMini({
 | `playRecordedMove(name, opts?)` | `boolean` | Play a named move (motion + bundled sound) from a HF dataset, daemon-side. Fire-and-forget (resolves on send, not on playback end). `opts.dataset` defaults to the pre-downloaded emotions library; `opts.initialGotoDuration` sets the lead-in goto |
 | `playMove(motion, opts?)` | `Promise<{finished?, cancelled?, error?, has_audio?}>` | Upload + play a recorded move (optionally with audio) on the daemon's local clock; resolves when playback ends — see [Daemon-side recorded-move playback](#daemon-side-recorded-move-playback) |
 | `cancelMove()` | `boolean` | Cancel an in-flight `playMove` |
+| `stopMove()` | `boolean` | Stop whatever move is playing (`playRecordedMove` included). A move is done when `robotState.is_move_running` goes back to `false` |
+| `preloadDataset(name)` / `preloadDatasetAndWait(name)` | `boolean` / `Promise` | Warm a recorded-move dataset on the robot so the first `playRecordedMove` starts without a download pause |
 | `uploadAudio(blob, opts?)` | `Promise<string>` | Upload a standalone audio slot, returns `uploadId` — pair with `playUploadedAudio` for record-time sync |
 | `playUploadedAudio(uploadId, opts?)` | `Promise<{started: true, ...}>` | Trigger daemon-side standalone audio playback; resolves on the daemon's `started` broadcast (use as a sync anchor) |
 | `cancelAudio()` | `boolean` | Cancel an in-flight `playUploadedAudio` |
@@ -180,7 +186,8 @@ Use `robot.addEventListener(name, handler)` — the SDK extends `EventTarget`.
 | `streaming` | `{ sessionId, robotId }` | WebRTC session active |
 | `sessionStopped` | `{ reason }` | Session ended |
 | `state` | Same shape as the `robotState` property (see above) | Robot state update (~500 ms polled, or ~30 Hz when subscribed via `subscribePose()`; wire shape) |
-| `videoTrack` | `{ track, stream }` | Video track available. `stream` also carries the robot's **mic audio track** (`stream.getAudioTracks()`) — usable for Web Audio metering or in-browser speech recognition (`SpeechRecognition.start(track)`, Chrome 135+) |
+| `videoTrack` | `{ track, stream }` | Video track available |
+| `audioTrack` | `{ track, stream }` | The robot's microphone track — usable for Web Audio metering, `MediaRecorder`, or in-browser speech recognition (`SpeechRecognition.start(track)`, Chrome 135+). Also exposed as `robotAudioTrack` |
 | `micSupported` | `{ supported }` | Bidirectional audio availability |
 | `error` | `{ source, error }` | Error from `signaling`, `webrtc`, or `robot` |
 | `sessionRejected` | `{ reason, activeApp }` | The robot refused the session (e.g. busy with another app) |
@@ -246,6 +253,7 @@ robot.cancelMove();
 ```js
 { time: [0, 0.01, 0.02, …], set_target_data: [{ head, antennas, body_yaw }, …] }
 ```
+`head` may be the flat `number[16]` you get from `state` events or a nested 4×4 — the daemon accepts both, so frames captured with `subscribePose()` can be replayed as-is.
 
 `audioLeadMs` shifts audio relative to motion at the daemon:
 - **Positive** — audio fires N ms BEFORE motion (compensates motor pickup).
@@ -391,9 +399,8 @@ await robot.signOut();
 
 ## Prerequisites
 
-- Your robot must be running the wireless firmware and connected to the central signaling server.
-- The robot must have a valid Hugging Face token configured (see [Usage](../platforms/reachy_mini/usage)).
-- Currently supported on **wireless versions** only.
+- The robot's daemon must be connected to the central signaling server, which happens automatically when it has a valid Hugging Face token configured (see [Usage](../platforms/reachy_mini/usage)).
+- Works on both Wireless and Lite robots (for a Lite, the daemon runs on the computer it is plugged into).
 
 ## Working examples
 
@@ -403,5 +410,6 @@ The reference apps maintained alongside the SDK are the canonical worked example
 - [`pollen-robotics/emotions`](https://huggingface.co/spaces/pollen-robotics/emotions) — React 19 + MUI 7 + Vite.
 - [`pollen-robotics/telepresence`](https://huggingface.co/spaces/pollen-robotics/telepresence) — React 19 + MUI 7 + Vite with camera + media streams.
 - [`pollen-robotics/sdk-js-demo-app`](https://huggingface.co/spaces/pollen-robotics/sdk-js-demo-app) — vanilla TS + Vite tour of every SDK primitive (camera, 3D pose view, moves, conversation).
+- [`pollen-robotics/reachy-mini-js-template`](https://huggingface.co/spaces/pollen-robotics/reachy-mini-js-template) — bare HTML, no build step: the smallest correct starting point, with short recipes for the common patterns.
 
 Clone the closest one and trim. See [`ts/APP_CREATION_GUIDE.md`](../../../ts/APP_CREATION_GUIDE.md) for the step-by-step.

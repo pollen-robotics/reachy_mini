@@ -289,6 +289,19 @@ If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connec
 </details>
 
 <details>
+<summary><strong>The Bluetooth PIN from the serial number label doesn't work</strong></summary>
+
+The PIN is the last 5 digits of the serial number. If hardware was replaced, the label may no longer match. Read the real serial number on the robot over SSH:
+
+```bash
+dfu-util -l
+```
+
+Use the `serial` field of the `Reachy Mini Audio DFU` lines, e.g. `serial="xxxxxxxx12345"` gives the PIN `12345`. See the [Wi-Fi Reset Guide](./platforms/reachy_mini/reset.md) for how to send it.
+
+</details>
+
+<details>
 <summary><strong>Does the robot have a Web API?</strong></summary>
 
 Yes. The daemon provides a REST API (FastAPI) and WebSocket support. The daemon host is `localhost:8000` on Lite (daemon on your machine) and `reachy-mini.local:8000` (or the robot's IP) on Wireless.

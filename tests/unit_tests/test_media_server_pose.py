@@ -33,8 +33,10 @@ def _make_server() -> GstMediaServer:
     server = cast(GstMediaServer, object.__new__(GstMediaServer))
     server._logger = logging.getLogger("test_pose")
     server._pose_channels = {}
+    server._pose_channel_bins = {}
     server._peer_webrtcbins = {}
     server._pose_subscribers = set()
+    server._pose_subscribed_on = {}
     server._pose_provider = None
     server._pose_push_source_id = None
     server._pose_lock = Lock()
@@ -393,5 +395,33 @@ def test_failed_channel_creation_drops_the_subscription(
 
     assert server._pose_channels == {}
     assert server._pose_subscribers == set()
+
+    server._pose_push_source_id = None
+
+
+def test_old_pose_channel_closing_keeps_the_new_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reconnect replaces the old session's pose channel.
+
+    The old channel's late `on-close` leaves the new session's stream alone.
+    """
+    _stub_timeout_add(monkeypatch)
+    _stub_idle_add(monkeypatch, run=True)
+
+    server = _make_server()
+    server._pose_provider = MagicMock(return_value='{"state": {}, "seq": 1}')
+    old_bin, new_bin = MagicMock(), MagicMock()
+    server._peer_webrtcbins = {"peer-1": old_bin}
+    server.set_pose_subscription("peer-1", True)
+    old_channel = server._pose_channels["peer-1"]
+
+    server._peer_webrtcbins["peer-1"] = new_bin  # same peer id, new session
+    server.set_pose_subscription("peer-1", True)
+    assert new_bin.emit.call_count == 1  # opened on the live session
+
+    server._on_pose_channel_close(old_channel, "peer-1")
+    assert server._pose_channels["peer-1"] is not old_channel
+    assert "peer-1" in server._pose_subscribers
 
     server._pose_push_source_id = None

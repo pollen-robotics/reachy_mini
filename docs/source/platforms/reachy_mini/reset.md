@@ -60,6 +60,17 @@ Commands are sent as **hexadecimal strings** (or as plain text such as `STATUS` 
 
 The PIN is the **last 5 digits** of the robot's serial number. For example, if the serial number is `xxxxxxxx4918400018`, the PIN is `00018` — send `PIN_00018` (or the hex value below).
 
+If the label is no longer valid (e.g. after a hardware replacement), read the serial number on the robot itself. Over SSH, run `dfu-util -l` and look at the `serial` field of the audio board:
+
+```
+pollen@reachy-mini:~ $ dfu-util -l
+...
+Found DFU: [38fb:1001] ver=0214, devnum=3, cfg=1, intf=4, path="1-1.1", alt=1, name="Reachy Mini Audio DFU Upgrade", serial="xxxxxxxx12345"
+Found DFU: [38fb:1001] ver=0214, devnum=3, cfg=1, intf=4, path="1-1.1", alt=0, name="Reachy Mini Audio DFU Factory", serial="xxxxxxxx12345"
+```
+
+Here the PIN is `12345`.
+
 #### Command reference
 
 | Command                | Hex value (after `0x`)              |

@@ -56,10 +56,10 @@ contract - your app is agnostic of everything else.
 
 - `sdk: docker` instead of `sdk: static` (only if you need a server,
   secrets, websockets, or Python compute - see the guide).
-- Microphone / camera (`enableMicrophone: true`, `handle.media.attachVideo`).
-  These are the **robot's** mic/camera over WebRTC — voice input & speech
-  recognition work fully in a static app (see `tfrere/minimal-conversation`);
-  never conclude a server is required for it.
+- Using the user's own microphone (`enableMicrophone: true`). The **robot's**
+  mic/camera need no flag (`handle.media.attachVideo` / `robotStream`) —
+  voice input & speech recognition work fully in a static app (see
+  `tfrere/minimal-conversation`); never conclude a server is required for it.
 - npm dependencies other than the SDK.
 - A desktop-only / kiosk UI (default is mobile-first).
 
@@ -69,6 +69,8 @@ contract - your app is agnostic of everything else.
 - Call `reachy.stopSession()` yourself - the host tears down; use `onLeave`.
 - Reach into host internals or private SDK fields (e.g. `reachy._pc`).
   Use the public API (`handle.media.attachVideo`, `enableMicrophone`).
+  Robot mic: `handle.media.robotStream` (embedded) or `reachy.robotAudioTrack`;
+  app audio to the robot speaker: `reachy.setOutgoingAudioTrack(track)`.
 - Call `reachy.attachVideo()` in an embedded app - it silently no-ops.
   `connectToHost()` finishes the WebRTC handshake before your app mounts,
   so the one-shot `videoTrack` event has already fired and your listener
@@ -85,21 +87,19 @@ contract - your app is agnostic of everything else.
 
 ## Procedure
 
-### Step 1: Align on the goal (plan optional)
+### Step 1: Align on the goal (plan.md first)
 
 Make sure you understand what the user wants, the robot choreography
-(which gestures map to which states), and the UI. For anything beyond a
-trivial app, jotting a short `plan.md` and confirming open questions
-before scaffolding is helpful - but it's optional, not a gate. If the
-ask is clear or the user just wants to vibe-code, skip the plan and go
-straight to scaffolding.
+(which gestures map to which states), and the UI. Write a short
+`plan.md` with your open questions and wait for the user's answers
+before scaffolding (same rule as in `AGENTS.md`).
 
 ### Step 2: Pick the path
 
 | Path | Use when | Deploy |
 |------|----------|--------|
 | **TS + Vite (default)** | New app, almost always. Production, TypeScript, npm deps. | `sdk: static` + `app_build_command`, HF builds on push |
-| Bare HTML + CDN | Trivial prototype, no Node toolchain wanted | `sdk: static`, no build. See guide §11.5 |
+| Bare HTML + CDN | Trivial prototype, no Node toolchain wanted | `sdk: static`, no build. Duplicate [`pollen-robotics/reachy-mini-js-template`](https://huggingface.co/spaces/pollen-robotics/reachy-mini-js-template); see guide §11.5 |
 | Docker | Need a server / secrets / Python | Ask first. `sdk: docker`. See guide |
 
 Default to **TS + Vite** for a NEW app unless the user explicitly wants otherwise.

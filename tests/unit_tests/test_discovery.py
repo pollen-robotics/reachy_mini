@@ -40,18 +40,19 @@ def test_discovered_robot_defaults():
     assert robot.properties == {}
 
 
-@pytest.fixture
-def registered_mdns(request):
-    """Yield a live MdnsServiceRegistration after register() has completed.
-
-    Parametrize the test with `wireless_version` (True/False) via
-    indirect parametrization, or omit and the fixture defaults to Lite.
-    """
-    wireless_version = getattr(request, "param", False)
+def _register(wireless_version: bool = False) -> MdnsServiceRegistration:
+    """Return a MdnsServiceRegistration whose register() has completed."""
     reg = MdnsServiceRegistration("test_robot", 9999, wireless_version=wireless_version)
     reg.register()
     assert reg._register_thread is not None
     reg._register_thread.join(timeout=10.0)
+    return reg
+
+
+@pytest.fixture
+def registered_mdns():
+    """Yield a live (Lite) MdnsServiceRegistration after register() has completed."""
+    reg = _register()
     try:
         yield reg
     finally:
@@ -71,28 +72,37 @@ def test_register_unregister_lifecycle(registered_mdns):
 
 
 @pytest.mark.parametrize(
-    "registered_mdns,expected_model",
+    "wireless_version,expected_model",
     [
         (True, "Reachy Mini Wireless"),
         (False, "Reachy Mini Lite"),
     ],
-    indirect=["registered_mdns"],
     ids=["wireless", "lite"],
 )
-def test_registered_txt_records_carry_metadata_keys(registered_mdns, expected_model):
+def test_registered_txt_records_carry_metadata_keys(
+    monkeypatch, wireless_version, expected_model
+):
     """TXT records carry model (per SKU), manufacturer, api, and caps."""
-    assert registered_mdns._info is not None
+    # Only the record matters here: skip the ~1.5 s of network probing a real
+    # registration costs (test_register_unregister_lifecycle does one).
+    monkeypatch.setattr(Zeroconf, "register_service", lambda self, info, **kw: None)
+    monkeypatch.setattr(Zeroconf, "unregister_service", lambda self, info: None)
+    reg = _register(wireless_version)
+    info = reg._info
+    reg.unregister()
+
+    assert info is not None
     props = {
         (k.decode() if isinstance(k, bytes) else k): (
             v.decode() if isinstance(v, bytes) else v
         )
-        for k, v in registered_mdns._info.properties.items()
+        for k, v in info.properties.items()
     }
     assert props.get("model") == expected_model
     assert props.get("manufacturer") == "Pollen Robotics"
     assert props.get("api") == "rest+ws"
     assert props.get("robot_name") == "test_robot"
-    assert registered_mdns._info.name == f"test_robot.{SERVICE_TYPE}"
+    assert info.name == f"test_robot.{SERVICE_TYPE}"
     caps = set((props.get("caps") or "").split(","))
     assert {"camera", "mic", "speaker", "motion", "apps"} <= caps
     # unit_id is only present when a robot is attached. In CI it

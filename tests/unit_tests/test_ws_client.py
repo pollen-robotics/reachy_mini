@@ -11,7 +11,9 @@ from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
+from reachy_mini.io.protocol import DaemonState, DaemonStatus
 from reachy_mini.io.ws_client import WSClient, _is_loopback_host
+from reachy_mini.reachy_mini import ReachyMini
 
 
 @pytest.mark.parametrize(
@@ -57,8 +59,36 @@ def test_connect_disables_compression_for_localhost(mock_connect: MagicMock) -> 
     client.disconnect()
 
     mock_connect.assert_called_once_with(
-        "ws://localhost:1234/ws/sdk", compression=None, additional_headers=ANY
+        "ws://127.0.0.1:1234/ws/sdk", compression=None, additional_headers=ANY
     )
+
+
+@pytest.mark.parametrize("host", ["localhost", "LOCALHOST", " Localhost "])
+@patch("reachy_mini.io.ws_client.ws_sync.connect")
+def test_localhost_is_pinned_to_ipv4(mock_connect: MagicMock, host: str) -> None:
+    """localhost -> 127.0.0.1, so Windows doesn't wait ~2 s on a refused ::1 first.
+
+    ``host`` is what the HTTP calls (media requests, daemon URL) are built from.
+    """
+    mock_connect.return_value = _make_fake_ws()
+
+    client = WSClient(host=host, port=1234)
+    client.disconnect()
+
+    assert client.host == "127.0.0.1"
+    assert mock_connect.call_args.args[0] == "ws://127.0.0.1:1234/ws/sdk"
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "::1", "192.168.1.50", "reachy.local"])
+@patch("reachy_mini.io.ws_client.ws_sync.connect")
+def test_other_hosts_are_left_untouched(mock_connect: MagicMock, host: str) -> None:
+    """Only the localhost name is rewritten: explicit addresses and names are kept."""
+    mock_connect.return_value = _make_fake_ws()
+
+    client = WSClient(host=host, port=1234)
+    client.disconnect()
+
+    assert client.host == host
 
 
 @patch("reachy_mini.io.ws_client.ws_sync.connect")
@@ -87,3 +117,33 @@ def test_connect_keeps_default_compression_for_remote_host(
     mock_connect.assert_called_once_with(
         "ws://192.168.1.50:1234/ws/sdk", compression="deflate", additional_headers=ANY
     )
+
+
+@patch("reachy_mini.io.ws_client.ws_sync.connect")
+def test_name_check_keeps_status_for_media_setup(mock_connect: MagicMock) -> None:
+    """The robot-name check must leave the status for the media setup that follows.
+
+    Otherwise ReachyMini(robot_name=...) waits for the daemon's next 1 Hz
+    status publish before it returns.
+    """
+    mock_connect.return_value = _make_fake_ws()
+    client = WSClient(host="localhost", port=1234)
+    client._dispatch(
+        DaemonStatus(
+            robot_name="lite",
+            state=DaemonState.RUNNING,
+            wireless_version=False,
+            desktop_app_daemon=False,
+            simulation_enabled=False,
+            mockup_sim_enabled=False,
+            backend_status=None,
+        )
+    )
+    mini = ReachyMini.__new__(ReachyMini)
+    mini.robot_name = "lite"
+
+    with patch.object(mini, "_connect_single", return_value=client):
+        assert mini._connect_and_verify_name("localhost", 1234, 1.0) is client
+
+    assert client.get_status(timeout=0.1).robot_name == "lite"
+    client.disconnect()
