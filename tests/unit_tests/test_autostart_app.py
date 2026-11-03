@@ -10,11 +10,12 @@ import pytest
 from fastapi import HTTPException
 
 from reachy_mini.apps import AppInfo, SourceKind
-from reachy_mini.daemon import startup_app_config
+from reachy_mini.daemon import jsonrpc_relay, startup_app_config
 from reachy_mini.daemon.app.routers import apps as apps_router
 from reachy_mini.daemon.app.startup_app import (
     AntennaTouchDetector,
     _antennas_in_commanded_motion,
+    apply_startup_app,
     ensure_startup_app_installed,
     make_startup_app_launcher,
     rearm_startup_app_watcher,
@@ -115,6 +116,7 @@ class StubDaemon:
         self.backend = StubBackend()
         self.robot_app_lock = RobotAppLock()
         self.startup_app_watcher_task: asyncio.Task[None] | None = None
+        self.startup_app_lock = asyncio.Lock()
 
 
 @pytest.mark.asyncio
@@ -643,3 +645,64 @@ async def test_relay_sets_and_clears_the_startup_app(config_file: Path) -> None:
     assert reply["result"] == {"name": None}
     assert startup_app_config.get_startup_app() is None
     assert daemon.startup_app_watcher_task is None
+
+
+@pytest.mark.asyncio
+async def test_relay_set_startup_requires_the_name_key(config_file: Path) -> None:
+    """A bare {} is rejected rather than read as null (which would clear it)."""
+    startup_app_config.set_startup_app("foo")
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    relay = JsonRpcRelay(mgr, broadcast=lambda _: None, daemon=StubDaemon())  # type: ignore[arg-type]
+
+    reply = await _rpc(relay, "apps.set_startup", {})
+    assert reply["error"]["data"]["reason"] == "invalid_params"
+    assert startup_app_config.get_startup_app() == "foo"
+
+
+@pytest.mark.asyncio
+async def test_relay_remove_clears_the_startup_app(
+    config_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """apps.remove of the startup app clears it first, like the REST route."""
+    daemon = StubDaemon()
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    mgr.current_app = None  # type: ignore[attr-defined]
+    relay = JsonRpcRelay(mgr, broadcast=lambda _: None, daemon=daemon)  # type: ignore[arg-type]
+    await _rpc(relay, "apps.set_startup", {"name": "foo"})
+    assert daemon.startup_app_watcher_task is not None
+    monkeypatch.setattr(
+        jsonrpc_relay.bg_job_register, "run_command", lambda *a, **k: "j1"
+    )
+
+    reply = await _rpc(relay, "apps.remove", {"name": "foo"})
+    assert reply["result"] == {"job_id": "j1"}
+    assert startup_app_config.get_startup_app() is None
+    assert daemon.startup_app_watcher_task is None
+
+
+@pytest.mark.asyncio
+async def test_concurrent_startup_app_changes_leave_one_watcher(
+    config_file: Path,
+) -> None:
+    """Overlapping set/clear must not leak a watcher the daemon no longer holds."""
+    daemon = StubDaemon()
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    await apply_startup_app(mgr, daemon, "foo")  # armed, as after boot
+
+    await asyncio.gather(
+        apply_startup_app(mgr, daemon, "foo"),
+        apply_startup_app(mgr, daemon, None),
+    )
+
+    watchers = [
+        t
+        for t in asyncio.all_tasks()
+        if not t.done() and "watch_antennas" in repr(t.get_coro())
+    ]
+    try:
+        assert startup_app_config.get_startup_app() is None
+        assert daemon.startup_app_watcher_task is None
+        assert watchers == []
+    finally:
+        for t in watchers:
+            t.cancel()

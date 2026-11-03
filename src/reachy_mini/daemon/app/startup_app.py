@@ -325,12 +325,14 @@ async def apply_startup_app(
     """Persist the startup app (``None`` clears it) and re-arm its watcher live.
 
     Raises ``ValueError`` when ``name`` is not installed; nothing is persisted then.
+    Calls are serialized, so the last one wins for both the config and the watcher.
     """
-    if name:
-        installed = await app_manager.list_available_apps(SourceKind.INSTALLED)
-        if not any(a.name == name for a in installed):
-            raise ValueError(f"App '{name}' is not installed")
-    startup_app_config.set_startup_app(name)
-    daemon.startup_app_watcher_task = await rearm_startup_app_watcher(
-        app_manager, daemon, name, daemon.startup_app_watcher_task
-    )
+    async with daemon.startup_app_lock:
+        if name:
+            installed = await app_manager.list_available_apps(SourceKind.INSTALLED)
+            if not any(a.name == name for a in installed):
+                raise ValueError(f"App '{name}' is not installed")
+        startup_app_config.set_startup_app(name)
+        daemon.startup_app_watcher_task = await rearm_startup_app_watcher(
+            app_manager, daemon, name, daemon.startup_app_watcher_task
+        )

@@ -103,6 +103,9 @@ class Daemon:
         self._jsonrpc_loop: "asyncio.AbstractEventLoop | None" = None
         # Antenna watcher of the startup app; re-armed live by REST and JSON-RPC.
         self.startup_app_watcher_task: "asyncio.Task[None] | None" = None
+        # Serializes those re-arms: two overlapping ones would both cancel the
+        # old watcher and both start a new one, leaking one that still fires.
+        self.startup_app_lock = asyncio.Lock()
 
         # Single source of truth for which managed app (local Python app or
         # remote WebRTC client) currently holds the robot's app slot. Shared

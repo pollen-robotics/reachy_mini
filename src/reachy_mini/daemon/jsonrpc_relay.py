@@ -274,13 +274,15 @@ class JsonRpcRelay:
         self._ensure_no_active_job()
         await self._ensure_not_running(name)
         if startup_app_config.get_startup_app() == name:
-            # The REST route clears it and re-arms the antenna watcher, which
-            # needs the FastAPI app state; refuse rather than leave a watcher
-            # that would reinstall the app on the next wake-up.
-            raise JsonRpcError(
-                f"{name!r} is the startup app; unset it before removing it",
-                reason="startup_app",
-            )
+            # Clear it like the REST route, so the watcher stops trying to
+            # launch (and reinstall) it. Without a daemon there is no watcher
+            # to disarm; refuse rather than leave one that would.
+            if self._daemon is None:
+                raise JsonRpcError(
+                    f"{name!r} is the startup app; unset it before removing it",
+                    reason="startup_app",
+                )
+            await apply_startup_app(self._apps, self._daemon, None)
         # Again, as in update: _ensure_not_running may have awaited.
         self._ensure_no_active_job()
         job_id = bg_job_register.run_command(
@@ -292,7 +294,8 @@ class JsonRpcRelay:
 
     async def _set_startup(self, req: RpcRequest) -> dict[str, Any]:
         """Set (``name``) or clear (``null``) the app the antennas start on wake-up."""
-        name = req.params.get("name")
+        # The key is required: a bare {} must not silently clear it.
+        name = req.params.get("name", "")
         if name is not None and (not isinstance(name, str) or not name):
             raise JsonRpcError(
                 "apps.set_startup takes a 'name' or null",
