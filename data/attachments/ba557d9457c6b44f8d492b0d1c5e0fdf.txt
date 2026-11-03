@@ -1,0 +1,2 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:203 Using AnalyticalKinematics kinematics engine
+ERROR    reachy_mini.daemon.backend.abstract:abstract.py:3281 WebRTC command error: boom

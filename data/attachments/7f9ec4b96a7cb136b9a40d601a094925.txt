@@ -1,0 +1,2 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:203 Using AnalyticalKinematics kinematics engine
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:967 play_move cancelled, exiting playback loop

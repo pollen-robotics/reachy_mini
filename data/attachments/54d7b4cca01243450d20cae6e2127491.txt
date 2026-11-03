@@ -1,1 +1,0 @@
-WARNING  reachy_mini.apps.manager.runner:manager.py:399 Could not return to zero position: motor bus error

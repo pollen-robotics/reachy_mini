@@ -1,0 +1,2 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:203 Using AnalyticalKinematics kinematics engine
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:563 Move still running 0.05 s after a stop request
