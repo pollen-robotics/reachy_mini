@@ -380,6 +380,9 @@ class AppManager:
         # Return to zero after an app stops, unless the app left it asleep.
         if self.daemon is not None and self.daemon.backend is not None:
             backend = self.daemon.backend
+            # Stop the app's move first: the asleep branch below would leave it
+            # running and holding the move guard (#1401).
+            await backend.stop_running_move()
             _, _, dist_to_sleep = distance_between_poses(
                 backend.get_current_head_pose(), backend.SLEEP_HEAD_POSE
             )

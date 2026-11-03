@@ -545,19 +545,24 @@ class Backend:
         finally:
             self._exit_move(in_move)
 
-    async def _stop_running_move(self) -> None:
-        """Stop a move left running by another session, waiting up to 1 s."""
+    async def stop_running_move(self, timeout: float = 1.0) -> None:
+        """Stop a move left running by another session, waiting up to ``timeout``."""
         # A move can outlive the session that started it (an uploaded dance
-        # keeps playing after a Wi-Fi drop). Our own enclosing move is not one.
+        # keeps playing after a Wi-Fi drop, a stopped app's goto). Our own
+        # enclosing move is not one.
         if not self.is_move_running or _IN_MOVE.get():
             return
         self._stop_move_requested = True
         token = self._active_move_token
         if token is not None:
             token.cancelled = True
-        deadline = time.monotonic() + 1.0
+        deadline = time.monotonic() + timeout
         while self.is_move_running and time.monotonic() < deadline:
             await asyncio.sleep(0.02)
+        if self.is_move_running:
+            self.logger.warning(
+                f"Move still running {timeout:g} s after a stop request"
+            )
 
     def get_status(
         self,
@@ -1458,7 +1463,7 @@ class Backend:
         nothing snaps), gravity compensation and per-motor torque overrides
         cleared, aim sources quiesced, then a lift to the init pose.
         """
-        await self._stop_running_move()
+        await self.stop_running_move()
 
         # Ordered: quiesce first so tracking can't re-aim the head between the
         # torque coming back and the lift starting.
@@ -1495,7 +1500,7 @@ class Backend:
         inherited pose into the one starting point the sleep trajectory was
         tuned for.
         """
-        await self._stop_running_move()
+        await self.stop_running_move()
         with self._move_guard():
             await self.reset_to_init()
             await asyncio.sleep(0.2)
