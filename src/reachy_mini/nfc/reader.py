@@ -32,7 +32,7 @@ import queue
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Callable, Iterable, Protocol
+from typing import Any, Callable, Concatenate, Iterable, ParamSpec, Protocol, TypeVar
 
 from pydantic import BaseModel, model_validator
 
@@ -40,7 +40,7 @@ from .ports import NfcBoard, describe_port, find_nfc_board
 
 logger = logging.getLogger(__name__)
 
-# Antenna polling period. A detection costs ~35 ms and a full NDEF read ~130,
+# Antenna polling period. A detection costs ~70 ms and a full NDEF read ~180,
 # so 5 Hz is the practical ceiling of the hardware, not an arbitrary choice.
 POLL_INTERVAL = 0.2
 
@@ -239,6 +239,28 @@ class NfcSession(Protocol):
         ...
 
 
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def _field_off_after(
+    method: Callable[Concatenate[Clrc663Session, _P], _R],
+) -> Callable[Concatenate[Clrc663Session, _P], _R]:
+    """Switch the RF field off once the call is over, however it ends.
+
+    The driver leaves the field on after each operation: without this, the
+    antenna would stay powered between polls for as long as the link is open.
+    """
+
+    def call(self: Clrc663Session, /, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            self._reader.field_off()
+
+    return call
+
+
 class Clrc663Session:
     """An ``winnie_nfc`` reader kept open for the lifetime of the link.
 
@@ -256,8 +278,8 @@ class Clrc663Session:
         self._reader.__enter__()
         self.chip_version = self._chip_version()
         # Last full read, kept so that a tag sitting on the antenna is not
-        # re-read at every poll: a detection costs ~35 ms, a full NDEF read
-        # ~130. Polling only detects, and reads content when the UID changes
+        # re-read at every poll: a detection costs ~70 ms, a full NDEF read
+        # ~180. Polling only detects, and reads content when the UID changes
         # or while the content has not been read yet.
         self._last_uid: str | None = None
         self._last_tag: NfcTag | None = None
@@ -274,12 +296,13 @@ class Clrc663Session:
         """Switch the field off and close the port."""
         self._reader.__exit__(None, None, None)
 
+    @_field_off_after
     def read_tag(self) -> NfcTag:
         """Poll the antenna once.
 
         Only the detection happens on every poll; the content is read when the
         UID changes. That is what makes 5 Hz reachable — a detection costs
-        ~35 ms against ~130 for a full memory transfer, and re-reading an
+        ~70 ms against ~180 for a full memory transfer, and re-reading an
         unchanged tag five times a second would buy nothing.
 
         Only a read that succeeded is kept. A failed one is published as it is
@@ -346,6 +369,7 @@ class Clrc663Session:
         self._last_tag = None
         self._failed_reads = 0
 
+    @_field_off_after
     def dump(self) -> NfcDump:
         """Read the whole user memory of the tag on the antenna."""
         from winnie_nfc.core import NoTagError, TagError
@@ -365,6 +389,7 @@ class Clrc663Session:
             error=read.error,
         )
 
+    @_field_off_after
     def write(self, text: str | None, uri: str | None) -> NfcWriteResult:
         """Write text or a URI onto the tag on the antenna."""
         if uri is not None:
@@ -372,6 +397,7 @@ class Clrc663Session:
         assert text is not None  # guaranteed by NfcWriteRequest
         return self._tag_write(lambda r: r.write_text(text))
 
+    @_field_off_after
     def erase(self, full: bool) -> NfcWriteResult:
         """Make the tag on the antenna blank again."""
         return self._tag_write(lambda r: r.erase(full=full))
@@ -729,7 +755,7 @@ class NfcReader:
         """Read the whole user memory of the tag currently on the antenna.
 
         Goes through the reader thread like a write does: the chip has a single
-        owner, and a 130 ms transfer must not interleave with a poll.
+        owner, and a ~180 ms transfer must not interleave with a poll.
         """
         if not driver_available():
             return NfcDump(present=False, error="DRIVER_MISSING")

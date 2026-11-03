@@ -719,9 +719,13 @@ def fake_ntag_reader(monkeypatch):
         def __init__(self, port):
             self.port = port
             self.written = []
+            self.fields_off = 0
 
         def __enter__(self):
             return self
+
+        def field_off(self):
+            self.fields_off += 1
 
         def __exit__(self, *exc):
             return None
@@ -810,6 +814,33 @@ def test_erase_shares_the_write_error_map(fake_ntag_reader):
     fake_ntag_reader.raises = None
     assert session.erase(full=True).success
     assert fake_ntag_reader.erased == [True]
+
+
+def test_every_session_call_ends_with_the_field_off(fake_ntag_reader):
+    # Otherwise the antenna stays powered between polls.
+    from winnie_nfc.core import NoTagError
+
+    from reachy_mini.nfc.reader import Clrc663Session
+
+    session = Clrc663Session("/dev/null")
+    session._reader.uid = lambda: b"\x04\xa1"
+    session._reader.read_tag = lambda: reading(records=[])
+    calls = [
+        session.read_tag,
+        session.read_tag,  # served from the cache, after a detection
+        session.dump,
+        lambda: session.write("badge", None),
+        lambda: session.erase(full=False),
+    ]
+    for call in calls:
+        session._reader.fields_off = 0
+        call()
+        assert session._reader.fields_off == 1
+
+    fake_ntag_reader.raises = NoTagError("nothing there")
+    session._reader.fields_off = 0
+    assert not session.write("badge", None).success
+    assert session._reader.fields_off == 1
 
 
 def test_a_write_is_seen_without_lifting_the_tag(fake_ntag_reader):
