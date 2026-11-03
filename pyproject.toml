@@ -133,6 +133,7 @@ exclude-newer = "7 days"
 
 [tool.uv.exclude-newer-package]
 "pollen_BMI088_imu_library"  = false
+"winnie_nfc" = false
 # huggingface-hub is pinned to an exact version (==1.20.1) in [project.dependencies],
 # released well before the 7-day cutoff, so no opt-out is needed here.
 
