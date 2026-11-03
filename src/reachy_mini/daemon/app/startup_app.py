@@ -336,3 +336,22 @@ async def apply_startup_app(
         daemon.startup_app_watcher_task = await rearm_startup_app_watcher(
             app_manager, daemon, name, daemon.startup_app_watcher_task
         )
+
+
+async def arm_startup_app_at_boot(
+    app_manager: AppManager, daemon: "Daemon", name: str
+) -> None:
+    """Arm the watcher for ``name``, the startup app read before ``daemon.start()``.
+
+    The relay is live during start() (a wake-up takes seconds), so a client may
+    have changed the startup app meanwhile: its choice wins, boot arms nothing.
+    """
+    async with daemon.startup_app_lock:
+        if (
+            daemon.startup_app_watcher_task is None
+            and startup_app_config.get_startup_app() == name
+        ):
+            daemon.startup_app_watcher_task = asyncio.create_task(
+                watch_antennas_for_startup_app(app_manager, daemon, name)
+            )
+            logger.info(f"Startup app antenna watcher started for app: {name}")

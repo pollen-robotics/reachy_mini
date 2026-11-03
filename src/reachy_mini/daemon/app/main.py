@@ -47,9 +47,9 @@ from reachy_mini.daemon.app.routers import (
     volume,
 )
 from reachy_mini.daemon.app.startup_app import (
+    arm_startup_app_at_boot,
     ensure_startup_app_installed,
     make_startup_app_launcher,
-    watch_antennas_for_startup_app,
 )
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.daemon.telemetry import telemetry as daemon_telemetry
@@ -222,15 +222,8 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                 and startup_app_ready
                 and app.state.daemon.backend is not None
             ):
-                app.state.daemon.startup_app_watcher_task = asyncio.create_task(
-                    watch_antennas_for_startup_app(
-                        app.state.app_manager,
-                        app.state.daemon,
-                        startup_app,
-                    )
-                )
-                logger.info(
-                    f"Startup app antenna watcher started for app: {startup_app}"
+                await arm_startup_app_at_boot(
+                    app.state.app_manager, app.state.daemon, startup_app
                 )
 
             # Register mDNS service only after the daemon is ready

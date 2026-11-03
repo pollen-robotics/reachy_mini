@@ -16,6 +16,7 @@ from reachy_mini.daemon.app.startup_app import (
     AntennaTouchDetector,
     _antennas_in_commanded_motion,
     apply_startup_app,
+    arm_startup_app_at_boot,
     ensure_startup_app_installed,
     make_startup_app_launcher,
     rearm_startup_app_watcher,
@@ -706,3 +707,45 @@ async def test_concurrent_startup_app_changes_leave_one_watcher(
     finally:
         for t in watchers:
             t.cancel()
+
+
+@pytest.mark.asyncio
+async def test_boot_arms_the_startup_app_read_before_start(config_file: Path) -> None:
+    """Nothing changed during start(): boot arms the watcher."""
+    startup_app_config.set_startup_app("foo")
+    daemon = StubDaemon()
+    await arm_startup_app_at_boot(
+        StubAppManager(installed=["foo"], catalog=[]), daemon, "foo"  # type: ignore[arg-type]
+    )
+    task = daemon.startup_app_watcher_task
+    assert task is not None
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("changed_to", [None, "foo"])
+async def test_boot_keeps_a_startup_app_change_made_during_start(
+    config_file: Path, changed_to: str | None
+) -> None:
+    """A client clearing or re-setting it during start() wins; boot arms no extra watcher."""
+    startup_app_config.set_startup_app("foo")  # what boot read
+    daemon = StubDaemon()
+    mgr = StubAppManager(installed=["foo"], catalog=[])
+    await apply_startup_app(mgr, daemon, changed_to)  # relay, mid wake-up
+    armed = daemon.startup_app_watcher_task
+
+    await arm_startup_app_at_boot(mgr, daemon, "foo")  # type: ignore[arg-type]
+
+    try:
+        assert daemon.startup_app_watcher_task is armed
+        watchers = [
+            t
+            for t in asyncio.all_tasks()
+            if not t.done() and "watch_antennas" in repr(t.get_coro())
+        ]
+        assert watchers == ([] if armed is None else [armed])
+    finally:
+        if armed is not None:
+            armed.cancel()
