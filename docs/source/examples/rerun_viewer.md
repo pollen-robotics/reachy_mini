@@ -4,7 +4,7 @@ This example shows how to use the Rerun utility to log and visualize Reachy Mini
 
 Requirements:
 - Install with: `pip install reachy-mini[rerun,placo_kinematics]`
-- Start the daemon with: `reachy-mini-daemon --kinematics-engine Placo`
+- For the compliant head, start the daemon with: `reachy-mini-daemon --kinematics-engine Placo`. Without it (e.g. on a Wireless), the viewer still shows the model and the camera, but the head is not compliant.
 
 <literalinclude>
 {"path": "../../../examples/rerun_viewer.py",

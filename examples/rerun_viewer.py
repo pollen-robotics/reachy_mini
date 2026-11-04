@@ -5,7 +5,8 @@ Viewer that shows the live 3D URDF model with joint positions and camera feed.
 
 Requirements:
 - Install with: pip install reachy-mini[rerun,placo_kinematics]
-- Start the daemon with: reachy-mini-daemon --kinematics-engine Placo
+- For the compliant head, start the daemon with: reachy-mini-daemon --kinematics-engine Placo
+  (without it, e.g. on a Wireless, the viewer still works but the head is not compliant)
 """
 
 # START doc_example
@@ -24,9 +25,9 @@ def main() -> None:
     )
 
     with ReachyMini(log_level="DEBUG") as mini:
+        rerun = Rerun(mini)
         try:
             mini.enable_gravity_compensation()
-            rerun = Rerun(mini)
             rerun.start()
 
             print("Reachy Mini is now compliant. Press Ctrl+C to exit.")
