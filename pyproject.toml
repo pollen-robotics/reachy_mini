@@ -10,7 +10,7 @@ description = ""
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "aiohttp>=3.14.0",
+    "aiohttp>=3.14.4",
     "asgiref",
     # 2026.10.19 distrusts the compromised eMudhra intermediates (CVE-2026-111943).
     "certifi>=2026.10.19",
@@ -38,7 +38,7 @@ dependencies = [
     "pycaw>=20240210; sys_platform == 'win32'",
     "pydantic>=2.12.5,<3.0.0",
     "pyserial",
-    "python-multipart>=0.0.27",
+    "python-multipart>=0.0.31",
     "pyusb>=1.2.1",
     "pyyaml>=6.0",
     "questionary",
@@ -72,7 +72,7 @@ examples = [
 mujoco = ["mujoco==3.3.0"]
 placo_kinematics = [
     "placo==0.9.14; sys_platform != 'win32'",
-    "tornado>=6.5.5; sys_platform != 'win32'", # security floor for meshcat transitive dependency
+    "tornado>=6.6; sys_platform != 'win32'", # security floor for meshcat transitive dependency
 ]
 rerun = ["rerun-sdk>=0.29.0,<=0.31.3"]
 wireless-version = [
