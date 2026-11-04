@@ -93,6 +93,10 @@ SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 
 # Cap the local IPC feed below the capture rate; it also paces every client, face tracker included.
 IPC_FPS = 10
+# Upper bound on frames decoded per second on the Linux V4L2 path (Lite). The camera
+# captures 1080p MJPEG at 60 fps; frames are dropped before jpegdec, so both the IPC
+# and WebRTC branches get at most this rate. Other platforms are unaffected.
+MAX_DECODE_FPS = int(os.getenv("REACHY_MINI_MAX_DECODE_FPS", "10"))
 
 # Reopening the Windows mic after Windows invalidated it (see
 # `_on_mic_failure`). Retries back off up to the cap while failures keep
@@ -930,6 +934,11 @@ class GstMediaServer:
         """Get the current camera framerate."""
         return self._resolution.value[2]
 
+    @property
+    def decode_framerate(self) -> int:
+        """Get the framerate the V4L2 chain decodes at (capped at MAX_DECODE_FPS)."""
+        return min(self.framerate, MAX_DECODE_FPS)
+
     def _configure_video(
         self, cam_path: str, pipeline: Gst.Pipeline, webrtcsink: Gst.Element
     ) -> None:
@@ -960,6 +969,9 @@ class GstMediaServer:
 
         # --- Build the camera source chain (ends with raw video) ---
         source_elements: list[Gst.Element] = []
+        # Only the V4L2 chain drops frames before decoding; every other
+        # source delivers the camera's native rate.
+        source_framerate = self.framerate
 
         if cam_path == "use_sim":
             # TODO: Optimize later by feeding frames directly via appsrc
@@ -982,6 +994,7 @@ class GstMediaServer:
         else:
             # Linux V4L2 USB camera
             source_elements = self._build_v4l2_source(cam_path)
+            source_framerate = self.decode_framerate
 
         if not source_elements:
             self._logger.error("Failed to create camera source elements.")
@@ -1007,7 +1020,7 @@ class GstMediaServer:
                 f"video/x-raw,format=I420,"
                 f"width={self.resolution[0]},"
                 f"height={self.resolution[1]},"
-                f"framerate={self.framerate}/1"
+                f"framerate={source_framerate}/1"
             )
             capsfilter_raw = Gst.ElementFactory.make("capsfilter", "pre_tee_caps")
             capsfilter_raw.set_property("caps", caps_raw)
@@ -1126,12 +1139,28 @@ class GstMediaServer:
         capsfilter = Gst.ElementFactory.make("capsfilter")
         capsfilter.set_property("caps", caps_mjpeg)
 
+        videorate = Gst.ElementFactory.make("videorate")
+        videorate.set_property("drop-only", True)
+        capsfilter_rate = Gst.ElementFactory.make("capsfilter")
+        capsfilter_rate.set_property(
+            "caps",
+            Gst.Caps.from_string(f"image/jpeg,framerate={self.decode_framerate}/1"),
+        )
+
         queue = Gst.ElementFactory.make("queue")
         # Decode MJPEG to raw so all platforms share one IPC/WebRTC pipeline.
         jpegdec = Gst.ElementFactory.make("jpegdec")
         videoconvert = Gst.ElementFactory.make("videoconvert")
 
-        elements = [camsrc, capsfilter, queue, jpegdec, videoconvert]
+        elements = [
+            camsrc,
+            capsfilter,
+            videorate,
+            capsfilter_rate,
+            queue,
+            jpegdec,
+            videoconvert,
+        ]
         if not all(elements):
             raise RuntimeError("Failed to create V4L2 video source elements")
         return elements
