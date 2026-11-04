@@ -100,6 +100,63 @@ def make_speaker_eq(logger: logging.Logger) -> Optional[Gst.Element]:
     return eq_bin
 
 
+def make_audiosink_tee_bin(
+    logger: logging.Logger,
+    audiosink: Gst.Element,
+    wobbler_appsink: Gst.Element,
+    speaker_head: Gst.Element | None = None,
+) -> Gst.Bin:
+    """Build a bin splitting incoming audio to the speaker and the head wobbler."""
+    container = Gst.Bin.new("audio_tee_bin")
+    tee = Gst.ElementFactory.make("tee")
+    container.add(tee)
+    if speaker_head is not None:
+        container.add(speaker_head)
+    eq_speaker = make_speaker_eq(logger)
+    # Per-branch convert+resample: the wireless XMOS PCM falls back to an
+    # IEC958 that fails to open at anything but its native rate.
+    queue_speaker = Gst.ElementFactory.make("queue")
+    ac_speaker = Gst.ElementFactory.make("audioconvert")
+    ar_speaker = Gst.ElementFactory.make("audioresample")
+    queue_wobbler = Gst.ElementFactory.make("queue")
+    ac_wobbler = Gst.ElementFactory.make("audioconvert")
+    ar_wobbler = Gst.ElementFactory.make("audioresample")
+
+    for element in (
+        queue_speaker,
+        ac_speaker,
+        ar_speaker,
+        audiosink,
+        queue_wobbler,
+        ac_wobbler,
+        ar_wobbler,
+        wobbler_appsink,
+    ):
+        container.add(element)
+
+    tee.link(queue_speaker)
+    if speaker_head is not None:
+        queue_speaker.link(speaker_head)
+        speaker_head.link(ac_speaker)
+    else:
+        queue_speaker.link(ac_speaker)
+    ac_speaker.link(ar_speaker)
+    if eq_speaker is not None:
+        container.add(eq_speaker)
+        ar_speaker.link(eq_speaker)
+        eq_speaker.link(audiosink)
+    else:
+        ar_speaker.link(audiosink)
+
+    tee.link(queue_wobbler)
+    queue_wobbler.link(ac_wobbler)
+    ac_wobbler.link(ar_wobbler)
+    ar_wobbler.link(wobbler_appsink)
+
+    container.add_pad(Gst.GhostPad.new("sink", tee.get_static_pad("sink")))
+    return container
+
+
 class AudioBase(ABC):
     """Abstract audio backend.
 
