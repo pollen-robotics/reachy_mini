@@ -1673,15 +1673,6 @@ wheels = [
 ]
 
 [[package]]
-name = "log-throttling"
-version = "0.0.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/76/be/09fda383d82a7b91f12ff5002bc909e101769c802ff3b1d2cb9f533d1a2f/log-throttling-0.0.3.tar.gz", hash = "sha256:df714e1448cd9cb4c916cf668ab88323032e61ece733548708d996ecf63190b9", size = 3533, upload-time = "2022-03-08T16:29:23.674Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b1/6e/995ebad4ab08250b4afe1d91fe3086b863ed9bb74539d90485250a50f08a/log_throttling-0.0.3-py3-none-any.whl", hash = "sha256:a82508f489dd44a60b737a0339c784dd8ee2b9db16bdcf587a8ae1012a7f6ffc", size = 4081, upload-time = "2022-03-08T16:29:21.443Z" },
-]
-
-[[package]]
 name = "markdown-it-py"
 version = "4.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3274,7 +3265,6 @@ dependencies = [
     { name = "huggingface-hub" },
     { name = "jinja2" },
     { name = "libusb-package" },
-    { name = "log-throttling" },
     { name = "numpy" },
     { name = "onnxruntime" },
     { name = "pip" },
@@ -3387,7 +3377,6 @@ requires-dist = [
     { name = "jinja2" },
     { name = "lgpio", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=0.2.2.0" },
     { name = "libusb-package", specifier = ">=1.0.26.3" },
-    { name = "log-throttling", specifier = "==0.0.3" },
     { name = "mujoco", marker = "extra == 'mujoco'", specifier = "==3.3.0" },
     { name = "nmcli", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.5" },
     { name = "numpy", specifier = ">=2.2.5" },

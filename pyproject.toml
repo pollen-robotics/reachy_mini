@@ -27,7 +27,6 @@ dependencies = [
     "huggingface-hub>=1.20.1,<2.0.0",
     "jinja2",
     "libusb_package>=1.0.26.3",
-    "log-throttling==0.0.3",
     "numpy>=2.2.5",
     "onnxruntime==1.27.0",
     # pip vendors its own CA bundle; updating certifi alone does not protect it.
