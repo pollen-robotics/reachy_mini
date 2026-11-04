@@ -12,7 +12,6 @@ from datetime import timedelta
 from multiprocessing import Event  # It seems to be more accurate than threading.Event
 from typing import Annotated, Any
 
-import log_throttling
 import numpy as np
 import numpy.typing as npt
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
@@ -256,9 +255,7 @@ class RobotBackend(Backend):
                             self.target_head_pose, self.target_body_yaw
                         )
                     except ValueError as e:
-                        log_throttling.by_time(self.logger, interval=0.5).warning(
-                            f"IK error: {e}"
-                        )
+                        self._log_ik_error(e)
 
                 if not self.is_shutting_down:
                     self.joint_positions_publisher.put(
