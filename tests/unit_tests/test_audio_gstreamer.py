@@ -149,8 +149,8 @@ def test_clear_player_flushes_past_the_mixer() -> None:
         GStreamerAudio.clear_player(fake)  # type: ignore[arg-type]
 
         assert "flush" in seen
+        assert sink_pad.get_sticky_event(Gst.EventType.SEGMENT, 0) is not None
         # The mixer's output task survived the flush.
         assert buffer_after_last_flush()
-        assert sink_pad.get_sticky_event(Gst.EventType.SEGMENT, 0) is not None
     finally:
         pipeline.set_state(Gst.State.NULL)
