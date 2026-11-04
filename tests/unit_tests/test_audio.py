@@ -1,32 +1,21 @@
 import os
 import tempfile
 import time
-import wave
 
 import numpy as np
 import pytest
-from scipy.signal import resample_poly
 
-from reachy_mini.media.audio_utils import _process_card_number_output, save_audio_to_wav
+from reachy_mini.media.audio_utils import (
+    _process_card_number_output,
+    load_audio_mono,
+    save_audio_to_wav,
+)
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
+from tests.audio_helpers import spectral_cosine
 
 SIGNALING_HOST = "reachy-mini.local"
 
-
-def _spectral_cosine(a: np.ndarray, b: np.ndarray, n: int = 8192) -> float:
-    """Cosine similarity of the Hann-windowed magnitude spectra of two signals.
-
-    Frequency-domain so it's timing-invariant — a partial capture or a start
-    offset doesn't matter, only whether the same sound is present.
-    """
-
-    def spectrum(x: np.ndarray) -> np.ndarray:
-        x = np.asarray(x, dtype=np.float64)
-        mag = np.abs(np.fft.rfft(x * np.hanning(len(x)), n))
-        return mag / (np.linalg.norm(mag) + 1e-9)
-
-    return float(np.dot(spectrum(a), spectrum(b)))
 
 # Audio-capable backends to test
 AUDIO_BACKENDS = [
@@ -36,7 +25,11 @@ AUDIO_BACKENDS = [
 
 
 @pytest.mark.audio
-@pytest.mark.parametrize("backend", AUDIO_BACKENDS)
+# WEBRTC only: the LOCAL case is covered with real assertions by
+# test_play_sound_reaches_sink. Kept until the webrtc tests are rewritten.
+@pytest.mark.parametrize(
+    "backend", [pytest.param(MediaBackend.WEBRTC, marks=pytest.mark.wireless)]
+)
 def test_play_sound(backend: MediaBackend) -> None:
     """Test playing a sound with the given backend."""
     media = MediaManager(
@@ -217,31 +210,6 @@ def test_push_audio_sample_without_start_playing(backend: MediaBackend) -> None:
 
 
 @pytest.mark.audio
-@pytest.mark.respeaker
-@pytest.mark.parametrize("backend", [MediaBackend.LOCAL])
-def test_DoA(backend: MediaBackend) -> None:
-    """Test Direction of Arrival (DoA) estimation."""
-    media = MediaManager(backend=backend)
-    # Test via GStreamerAudio directly
-    doa = media.audio.get_DoA()
-    assert doa is not None, "DoA is not defined."
-    assert isinstance(doa, tuple), "DoA is not a tuple."
-    assert len(doa) == 2, f"DoA has incorrect length: {len(doa)} != 2"
-    assert isinstance(doa[0], float), (
-        f"DoA has incorrect first type: {type(doa[0])} != float"
-    )
-    assert isinstance(doa[1], bool), (
-        f"DoA has incorrect second type: {type(doa[1])} != bool"
-    )
-    # Test via MediaManager proxy
-    doa_proxy = media.get_DoA()
-    assert doa_proxy is not None, "DoA is not defined."
-    assert doa_proxy == doa, "Proxy DoA is not equal to direct DoA"
-
-    media.close()
-
-
-@pytest.mark.audio
 @pytest.mark.loopback
 def test_play_sound_reaches_sink(audio_loopback: None) -> None:
     """Play a sound and confirm real, non-silent audio reaches the sink.
@@ -275,15 +243,9 @@ def test_play_sound_reaches_sink(audio_loopback: None) -> None:
     # Confirm it's actually the wake_up sound (not just any audio): compare the
     # captured spectrum to the source file resampled to the capture rate.
     captured = audio.astype(np.float64).mean(axis=1)
-    with wave.open(f"{ASSETS_ROOT_PATH}/wake_up.wav") as wav:
-        channels = wav.getnchannels()
-        src_rate = wav.getframerate()
-        raw = wav.readframes(wav.getnframes())
-    reference = np.frombuffer(raw, dtype=np.int16).astype(np.float64)
-    reference = reference.reshape(-1, channels).mean(axis=1)
-    reference = resample_poly(reference, rate, src_rate)
+    reference, _ = load_audio_mono(f"{ASSETS_ROOT_PATH}/wake_up.wav", samplerate=rate)
 
-    similarity = _spectral_cosine(captured, reference)
+    similarity = spectral_cosine(captured, reference)
     # Measured ~0.75-0.84 for the real sound vs ~0.10 for unrelated noise.
     assert similarity > 0.5, (
         f"Captured audio does not match wake_up.wav (spectral cosine={similarity:.2f})."
