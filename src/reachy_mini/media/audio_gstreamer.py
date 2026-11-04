@@ -522,7 +522,8 @@ class GStreamerAudio(AudioBase):
             mixer_src.push_event(Gst.Event.new_flush_start())
             mixer_src.push_event(Gst.Event.new_flush_stop(reset_time=False))
             if segment is not None:
-                mixer_src.push_event(segment)
+                # A copy: GStreamer 1.24 skips re-pushing the same event object.
+                mixer_src.push_event(Gst.Event.new_segment(segment.parse_segment()))
             self._pipeline.set_state(Gst.State.PLAYING)
             self.logger.info("Cleared player queue")
         else:
