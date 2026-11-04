@@ -56,7 +56,7 @@ import os
 import platform
 import time
 from collections.abc import Callable
-from threading import Thread
+from threading import Lock, Thread
 from typing import Optional
 
 import numpy as np
@@ -114,6 +114,9 @@ class GStreamerAudio(AudioBase):
         super().__init__(log_level=log_level)
 
         self._head_wobbler: Optional[HeadWobbler] = None
+        # Guards _head_wobbler between the wobbler appsink callback
+        # (GStreamer streaming thread) and (dis|en)able_wobbling.
+        self._head_wobbler_lock = Lock()
 
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
@@ -293,12 +296,18 @@ class GStreamerAudio(AudioBase):
         buffer's PTS on the pipeline clock — audio is playing NOW.
         """
         sample = appsink.pull_sample()
-        if sample is None or self._head_wobbler is None:
+        if sample is None:
             return Gst.FlowReturn.OK
-        buf = sample.get_buffer()
-        data = buf.extract_dup(0, buf.get_size())
-        pcm = np.frombuffer(data, dtype=np.float32)
-        self._head_wobbler.feed(pcm, time.monotonic_ns())
+        # Held until feed() returns, so (dis|en)able_wobbling cannot stop
+        # this wobbler mid-feed: hops scheduled after its stop() would fire.
+        with self._head_wobbler_lock:
+            wobbler = self._head_wobbler
+            if wobbler is None:
+                return Gst.FlowReturn.OK
+            buf = sample.get_buffer()
+            data = buf.extract_dup(0, buf.get_size())
+            pcm = np.frombuffer(data, dtype=np.float32)
+            wobbler.feed(pcm, time.monotonic_ns())
         return Gst.FlowReturn.OK
 
     def _build_audiosink_tee_bin(self) -> Gst.Bin:
@@ -469,8 +478,9 @@ class GStreamerAudio(AudioBase):
     def _on_bus_message(
         self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
     ) -> bool:
-        if msg.type == Gst.MessageType.EOS and self._head_wobbler is not None:
-            self._head_wobbler.stop()
+        wobbler = self._head_wobbler
+        if msg.type == Gst.MessageType.EOS and wobbler is not None:
+            wobbler.stop()
         return super()._on_bus_message(bus, msg, pipeline)
 
     def _dump_latency(self) -> None:
@@ -488,16 +498,18 @@ class GStreamerAudio(AudioBase):
 
     def start_playing(self) -> None:
         """Start the playback pipeline so ``push_audio_sample`` can feed data."""
-        if self._head_wobbler is not None:
-            self._head_wobbler.start()
+        wobbler = self._head_wobbler
+        if wobbler is not None:
+            wobbler.start()
         self._appsrc_pts = -1
         self._pipeline.set_state(Gst.State.PLAYING)
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def stop_playing(self) -> None:
         """Stop the playback pipeline."""
-        if self._head_wobbler is not None:
-            self._head_wobbler.stop()
+        wobbler = self._head_wobbler
+        if wobbler is not None:
+            wobbler.stop()
         self._appsrc_pts = -1
         self._pipeline.set_state(Gst.State.NULL)
         if self._playbin is not None:
@@ -506,8 +518,9 @@ class GStreamerAudio(AudioBase):
 
     def clear_player(self) -> None:
         """Flush the player's appsrc to drop any queued audio immediately."""
-        if self._head_wobbler is not None:
-            self._head_wobbler.reset()
+        wobbler = self._head_wobbler
+        if wobbler is not None:
+            wobbler.reset()
         if self._appsrc is not None:
             self._appsrc_pts = -1
             self._pipeline.set_state(Gst.State.PAUSED)
@@ -565,9 +578,10 @@ class GStreamerAudio(AudioBase):
         playbin.set_property("uri", uri)
 
         playbin.set_property("audio-sink", self._build_audiosink_tee_bin())
-        if self._head_wobbler is not None:
-            self._head_wobbler.reset()
-            self._head_wobbler.start()
+        wobbler = self._head_wobbler
+        if wobbler is not None:
+            wobbler.reset()
+            wobbler.start()
 
         self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
@@ -617,22 +631,28 @@ class GStreamerAudio(AudioBase):
                 yaw_rad)`` for each movement hop.
 
         """
-        if self._head_wobbler is not None:
-            self._head_wobbler.stop()
-        self._head_wobbler = HeadWobbler(callback, sample_rate=self.SAMPLE_RATE)
+        new = HeadWobbler(callback, sample_rate=self.SAMPLE_RATE)
+        # Swap under the lock, stop outside it: stop() calls back into the
+        # offsets callback, and no feed() on the old wobbler is in flight now.
+        with self._head_wobbler_lock:
+            old, self._head_wobbler = self._head_wobbler, new
+        if old is not None:
+            old.stop()
         self.logger.info("Head wobbler enabled")
 
     def disable_wobbling(self) -> None:
         """Disable head wobbling."""
-        if self._head_wobbler is not None:
-            self._head_wobbler.stop()
-            self._head_wobbler = None
+        with self._head_wobbler_lock:
+            old, self._head_wobbler = self._head_wobbler, None
+        if old is not None:
+            old.stop()
             self.logger.info("Head wobbler disabled")
 
     def cleanup(self) -> None:
         """Release all resources (pipelines, USB devices)."""
-        if self._head_wobbler is not None:
-            self._head_wobbler.stop()
+        wobbler = self._head_wobbler
+        if wobbler is not None:
+            wobbler.stop()
         self._doa.close()
 
     def __del__(self) -> None:
