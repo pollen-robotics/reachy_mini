@@ -90,8 +90,8 @@ class GStreamerAudio(AudioBase):
 
     Extends ``AudioBase`` with a GStreamer-specific helper:
 
-    - ``clear_player()``: flush the playback appsrc immediately via GStreamer
-      flush events, dropping any queued audio.
+    - ``clear_player()``: flush the playback path (appsrc branch and mixer
+      output) via GStreamer flush events, dropping any queued audio.
 
     (``clear_output_buffer()`` is deprecated and does nothing; use
     ``clear_player()`` instead.)
@@ -505,28 +505,24 @@ class GStreamerAudio(AudioBase):
             self._playbin = None
 
     def clear_player(self) -> None:
-        """Drop all queued playback audio immediately (barge-in).
-
-        A flush sent into the appsrc stops at the audiomixer, which doesn't
-        forward a flush arriving on a single sink pad. So the appsrc branch
-        and everything after the mixer (queue, speaker EQ, the sink's ring
-        buffer) are flushed separately; otherwise the speech already past
-        the mixer plays out after the pipeline resumes.
-
-        The pipeline is paused meanwhile so the live sources and the mixer
-        stop pushing: a buffer pushed into the flush would return FLUSHING,
-        which stops the mixer's output task for good.
-        """
+        """Drop all queued playback audio immediately (barge-in)."""
         if self._head_wobbler is not None:
             self._head_wobbler.reset()
         if self._appsrc is not None:
             self._appsrc_pts = -1
+            # Paused so the mixer can't push into the flush: FLUSHING would
+            # stop its output task for good.
             self._pipeline.set_state(Gst.State.PAUSED)
             self._appsrc.send_event(Gst.Event.new_flush_start())
             self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=False))
+            # audiomixer doesn't forward a single-pad flush: flush its output
+            # too, then resend the segment the flush cleared downstream.
             mixer_src = self._mixer.get_static_pad("src")
+            segment = mixer_src.get_sticky_event(Gst.EventType.SEGMENT, 0)
             mixer_src.push_event(Gst.Event.new_flush_start())
             mixer_src.push_event(Gst.Event.new_flush_stop(reset_time=False))
+            if segment is not None:
+                mixer_src.push_event(segment)
             self._pipeline.set_state(Gst.State.PLAYING)
             self.logger.info("Cleared player queue")
         else:
