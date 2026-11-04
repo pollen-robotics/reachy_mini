@@ -26,7 +26,7 @@ Example usage:
 import logging
 from dataclasses import dataclass, field, fields
 from enum import Enum
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -119,6 +119,8 @@ class CameraSpecs:
             and frame rates for this camera model.
         default_resolution (CameraResolution): Default resolution used when the camera
             is initialized.
+        calibration_size (Tuple[int, int]): Image size that the intrinsic matrix
+            ``K`` is calibrated for.
         vid (int): USB Vendor ID for identifying this camera model.
         pid (int): USB Product ID for identifying this camera model.
         K (npt.NDArray[np.float64]): 3x3 camera intrinsic matrix containing focal
@@ -156,6 +158,7 @@ class CameraSpecs:
     name: str = ""
     available_resolutions: List[CameraResolution] = field(default_factory=list)
     default_resolution: CameraResolution = CameraResolution.R1280x720at30fps
+    calibration_size: Tuple[int, int] = (3840, 2592)
     vid = 0
     pid = 0
     K: npt.NDArray[np.float64] = field(default_factory=lambda: np.eye(3))
@@ -189,6 +192,7 @@ class ArducamSpecs(CameraSpecs):
         CameraResolution.R1280x720at30fps,
     ]
     default_resolution = CameraResolution.R1280x720at30fps
+    calibration_size = CameraResolution.R1280x720at30fps.value[:2]
     vid = 0x0C45
     pid = 0x636D
     K = np.array([[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]])
@@ -278,18 +282,21 @@ class MujocoCameraSpecs(CameraSpecs):
         CameraResolution.R1280x720at60fps,
     ]
     default_resolution = CameraResolution.R1280x720at60fps
-    # ideal camera matrix
+    calibration_size = CameraResolution.R1280x720at60fps.value[:2]
+    # MuJoCo's eye_camera uses an 80-degree vertical field of view.
+    _fovy_rad = np.deg2rad(80.0)
+    _focal_length = calibration_size[1] / (2.0 * np.tan(_fovy_rad / 2.0))
     K = np.array(
         [
             [
-                CameraResolution.R1280x720at60fps.value[0],
+                _focal_length,
                 0.0,
-                CameraResolution.R1280x720at60fps.value[0] / 2,
+                calibration_size[0] / 2,
             ],
             [
                 0.0,
-                CameraResolution.R1280x720at60fps.value[1],
-                CameraResolution.R1280x720at60fps.value[1] / 2,
+                _focal_length,
+                calibration_size[1] / 2,
             ],
             [0.0, 0.0, 1.0],
         ]
@@ -307,6 +314,7 @@ class GenericWebcamSpecs(CameraSpecs):
         CameraResolution.R1920x1080at30fps,
     ]
     default_resolution = CameraResolution.R1280x720at30fps
+    calibration_size = CameraResolution.R1280x720at30fps.value[:2]
     # Approximate camera matrix for generic 720p webcam
     K = np.array(
         [

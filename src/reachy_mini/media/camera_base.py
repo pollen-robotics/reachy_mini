@@ -137,10 +137,7 @@ class CameraBase(ABC):
 
         # Rescale intrinsic matrix
         original_K = self.camera_specs.K
-        original_size: tuple[int, int] = (
-            CameraResolution.R3840x2592at30fps.value[0],
-            CameraResolution.R3840x2592at30fps.value[1],
-        )
+        original_size = self.camera_specs.calibration_size
         target_size: tuple[int, int] = (resolution.value[0], resolution.value[1])
         crop_scale = resolution.value[3]
         self.resized_K = scale_intrinsics(
