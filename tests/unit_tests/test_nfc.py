@@ -728,6 +728,63 @@ def test_erase_without_a_link_answers_instead_of_blocking(driver_installed, no_b
         reader.stop()
 
 
+def test_an_explicit_port_that_is_the_motor_port_is_refused(driver_installed):
+    # --nfc-port pointing at the motor controller: the board protocol must
+    # never be driven onto the motor bus.
+    opened = []
+
+    def factory(port):
+        opened.append(port)
+        return FakeSession()
+
+    reader = NfcReader(
+        port="/dev/ttyACM0",
+        exclude_ports=("/dev/ttyACM0",),
+        poll_interval=0.01,
+        retry_interval=0.01,
+        session_factory=factory,
+    )
+    reader.start()
+    try:
+        assert wait_until(
+            lambda: "motor controller" in (reader.get_status().error or "")
+        )
+        assert opened == []
+        assert not reader.is_connected()
+    finally:
+        reader.stop()
+
+
+def test_the_no_board_error_is_the_text_the_client_apps_match(
+    driver_installed, no_board
+):
+    # The desktop, mobile and conversation apps compare these verbatim.
+    reader = NfcReader(poll_interval=0.01, retry_interval=0.01)
+    reader.start()
+    try:
+        assert wait_until(
+            lambda: reader.get_status().error == "no NFC reader board found"
+        )
+    finally:
+        reader.stop()
+    assert reader.get_status().error == "NFC reader disabled"
+
+
+def test_a_job_dequeued_after_a_stop_never_reaches_the_tag():
+    # The thread took the job off the queue just as stop() was called: the
+    # reader is off, so the job is answered without touching the tag.
+    from reachy_mini.nfc.reader import _WriteJob
+
+    session = FakeSession()
+    reader = make_reader(session)
+    reader._should_stop.set()
+    job = _WriteJob(lambda s: s.write("x", None), timeout=5)
+    reader._serve_job(session, job)
+    assert session.write_calls == []
+    assert job.outcome is not None
+    assert job.outcome.error == "NOT_CONNECTED"
+
+
 class BlockingSession(FakeSession):
     """A session whose erase (or poll) holds the chip until released."""
 
@@ -1183,6 +1240,24 @@ def test_erase_shares_the_write_error_map(fake_ntag_reader):
     fake_ntag_reader.raises = None
     assert session.erase(full=True).success
     assert fake_ntag_reader.erased == [True]
+
+
+def test_a_failing_field_off_does_not_hide_a_landed_write(
+    fake_ntag_reader, monkeypatch
+):
+    # The write reached the tag; switching the field off afterwards failed.
+    # The caller must hear success, not LINK_LOST for a tag that changed.
+    from reachy_mini.nfc.reader import Clrc663Session
+
+    session = Clrc663Session("/dev/null")
+
+    def broken_field_off():
+        raise OSError("port gone")
+
+    monkeypatch.setattr(session._reader, "field_off", broken_field_off)
+    result = session.write("badge", None)
+    assert result.success
+    assert session._reader.written == ["badge"]
 
 
 def test_every_session_call_ends_with_the_field_off(fake_ntag_reader):

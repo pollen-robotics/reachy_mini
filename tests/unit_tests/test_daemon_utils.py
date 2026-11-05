@@ -113,7 +113,9 @@ def test_is_local_camera_available_linux_false(
 def test_daemon_check_no_spawn(monkeypatch: pytest.MonkeyPatch) -> None:
     """Nothing happens when spawn_daemon is False."""
     called = {"popen": False}
-    monkeypatch.setattr(utils.psutil, "process_iter", lambda *a, **k: iter([]))
+    monkeypatch.setattr(
+        utils.psutil, "process_iter", lambda *a, **k: iter([])
+    )
     monkeypatch.setattr(
         utils.subprocess,
         "Popen",

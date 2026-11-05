@@ -101,9 +101,13 @@ MAX_WRITE_CHARS = 860
 # The full memory is available through ``dump()`` and ``GET /api/nfc/dump``.
 RAW_PREVIEW_BYTES = 32
 
-# Status error of a reader that is switched off or absent, and the message the
-# APIs refuse tag operations with in that state.
+# Status errors the client apps (desktop, mobile, conversation) match verbatim:
+# changing either text breaks them.
+# - a reader switched off or absent; also what the APIs refuse tag operations
+#   with in that state.
 DISABLED_ERROR = "NFC reader disabled"
+# - a reader switched on, with no board plugged in.
+NO_BOARD_ERROR = "no NFC reader board found"
 
 
 class NfcRecord(BaseModel):
@@ -388,7 +392,7 @@ class Clrc663Session:
         except TagError:
             # No answer, or a malformed frame: a missed detection either way.
             # A tag that is really there answers properly on the next poll.
-            return NfcTag(present=False)
+            return no_tag()
 
         if uid != self._last_uid:
             self.forget()
@@ -405,7 +409,7 @@ class Clrc663Session:
             read = self._reader.read_tag()
         except TagError:
             # Removed between the detection and the read.
-            return NfcTag(present=False)
+            return no_tag()
 
         try:
             tag = _snapshot(read)
@@ -446,8 +450,8 @@ class Clrc663Session:
             return NfcDump(present=True, error=str(e))
         return NfcDump(
             present=True,
-            uid=read.uid.hex().upper(),
-            model=getattr(read.info, "name", None),
+            uid=_uid(read),
+            model=_model(read),
             size=len(read.data),
             hex=read.data.hex(),
             error=read.error,
@@ -518,6 +522,17 @@ class Clrc663Session:
         return NfcWriteResult(success=True)
 
 
+def _uid(read: Any) -> str:
+    """Return the UID of a ``read_tag`` result, as the API reports it."""
+    uid: bytes = read.uid
+    return uid.hex().upper()
+
+
+def _model(read: Any) -> str | None:
+    """Return the model of a ``read_tag`` result (None if unidentified)."""
+    return read.info.name if read.info is not None else None
+
+
 def _snapshot(read: Any) -> NfcTag:
     """Turn one ``NTagReader.read_tag`` result into an ``NfcTag``."""
     info = read.info
@@ -539,9 +554,9 @@ def _snapshot(read: Any) -> NfcTag:
 
     return NfcTag(
         present=True,
-        uid=read.uid.hex().upper(),
-        model=getattr(info, "name", None),
-        capacity=getattr(info, "ndef_bytes", None),
+        uid=_uid(read),
+        model=_model(read),
+        capacity=info.ndef_bytes if info is not None else None,
         writable=bool(
             info is not None and info.ndef_bytes is not None and not info.read_only
         ),
@@ -864,10 +879,7 @@ class NfcReader:
         antenna so the caller can post the write first and present the tag
         after. Returns an error result rather than raising.
         """
-        job = _WriteJob(lambda s: s.write(request.text, request.uri), timeout)
-        # The thread has until the deadline, plus one poll period to notice
-        # the job and one more to answer it.
-        return self._submit(job, timeout + 2 * self._poll_interval + 1.0)
+        return self._submit_write(lambda s: s.write(request.text, request.uri), timeout)
 
     def erase(
         self, request: NfcEraseRequest, timeout: float = ERASE_TIMEOUT
@@ -877,8 +889,7 @@ class NfcReader:
         Same waiting behaviour as a write, with a longer timeout (see
         ``ERASE_TIMEOUT``).
         """
-        job = _WriteJob(lambda s: s.erase(request.full), timeout)
-        return self._submit(job, timeout + 2 * self._poll_interval + 1.0)
+        return self._submit_write(lambda s: s.erase(request.full), timeout)
 
     def dump(self, timeout: float = 5.0) -> NfcDump:
         """Read the whole user memory of the tag currently on the antenna.
@@ -887,6 +898,15 @@ class NfcReader:
         owner, and a ~180 ms transfer must not interleave with a poll.
         """
         return self._submit(_DumpJob(), timeout + self._poll_interval)
+
+    def _submit_write(
+        self, action: Callable[[NfcSession], NfcWriteResult], timeout: float
+    ) -> NfcWriteResult:
+        """Submit a tag-modifying job that waits up to ``timeout`` for a tag."""
+        # The thread has until the deadline, plus one poll period to notice
+        # the job and one more to answer it.
+        wait = timeout + 2 * self._poll_interval + 1.0
+        return self._submit(_WriteJob(action, timeout), wait)
 
     def _submit(self, job: _Job[_Outcome], wait: float) -> _Outcome:
         """Hand one job to the reader thread and wait up to ``wait`` for it.
@@ -912,9 +932,17 @@ class NfcReader:
     # -- background loop ---------------------------------------------------
 
     def _resolve_board(self) -> NfcBoard | None:
-        if self._port_setting != "auto":
-            return describe_port(self._port_setting)
-        return find_nfc_board(exclude=self._exclude_ports)
+        if self._port_setting == "auto":
+            return find_nfc_board(exclude=self._exclude_ports)
+        if self._port_setting in self._exclude_ports:
+            # A misconfigured --nfc-port: driving the CLRC663 protocol onto
+            # the motor bus would garble it. Reported in the status, retried
+            # like a missing board.
+            raise RuntimeError(
+                f"{self._port_setting} is the motor controller's port, "
+                "not the NFC reader's"
+            )
+        return describe_port(self._port_setting)
 
     def _run(self) -> None:
         while True:
@@ -932,7 +960,7 @@ class NfcReader:
             try:
                 board = self._resolve_board()
                 if board is None:
-                    raise RuntimeError("no NFC reader board found")
+                    raise RuntimeError(NO_BOARD_ERROR)
                 session = self._session_factory(board.port)
                 self._set_connected(board, session.chip_version)
                 logger.info(

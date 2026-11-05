@@ -38,7 +38,7 @@ from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.manager import AppManager, AppState
 from reachy_mini.apps.sources import app_update_checker, local_common_venv
 from reachy_mini.apps.sources.hf_space import get_python_app_info
-from reachy_mini.daemon import startup_app_config
+from reachy_mini.daemon import nfc_switch, startup_app_config
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.startup_app import (
     apply_startup_app,
@@ -56,10 +56,15 @@ from reachy_mini.io.jsonrpc import (
     parse_inbound,
     parse_request,
 )
+from reachy_mini.nfc import (
+    NfcEnableRequest,
+    NfcEraseRequest,
+    NfcReader,
+    NfcWriteRequest,
+)
 
 if TYPE_CHECKING:
     from reachy_mini.daemon.daemon import Daemon
-    from reachy_mini.nfc import NfcReader
 
 Reply = Callable[[dict[str, Any]], None]
 
@@ -485,16 +490,6 @@ class JsonRpcRelay:
     # -- nfc.* (daemon-local) ---------------------------------------------
 
     async def _handle_nfc(self, req: RpcRequest, reply: Reply) -> None:
-        # Imported here: the reader module pulls in serial I/O the relay does
-        # not otherwise need.
-        from reachy_mini.nfc import (
-            NfcEnableRequest,
-            NfcEraseRequest,
-            NfcWriteRequest,
-        )
-
-        from . import nfc_switch
-
         verb = req.method.split(".", 1)[1] if "." in req.method else ""
         reader = self._nfc
 
