@@ -20,9 +20,9 @@ from ....nfc import (
     NfcTag,
     NfcWriteRequest,
     NfcWriteResult,
-    driver_available,
+    disabled_status,
     no_tag,
-    set_nfc_enabled,
+    switch_reader,
 )
 from ..dependencies import get_nfc_reader
 
@@ -56,13 +56,7 @@ async def get_status(
 ) -> NfcStatus:
     """Get the NFC reader hardware status (link, chip detection, driver)."""
     if reader is None:
-        return NfcStatus(
-            connected=False,
-            enabled=False,
-            chip_detected=False,
-            driver_available=driver_available(),
-            error="NFC reader disabled",
-        )
+        return disabled_status()
     return reader.get_status()
 
 
@@ -76,17 +70,17 @@ async def set_enabled(
     Off, the reader thread stops and the serial port is released; on, it goes
     back to looking for the board. Answers with the status right after the
     switch: when switching on, the board is usually not connected yet.
+    ``setting_saved`` is false when the switch applied but could not be saved,
+    and will be lost at the next restart.
 
     Not available when the daemon was started with ``--no-nfc``.
     """
     if reader is None:
         raise HTTPException(status_code=503, detail="NFC reader disabled")
 
-    set_nfc_enabled(request.enabled)
     # stop() joins the reader thread, which can take up to a poll's worth of
     # serial I/O: keep it off the event loop.
-    await asyncio.to_thread(reader.start if request.enabled else reader.stop)
-    return reader.get_status()
+    return await asyncio.to_thread(switch_reader, reader, request.enabled)
 
 
 @router.get("/dump")

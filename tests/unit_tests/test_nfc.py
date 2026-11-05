@@ -311,6 +311,39 @@ def test_the_switch_is_remembered_and_on_by_default(tmp_path, monkeypatch):
     assert settings.get_nfc_enabled()
 
 
+def test_a_switch_that_cannot_be_saved_still_applies(
+    driver_installed, tmp_path, monkeypatch
+):
+    from reachy_mini.nfc import settings
+
+    # A file where the config dir should be: mkdir fails, like a read-only fs.
+    (tmp_path / "blocker").write_text("")
+    monkeypatch.setattr(settings, "_STATE_PATH", tmp_path / "blocker" / "nfc.json")
+    reader = make_reader(FakeSession())
+    started(reader)
+    try:
+        status = settings.switch_reader(reader, False)
+        assert not status.enabled
+        assert status.setting_saved is False
+        assert reader.get_status().setting_saved is None
+    finally:
+        reader.stop()
+
+
+def test_a_saved_switch_says_so(driver_installed, tmp_path, monkeypatch):
+    from reachy_mini.nfc import settings
+
+    monkeypatch.setattr(settings, "_STATE_PATH", tmp_path / "nfc.json")
+    reader = make_reader(FakeSession())
+    try:
+        status = settings.switch_reader(reader, True)
+        assert status.enabled
+        assert status.setting_saved is True
+        assert settings.get_nfc_enabled()
+    finally:
+        reader.stop()
+
+
 def test_write_is_served_by_the_reader_thread(driver_installed):
     session = FakeSession()
     reader = make_reader(session)

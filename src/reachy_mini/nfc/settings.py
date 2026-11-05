@@ -14,6 +14,10 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .reader import NfcReader, NfcStatus
 
 logger = logging.getLogger(__name__)
 
@@ -42,3 +46,19 @@ def set_nfc_enabled(enabled: bool) -> bool:
     except Exception as e:  # noqa: BLE001 - never stop the daemon over this
         logger.warning("Could not write the NFC setting: %s", e)
         return False
+
+
+def switch_reader(reader: NfcReader, enabled: bool) -> NfcStatus:
+    """Switch the reader on or off now, and remember it across restarts.
+
+    The switch applies even when the choice cannot be saved: the returned
+    status then says ``setting_saved=False``, so a client can tell the user it
+    will not survive a restart. Blocking (stop() joins the reader thread):
+    call it off the event loop.
+    """
+    saved = set_nfc_enabled(enabled)
+    if enabled:
+        reader.start()
+    else:
+        reader.stop()
+    return reader.get_status().model_copy(update={"setting_saved": saved})

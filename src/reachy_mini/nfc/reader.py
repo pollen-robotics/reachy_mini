@@ -136,6 +136,10 @@ class NfcStatus(BaseModel):
     chip_version: str | None = None
     error: str | None = None
     last_seen_at: datetime | None = None
+    # Only set in the answer to a switch on/off: False when the choice could
+    # not be saved, so the reader is switched as asked but goes back to its
+    # previous setting at the next daemon restart.
+    setting_saved: bool | None = None
 
 
 class NfcWriteRequest(BaseModel):
@@ -203,6 +207,17 @@ class NfcDump(BaseModel):
 def no_tag() -> NfcTag:
     """Return an empty tag snapshot, for when there is no reader at all."""
     return NfcTag(present=False)
+
+
+def disabled_status() -> NfcStatus:
+    """Return the status reported when there is no reader at all (--no-nfc)."""
+    return NfcStatus(
+        connected=False,
+        enabled=False,
+        chip_detected=False,
+        driver_available=driver_available(),
+        error="NFC reader disabled",
+    )
 
 
 def _now() -> datetime:

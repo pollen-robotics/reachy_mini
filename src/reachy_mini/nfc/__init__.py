@@ -11,10 +11,11 @@ from .reader import (
     NfcTag,
     NfcWriteRequest,
     NfcWriteResult,
+    disabled_status,
     driver_available,
     no_tag,
 )
-from .settings import get_nfc_enabled, set_nfc_enabled
+from .settings import get_nfc_enabled, set_nfc_enabled, switch_reader
 
 __all__ = [
     "NfcBoard",
@@ -27,10 +28,12 @@ __all__ = [
     "NfcTag",
     "NfcWriteRequest",
     "NfcWriteResult",
+    "disabled_status",
     "driver_available",
     "find_nfc_board",
     "get_nfc_enabled",
     "is_nfc_board",
     "no_tag",
     "set_nfc_enabled",
+    "switch_reader",
 ]

@@ -2262,7 +2262,7 @@
     "/api/nfc/enabled": {
       "post": {
         "summary": "Set Enabled",
-        "description": "Switch the NFC reader on or off, and remember it across restarts.\n\nOff, the reader thread stops and the serial port is released; on, it goes\nback to looking for the board. Answers with the status right after the\nswitch: when switching on, the board is usually not connected yet.\n\nNot available when the daemon was started with ``--no-nfc``.",
+        "description": "Switch the NFC reader on or off, and remember it across restarts.\n\nOff, the reader thread stops and the serial port is released; on, it goes\nback to looking for the board. Answers with the status right after the\nswitch: when switching on, the board is usually not connected yet.\n``setting_saved`` is false when the switch applied but could not be saved,\nand will be lost at the next restart.\n\nNot available when the daemon was started with ``--no-nfc``.",
         "operationId": "set_enabled_api_nfc_enabled_post",
         "requestBody": {
           "content": {
@@ -4229,6 +4229,17 @@
               }
             ],
             "title": "Last Seen At"
+          },
+          "setting_saved": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setting Saved"
           }
         },
         "type": "object",
