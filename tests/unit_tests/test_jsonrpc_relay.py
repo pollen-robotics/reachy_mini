@@ -1034,16 +1034,17 @@ async def test_nfc_status_does_not_carry_setting_saved() -> None:
 
 
 @pytest.mark.asyncio
-async def test_nfc_dump_mirrors_the_rest_route() -> None:
-    relay = JsonRpcRelay(
-        FakeAppManager(), broadcast=lambda _: None, nfc_reader=FakeNfcReader()
-    )  # type: ignore[arg-type]
-    dump = await _call(relay, "nfc.dump")
-    assert dump["result"]["hex"] == "deadbeef"
-    off = JsonRpcRelay(
-        FakeAppManager(),
-        broadcast=lambda _: None,
-        nfc_reader=FakeNfcReader(enabled=False),
-    )  # type: ignore[arg-type]
-    refused = await _call(off, "nfc.dump")
-    assert refused["error"]["data"]["reason"] == "nfc_disabled"
+async def test_nfc_dump_is_not_served_over_rpc() -> None:
+    # The whole memory of any card on the reader stays LAN-only (REST).
+    reader = FakeNfcReader()
+    reader.dumps = 0
+
+    def dump() -> Any:
+        reader.dumps += 1
+        raise AssertionError("nfc.dump must not reach the reader")
+
+    reader.dump = dump  # type: ignore[method-assign]
+    relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None, nfc_reader=reader)  # type: ignore[arg-type]
+    reply = await _call(relay, "nfc.dump")
+    assert reply["error"]["data"]["reason"] == "method_not_found"
+    assert reader.dumps == 0

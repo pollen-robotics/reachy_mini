@@ -11,7 +11,9 @@ Incoming JSON-RPC frames from any client transport (WebRTC DataChannel,
   and the startup app the antennas launch. This *is* the "apps API"
   exposed over WebRTC, for clients that can't reach the LAN-only REST API.
 * ``nfc.*`` — handled locally against the optional NFC reader, mirroring the
-  ``/api/nfc`` routes for clients that only reach the daemon over WebRTC.
+  ``/api/nfc`` routes for clients that only reach the daemon over WebRTC —
+  except ``dump``: it reads the whole memory of any card put on the reader (an
+  access badge, say), and stays a LAN-only diagnostic on ``GET /api/nfc/dump``.
 * anything else (e.g. ``conversation.*``) — relayed to the running app's
   ``/rpc`` WebSocket. The relay holds one persistent connection to that
   endpoint, which doubles as the daemon's subscription to the app's event
@@ -520,9 +522,6 @@ class JsonRpcRelay:
                     nfc_switch.require_enabled(reader).write, write
                 )
                 result = outcome.model_dump(mode="json")
-            elif verb == "dump":
-                dump = await asyncio.to_thread(nfc_switch.require_enabled(reader).dump)
-                result = dump.model_dump(mode="json")
             else:
                 raise JsonRpcError(
                     f"unknown method: {req.method}",
