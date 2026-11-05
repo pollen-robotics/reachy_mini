@@ -39,6 +39,7 @@ from typing import (
     Concatenate,
     Generic,
     Iterable,
+    Literal,
     ParamSpec,
     Protocol,
     TypeVar,
@@ -101,13 +102,22 @@ MAX_WRITE_CHARS = 860
 # The full memory is available through ``dump()`` and ``GET /api/nfc/dump``.
 RAW_PREVIEW_BYTES = 32
 
-# Status errors the client apps (desktop, mobile, conversation) match verbatim:
-# changing either text breaks them.
-# - a reader switched off or absent; also what the APIs refuse tag operations
-#   with in that state.
+# Why the reader is not serving, as a stable code for clients to branch on
+# (``NfcStatus.error_code``); ``NfcStatus.error`` is the matching sentence, for
+# people, and free to change.
+NfcStatusError = Literal[
+    "DISABLED",  # switched off, or the daemon runs with --no-nfc
+    "NO_BOARD",  # switched on, no board plugged in: the usual state
+    "DRIVER_MISSING",  # the winnie_nfc package is not installed
+    "PORT_CONFLICT",  # --nfc-port names the motor controller's port
+    "LINK_ERROR",  # the board is there but the serial link failed
+]
+
+# Sentences of the codes above that have a fixed one. DISABLED_ERROR is also
+# what the APIs refuse tag operations with while the reader is off.
 DISABLED_ERROR = "NFC reader disabled"
-# - a reader switched on, with no board plugged in.
 NO_BOARD_ERROR = "no NFC reader board found"
+DRIVER_MISSING_ERROR = "winnie_nfc is not installed (pip install 'reachy_mini[nfc]')"
 
 
 class NfcRecord(BaseModel):
@@ -152,7 +162,8 @@ class NfcStatus(BaseModel):
     port: str | None = None
     board_version: str | None = None  # from the USB product string
     chip_version: str | None = None
-    error: str | None = None
+    error: str | None = None  # why the reader is not serving, for people
+    error_code: NfcStatusError | None = None  # the same, for clients
     last_seen_at: datetime | None = None
     # Only set in the answer to a switch on/off: False when the choice could
     # not be saved, so the reader is switched as asked but goes back to its
@@ -203,7 +214,11 @@ class NfcWriteResult(BaseModel):
     ``error`` is a stable code rather than a sentence: ``NO_TAG``,
     ``TOO_LONG``, ``LOCKED``, ``UNKNOWN_TAG``, ``WRITE_REFUSED``,
     ``WRITE_ERROR``, ``COLLISION``, ``NOT_CONNECTED``, ``LINK_LOST``,
-    ``TIMEOUT``, ``BUSY``, ``DRIVER_MISSING``.
+    ``TIMEOUT``, ``UNCERTAIN``, ``BUSY``, ``DRIVER_MISSING``.
+
+    ``TIMEOUT`` means the tag was left untouched: no tag came in time.
+    ``UNCERTAIN`` means the caller stopped waiting while the operation was on
+    the tag: it may or may not have landed, read the tag to know.
     """
 
     success: bool
@@ -235,6 +250,7 @@ def disabled_status() -> NfcStatus:
         chip_detected=False,
         driver_available=driver_available(),
         error=DISABLED_ERROR,
+        error_code="DISABLED",
     )
 
 
@@ -627,18 +643,29 @@ class _Job(Generic[_Outcome]):
             self._cancelled = True
             return True
 
-    def wait(self, timeout: float) -> bool:
-        """Wait for the outcome; on timeout, make sure the job never runs."""
+    def wait(self, timeout: float) -> Literal["done", "withdrawn", "running"]:
+        """Wait for the outcome; on timeout, make sure the job never runs again.
+
+        Returns ``"done"`` when the outcome is in, ``"withdrawn"`` when the job
+        timed out between two attempts (nothing is on the tag, and nothing
+        will be), ``"running"`` when an attempt is still on the tag and its
+        outcome is unknown.
+        """
         if self.done.wait(timeout):
-            return True
+            return "done"
         if self.cancel():
-            return False
+            return "withdrawn"
         # An attempt is running: it is bounded by the driver, give it as long
         # again, then withdraw whatever retries are left.
-        finished = self.done.wait(timeout)
-        if not finished and not self.cancel():
-            logger.warning("NFC job still running after its caller gave up.")
-        return finished
+        if self.done.wait(timeout):
+            return "done"
+        if self.cancel():
+            return "withdrawn"
+        logger.warning("NFC job still running after its caller gave up.")
+        return "running"
+
+    # The error reported when the caller gives up during an attempt.
+    unsure_error = "TIMEOUT"
 
     def run(self, session: NfcSession) -> bool:
         """Do the work. Return False to be retried after a poll interval."""
@@ -661,6 +688,9 @@ class _WriteJob(_Job[NfcWriteResult]):
     share one retry policy: both are things a caller posts before putting a
     tag on the antenna.
     """
+
+    # An attempt cut short may have written some pages, or all of them.
+    unsure_error = "UNCERTAIN"
 
     def __init__(
         self, action: Callable[[NfcSession], NfcWriteResult], timeout: float
@@ -710,6 +740,14 @@ class _DumpJob(_Job[NfcDump]):
 
     def failed(self, error: str) -> NfcDump:
         return NfcDump(present=False, error=error)
+
+
+class _BoardError(RuntimeError):
+    """No usable board, for a reason the status reports as ``code``."""
+
+    def __init__(self, code: NfcStatusError, message: str) -> None:
+        super().__init__(message)
+        self.code: NfcStatusError = code
 
 
 class NfcReader:
@@ -768,6 +806,7 @@ class NfcReader:
         self._board_version: str | None = None
         self._chip_version: str | None = None
         self._error: str | None = None
+        self._error_code: NfcStatusError | None = None
         self._last_seen_at: datetime | None = None
         self._misses = 0  # consecutive polls with no tag
 
@@ -789,9 +828,8 @@ class NfcReader:
             # Not an error: the driver is an optional extra. Say so once, in
             # the status, instead of retrying an import that cannot succeed.
             with self._lock:
-                self._error = (
-                    "winnie_nfc is not installed (pip install 'reachy_mini[nfc]')"
-                )
+                self._error = DRIVER_MISSING_ERROR
+                self._error_code = "DRIVER_MISSING"
             logger.info("NFC reader disabled: winnie_nfc is not installed.")
             return
         self._should_stop.clear()
@@ -856,6 +894,7 @@ class NfcReader:
                 board_version=self._board_version,
                 chip_version=self._chip_version,
                 error=self._error if self._enabled else DISABLED_ERROR,
+                error_code=self._error_code if self._enabled else "DISABLED",
                 last_seen_at=self._last_seen_at,
             )
 
@@ -923,8 +962,11 @@ class NfcReader:
             return job.failed("BUSY")
         try:
             self._jobs.put(job)
-            if not job.wait(wait):
+            waited = job.wait(wait)
+            if waited == "withdrawn":
                 return job.failed("TIMEOUT")
+            if waited == "running":
+                return job.failed(job.unsure_error)
             return job.outcome if job.outcome is not None else job.failed("LINK_LOST")
         finally:
             self._job_lock.release()
@@ -938,9 +980,10 @@ class NfcReader:
             # A misconfigured --nfc-port: driving the CLRC663 protocol onto
             # the motor bus would garble it. Reported in the status, retried
             # like a missing board.
-            raise RuntimeError(
+            raise _BoardError(
+                "PORT_CONFLICT",
                 f"{self._port_setting} is the motor controller's port, "
-                "not the NFC reader's"
+                "not the NFC reader's",
             )
         return describe_port(self._port_setting)
 
@@ -950,7 +993,7 @@ class NfcReader:
             with self._lifecycle:
                 if self._should_stop.is_set():
                     self._running = False
-                    self._set_disconnected(None)
+                    self._set_disconnected(None, None)
                     return
             # start() was called again while this thread was finishing up.
 
@@ -960,7 +1003,7 @@ class NfcReader:
             try:
                 board = self._resolve_board()
                 if board is None:
-                    raise RuntimeError(NO_BOARD_ERROR)
+                    raise _BoardError("NO_BOARD", NO_BOARD_ERROR)
                 session = self._session_factory(board.port)
                 self._set_connected(board, session.chip_version)
                 logger.info(
@@ -969,7 +1012,8 @@ class NfcReader:
                     board.version or "unknown",
                 )
             except Exception as e:  # noqa: BLE001 - the board may be absent
-                self._set_disconnected(str(e))
+                code = e.code if isinstance(e, _BoardError) else "LINK_ERROR"
+                self._set_disconnected(str(e), code)
                 # A job posted while the link was still up, just before it
                 # dropped: answer it now rather than at its deadline.
                 self._abandon_queued("NOT_CONNECTED")
@@ -982,7 +1026,7 @@ class NfcReader:
                 self._serve(session)
             except Exception as e:  # noqa: BLE001 - the link may drop anytime
                 logger.warning("NFC reader link lost: %s", e)
-                self._set_disconnected(str(e))
+                self._set_disconnected(str(e), "LINK_ERROR")
                 # Nobody serves the queue while reconnecting: without this a
                 # queued write waits out its whole deadline for a TIMEOUT, or
                 # fires on a reconnect the user no longer expects.
@@ -1036,6 +1080,7 @@ class NfcReader:
             self._chip_detected = True
             self._last_seen_at = _now()
             self._error = None
+            self._error_code = None
 
             if tag.present:
                 self._misses = 0
@@ -1073,11 +1118,15 @@ class NfcReader:
             self._board_version = board.version
             self._chip_version = chip_version
             self._error = None
+            self._error_code = None
 
-    def _set_disconnected(self, error: str | None) -> None:
+    def _set_disconnected(
+        self, error: str | None, error_code: NfcStatusError | None
+    ) -> None:
         with self._lock:
             self._connected = False
             self._misses = 0
             self._chip_detected = False
             self._tag = no_tag()
             self._error = error
+            self._error_code = error_code

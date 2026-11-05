@@ -4218,6 +4218,24 @@
             ],
             "title": "Error"
           },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "DISABLED",
+                  "NO_BOARD",
+                  "DRIVER_MISSING",
+                  "PORT_CONFLICT",
+                  "LINK_ERROR"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
           "last_seen_at": {
             "anyOf": [
               {
@@ -4430,7 +4448,7 @@
           "success"
         ],
         "title": "NfcWriteResult",
-        "description": "Result of a write attempt.\n\n``error`` is a stable code rather than a sentence: ``NO_TAG``,\n``TOO_LONG``, ``LOCKED``, ``UNKNOWN_TAG``, ``WRITE_REFUSED``,\n``WRITE_ERROR``, ``COLLISION``, ``NOT_CONNECTED``, ``LINK_LOST``,\n``TIMEOUT``, ``BUSY``, ``DRIVER_MISSING``."
+        "description": "Result of a write attempt.\n\n``error`` is a stable code rather than a sentence: ``NO_TAG``,\n``TOO_LONG``, ``LOCKED``, ``UNKNOWN_TAG``, ``WRITE_REFUSED``,\n``WRITE_ERROR``, ``COLLISION``, ``NOT_CONNECTED``, ``LINK_LOST``,\n``TIMEOUT``, ``UNCERTAIN``, ``BUSY``, ``DRIVER_MISSING``.\n\n``TIMEOUT`` means the tag was left untouched: no tag came in time.\n``UNCERTAIN`` means the caller stopped waiting while the operation was on\nthe tag: it may or may not have landed, read the tag to know."
       },
       "PlaySoundRequest": {
         "properties": {

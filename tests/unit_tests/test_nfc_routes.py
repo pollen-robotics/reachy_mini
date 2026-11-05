@@ -96,6 +96,7 @@ def test_status_and_tag_answer_without_a_reader() -> None:
     assert status.status_code == 200
     assert status.json()["enabled"] is False
     assert status.json()["error"] == DISABLED_ERROR
+    assert status.json()["error_code"] == "DISABLED"
     tag = client.get("/nfc/tag")
     assert tag.status_code == 200
     assert tag.json()["present"] is False

@@ -271,6 +271,7 @@ def test_the_reader_can_be_switched_off_and_on_again(driver_installed):
         assert not status.enabled
         assert not status.connected
         assert status.error == "NFC reader disabled"
+        assert status.error_code == "DISABLED"
         started(reader)
         assert reader.get_status().enabled
         assert wait_until(lambda: reader.get_tag().present)
@@ -583,6 +584,7 @@ def test_a_missing_driver_disables_the_reader_without_failing(monkeypatch):
         status = reader.get_status()
         assert not status.driver_available
         assert status.error is not None and "winnie_nfc" in status.error
+        assert status.error_code == "DRIVER_MISSING"
         assert reader.write(NfcWriteRequest(text="x")).error == "DRIVER_MISSING"
         assert threading.active_count() >= 1
     finally:
@@ -746,28 +748,53 @@ def test_an_explicit_port_that_is_the_motor_port_is_refused(driver_installed):
     )
     reader.start()
     try:
-        assert wait_until(
-            lambda: "motor controller" in (reader.get_status().error or "")
-        )
+        assert wait_until(lambda: reader.get_status().error_code == "PORT_CONFLICT")
+        assert "motor controller" in (reader.get_status().error or "")
         assert opened == []
         assert not reader.is_connected()
     finally:
         reader.stop()
 
 
-def test_the_no_board_error_is_the_text_the_client_apps_match(
-    driver_installed, no_board
-):
-    # The desktop, mobile and conversation apps compare these verbatim.
+def test_a_missing_board_has_its_own_code(driver_installed, no_board):
+    # The usual state of a robot without the add-on: clients tell it apart
+    # from a fault by its code, not by the wording of the error.
     reader = NfcReader(poll_interval=0.01, retry_interval=0.01)
     reader.start()
     try:
-        assert wait_until(
-            lambda: reader.get_status().error == "no NFC reader board found"
-        )
+        assert wait_until(lambda: reader.get_status().error_code == "NO_BOARD")
     finally:
         reader.stop()
-    assert reader.get_status().error == "NFC reader disabled"
+    assert reader.get_status().error_code == "DISABLED"
+
+
+def test_a_board_that_cannot_be_opened_is_a_link_error(driver_installed):
+    def factory(port):
+        raise OSError("permission denied")
+
+    reader = NfcReader(
+        port="/dev/ttyACM0",
+        poll_interval=0.01,
+        retry_interval=0.01,
+        session_factory=factory,
+    )
+    reader.start()
+    try:
+        assert wait_until(lambda: reader.get_status().error_code == "LINK_ERROR")
+        assert reader.get_status().error == "permission denied"
+    finally:
+        reader.stop()
+
+
+def test_a_connected_reader_reports_no_error_code(driver_installed):
+    reader = make_reader(FakeSession())
+    started(reader)
+    try:
+        status = reader.get_status()
+        assert status.error is None
+        assert status.error_code is None
+    finally:
+        reader.stop()
 
 
 def test_a_job_dequeued_after_a_stop_never_reaches_the_tag():
@@ -902,6 +929,28 @@ def test_a_write_whose_attempt_is_running_waits_for_its_outcome(driver_installed
         session.release.set()
         eraser.join(timeout=5)
         assert results[0].success
+    finally:
+        session.release.set()
+        reader.stop()
+
+
+def test_a_write_still_on_the_tag_when_the_caller_gives_up_is_uncertain(
+    driver_installed,
+):
+    # The erase outlives both of the caller's waits: it may yet land, so the
+    # answer is UNCERTAIN, never TIMEOUT (which promises an untouched tag).
+    session = BlockingSession(block_erase=True)
+    reader = make_reader(session)
+    started(reader)
+    results = []
+    eraser = threading.Thread(
+        target=lambda: results.append(reader.erase(NfcEraseRequest(), timeout=0.01))
+    )
+    try:
+        eraser.start()
+        assert session.erasing.wait(2)
+        eraser.join(timeout=5)  # both waits run out while the erase blocks
+        assert results[0].error == "UNCERTAIN"
     finally:
         session.release.set()
         reader.stop()
