@@ -817,6 +817,9 @@ class NfcReader:
             return job.failed("BUSY")
         try:
             self._jobs.put(job)
+            with self._lifecycle:
+                if not self._running:
+                    self._abandon_queued("NOT_CONNECTED")
             waited = job.wait(wait)
             if waited == "withdrawn":
                 return job.failed("TIMEOUT")
@@ -846,6 +849,7 @@ class NfcReader:
                 if self._should_stop.is_set():
                     self._running = False
                     self._set_disconnected(None, None)
+                    self._abandon_queued("NOT_CONNECTED")
                     return
             # Restarted while finishing up: keep serving.
 
