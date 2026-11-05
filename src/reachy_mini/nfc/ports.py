@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import sys
 from dataclasses import dataclass
-from typing import Any, Iterable, Sequence
+from typing import Any, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -61,23 +61,15 @@ def _comports() -> list[Any]:
     return list(serial.tools.list_ports.comports())
 
 
-def find_nfc_board(
-    comports: Sequence[Any] | None = None,
-    exclude: Iterable[str] = (),
-) -> NfcBoard | None:
+def find_nfc_board(comports: Sequence[Any] | None = None) -> NfcBoard | None:
     """Return the NFC reader board, or ``None`` if there is none.
 
     Args:
         comports: optional list of ports (for testing); defaults to the live
             ``serial.tools.list_ports.comports()``.
-        exclude: ports to leave out (typically the motor controller's port,
-            when it is known explicitly).
 
     """
-    excluded = set(exclude)
     for p in _comports() if comports is None else comports:
-        if p.device in excluded:
-            continue
         found, version = parse_product(port_product(p))
         if found:
             return NfcBoard(port=p.device, version=version)

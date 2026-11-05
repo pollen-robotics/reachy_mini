@@ -25,7 +25,6 @@ from typing import (
     Callable,
     Concatenate,
     Generic,
-    Iterable,
     Literal,
     ParamSpec,
     Protocol,
@@ -645,7 +644,7 @@ class NfcReader:
     def __init__(
         self,
         port: str = "auto",
-        exclude_ports: Iterable[str] = (),
+        motor_port: str | None = None,
         poll_interval: float = POLL_INTERVAL,
         retry_interval: float = RETRY_INTERVAL,
         session_factory: Callable[[str], NfcSession] | None = None,
@@ -656,7 +655,10 @@ class NfcReader:
         Args:
             port: serial port path, or ``"auto"`` to look the board up by its
                 USB product string.
-            exclude_ports: ports never to take for the board (see ``ports.py``).
+            motor_port: the motor controller's port when configured
+                explicitly; an explicit ``port`` equal to it is refused
+                (``PORT_CONFLICT``). Auto-detection needs no such guard: it
+                goes by the board's USB product string.
             poll_interval: seconds between two antenna polls.
             retry_interval: seconds before retrying after a failure.
             session_factory: opens a session on a port (injectable for tests).
@@ -665,7 +667,7 @@ class NfcReader:
 
         """
         self._port_setting = port
-        self._exclude_ports = tuple(exclude_ports)
+        self._motor_port = motor_port
         self._poll_interval = poll_interval
         self._retry_interval = retry_interval
         self._absence_polls = max(1, absence_polls)
@@ -833,8 +835,8 @@ class NfcReader:
 
     def _resolve_board(self) -> NfcBoard | None:
         if self._port_setting == "auto":
-            return find_nfc_board(exclude=self._exclude_ports)
-        if self._port_setting in self._exclude_ports:
+            return find_nfc_board()
+        if self._port_setting == self._motor_port:
             raise _BoardError(
                 "PORT_CONFLICT",
                 f"{self._port_setting} is the motor controller's port, "

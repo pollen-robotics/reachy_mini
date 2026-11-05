@@ -56,17 +56,6 @@ def test_find_nfc_board_goes_by_the_product_string():
     assert found == ports.NfcBoard(port="/dev/ttyACM1", version="1.0")
 
 
-def test_find_nfc_board_honours_exclusions():
-    found = ports.find_nfc_board(
-        comports=[
-            comport("/dev/ttyACM0", product="Winnie NFC 1.0"),
-            comport("/dev/ttyACM1", product="Winnie NFC 2.0"),
-        ],
-        exclude=["/dev/ttyACM0"],
-    )
-    assert found == ports.NfcBoard(port="/dev/ttyACM1", version="2.0")
-
-
 def test_find_nfc_board_returns_none_without_the_product_string():
     assert ports.find_nfc_board(comports=[comport("/dev/ttyACM0")]) is None
 
@@ -728,7 +717,7 @@ def test_an_explicit_port_that_is_the_motor_port_is_refused(driver_installed):
 
     reader = NfcReader(
         port="/dev/ttyACM0",
-        exclude_ports=("/dev/ttyACM0",),
+        motor_port="/dev/ttyACM0",
         poll_interval=0.01,
         retry_interval=0.01,
         session_factory=factory,

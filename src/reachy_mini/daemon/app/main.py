@@ -358,12 +358,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     # wire the JSON-RPC app relay (apps.* + conversation.* over the DataChannel).
     app.state.daemon.app_manager = app.state.app_manager
 
-    # The NFC board can share the motor controller's USB ids: never take an
-    # explicitly configured motor port.
+    # An explicit --nfc-port that names the motor port is refused.
     app.state.nfc_reader = (
         NfcReader(
             port=args.nfc_port,
-            exclude_ports=(() if args.serialport == "auto" else (args.serialport,)),
+            motor_port=None if args.serialport == "auto" else args.serialport,
         )
         if nfc_reader_wanted(args)
         else None
