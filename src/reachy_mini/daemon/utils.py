@@ -9,6 +9,8 @@ from enum import Enum
 import psutil
 import serial.tools.list_ports
 
+from ..nfc.ports import is_nfc_board
+
 
 class SimulationMode(Enum):
     """Simulation mode for the Reachy Mini daemon."""
@@ -168,8 +170,6 @@ def find_serial_port(
     pid = pid.upper()
 
     # The NFC reader board can share these USB ids.
-    from ..nfc.ports import is_nfc_board
-
     return [
         p.device
         for p in ports
