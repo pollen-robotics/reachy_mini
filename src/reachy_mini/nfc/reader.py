@@ -294,13 +294,22 @@ def _field_off_after(
 
     The driver leaves the field on after each operation: without this, the
     antenna would stay powered between polls for as long as the link is open.
+
+    A failing ``field_off`` must not replace the call's own outcome: a write
+    that landed would otherwise be reported as ``LINK_LOST``. It is logged and
+    swallowed: if the link is really gone, the next poll fails on its own and
+    the reader thread reconnects.
     """
 
+    @functools.wraps(method)
     def call(self: Clrc663Session, /, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         try:
             return method(self, *args, **kwargs)
         finally:
-            self._reader.field_off()
+            try:
+                self._reader.field_off()
+            except Exception as e:  # noqa: BLE001 - see docstring
+                logger.debug("Could not switch the NFC field off: %r", e)
 
     return call
 
@@ -969,6 +978,11 @@ class NfcReader:
     def _serve_job(self, session: NfcSession, job: _Job[Any]) -> None:
         """Run one job, retrying it while it asks to be retried."""
         while True:
+            if self._should_stop.is_set():
+                # Stopped, possibly while this job was being dequeued: the
+                # reader is off, it must not touch a tag any more.
+                job.abandon("NOT_CONNECTED")
+                return
             if not job.begin():
                 return  # the caller timed out: do not touch the tag any more
             try:
@@ -976,9 +990,6 @@ class NfcReader:
             finally:
                 job.end()
             if finished:
-                return
-            if self._should_stop.is_set():
-                job.abandon("NOT_CONNECTED")
                 return
             self._should_stop.wait(self._poll_interval)
 

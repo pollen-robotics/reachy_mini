@@ -298,10 +298,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             # Unregister mDNS service
             mdns.unregister()
 
-            # Stop the NFC reader if it was started
+            # Stop the NFC reader if it was started. stop() joins the reader
+            # thread (seconds during a full erase): keep it off the event loop.
             if app.state.nfc_reader is not None:
                 try:
-                    app.state.nfc_reader.stop()
+                    await asyncio.to_thread(app.state.nfc_reader.stop)
                 except Exception as e:
                     logger.exception(f"Error stopping NFC reader: {e}")
 
