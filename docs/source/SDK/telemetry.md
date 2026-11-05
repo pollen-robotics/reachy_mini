@@ -20,9 +20,12 @@ Events:
 | `robot_app_started` / `robot_app_stopped` | app id, duration, exit code, crashed |
 | `robot_app_installed` / `robot_app_removed` | app id, success |
 | `update_result` | previous and new version, success, error type |
-| `client_connected` | client kind (desktop, mobile, web, Python SDK), its version and OS |
+| `client_connected` | client kind (desktop, mobile, web, Python SDK), its version and OS; for an unknown kind, its short name |
+| `js_app_started` / `js_app_stopped` | app id of the JS app, duration |
+| `usage_tick` | sent when the robot stops being used, every hour while use goes on, and when the daemon stops; never while idle: how many seconds it was in use, the kinds of clients and the app ids in use. An open desktop or mobile app counts as use, even while the robot sleeps |
+| `move_played` | dataset and move name for Pollen's move libraries; `other` for any other dataset. Moves a Python app plays itself, through the SDK, aren't seen |
 
-The app id is the Hugging Face Space id for public apps only. Private or local apps are reported as `private`.
+The app id is the Hugging Face Space id for public apps only. Private or local apps are reported as `private`. A JS app's id is checked by the app itself, which asks the Hugging Face Hub, without credentials, whether its Space is public.
 
 ## What is never sent
 

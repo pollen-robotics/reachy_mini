@@ -35,6 +35,7 @@ def _manager_with_head_pose(head_pose: np.ndarray) -> tuple[AppManager, AsyncMoc
         reset_to_init=reset_to_init,
         set_motor_control_mode=MagicMock(),
         request_idle_reset=MagicMock(),
+        stop_running_move=AsyncMock(),
     )
     mngr = AppManager(daemon=SimpleNamespace(backend=backend))
     mngr.current_app = _fake_current_app()  # type: ignore[assignment]

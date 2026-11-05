@@ -38,8 +38,10 @@ OS_IMAGE_VERSION_PATH = Path("/home/pollen/VERSION.txt")
 
 FLUSH_INTERVAL_S = 60.0
 HEARTBEAT_INTERVAL_S = 24 * 3600.0
+USAGE_TICK_S = 3600.0
 _MAX_QUEUE = 500
 _MAX_CLIENTS_SEEN = 50
+_MAX_SESSIONS = 50
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 _FALSY = frozenset({"0", "false", "no", "off"})
 
@@ -49,6 +51,11 @@ CLIENT_OSES = frozenset({"macos", "windows", "linux", "ios", "android"})
 _CLIENT_RE = re.compile(
     r"^([a-z_]{1,16})/([0-9A-Za-z.+-]{1,32})(?: \(([a-z]{1,16})\))?$"
 )
+_HF_ID_RE = re.compile(r"^[A-Za-z0-9][\w.-]{0,95}/[A-Za-z0-9][\w.-]{0,95}$", re.ASCII)
+_MOVE_NAME_RE = re.compile(r"^[\w.-]{1,64}$", re.ASCII)
+# shortcut: only Pollen's own move libraries are named, other datasets report
+# "other"; upgrade to a public check if community libraries matter.
+_NAMED_MOVE_OWNERS = ("pollen-robotics/",)
 
 
 def _state_path() -> Path:
@@ -143,11 +150,16 @@ def parse_client_header(raw: str) -> dict[str, str] | None:
     if match is None:
         return None
     client_type, client_version, client_os = match.groups()
-    return {
+    client = {
         "client_type": client_type if client_type in CLIENT_TYPES else "other",
         "client_version": client_version,
-        "client_os": client_os if client_os in CLIENT_OSES else "other",
     }
+    if client_os is not None:  # browsers don't say: leave it out, not "other"
+        client["client_os"] = client_os if client_os in CLIENT_OSES else "other"
+    if client["client_type"] == "other":
+        # Already limited to 16 lowercase letters by the regex.
+        client["client_type_raw"] = client_type
+    return client
 
 
 def app_id_for(metadata: dict[str, Any]) -> str:
@@ -202,6 +214,14 @@ class Telemetry:
         self._envelope: dict[str, Any] | None = None
         self._robot_id: str | None = None
         self._clients_seen: set[tuple[str, ...]] = set()
+        # Who is using the robot right now: key -> (kind, app id, start time),
+        # and everything seen since the last usage tick.
+        self._sessions: dict[str, tuple[str, str | None, float]] = {}
+        self._window: dict[str, tuple[str, str | None]] = {}
+        # Seconds with at least one session open since the last tick.
+        self._clock = time.monotonic
+        self._busy_since: float | None = None
+        self._busy_s = 0.0
 
     @property
     def active(self) -> bool:
@@ -232,6 +252,7 @@ class Telemetry:
         """Flush what is pending and mark a clean daemon exit."""
         if not self.active:
             return
+        self._usage_tick()  # the use since the last tick, sent with the final flush
         self._halt(flush=True)
         try:
             _write_state({**_read_state(), "running": False})
@@ -284,6 +305,108 @@ class Telemetry:
             self._clients_seen.add(key)
         self.capture("client_connected", **client)
 
+    def session_begin(self, key: str, kind: str, app_id: str | None = None) -> None:
+        """Count *key* as using the robot until ``session_end``."""
+        now = self._clock()
+        with self._lock:
+            if key not in self._sessions and len(self._sessions) >= _MAX_SESSIONS:
+                return
+            if not self._sessions:
+                self._busy_since = now
+            self._sessions[key] = (kind, app_id, now)
+            if self._envelope is not None:  # nothing piles up while opted out
+                self._window[key] = (kind, app_id)
+
+    def session_end(self, key: str) -> tuple[str, str | None, float] | None:
+        """Stop counting *key*; return its session, or None if unknown."""
+        with self._lock:
+            session = self._sessions.pop(key, None)
+            ended_last = session is not None and not self._sessions
+            if ended_last and self._busy_since is not None:
+                self._busy_s += self._clock() - self._busy_since
+                self._busy_since = None
+            return session
+
+    def note_hello(self, peer_id: str, client: str, app: str | None) -> None:
+        """Track a data-channel client and the JS app it runs, if any."""
+        parsed = parse_client_header(client)
+        if parsed is None:
+            return
+        self.note_client(client)
+        if app is not None and (app == "private" or not _HF_ID_RE.match(app)):
+            app = "private"  # the SDK only names Spaces it found public
+        key = f"peer:{peer_id}"
+        with self._lock:
+            session = self._sessions.get(key)
+        if session is not None and session[:2] == (parsed["client_type"], app):
+            return  # same client again (e.g. a reconnect): keep its session
+        # Relayed sessions share one peer id, but the relay runs one at a
+        # time: a different hello is a new session replacing the old one.
+        self.peer_closed(peer_id)
+        self.session_begin(key, parsed["client_type"], app)
+        if app is not None:
+            self.capture("js_app_started", app_id=app)
+
+    def peer_closed(self, peer_id: str) -> None:
+        """End a data-channel session, reporting the JS app's run time."""
+        session = self.session_end(f"peer:{peer_id}")
+        if session is not None and session[1] is not None:
+            self.capture(
+                "js_app_stopped",
+                app_id=session[1],
+                duration_s=int(self._clock() - session[2]),
+            )
+
+    def note_move(self, dataset: str, move: str) -> None:
+        """Report a recorded move, named only for Pollen's own libraries."""
+        if dataset.startswith(_NAMED_MOVE_OWNERS) and _MOVE_NAME_RE.match(move):
+            self.capture("move_played", dataset=dataset, move=move)
+        else:
+            self.capture("move_played", dataset="other")
+
+    def _maybe_tick(self, next_tick: float) -> float:
+        """Tick when use stops, or hourly while it goes on; return the next deadline.
+
+        Ticking only on the hour would never send a run shorter than an hour,
+        nor the last partial hour, since a daemon often exits uncleanly.
+        """
+        now = self._clock()
+        with self._lock:
+            idle = not self._sessions
+            used = bool(self._window)
+        if not used:
+            return now + USAGE_TICK_S  # the hour starts with the next use
+        if idle or now >= next_tick:
+            self._usage_tick()
+            # From now, not +=: no burst of ticks after a suspend.
+            return now + USAGE_TICK_S
+        return next_tick
+
+    def _usage_tick(self) -> None:
+        now = self._clock()
+        with self._lock:
+            window = self._window
+            self._window = {
+                k: (kind, app) for k, (kind, app, _) in self._sessions.items()
+            }
+            active_s = self._busy_s
+            if self._busy_since is not None:
+                active_s += now - self._busy_since
+                self._busy_since = now
+            self._busy_s = 0.0
+        if window and active_s > 0:  # a session ending right at the last tick
+            kinds = {kind for kind, _ in window.values()}
+            if "python_app" in kinds:
+                # The app's own SDK connection: not a second client.
+                kinds.discard("python_sdk")
+            self.capture(
+                "usage_tick",
+                interval_s=int(USAGE_TICK_S),
+                active_s=round(active_s),
+                kinds=sorted(kinds),
+                apps=sorted({app for _, app in window.values() if app}),
+            )
+
     def _activate(self, time_to_ready_ms: int | None) -> None:
         assert self._context is not None
         try:
@@ -310,6 +433,12 @@ class Telemetry:
             # A flush still in flight from a previous identity may have requeued.
             self._queue.clear()
             self._clients_seen.clear()
+            # Report only what is in use from now on, not what ran while off.
+            self._window = {
+                k: (kind, app) for k, (kind, app, _) in self._sessions.items()
+            }
+            self._busy_since = self._clock() if self._sessions else None
+            self._busy_s = 0.0
             self._robot_id = robot_id
             self._envelope = envelope
         started: dict[str, Any] = {"previous_exit_clean": previous_exit_clean}
@@ -339,6 +468,7 @@ class Telemetry:
         with self._lock:
             self._envelope = None
             self._robot_id = None
+            self._window = {}
             if not flush:
                 self._queue.clear()
         self._stop.set()
@@ -349,15 +479,16 @@ class Telemetry:
 
     def _run(self, stop: threading.Event) -> None:
         next_heartbeat = time.monotonic() + HEARTBEAT_INTERVAL_S
+        next_tick = self._clock() + USAGE_TICK_S
         started = time.monotonic()
         while not stop.is_set():
             self._wake.wait(FLUSH_INTERVAL_S)
             self._wake.clear()
-            if time.monotonic() >= next_heartbeat:
-                self.capture(
-                    "daily_heartbeat", uptime_s=int(time.monotonic() - started)
-                )
+            now = time.monotonic()
+            if now >= next_heartbeat:
+                self.capture("daily_heartbeat", uptime_s=int(now - started))
                 next_heartbeat += HEARTBEAT_INTERVAL_S
+            next_tick = self._maybe_tick(next_tick)
             self._flush(timeout=10.0)
         self._flush(timeout=2.0)
 

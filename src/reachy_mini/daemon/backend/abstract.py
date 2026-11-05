@@ -35,6 +35,7 @@ from reachy_mini.io.protocol import (
     CancelAudioCmd,
     CancelMoveCmd,
     ClearIncomingAudioCmd,
+    ClientHelloCmd,
     DeleteHfTokenCmd,
     DoaSnapshot,
     FaceTarget,
@@ -544,19 +545,24 @@ class Backend:
         finally:
             self._exit_move(in_move)
 
-    async def _stop_running_move(self) -> None:
-        """Stop a move left running by another session, waiting up to 1 s."""
+    async def stop_running_move(self, timeout: float = 1.0) -> None:
+        """Stop a move left running by another session, waiting up to ``timeout``."""
         # A move can outlive the session that started it (an uploaded dance
-        # keeps playing after a Wi-Fi drop). Our own enclosing move is not one.
+        # keeps playing after a Wi-Fi drop, a stopped app's goto). Our own
+        # enclosing move is not one.
         if not self.is_move_running or _IN_MOVE.get():
             return
         self._stop_move_requested = True
         token = self._active_move_token
         if token is not None:
             token.cancelled = True
-        deadline = time.monotonic() + 1.0
+        deadline = time.monotonic() + timeout
         while self.is_move_running and time.monotonic() < deadline:
             await asyncio.sleep(0.02)
+        if self.is_move_running:
+            self.logger.warning(
+                f"Move still running {timeout:g} s after a stop request"
+            )
 
     def get_status(
         self,
@@ -1457,7 +1463,7 @@ class Backend:
         nothing snaps), gravity compensation and per-motor torque overrides
         cleared, aim sources quiesced, then a lift to the init pose.
         """
-        await self._stop_running_move()
+        await self.stop_running_move()
 
         # Ordered: quiesce first so tracking can't re-aim the head between the
         # torque coming back and the lift starting.
@@ -1494,7 +1500,7 @@ class Backend:
         inherited pose into the one starting point the sleep trajectory was
         tuned for.
         """
-        await self._stop_running_move()
+        await self.stop_running_move()
         with self._move_guard():
             await self.reset_to_init()
             await asyncio.sleep(0.2)
@@ -1909,7 +1915,12 @@ class Backend:
         elif isinstance(cmd, GetVersionCmd):
             from importlib.metadata import version
 
-            send_response({"version": version("reachy_mini")})
+            from reachy_mini.daemon.telemetry import telemetry
+
+            # client_hello: the JS SDK may send it (no Hub lookup when opted out).
+            send_response(
+                {"version": version("reachy_mini"), "client_hello": telemetry.active}
+            )
 
         elif isinstance(cmd, GetHardwareIdCmd):
             from reachy_mini.utils.hardware_id import get_hardware_id
@@ -2008,6 +2019,13 @@ class Backend:
 
         elif isinstance(cmd, SetTelemetryCmd):
             asyncio.create_task(self._async_set_telemetry(cmd, send_response))
+
+        elif isinstance(cmd, ClientHelloCmd):
+            from reachy_mini.daemon.telemetry import telemetry
+
+            # Fire-and-forget; only multiplexed transports (WebRTC) have peers.
+            if peer_id is not None:
+                telemetry.note_hello(peer_id, cmd.client, cmd.app)
 
         elif isinstance(
             cmd,
@@ -2711,8 +2729,16 @@ class Backend:
         Called from the media server's GStreamer/GLib thread, so we hop
         back onto the asyncio loop before touching task state.
         """
+        from reachy_mini.daemon.telemetry import telemetry
+
         loop = self._log_loop
-        if loop is None or peer_id not in self._log_tasks:
+        if loop is None:
+            telemetry.peer_closed(peer_id)
+            return
+        # Same queue as data-channel messages: a hello still waiting there
+        # is handled first, instead of opening a session nothing closes.
+        loop.call_soon_threadsafe(telemetry.peer_closed, peer_id)
+        if peer_id not in self._log_tasks:
             return
         loop.call_soon_threadsafe(self._cancel_log_subscription, peer_id)
 
@@ -2878,6 +2904,9 @@ class Backend:
             )
             return
 
+        from reachy_mini.daemon.telemetry import telemetry
+
+        telemetry.note_move(dataset, cmd.move_name)
         # Dispatched: ack now (fire-and-forget), then run the move.
         send_response(
             {

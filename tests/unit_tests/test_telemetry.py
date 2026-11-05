@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon import telemetry as tm
 from reachy_mini.daemon.app.routers import telemetry as telemetry_router
-from reachy_mini.io.protocol import GetTelemetryCmd, SetTelemetryCmd
+from reachy_mini.io.protocol import ClientHelloCmd, GetTelemetryCmd, SetTelemetryCmd
 
 FORBIDDEN_KEYS = {"robot_name", "hostname", "hardware_id", "ip", "ssid", "username"}
 
@@ -70,8 +70,13 @@ def test_parse_client_header() -> None:
         "client_type": "other",
         "client_version": "1.0",
         "client_os": "other",
+        "client_type_raw": "toaster",
     }
     assert tm.parse_client_header("<script>/1 (x)") is None
+    assert tm.parse_client_header("web/1.2.0") == {
+        "client_type": "web",
+        "client_version": "1.2.0",
+    }
     assert tm.parse_client_header("desktop/" + "9" * 40) is None
 
 
@@ -234,7 +239,6 @@ def test_opt_in_again_does_not_revive_old_sender(client: tm.Telemetry) -> None:
     assert client._stop is not old_stop and not client._stop.is_set()
 
 
-
 def test_opt_out_does_not_wait_for_a_stuck_send(
     client: tm.Telemetry, isolated: MagicMock
 ) -> None:
@@ -257,6 +261,7 @@ def test_opt_out_does_not_wait_for_a_stuck_send(
     assert time.monotonic() - started < 0.5
     assert not client.active
     release.set()
+
 
 def test_flush_posts_batch_and_requeues_when_offline(
     client: tm.Telemetry, isolated: MagicMock
@@ -327,3 +332,319 @@ async def test_data_channel_get_and_set(
         },
     ]
     assert startup_app_config.get_telemetry_enabled() is False
+
+
+def _props(t: tm.Telemetry, event: str) -> list[dict[str, Any]]:
+    return [e["properties"] for e in t._queue if e["event"] == event]
+
+
+def test_unknown_client_type_keeps_its_raw_name() -> None:
+    """An unknown client is still bucketed as other, but we learn its name."""
+    assert tm.parse_client_header("toaster/1.0 (ios)") == {
+        "client_type": "other",
+        "client_version": "1.0",
+        "client_os": "ios",
+        "client_type_raw": "toaster",
+    }
+    assert "client_type_raw" not in tm.parse_client_header("mobile/1.0 (ios)")  # type: ignore[operator]
+
+
+def test_hello_reports_client_and_js_app_lifecycle(client: tm.Telemetry) -> None:
+    """A data-channel hello names the client; the peer leaving ends the JS app."""
+    _start(client)
+    client.note_hello("p1", "web/1.2.0", "pollen-robotics/emotions")
+    client.peer_closed("p1")
+    client.peer_closed("p1")  # second disconnect notice: no duplicate stop
+
+    assert _props(client, "client_connected")[0]["client_type"] == "web"
+    assert _props(client, "js_app_started") == [
+        {**_props(client, "js_app_started")[0], "app_id": "pollen-robotics/emotions"}
+    ]
+    stopped = _props(client, "js_app_stopped")
+    assert len(stopped) == 1 and stopped[0]["duration_s"] >= 0
+
+
+@pytest.mark.parametrize(
+    "app", ["private", "../../etc", "a" * 150, "no-slash", "x/y z", "john/<b>"]
+)
+def test_hello_never_reports_an_unvetted_app_id(client: tm.Telemetry, app: str) -> None:
+    """Anything that isn't a plain owner/name id is sent as private."""
+    _start(client)
+    client.note_hello("p1", "web/1.2.0", app)
+    assert _props(client, "js_app_started")[0]["app_id"] == "private"
+
+
+def test_hello_without_app_tracks_usage_only(client: tm.Telemetry) -> None:
+    """The mobile app itself is a client, not a JS app."""
+    _start(client)
+    client.note_hello("p1", "mobile/0.11.4 (android)", None)
+    client.peer_closed("p1")
+    assert not _props(client, "js_app_started")
+    assert not _props(client, "js_app_stopped")
+    assert _props(client, "client_connected")[0]["client_type"] == "mobile"
+
+
+def test_repeated_hello_keeps_the_session(client: tm.Telemetry) -> None:
+    """The same hello again is not a new run; a different app replaces it."""
+    _start(client)
+    for _ in range(3):
+        client.note_hello("p1", "web/1.2.0", "pollen-robotics/emotions")
+    assert len(_props(client, "js_app_started")) == 1
+    assert not _props(client, "js_app_stopped")
+
+    client.note_hello("p1", "web/1.2.0", "pollen-robotics/radio")
+    assert [e["app_id"] for e in _props(client, "js_app_stopped")] == [
+        "pollen-robotics/emotions"
+    ]
+    assert [e["app_id"] for e in _props(client, "js_app_started")] == [
+        "pollen-robotics/emotions",
+        "pollen-robotics/radio",
+    ]
+
+
+def test_garbage_hello_is_ignored(client: tm.Telemetry) -> None:
+    """A malformed client string reports nothing and opens no session."""
+    _start(client)
+    client.note_hello("p1", "<script>", "pollen-robotics/emotions")
+    assert _events(client) == ["daemon_started"]
+    assert not client._sessions
+
+
+def test_usage_tick_counts_anything_seen_in_the_window(client: tm.Telemetry) -> None:
+    """A session that started and ended between two ticks still counts once."""
+    _start(client)
+    client._usage_tick()
+    assert not _props(client, "usage_tick")  # idle robot: nothing sent
+
+    client.session_begin("app:x", "python_app", "pollen-robotics/hello")
+    client.note_hello("p1", "web/1.2.0", "private")
+    client.session_end("app:x")
+    client._usage_tick()
+    client._usage_tick()  # p1 still connected
+    client.peer_closed("p1")
+    client._usage_tick()  # p1 was seen in this window
+    client._usage_tick()  # nothing left
+
+    ticks = _props(client, "usage_tick")
+    assert [t["kinds"] for t in ticks] == [["python_app", "web"], ["web"], ["web"]]
+    assert ticks[0]["apps"] == ["pollen-robotics/hello", "private"]
+    assert ticks[0]["interval_s"] == int(tm.USAGE_TICK_S)
+
+
+def test_usage_tick_hides_a_python_apps_own_sdk(client: tm.Telemetry) -> None:
+    """A Python app talks through the SDK: that's one client, not two."""
+    _start(client)
+    client.session_begin("sdk:1", "python_sdk")
+    client._usage_tick()
+    client.session_begin("app:x", "python_app", "pollen-robotics/hello")
+    client._usage_tick()
+    assert [t["kinds"] for t in _props(client, "usage_tick")] == [
+        ["python_sdk"],
+        ["python_app"],
+    ]
+
+
+def test_sessions_are_capped(client: tm.Telemetry) -> None:
+    """Peers whose disconnect never arrives can't grow memory without bound."""
+    for i in range(200):
+        client.session_begin(f"peer:{i}", "web")
+    assert len(client._sessions) == tm._MAX_SESSIONS
+
+
+@pytest.mark.parametrize(
+    "dataset,move,expected",
+    [
+        (
+            "pollen-robotics/reachy-mini-emotions-library",
+            "happy1",
+            {
+                "dataset": "pollen-robotics/reachy-mini-emotions-library",
+                "move": "happy1",
+            },
+        ),
+        ("john/secret-moves", "happy1", {"dataset": "other"}),
+        ("pollen-robotics/reachy-mini-emotions-library", "../x", {"dataset": "other"}),
+    ],
+)
+def test_moves_are_named_only_for_pollen_libraries(
+    client: tm.Telemetry, dataset: str, move: str, expected: dict[str, str]
+) -> None:
+    """Other datasets may be private: only Pollen's own libraries are named."""
+    _start(client)
+    client.note_move(dataset, move)
+    props = _props(client, "move_played")[0]
+    assert {k: props[k] for k in ("dataset", "move") if k in props} == expected
+
+
+def test_client_hello_over_the_data_channel(
+    client: tm.Telemetry, monkeypatch: pytest.MonkeyPatch, sim_backend: Any
+) -> None:
+    """The backend routes a WebRTC hello to telemetry, and peer loss ends it."""
+    monkeypatch.setattr(tm, "telemetry", client)
+    _start(client)
+    hello = ClientHelloCmd(client="web/1.2.0", app="pollen-robotics/emotions")
+    sim_backend.process_command(hello, send_response=lambda r: None, peer_id="p1")
+    sim_backend.process_command(hello, send_response=lambda r: None)  # no peer
+    sim_backend._on_peer_disconnect("p1")
+    assert len(_props(client, "js_app_started")) == 1
+    assert len(_props(client, "js_app_stopped")) == 1
+
+
+@pytest.mark.parametrize(
+    "query,headers,kind",
+    [
+        ("?client=desktop/0.9.5%20(macos)", {}, "desktop"),
+        ("", {tm.CLIENT_HEADER: "desktop/0.9.5 (macos)"}, "desktop"),
+        ("", {}, "move_listener"),
+    ],
+)
+def test_move_updates_socket_counts_as_use(
+    client: tm.Telemetry,
+    monkeypatch: pytest.MonkeyPatch,
+    query: str,
+    headers: dict[str, str],
+    kind: str,
+) -> None:
+    """The desktop's long-lived socket is a usage session, named if it says so."""
+    from reachy_mini.daemon.app.routers import move as move_router
+
+    monkeypatch.setattr(move_router, "telemetry", client)
+    _start(client)
+    app = FastAPI()
+    app.include_router(move_router.router, prefix="/api")
+    with TestClient(app).websocket_connect(
+        f"/api/move/ws/updates{query}", headers=headers
+    ):
+        assert [s[0] for s in client._sessions.values()] == [kind]
+    assert not client._sessions
+    # The header is reported by the middleware, not this route.
+    connected = _props(client, "client_connected")
+    assert [c["client_type"] for c in connected] == (["desktop"] if query else [])
+
+
+def test_use_while_opted_out_is_not_reported_after_opting_in(
+    client: tm.Telemetry,
+) -> None:
+    """Off, use, on, tick: only what is still running counts, nothing piles up."""
+    _start(client)
+    client.set_enabled(False)
+    client.session_begin("app:x", "python_app", "pollen-robotics/hello")
+    for i in range(300):
+        client.session_begin(f"peer:{i}", "web", "pollen-robotics/emotions")
+        client.session_end(f"peer:{i}")
+    assert client._window == {}
+
+    client.set_enabled(True)
+    client._usage_tick()
+    ticks = _props(client, "usage_tick")
+    assert [t["kinds"] for t in ticks] == [["python_app"]]
+    assert ticks[0]["apps"] == ["pollen-robotics/hello"]
+
+
+def test_usage_tick_reports_the_seconds_in_use(client: tm.Telemetry) -> None:
+    """active_s is the time anything was open, overlaps counted once."""
+    now = [0.0]
+    client._clock = lambda: now[0]
+    _start(client)
+
+    def at(t: float) -> None:
+        now[0] = t
+
+    at(10)
+    client.session_begin("app:x", "python_app")
+    at(20)
+    client.session_begin("sdk:1", "python_sdk")  # the app's own SDK: overlaps
+    at(30)
+    client.session_end("app:x")
+    at(40)
+    client.session_end("sdk:1")
+    at(150)
+    client.session_begin("peer:p", "mobile")
+    at(200)
+    client._usage_tick()  # 10..40 and 150..200
+    at(260)
+    client._usage_tick()  # the phone stays connected for the whole window
+    at(300)
+    client._usage_tick()  # still connected
+    client.peer_closed("p")
+    at(400)
+    client._usage_tick()  # it left exactly at the last tick: 0 s, no tick
+
+    assert [t["active_s"] for t in _props(client, "usage_tick")] == [80, 60, 40]
+
+
+def test_hello_queued_before_a_disconnect_leaves_no_session(
+    client: tm.Telemetry, monkeypatch: pytest.MonkeyPatch, sim_backend: Any
+) -> None:
+    """The media server's disconnect (GLib thread) runs after a queued hello."""
+    monkeypatch.setattr(tm, "telemetry", client)
+    _start(client)
+    loop = asyncio.new_event_loop()
+    try:
+        sim_backend._log_loop = loop
+        hello = ClientHelloCmd(client="web/1.2.0", app="pollen-robotics/emotions")
+        # As the media server does: messages go through the loop's queue...
+        loop.call_soon_threadsafe(
+            sim_backend._handle_webrtc_message, "p1", hello.model_dump_json()
+        )
+        # ...while the disconnect arrives first, from another thread.
+        sim_backend._on_peer_disconnect("p1")
+        loop.run_until_complete(asyncio.sleep(0))
+    finally:
+        sim_backend._log_loop = None
+        loop.close()
+    assert not client._sessions
+    assert len(_props(client, "js_app_stopped")) == 1
+
+
+def _run_ticks(
+    client: tm.Telemetry, now: list[float], until: float, events: dict[float, Any]
+) -> None:
+    """Drive _maybe_tick like the sender thread does: once a flush interval."""
+    next_tick = now[0] + tm.USAGE_TICK_S
+    while now[0] < until:
+        now[0] += tm.FLUSH_INTERVAL_S
+        for t in [t for t in sorted(events) if t <= now[0]]:
+            events.pop(t)()
+        next_tick = client._maybe_tick(next_tick)
+
+
+def test_a_short_run_ticks_once_when_use_stops(client: tm.Telemetry) -> None:
+    """A 2-minute run is sent at the next flush, not lost waiting for the hour."""
+    now = [0.0]
+    client._clock = lambda: now[0]
+    _start(client)
+    events = {
+        100.0: lambda: client.session_begin("app:x", "python_app"),
+        220.0: lambda: client.session_end("app:x"),
+    }
+    # One flush after use stops: the daemon may well be gone by the hour.
+    _run_ticks(client, now, 220.0 + tm.FLUSH_INTERVAL_S, events)
+    assert [t["active_s"] for t in _props(client, "usage_tick")] == [120]
+
+
+def test_a_long_run_ticks_hourly_then_when_it_stops(client: tm.Telemetry) -> None:
+    """Hourly while use goes on, then the last partial hour when it stops."""
+    now = [0.0]
+    client._clock = lambda: now[0]
+    _start(client)
+    client.session_begin("app:x", "python_app")
+    events = {9000.0: lambda: client.session_end("app:x")}  # 2.5 hours
+    _run_ticks(client, now, 9000.0 + tm.FLUSH_INTERVAL_S, events)
+    ticks = [t["active_s"] for t in _props(client, "usage_tick")]
+    assert ticks == [3600, 3600, 1800]
+
+
+def test_stop_sends_the_use_since_the_last_tick(
+    client: tm.Telemetry, isolated: MagicMock
+) -> None:
+    """A 40-minute app then a clean stop: the final flush carries its tick."""
+    now = [0.0]
+    client._clock = lambda: now[0]
+    _start(client)
+    client.session_begin("app:x", "python_app", "pollen-robotics/hello")
+    now[0] = 2400.0
+    client.stop()
+    sent = [e for call in isolated.call_args_list for e in call.kwargs["json"]["batch"]]
+    ticks = [e["properties"] for e in sent if e["event"] == "usage_tick"]
+    assert [t["active_s"] for t in ticks] == [2400]

@@ -126,6 +126,11 @@ export interface ReachyMiniOptions {
     clientId?: string;
     appName?: string;
     /**
+     * Identifies this client to the robot's anonymous telemetry, as
+     * `<type>/<version> (<os>)`. Defaults to `web/<sdk version>`.
+     */
+    client?: string;
+    /**
      * Hint to the receiver's WebRTC jitter buffer (ms). 0 = "render
      * ASAP", appropriate for teleop. Spec range [0, 4000]. Browsers
      * that don't implement `RTCRtpReceiver.jitterBufferTarget` fall

@@ -46,7 +46,7 @@ def _fake_backend(*, head_pose: np.ndarray | None = None) -> SimpleNamespace:
     )
     fake.goto_target = AsyncMock(side_effect=lambda *a, **kw: calls.append("goto"))
     fake.goto_sleep = AsyncMock(side_effect=lambda: calls.append("sleep"))
-    fake._stop_running_move = AsyncMock()
+    fake.stop_running_move = AsyncMock()
     fake._move_guard = contextlib.nullcontext
     # Bind the real lift so these tests exercise it, not a stub.
     fake.reset_to_init = lambda: Backend.reset_to_init(fake)
