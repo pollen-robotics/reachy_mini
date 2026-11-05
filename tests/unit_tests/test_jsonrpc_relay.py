@@ -994,7 +994,7 @@ async def test_nfc_set_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
         saved.append(enabled)
         return True
 
-    monkeypatch.setattr("reachy_mini.nfc.settings.set_nfc_enabled", save)
+    monkeypatch.setattr("reachy_mini.daemon.startup_app_config.set_nfc_enabled", save)
     reader = FakeNfcReader()
     relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None, nfc_reader=reader)  # type: ignore[arg-type]
     reply = await _call(relay, "nfc.set_enabled", {"enabled": False})
@@ -1012,7 +1012,9 @@ async def test_nfc_set_enabled_reports_a_switch_that_was_not_saved(
 ) -> None:
     # The config dir is read-only: the reader still switches off, and the
     # caller is told the choice will not survive a restart.
-    monkeypatch.setattr("reachy_mini.nfc.settings.set_nfc_enabled", lambda _: False)
+    monkeypatch.setattr(
+        "reachy_mini.daemon.startup_app_config.set_nfc_enabled", lambda _: False
+    )
     reader = FakeNfcReader()
     relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None, nfc_reader=reader)  # type: ignore[arg-type]
     reply = await _call(relay, "nfc.set_enabled", {"enabled": False})

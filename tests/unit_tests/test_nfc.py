@@ -114,6 +114,7 @@ class FakeSession:
         self.fail_on_poll = fail_on_poll
         self.polls = 0
         self.dumps = 0
+        self.forgets = 0
         self.closed = False
 
     def read_tag(self):
@@ -149,6 +150,9 @@ class FakeSession:
                 else self.dump_results[0]
             )
         return NfcDump(present=True, uid="04", size=4, hex="deadbeef")
+
+    def forget(self):
+        self.forgets += 1
 
     def close(self):
         self.closed = True
@@ -298,27 +302,54 @@ def test_stopping_answers_a_pending_write(driver_installed):
     assert not results[0].success
 
 
-def test_the_switch_is_remembered_and_on_by_default(tmp_path, monkeypatch):
-    from reachy_mini.nfc import settings
+@pytest.fixture
+def daemon_config(tmp_path, monkeypatch):
+    """Point the daemon config file at a temporary path."""
+    from reachy_mini.daemon import startup_app_config
 
-    monkeypatch.setattr(settings, "_STATE_PATH", tmp_path / "nfc.json")
-    assert settings.get_nfc_enabled()
-    assert settings.set_nfc_enabled(False)
-    assert not settings.get_nfc_enabled()
-    assert settings.set_nfc_enabled(True)
-    assert settings.get_nfc_enabled()
-    (tmp_path / "nfc.json").write_text("not json")
-    assert settings.get_nfc_enabled()
+    path = tmp_path / "daemon_config.json"
+    monkeypatch.setattr(startup_app_config, "_config_path", lambda: path)
+    return path
+
+
+def test_the_switch_is_remembered_and_on_by_default(daemon_config):
+    from reachy_mini.daemon import startup_app_config as config
+
+    assert config.get_nfc_enabled()
+    assert config.set_nfc_enabled(False)
+    assert not config.get_nfc_enabled()
+    assert config.set_nfc_enabled(True)
+    assert config.get_nfc_enabled()
+    daemon_config.write_text("not json")
+    assert config.get_nfc_enabled()
+
+
+def test_the_switch_lives_with_the_other_daemon_settings(daemon_config):
+    import json
+
+    from reachy_mini.daemon import startup_app_config as config
+
+    config.set_startup_app("my_app")
+    config.set_nfc_enabled(False)
+    assert json.loads(daemon_config.read_text()) == {
+        "startup_app": "my_app",
+        "nfc_enabled": False,
+    }
 
 
 def test_a_switch_that_cannot_be_saved_still_applies(
     driver_installed, tmp_path, monkeypatch
 ):
+    from reachy_mini.daemon import startup_app_config
     from reachy_mini.nfc import settings
 
     # A file where the config dir should be: mkdir fails, like a read-only fs.
     (tmp_path / "blocker").write_text("")
-    monkeypatch.setattr(settings, "_STATE_PATH", tmp_path / "blocker" / "nfc.json")
+    monkeypatch.setattr(
+        startup_app_config,
+        "_config_path",
+        lambda: tmp_path / "blocker" / "daemon_config.json",
+    )
     reader = make_reader(FakeSession())
     started(reader)
     try:
@@ -330,16 +361,16 @@ def test_a_switch_that_cannot_be_saved_still_applies(
         reader.stop()
 
 
-def test_a_saved_switch_says_so(driver_installed, tmp_path, monkeypatch):
+def test_a_saved_switch_says_so(driver_installed, daemon_config):
+    from reachy_mini.daemon import startup_app_config
     from reachy_mini.nfc import settings
 
-    monkeypatch.setattr(settings, "_STATE_PATH", tmp_path / "nfc.json")
     reader = make_reader(FakeSession())
     try:
         status = settings.switch_reader(reader, True)
         assert status.enabled
         assert status.setting_saved is True
-        assert settings.get_nfc_enabled()
+        assert startup_app_config.get_nfc_enabled()
     finally:
         reader.stop()
 
@@ -1110,20 +1141,49 @@ def test_a_missed_detection_keeps_the_content_read(fake_ntag_reader):
     assert session.reads == 1
 
 
-def test_a_confirmed_absence_drops_the_content_read(fake_ntag_reader):
+def test_forgetting_drops_the_content_read(fake_ntag_reader):
+    # The reader thread calls forget() once it has confirmed the absence.
     from winnie_nfc.core import NoTagError
-
-    from reachy_mini.nfc.reader import ABSENCE_POLLS
 
     first = reading(records=[{"type": "text", "value": "v1"}])
     second = reading(records=[{"type": "text", "value": "v2"}])
-    misses = [NoTagError("no answer")] * ABSENCE_POLLS
-    session = _session_reading([first, *misses, second])
+    session = _session_reading([first, NoTagError("no answer"), second])
 
     assert session.read_tag().content == "v1"
-    for _ in misses:
-        session.read_tag()
+    assert not session.read_tag().present
+    session.forget()
     assert session.read_tag().content == "v2"
+
+
+def test_the_session_cache_follows_the_readers_absence_count(driver_installed):
+    # One absence count, the reader's: the session forgets exactly when the
+    # published tag clears, whatever absence_polls is set to.
+    here = NfcTag(present=True, uid="04", readable=True)
+    gone = NfcTag(present=False)
+    session = FakeSession(tags=[here, gone, gone, gone, gone, gone, gone])
+    reader = make_reader(session, absence_polls=5)
+    reader._record_poll(here)
+    for _ in range(4):
+        assert not reader._record_poll(gone)
+        assert reader.get_tag().present
+    assert reader._record_poll(gone)
+    assert not reader.get_tag().present
+    assert not reader._record_poll(gone)  # forgotten once, not on every poll
+
+
+def test_the_reader_thread_tells_the_session_to_forget(driver_installed):
+    here = NfcTag(present=True, uid="04", readable=True)
+    gone = NfcTag(present=False)
+    session = FakeSession(tags=[here, gone])
+    reader = make_reader(session, absence_polls=2)
+    started(reader)
+    try:
+        assert wait_until(lambda: session.forgets == 1)
+        assert not reader.get_tag().present
+        time.sleep(0.1)
+        assert session.forgets == 1
+    finally:
+        reader.stop()
 
 
 def test_a_malformed_frame_at_detection_is_a_miss_not_a_tag(fake_ntag_reader):

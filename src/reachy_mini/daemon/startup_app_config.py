@@ -19,6 +19,7 @@ _EQ_KEY = "speaker_eq_gains"
 _TURN_KEY = "turn_enabled"
 _FIRST_WAKE_UP_KEY = "first_wake_up_completed"
 _TELEMETRY_KEY = "telemetry_enabled"
+_NFC_KEY = "nfc_enabled"
 # equalizer-10bands accepts per-band gains in [-24, +12] dB.
 _EQ_GAIN_MIN, _EQ_GAIN_MAX = -24.0, 12.0
 
@@ -173,6 +174,29 @@ def set_telemetry_enabled(enabled: bool) -> None:
 def set_startup_app(name: str | None) -> None:
     """Persist the startup app name; a falsy name clears it."""
     _update(_KEY, name if name else None)
+
+
+def get_nfc_enabled() -> bool:
+    """Return whether the NFC reader is switched on.
+
+    On by default: True when unset or malformed. ``--no-nfc`` still wins, it
+    removes the reader altogether.
+    """
+    return _get_bool(_NFC_KEY) is not False
+
+
+def set_nfc_enabled(enabled: bool) -> bool:
+    """Persist the NFC reader switch. Returns True on success.
+
+    Fail-safe: a write error is logged and reported as False instead of
+    raising, so the caller can say the choice will not survive a restart.
+    """
+    try:
+        _update(_NFC_KEY, bool(enabled))
+        return True
+    except OSError as e:
+        logger.warning(f"Could not persist the NFC reader switch: {e}")
+        return False
 
 
 def get_first_wake_up_completed() -> bool:

@@ -254,6 +254,10 @@ class NfcSession(Protocol):
         """Read the whole user memory of the tag on the antenna."""
         ...
 
+    def forget(self) -> None:
+        """Drop what was read from the last tag: its absence is confirmed."""
+        ...
+
     def close(self) -> None:
         """Switch the field off and release the serial port."""
         ...
@@ -304,7 +308,6 @@ class Clrc663Session:
         self._last_uid: str | None = None
         self._last_tag: NfcTag | None = None
         self._failed_reads = 0  # content reads that failed on _last_uid
-        self._misses = 0  # consecutive polls with no tag
 
     def _chip_version(self) -> str | None:
         try:
@@ -330,9 +333,10 @@ class Clrc663Session:
         the next polls, up to ``CONTENT_READ_POLLS``: keeping the first failure
         would leave a perfectly good tag unreadable until it is lifted off.
 
-        The cache also outlives a missed detection, up to ``ABSENCE_POLLS`` in
-        a row, so a tag that flickers at the RF level is not re-read — and
-        exposed to another failed read — every time it answers again.
+        The cache also outlives missed detections, until the reader thread
+        confirms the absence and calls :meth:`forget`, so a tag that flickers
+        at the RF level is not re-read — and exposed to another failed read —
+        every time it answers again.
 
         Transport failures propagate: they mean the link is gone, and the
         reader thread reconnects. Tag-level failures do not — they are
@@ -346,16 +350,15 @@ class Clrc663Session:
         except CollisionError as e:
             # Several tags on the antenna: something is there, but nothing
             # usable came back.
-            self._forget()
+            self.forget()
             return NfcTag(present=True, error=str(e), last_read_at=_now())
         except TagError:
             # No answer, or a malformed frame: a missed detection either way.
             # A tag that is really there answers properly on the next poll.
-            return self._missed()
-        self._misses = 0
+            return NfcTag(present=False)
 
         if uid != self._last_uid:
-            self._forget()
+            self.forget()
         elif self._last_tag is not None and (
             self._last_tag.readable or self._failed_reads >= CONTENT_READ_POLLS
         ):
@@ -369,7 +372,7 @@ class Clrc663Session:
             read = self._reader.read_tag()
         except TagError:
             # Removed between the detection and the read.
-            return self._missed()
+            return NfcTag(present=False)
 
         tag = _snapshot(read)
         self._last_uid = tag.uid
@@ -377,14 +380,8 @@ class Clrc663Session:
         self._failed_reads = 0 if tag.readable else self._failed_reads + 1
         return tag
 
-    def _missed(self) -> NfcTag:
-        """Report an empty antenna, forgetting the tag once absence is confirmed."""
-        self._misses += 1
-        if self._misses >= ABSENCE_POLLS:
-            self._forget()
-        return NfcTag(present=False)
-
-    def _forget(self) -> None:
+    def forget(self) -> None:
+        """Drop the cached read: the next detection reads the content again."""
         self._last_uid = None
         self._last_tag = None
         self._failed_reads = 0
@@ -434,7 +431,7 @@ class Clrc663Session:
         # The tag keeps its UID across a write, so the cached read would
         # otherwise be served until the tag is lifted off. Dropped whatever
         # the outcome: a failed write may still have changed some pages.
-        self._forget()
+        self.forget()
         try:
             operation(self._reader)
         except NoTagError as e:
@@ -935,6 +932,11 @@ class NfcReader:
 
     def _poll(self, session: NfcSession) -> None:
         tag = session.read_tag()
+        if self._record_poll(tag):
+            session.forget()
+
+    def _record_poll(self, tag: NfcTag) -> bool:
+        """Publish a poll's result. True when the tag's absence is confirmed."""
         with self._lock:
             self._chip_detected = True
             self._last_seen_at = _now()
@@ -943,13 +945,18 @@ class NfcReader:
             if tag.present:
                 self._misses = 0
                 self._tag = tag
-                return
+                return False
 
             # No answer. Keep the last known tag until absence is confirmed,
-            # so one missed detection does not read as a removal.
+            # so one missed detection does not read as a removal. This is the
+            # only absence count: the session's cache follows it (forget()).
             self._misses += 1
-            if self._misses >= self._absence_polls or not self._tag.present:
+            if self._misses == self._absence_polls:
                 self._tag = tag
+                return True
+            if not self._tag.present:
+                self._tag = tag
+            return False
 
     def _close(self, session: NfcSession | None) -> None:
         if session is None:

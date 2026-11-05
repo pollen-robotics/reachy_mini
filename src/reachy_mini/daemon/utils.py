@@ -169,15 +169,13 @@ def find_serial_port(
 
     # The NFC reader board can share these USB ids: tell it apart by its USB
     # product string (see reachy_mini.nfc.ports).
-    from ..nfc import is_nfc_board
+    from ..nfc.ports import is_nfc_board
 
-    candidates = [
+    return [
         p.device
         for p in ports
         if f"USB VID:PID={vid}:{pid}" in p.hwid and not is_nfc_board(p)
     ]
-
-    return candidates
 
 
 def get_ip_address(ifname: str = "wlan0") -> str | None:
