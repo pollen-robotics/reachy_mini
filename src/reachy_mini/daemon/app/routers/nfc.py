@@ -20,20 +20,31 @@ from ....nfc import (
     NfcTag,
     NfcWriteRequest,
     NfcWriteResult,
-    disabled_status,
-    no_tag,
 )
-from ...nfc_switch import switch_reader
+from ... import nfc_switch
 from ..dependencies import get_nfc_reader
 
 router = APIRouter(prefix="/nfc")
 
 
+def _refused(e: nfc_switch.NfcDisabledError) -> HTTPException:
+    return HTTPException(status_code=503, detail=str(e))
+
+
+def _reader(reader: NfcReader | None = Depends(get_nfc_reader)) -> NfcReader:
+    """Get the NFC reader, or answer 503 when the daemon runs without one."""
+    try:
+        return nfc_switch.require_reader(reader)
+    except nfc_switch.NfcDisabledError as e:
+        raise _refused(e) from e
+
+
 def _enabled_reader(reader: NfcReader | None = Depends(get_nfc_reader)) -> NfcReader:
     """Get the NFC reader, or answer 503 when it is off or was never created."""
-    if reader is None or not reader.is_enabled():
-        raise HTTPException(status_code=503, detail="NFC reader disabled")
-    return reader
+    try:
+        return nfc_switch.require_enabled(reader)
+    except nfc_switch.NfcDisabledError as e:
+        raise _refused(e) from e
 
 
 @router.get("/tag")
@@ -45,9 +56,7 @@ async def get_tag(reader: NfcReader | None = Depends(get_nfc_reader)) -> NfcTag:
     UID is available on any ISO 14443-A tag, the NDEF ``records`` only on the
     Type 2 families the driver supports.
     """
-    if reader is None:
-        return no_tag()
-    return reader.get_tag()
+    return nfc_switch.tag(reader)
 
 
 @router.get("/status")
@@ -55,15 +64,13 @@ async def get_status(
     reader: NfcReader | None = Depends(get_nfc_reader),
 ) -> NfcStatus:
     """Get the NFC reader hardware status (link, chip detection, driver)."""
-    if reader is None:
-        return disabled_status()
-    return reader.get_status()
+    return nfc_switch.status(reader)
 
 
 @router.post("/enabled")
 async def set_enabled(
     request: NfcEnableRequest,
-    reader: NfcReader | None = Depends(get_nfc_reader),
+    reader: NfcReader = Depends(_reader),
 ) -> NfcStatus:
     """Switch the NFC reader on or off, and remember it across restarts.
 
@@ -75,12 +82,9 @@ async def set_enabled(
 
     Not available when the daemon was started with ``--no-nfc``.
     """
-    if reader is None:
-        raise HTTPException(status_code=503, detail="NFC reader disabled")
-
     # stop() joins the reader thread, which can take up to a poll's worth of
     # serial I/O: keep it off the event loop.
-    return await asyncio.to_thread(switch_reader, reader, request.enabled)
+    return await asyncio.to_thread(nfc_switch.switch_reader, reader, request.enabled)
 
 
 @router.get("/dump")

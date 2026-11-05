@@ -101,6 +101,10 @@ MAX_WRITE_CHARS = 860
 # The full memory is available through ``dump()`` and ``GET /api/nfc/dump``.
 RAW_PREVIEW_BYTES = 32
 
+# Status error of a reader that is switched off or absent, and the message the
+# APIs refuse tag operations with in that state.
+DISABLED_ERROR = "NFC reader disabled"
+
 
 class NfcRecord(BaseModel):
     """One NDEF record read from a tag.
@@ -226,7 +230,7 @@ def disabled_status() -> NfcStatus:
         enabled=False,
         chip_detected=False,
         driver_available=driver_available(),
-        error="NFC reader disabled",
+        error=DISABLED_ERROR,
     )
 
 
@@ -836,7 +840,7 @@ class NfcReader:
                 port=self._port,
                 board_version=self._board_version,
                 chip_version=self._chip_version,
-                error=self._error if self._enabled else "NFC reader disabled",
+                error=self._error if self._enabled else DISABLED_ERROR,
                 last_seen_at=self._last_seen_at,
             )
 

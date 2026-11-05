@@ -2,6 +2,7 @@
 
 from .ports import NfcBoard, find_nfc_board, is_nfc_board
 from .reader import (
+    DISABLED_ERROR,
     NfcDump,
     NfcEnableRequest,
     NfcEraseRequest,
@@ -17,6 +18,7 @@ from .reader import (
 )
 
 __all__ = [
+    "DISABLED_ERROR",
     "NfcBoard",
     "NfcDump",
     "NfcEnableRequest",

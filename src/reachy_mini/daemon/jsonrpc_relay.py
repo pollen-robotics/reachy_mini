@@ -491,48 +491,42 @@ class JsonRpcRelay:
             NfcEnableRequest,
             NfcEraseRequest,
             NfcWriteRequest,
-            disabled_status,
-            no_tag,
         )
 
-        from .nfc_switch import switch_reader
+        from . import nfc_switch
 
         verb = req.method.split(".", 1)[1] if "." in req.method else ""
         reader = self._nfc
 
-        def enabled_reader() -> NfcReader:
-            # Same refusal as the REST routes' 503.
-            if reader is None or not reader.is_enabled():
-                raise _nfc_disabled()
-            return reader
-
         try:
             if verb == "status":
-                status = (
-                    reader.get_status() if reader is not None else disabled_status()
-                )
-                result: Any = status.model_dump(mode="json")
+                result: Any = nfc_switch.status(reader).model_dump(mode="json")
             elif verb == "tag":
-                tag = reader.get_tag() if reader is not None else no_tag()
-                result = tag.model_dump(mode="json")
+                result = nfc_switch.tag(reader).model_dump(mode="json")
             elif verb == "set_enabled":
                 enable = NfcEnableRequest.model_validate(req.params)
-                if reader is None:
-                    raise _nfc_disabled()
                 # stop() joins the reader thread: keep it off the event loop.
-                status = await asyncio.to_thread(switch_reader, reader, enable.enabled)
+                status = await asyncio.to_thread(
+                    nfc_switch.switch_reader,
+                    nfc_switch.require_reader(reader),
+                    enable.enabled,
+                )
                 result = status.model_dump(mode="json")
             elif verb == "erase":
                 erase = NfcEraseRequest.model_validate(req.params)
                 # Blocks until a tag is presented: keep it off the event loop.
-                outcome = await asyncio.to_thread(enabled_reader().erase, erase)
+                outcome = await asyncio.to_thread(
+                    nfc_switch.require_enabled(reader).erase, erase
+                )
                 result = outcome.model_dump(mode="json")
             elif verb == "write":
                 write = NfcWriteRequest.model_validate(req.params)
-                outcome = await asyncio.to_thread(enabled_reader().write, write)
+                outcome = await asyncio.to_thread(
+                    nfc_switch.require_enabled(reader).write, write
+                )
                 result = outcome.model_dump(mode="json")
             elif verb == "dump":
-                dump = await asyncio.to_thread(enabled_reader().dump)
+                dump = await asyncio.to_thread(nfc_switch.require_enabled(reader).dump)
                 result = dump.model_dump(mode="json")
             else:
                 raise JsonRpcError(
@@ -540,6 +534,9 @@ class JsonRpcRelay:
                     reason="method_not_found",
                     code=-32601,
                 )
+        except nfc_switch.NfcDisabledError as e:
+            # Same refusal as the REST routes' 503.
+            raise JsonRpcError(str(e), reason="nfc_disabled") from e
         except ValidationError as e:
             raise JsonRpcError(
                 f"invalid params for {req.method}: {e.errors()[0]['msg']}",
@@ -736,11 +733,6 @@ def _installed_dict(app: AppInfo) -> dict[str, Any]:
 
 def _job_dict(info: bg_job_register.JobInfo) -> dict[str, Any]:
     return {"command": info.command, "status": info.status.value, "logs": info.logs}
-
-
-def _nfc_disabled() -> JsonRpcError:
-    """Refuse a tag operation while the reader is off (REST answers 503)."""
-    return JsonRpcError("NFC reader disabled", reason="nfc_disabled")
 
 
 def _status_dict(status: Any) -> dict[str, Any]:
