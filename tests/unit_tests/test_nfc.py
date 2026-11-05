@@ -341,7 +341,7 @@ def test_a_switch_that_cannot_be_saved_still_applies(
     driver_installed, tmp_path, monkeypatch
 ):
     from reachy_mini.daemon import startup_app_config
-    from reachy_mini.nfc import settings
+    from reachy_mini.daemon import nfc_switch
 
     # A file where the config dir should be: mkdir fails, like a read-only fs.
     (tmp_path / "blocker").write_text("")
@@ -353,7 +353,7 @@ def test_a_switch_that_cannot_be_saved_still_applies(
     reader = make_reader(FakeSession())
     started(reader)
     try:
-        status = settings.switch_reader(reader, False)
+        status = nfc_switch.switch_reader(reader, False)
         assert not status.enabled
         assert status.setting_saved is False
         assert reader.get_status().setting_saved is None
@@ -361,13 +361,63 @@ def test_a_switch_that_cannot_be_saved_still_applies(
         reader.stop()
 
 
+def test_concurrent_switches_leave_the_saved_and_live_state_in_agreement(
+    driver_installed, monkeypatch
+):
+    # Saving and applying are two steps: a switch must not run between them.
+    # "On" is slow to apply, so without the lock "off" is saved after it but
+    # applied before it, and the reader ends up running with "off" saved.
+    from reachy_mini.daemon import nfc_switch, startup_app_config
+
+    saved = []
+
+    def save(enabled):
+        saved.append(enabled)
+        time.sleep(0.1 if enabled else 0.0)
+        return True
+
+    monkeypatch.setattr(startup_app_config, "set_nfc_enabled", save)
+    reader = make_reader(FakeSession())
+    try:
+        on = threading.Thread(target=nfc_switch.switch_reader, args=(reader, True))
+        off = threading.Thread(target=nfc_switch.switch_reader, args=(reader, False))
+        on.start()
+        time.sleep(0.02)  # "on" is saved first
+        off.start()
+        on.join(timeout=5)
+        off.join(timeout=5)
+        assert saved == [True, False]
+        assert not reader.is_enabled()
+    finally:
+        reader.stop()
+
+
+def test_concurrent_config_writes_keep_every_key(daemon_config):
+    # The NFC switch writes from a worker thread while the event loop writes
+    # other keys: no write may be lost, and the file must stay valid JSON.
+    import json
+
+    from reachy_mini.daemon import startup_app_config as config
+
+    def write(key):
+        for i in range(20):
+            config._update(key, i)
+
+    threads = [threading.Thread(target=write, args=(f"k{n}",)) for n in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+    assert json.loads(daemon_config.read_text()) == {f"k{n}": 19 for n in range(8)}
+
+
 def test_a_saved_switch_says_so(driver_installed, daemon_config):
     from reachy_mini.daemon import startup_app_config
-    from reachy_mini.nfc import settings
+    from reachy_mini.daemon import nfc_switch
 
     reader = make_reader(FakeSession())
     try:
-        status = settings.switch_reader(reader, True)
+        status = nfc_switch.switch_reader(reader, True)
         assert status.enabled
         assert status.setting_saved is True
         assert startup_app_config.get_nfc_enabled()
@@ -476,6 +526,52 @@ def test_the_reader_reconnects_after_a_link_loss(driver_installed):
         assert wait_until(lambda: reader.is_connected())
     finally:
         reader.stop()
+
+
+def test_the_driver_lookup_is_done_once(monkeypatch):
+    import builtins
+
+    from reachy_mini.nfc.reader import driver_available
+
+    driver_available.cache_clear()
+    attempts = []
+    real_import = builtins.__import__
+
+    def tracking_import(name, *args, **kwargs):
+        if name == "winnie_nfc":
+            attempts.append(name)
+            raise ImportError(name)
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", tracking_import)
+    try:
+        assert not driver_available()
+        assert not driver_available()
+        assert attempts == ["winnie_nfc"]
+    finally:
+        driver_available.cache_clear()
+
+
+def test_a_broken_driver_install_reads_as_unavailable(monkeypatch):
+    # Not only ImportError: a driver failing inside its own import must not
+    # turn every status poll into a 500.
+    import builtins
+
+    from reachy_mini.nfc.reader import driver_available
+
+    real_import = builtins.__import__
+
+    def broken_import(name, *args, **kwargs):
+        if name == "winnie_nfc":
+            raise OSError("libusb not found")
+        return real_import(name, *args, **kwargs)
+
+    driver_available.cache_clear()
+    monkeypatch.setattr(builtins, "__import__", broken_import)
+    try:
+        assert not driver_available()
+    finally:
+        driver_available.cache_clear()
 
 
 def test_a_missing_driver_disables_the_reader_without_failing(monkeypatch):
@@ -1007,6 +1103,31 @@ def test_a_transport_failure_is_left_to_the_reader_thread(fake_ntag_reader):
         session.write("badge", None)
 
 
+def test_an_unexpected_write_failure_is_a_write_error_not_a_link_loss(
+    fake_ntag_reader,
+):
+    from reachy_mini.nfc.reader import Clrc663Session
+
+    for exception in (
+        ValueError("bad uri"),
+        UnicodeEncodeError("ascii", "é", 0, 1, "x"),
+    ):
+        session = Clrc663Session("/dev/null")
+        fake_ntag_reader.raises = exception
+        result = session.write("badge", None)
+        assert result.error == "WRITE_ERROR", type(exception).__name__
+
+
+def test_a_serial_failure_still_reaches_the_reader_thread(fake_ntag_reader):
+    # pyserial's SerialException is an OSError: the link is gone.
+    from reachy_mini.nfc.reader import Clrc663Session
+
+    session = Clrc663Session("/dev/null")
+    fake_ntag_reader.raises = OSError("device disconnected")
+    with pytest.raises(OSError):
+        session.write("badge", None)
+
+
 def test_erase_shares_the_write_error_map(fake_ntag_reader):
     from winnie_nfc import type2
 
@@ -1184,6 +1305,19 @@ def test_the_reader_thread_tells_the_session_to_forget(driver_installed):
         assert session.forgets == 1
     finally:
         reader.stop()
+
+
+def test_an_undecodable_tag_is_reported_not_taken_for_a_link_loss(
+    fake_ntag_reader,
+):
+    # A record missing its value: the tag is there, its UID is known, and the
+    # failure belongs in the snapshot rather than in a reconnect loop.
+    session = _session_reading([reading(records=[{"type": "text"}])])
+    tag = session.read_tag()
+    assert tag.present
+    assert tag.uid == "04A1"
+    assert not tag.readable
+    assert tag.error is not None and "undecodable" in tag.error
 
 
 def test_a_malformed_frame_at_detection_is_a_miss_not_a_tag(fake_ntag_reader):

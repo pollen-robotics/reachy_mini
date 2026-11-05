@@ -15,7 +15,6 @@ from .reader import (
     driver_available,
     no_tag,
 )
-from .settings import switch_reader
 
 __all__ = [
     "NfcBoard",
@@ -33,5 +32,4 @@ __all__ = [
     "find_nfc_board",
     "is_nfc_board",
     "no_tag",
-    "switch_reader",
 ]

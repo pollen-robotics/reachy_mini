@@ -493,8 +493,9 @@ class JsonRpcRelay:
             NfcWriteRequest,
             disabled_status,
             no_tag,
-            switch_reader,
         )
+
+        from .nfc_switch import switch_reader
 
         verb = req.method.split(".", 1)[1] if "." in req.method else ""
         reader = self._nfc

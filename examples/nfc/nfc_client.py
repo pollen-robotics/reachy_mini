@@ -44,11 +44,15 @@ class NfcClient:
         Returns ``{"success", "error", "detail"}``.
         """
         body = {"text": text} if uri is None else {"uri": uri}
-        return self._call("POST", "/write", json=body, timeout=15)
+        # The daemon answers within ~15 s at worst (WRITE_TIMEOUT, then as long
+        # again when a write is already on the tag at that point).
+        return self._call("POST", "/write", json=body, timeout=20)
 
     def erase(self, full: bool = False) -> dict[str, Any]:
         """Make the next tag presented blank again (``full`` wipes all memory)."""
-        return self._call("POST", "/erase", json={"full": full}, timeout=25)
+        # Up to ~33 s at worst (ERASE_TIMEOUT, twice over when a full erase is
+        # already running at that point).
+        return self._call("POST", "/erase", json={"full": full}, timeout=40)
 
     def _call(
         self, method: str, path: str, timeout: float = 5, **kwargs: Any

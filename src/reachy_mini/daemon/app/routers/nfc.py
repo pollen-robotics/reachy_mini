@@ -22,8 +22,8 @@ from ....nfc import (
     NfcWriteResult,
     disabled_status,
     no_tag,
-    switch_reader,
 )
+from ...nfc_switch import switch_reader
 from ..dependencies import get_nfc_reader
 
 router = APIRouter(prefix="/nfc")

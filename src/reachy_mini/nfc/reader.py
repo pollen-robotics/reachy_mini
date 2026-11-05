@@ -27,6 +27,7 @@ imported lazily, so a daemon without it starts normally and reports
 
 from __future__ import annotations
 
+import functools
 import logging
 import queue
 import threading
@@ -224,11 +225,21 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+@functools.cache
 def driver_available() -> bool:
-    """Whether the optional ``winnie_nfc`` driver is installed."""
+    """Whether the optional ``winnie_nfc`` driver is installed and importable.
+
+    Cached for the life of the process, since the status a client polls asks
+    every time and a missing package would otherwise cost a full ``sys.path``
+    search per request. Installing the ``[nfc]`` extra therefore takes a
+    daemon restart, which a new dependency needs anyway.
+    """
     try:
         import winnie_nfc  # noqa: F401
     except ImportError:
+        return False
+    except Exception as e:  # noqa: BLE001 - a broken install must not 500 /status
+        logger.warning("winnie_nfc is installed but failed to import: %s", e)
         return False
     return True
 
@@ -374,7 +385,21 @@ class Clrc663Session:
             # Removed between the detection and the read.
             return NfcTag(present=False)
 
-        tag = _snapshot(read)
+        try:
+            tag = _snapshot(read)
+        except Exception as e:  # noqa: BLE001 - see below
+            # A driver answer this code does not expect (a record missing a
+            # field, say). Pure data conversion, no I/O: letting it escape
+            # would read as a broken link and reopen a healthy one every poll
+            # for as long as the tag stays on.
+            logger.warning("Could not decode the NFC tag: %r", e)
+            tag = NfcTag(
+                present=True,
+                uid=uid,  # from the detection above, known to be good
+                readable=False,
+                error=f"undecodable tag: {e!r}",
+                last_read_at=_now(),
+            )
         self._last_uid = tag.uid
         self._last_tag = tag
         self._failed_reads = 0 if tag.readable else self._failed_reads + 1
@@ -427,6 +452,7 @@ class Clrc663Session:
         """
         from winnie_nfc import ndef, type2
         from winnie_nfc.core import CollisionError, NoTagError, TagError
+        from winnie_nfc.transport import TransportError
 
         # The tag keeps its UID across a write, so the cached read would
         # otherwise be served until the tag is lifted off. Dropped whatever
@@ -458,6 +484,15 @@ class Clrc663Session:
             # look like a broken serial link to the reader thread, which would
             # then drop and reopen a perfectly healthy one.
             return NfcWriteResult(success=False, error="WRITE_ERROR", detail=str(e))
+        except (TransportError, OSError):
+            # The link itself (pyserial's SerialException is an OSError): the
+            # one failure the reader thread must see, to reopen the port.
+            raise
+        except Exception as e:  # noqa: BLE001 - anything else is about the tag
+            # The driver rejecting an argument (ValueError, an encoding error):
+            # an answer for the caller, not a reason to drop a healthy link.
+            logger.warning("Unexpected NFC write failure: %r", e)
+            return NfcWriteResult(success=False, error="WRITE_ERROR", detail=repr(e))
         return NfcWriteResult(success=True)
 
 
