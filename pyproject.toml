@@ -107,7 +107,6 @@ all = [
     "reachy_mini[wireless-version]",
     "reachy_mini[opencv]",
     "reachy_mini[central-consumer]",
-    "reachy_mini[nfc]",
 ]
 
 [dependency-groups]

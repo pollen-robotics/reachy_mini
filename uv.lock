@@ -3418,7 +3418,6 @@ requires-dist = [
     { name = "reachy-mini", extras = ["central-consumer"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["examples"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["mujoco"], marker = "extra == 'all'" },
-    { name = "reachy-mini", extras = ["nfc"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["nfc"], marker = "extra == 'wireless-version'" },
     { name = "reachy-mini", extras = ["opencv"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["placo-kinematics"], marker = "extra == 'all'" },
