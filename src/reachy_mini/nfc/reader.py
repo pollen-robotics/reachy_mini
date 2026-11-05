@@ -771,12 +771,21 @@ class NfcReader:
                 logger.warning("NFC reader thread did not stop in time.")
         # A write posted just before the stop would otherwise wait out its
         # whole deadline: nobody is left to serve it.
+        self._abandon_queued("NOT_CONNECTED")
+
+    def _abandon_queued(self, error: str) -> None:
+        """Answer every job still waiting in the queue with ``error``.
+
+        Cancelled first, so a job answered here can never run later: once its
+        caller has its answer, it must not touch a tag.
+        """
         while True:
             try:
                 job = self._jobs.get_nowait()
             except queue.Empty:
-                break
-            job.abandon("NOT_CONNECTED")
+                return
+            job.cancel()
+            job.abandon(error)
             job.done.set()
 
     # -- public state accessors -------------------------------------------
@@ -919,6 +928,9 @@ class NfcReader:
                 )
             except Exception as e:  # noqa: BLE001 - the board may be absent
                 self._set_disconnected(str(e))
+                # A job posted while the link was still up, just before it
+                # dropped: answer it now rather than at its deadline.
+                self._abandon_queued("NOT_CONNECTED")
                 logger.debug("NFC reader not available: %s", e)
                 self._close(session)
                 self._should_stop.wait(self._retry_interval)
@@ -929,6 +941,10 @@ class NfcReader:
             except Exception as e:  # noqa: BLE001 - the link may drop anytime
                 logger.warning("NFC reader link lost: %s", e)
                 self._set_disconnected(str(e))
+                # Nobody serves the queue while reconnecting: without this a
+                # queued write waits out its whole deadline for a TIMEOUT, or
+                # fires on a reconnect the user no longer expects.
+                self._abandon_queued("LINK_LOST")
                 self._should_stop.wait(self._retry_interval)
             finally:
                 self._close(session)

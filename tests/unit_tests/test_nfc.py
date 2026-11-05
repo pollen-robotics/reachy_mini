@@ -850,6 +850,49 @@ def test_a_write_whose_attempt_is_running_waits_for_its_outcome(driver_installed
         reader.stop()
 
 
+def test_a_job_queued_when_the_link_drops_is_answered_at_once(driver_installed):
+    # The write is queued while the thread is busy on a poll; that poll then
+    # finds the link gone and the board does not come back. The caller hears
+    # LINK_LOST right away, not a TIMEOUT at its deadline, and nothing is
+    # written behind its back later on.
+    session = BlockingSession()
+    opened = []
+
+    def factory(port):
+        opened.append(port)
+        if len(opened) > 1:
+            raise OSError("no board")
+        return session
+
+    reader = NfcReader(
+        port="/dev/ttyACM0",
+        poll_interval=0.01,
+        retry_interval=0.01,
+        session_factory=factory,
+    )
+    started(reader)
+    results = []
+    writer = threading.Thread(
+        target=lambda: results.append(
+            reader.write(NfcWriteRequest(text="x"), timeout=30)
+        )
+    )
+    try:
+        session.block_polls = True
+        time.sleep(0.05)  # the thread is now inside a blocked poll
+        writer.start()
+        time.sleep(0.05)  # the write is queued
+        session.fail_on_poll = 1
+        session.release.set()
+        writer.join(timeout=5)
+        assert not writer.is_alive()
+        assert results[0].error == "LINK_LOST"
+        assert session.write_calls == []
+    finally:
+        session.release.set()
+        reader.stop()
+
+
 def test_a_job_queued_behind_a_long_one_answers_busy(driver_installed, monkeypatch):
     monkeypatch.setattr("reachy_mini.nfc.reader.JOB_LOCK_TIMEOUT", 0.05)
     session = BlockingSession(block_erase=True)
