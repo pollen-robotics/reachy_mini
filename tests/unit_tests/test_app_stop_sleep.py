@@ -102,3 +102,21 @@ async def test_only_unrequested_exits_trigger_the_idle_reset(
 
     assert lock.status().state == RobotAppLockState.FREE
     assert freed == ([] if requested else [False])
+
+
+@pytest.mark.asyncio
+async def test_stop_clears_current_app_when_pose_read_fails(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A failed pose read must not leave the stopped app registered."""
+    mngr, reset_to_init = _manager_with_head_pose(np.eye(4))
+    mngr.daemon.backend.get_current_head_pose = MagicMock(
+        side_effect=RuntimeError("pose unavailable")
+    )
+
+    with caplog.at_level("WARNING"):
+        await mngr.stop_current_app()
+
+    reset_to_init.assert_not_awaited()
+    assert "Could not handle post-stop pose: pose unavailable" in caplog.text
+    assert mngr.current_app is None
