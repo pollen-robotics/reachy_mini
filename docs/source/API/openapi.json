@@ -2221,6 +2221,180 @@
         }
       }
     },
+    "/api/nfc/tag": {
+      "get": {
+        "summary": "Get Tag",
+        "description": "Get the tag currently on the reader.\n\nThe ``uid`` is read on any ISO 14443-A tag, the NDEF ``records`` only on\nType 2 tags. An unreadable tag has ``readable`` false and an ``error``.\n\nReports the UID and content of any card put on the reader (an access\nbadge, a transport card) to every client of the API, including remote\nones over WebRTC (``nfc.tag``).",
+        "operationId": "get_tag_api_nfc_tag_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NfcTag"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nfc/status": {
+      "get": {
+        "summary": "Get Status",
+        "description": "Get the NFC reader hardware status (link, chip detection, driver).",
+        "operationId": "get_status_api_nfc_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NfcStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nfc/enabled": {
+      "post": {
+        "summary": "Set Enabled",
+        "description": "Switch the NFC reader on or off, and remember it across restarts.\n\nOff, the serial port is released. Answers with the status right after the\nswitch; ``setting_saved`` is false when the choice could not be persisted.\nAnswers 503 when the daemon was started with ``--no-nfc``.",
+        "operationId": "set_enabled_api_nfc_enabled_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NfcEnableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NfcStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nfc/dump": {
+      "get": {
+        "summary": "Dump Tag",
+        "description": "Read the whole user memory of the tag on the reader, as hex.\n\nFor tags carrying raw data rather than NDEF; ``GET /tag`` only reports its\nfirst bytes in ``raw_hex``.",
+        "operationId": "dump_tag_api_nfc_dump_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NfcDump"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nfc/erase": {
+      "post": {
+        "summary": "Erase Tag",
+        "description": "Make the next tag presented to the reader blank again.\n\nBy default, writes an empty NDEF message: the tag stays formatted. ``full``\nalso zeroes the whole user memory (a few seconds). The capability\ncontainer, lock bytes and password are never touched.",
+        "operationId": "erase_tag_api_nfc_erase_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NfcEraseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NfcWriteResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nfc/write": {
+      "post": {
+        "summary": "Write Tag",
+        "description": "Write text or a URI onto the next tag presented to the reader.\n\nExactly one of ``text`` or ``uri``. Waits for a tag to be presented. A\nmessage larger than the tag's capacity (144 bytes on an NTAG213, 496 on an\nNTAG215, 872 on an NTAG216) answers ``TOO_LONG``.",
+        "operationId": "write_tag_api_nfc_write_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NfcWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NfcWriteResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/state/present_head_pose": {
       "get": {
         "summary": "Get Head Pose",
@@ -3845,6 +4019,436 @@
         ],
         "title": "MujocoBackendStatus",
         "description": "Status of the Mujoco backend."
+      },
+      "NfcDump": {
+        "properties": {
+          "present": {
+            "type": "boolean",
+            "title": "Present"
+          },
+          "uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uid"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size",
+            "default": 0
+          },
+          "hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hex"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "present"
+        ],
+        "title": "NfcDump",
+        "description": "The raw user memory of a tag (see ``GET /api/nfc/dump``)."
+      },
+      "NfcEnableRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "NfcEnableRequest",
+        "description": "Switch the reader on or off."
+      },
+      "NfcEraseRequest": {
+        "properties": {
+          "full": {
+            "type": "boolean",
+            "title": "Full",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "NfcEraseRequest",
+        "description": "Request body to make the tag blank again (see ``POST /api/nfc/erase``)."
+      },
+      "NfcRecord": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "type_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Name"
+          },
+          "data_hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Hex"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "NfcRecord",
+        "description": "One NDEF record read from a tag.\n\n``kind`` is ``\"text\"``, ``\"uri\"``, or ``\"other\"`` for a record that is not\ndecoded (vCard, MIME payload...), reported with its raw payload."
+      },
+      "NfcStatus": {
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "chip_detected": {
+            "type": "boolean",
+            "title": "Chip Detected"
+          },
+          "driver_available": {
+            "type": "boolean",
+            "title": "Driver Available"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "board_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Board Version"
+          },
+          "chip_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chip Version"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "DISABLED",
+                  "NO_BOARD",
+                  "DRIVER_MISSING",
+                  "PORT_CONFLICT",
+                  "LINK_ERROR"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "setting_saved": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setting Saved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connected",
+          "enabled",
+          "chip_detected",
+          "driver_available"
+        ],
+        "title": "NfcStatus",
+        "description": "Snapshot of the NFC reader hardware status."
+      },
+      "NfcTag": {
+        "properties": {
+          "present": {
+            "type": "boolean",
+            "title": "Present"
+          },
+          "uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uid"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/NfcRecord"
+            },
+            "type": "array",
+            "title": "Records",
+            "default": []
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "blank": {
+            "type": "boolean",
+            "title": "Blank",
+            "default": false
+          },
+          "readable": {
+            "type": "boolean",
+            "title": "Readable",
+            "default": false
+          },
+          "writable": {
+            "type": "boolean",
+            "title": "Writable",
+            "default": false
+          },
+          "capacity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity"
+          },
+          "raw_hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Hex"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "last_read_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Read At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "present"
+        ],
+        "title": "NfcTag",
+        "description": "Snapshot of the tag currently on the reader."
+      },
+      "NfcWriteRequest": {
+        "properties": {
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uri"
+          }
+        },
+        "type": "object",
+        "title": "NfcWriteRequest",
+        "description": "Request body to write onto the next presented tag: ``text`` or ``uri``."
+      },
+      "NfcWriteResult": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "title": "NfcWriteResult",
+        "description": "Result of a write attempt.\n\n``error`` is a stable code rather than a sentence: ``NO_TAG``,\n``TOO_LONG``, ``LOCKED``, ``UNKNOWN_TAG``, ``WRITE_REFUSED``,\n``WRITE_ERROR``, ``COLLISION``, ``NOT_CONNECTED``, ``LINK_LOST``,\n``TIMEOUT``, ``UNCERTAIN``, ``BUSY``, ``DRIVER_MISSING``.\n\n``WRITE_REFUSED``: the tag refused a page (locked or password-protected\npage on a tag otherwise declared writable). When the refusal comes after\nthe first page, the tag now reads as blank: its previous content is lost.\nThe same applies to ``NO_TAG`` when the tag is removed during the write.\n``TIMEOUT``: no tag came in time, nothing was written. ``UNCERTAIN``: the\ncaller stopped waiting while the operation was running on the tag."
       },
       "PlaySoundRequest": {
         "properties": {

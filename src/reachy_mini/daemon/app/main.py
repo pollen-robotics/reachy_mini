@@ -41,6 +41,7 @@ from reachy_mini.daemon.app.routers import (
     media,
     motors,
     move,
+    nfc,
     sdk_ws,
     state,
     telemetry,
@@ -59,6 +60,7 @@ from reachy_mini.media.audio_utils import (
     write_asoundrc_to_home,
 )
 from reachy_mini.motion.recorded_move import preload_default_datasets
+from reachy_mini.nfc import NfcReader
 from reachy_mini.utils.discovery import MdnsServiceRegistration
 from reachy_mini.utils.wireless_version.startup_check import (
     run_wireless_startup_checks,
@@ -84,6 +86,9 @@ class Args:
 
     serialport: str = "auto"
     hardware_config_filepath: str | None = None
+
+    nfc_enabled: bool = True
+    nfc_port: str = "auto"
 
     sim: bool = False
     mockup_sim: bool = False
@@ -121,6 +126,14 @@ def _resolve_bind_host(args: Args) -> str:
     if args.fastapi_host:
         return args.fastapi_host
     return "0.0.0.0" if args.wireless_version else "127.0.0.1"
+
+
+def nfc_reader_wanted(args: Args) -> bool:
+    """Whether the daemon runs the NFC reader.
+
+    Not in simulation: there is no robot, so no accessory board to look for.
+    """
+    return args.nfc_enabled and not (args.sim or args.mockup_sim)
 
 
 def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> FastAPI:
@@ -259,6 +272,16 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
                 daemon_instance.backend.set_robot_name_callback(_apply_robot_name_live)
 
+            # Start the NFC reader unless it was switched off.
+            if (
+                app.state.nfc_reader is not None
+                and startup_app_config.get_nfc_enabled()
+            ):
+                try:
+                    app.state.nfc_reader.start()
+                except Exception as e:
+                    logger.warning(f"Failed to start NFC reader: {e}")
+
             yield
         finally:
             # Cancel dataset updater task if running
@@ -280,6 +303,13 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
             # Unregister mDNS service
             mdns.unregister()
+
+            # stop() joins the reader thread: keep it off the event loop.
+            if app.state.nfc_reader is not None:
+                try:
+                    await asyncio.to_thread(app.state.nfc_reader.stop)
+                except Exception as e:
+                    logger.exception(f"Error stopping NFC reader: {e}")
 
             # Ensure cleanup happens even if there's an exception
             try:
@@ -328,6 +358,18 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     # wire the JSON-RPC app relay (apps.* + conversation.* over the DataChannel).
     app.state.daemon.app_manager = app.state.app_manager
 
+    # An explicit --nfc-port that names the motor port is refused.
+    app.state.nfc_reader = (
+        NfcReader(
+            port=args.nfc_port,
+            motor_port=None if args.serialport == "auto" else args.serialport,
+        )
+        if nfc_reader_wanted(args)
+        else None
+    )
+    # Served over WebRTC as nfc.* by the JSON-RPC relay.
+    app.state.daemon.nfc_reader = app.state.nfc_reader
+
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
     router.include_router(audio_config.router)
@@ -338,6 +380,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(media.router)
     router.include_router(motors.router)
     router.include_router(move.router)
+    router.include_router(nfc.router)
     router.include_router(state.router)
     router.include_router(telemetry.router)
     router.include_router(volume.router)
@@ -546,7 +589,12 @@ def configure_root_logging(log_level: str, log_file: str | None = None) -> None:
         root_logger.addHandler(file_handler)
 
 
-_POLLING_PATHS = ("/health-check", "/api/hf-auth/relay-status")
+_POLLING_PATHS = (
+    "/health-check",
+    "/api/hf-auth/relay-status",
+    "/api/nfc/status",
+    "/api/nfc/tag",
+)
 _OAUTH_CALLBACK_PATH = "/api/hf-auth/oauth/callback"
 
 # Hub embeds provider text or stored token lines in these messages.
@@ -747,6 +795,20 @@ def main() -> None:
         type=str,
         default=default_hw_config_path,
         help=f"Path to the hardware configuration YAML file (default: {default_hw_config_path}).",
+    )
+    # Optional NFC reader accessory
+    parser.add_argument(
+        "--no-nfc",
+        action="store_false",
+        dest="nfc_enabled",
+        help="Disable the optional NFC reader accessory (default: enabled, "
+        "except in simulation).",
+    )
+    parser.add_argument(
+        "--nfc-port",
+        type=str,
+        default=default_args.nfc_port,
+        help="Serial port for the NFC reader (default: auto-detect).",
     )
     # Simulation mode
     parser.add_argument(

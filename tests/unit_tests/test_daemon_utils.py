@@ -14,9 +14,10 @@ from reachy_mini.daemon import utils
 class _FakePort:
     """Minimal stand-in for a serial.tools.list_ports port object."""
 
-    def __init__(self, device: str, hwid: str) -> None:
+    def __init__(self, device: str, hwid: str, product: str | None = None) -> None:
         self.device = device
         self.hwid = hwid
+        self.product = product
 
 
 class _FakeProc:
@@ -70,6 +71,16 @@ def test_find_serial_port_found(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
     monkeypatch.setattr(utils.serial.tools.list_ports, "comports", lambda: ports)
     assert utils.find_serial_port() == ["/dev/ttyUSB0"]
+
+
+def test_find_serial_port_skips_the_nfc_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The NFC reader shares the motor controller's VID:PID; its product string tells it apart."""
+    ports = [
+        _FakePort("/dev/ttyACM0", "USB VID:PID=1A86:55D3 SER=1", "Winnie NFC 1.0"),
+        _FakePort("/dev/ttyACM1", "USB VID:PID=1A86:55D3 SER=2", "USB Single Serial"),
+    ]
+    monkeypatch.setattr(utils.serial.tools.list_ports, "comports", lambda: ports)
+    assert utils.find_serial_port() == ["/dev/ttyACM1"]
 
 
 def test_find_serial_port_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
