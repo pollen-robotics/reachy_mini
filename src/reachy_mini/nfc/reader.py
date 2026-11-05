@@ -33,7 +33,16 @@ import queue
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Callable, Concatenate, Iterable, ParamSpec, Protocol, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Concatenate,
+    Generic,
+    Iterable,
+    ParamSpec,
+    Protocol,
+    TypeVar,
+)
 
 from pydantic import BaseModel, model_validator
 
@@ -551,11 +560,15 @@ def _record(record: dict[str, Any]) -> NfcRecord:
     return NfcRecord(kind=kind, value=record["value"])
 
 
-class _Job:
+_Outcome = TypeVar("_Outcome", NfcWriteResult, NfcDump)
+
+
+class _Job(Generic[_Outcome]):
     """Work handed to the reader thread, and its outcome."""
 
     def __init__(self) -> None:
         self.done = threading.Event()
+        self.outcome: _Outcome | None = None
         self._state = threading.Lock()
         self._running = False
         self._cancelled = False
@@ -603,12 +616,17 @@ class _Job:
         """Do the work. Return False to be retried after a poll interval."""
         raise NotImplementedError
 
-    def abandon(self, error: str) -> None:
-        """Record an outcome for a caller nobody else will answer."""
+    def failed(self, error: str) -> _Outcome:
+        """Build the outcome reporting ``error``, in this job's result type."""
         raise NotImplementedError
 
+    def abandon(self, error: str) -> None:
+        """Record an outcome for a caller nobody else will answer."""
+        if self.outcome is None:
+            self.outcome = self.failed(error)
 
-class _WriteJob(_Job):
+
+class _WriteJob(_Job[NfcWriteResult]):
     """A tag-modifying operation, retried while no tag has been presented yet.
 
     Holds the operation rather than its arguments so that a write and an erase
@@ -616,13 +634,19 @@ class _WriteJob(_Job):
     tag on the antenna.
     """
 
-    def __init__(self, action: Callable[[NfcSession], NfcWriteResult], deadline: float):
+    def __init__(
+        self, action: Callable[[NfcSession], NfcWriteResult], timeout: float
+    ) -> None:
         super().__init__()
         self.action = action
-        self.deadline = deadline
-        self.result: NfcWriteResult | None = None
+        self.timeout = timeout
+        # Starts when the reader thread first picks the job up: the time a
+        # caller has to present a tag, whatever the job waited before that.
+        self.deadline: float | None = None
 
     def run(self, session: NfcSession) -> bool:
+        if self.deadline is None:
+            self.deadline = time.monotonic() + self.timeout
         result = self.action(session)
         # Only "no tag yet" is worth retrying; past the deadline it becomes the
         # answer.
@@ -631,36 +655,33 @@ class _WriteJob(_Job):
             or result.error != "NO_TAG"
             or time.monotonic() >= self.deadline
         ):
-            self.result = result
+            self.outcome = result
             return True
         return False
 
-    def abandon(self, error: str) -> None:
-        if self.result is None:
-            self.result = NfcWriteResult(success=False, error=error)
+    def failed(self, error: str) -> NfcWriteResult:
+        return NfcWriteResult(success=False, error=error)
 
 
-class _DumpJob(_Job):
+class _DumpJob(_Job[NfcDump]):
     """A read of the whole user memory, served on demand."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.dump: NfcDump | None = None
         self._left = DUMP_ATTEMPTS
 
     def run(self, session: NfcSession) -> bool:
         dump = session.dump()
         self._left -= 1
         if dump.present or dump.error is not None or self._left <= 0:
-            self.dump = dump
+            self.outcome = dump
             return True
         # No tag answered, but detection misses a poll now and then: retry
         # rather than tell the caller the antenna is empty.
         return False
 
-    def abandon(self, error: str) -> None:
-        if self.dump is None:
-            self.dump = NfcDump(present=False, error=error)
+    def failed(self, error: str) -> NfcDump:
+        return NfcDump(present=False, error=error)
 
 
 class NfcReader:
@@ -708,7 +729,7 @@ class NfcReader:
         self._lifecycle = threading.Lock()
         self._running = False  # a reader thread exists and has not exited
         self._enabled = False  # between start() and stop()
-        self._jobs: queue.Queue[_Job] = queue.Queue()
+        self._jobs: queue.Queue[_Job[Any]] = queue.Queue()
         self._job_lock = threading.Lock()  # one job waited on at a time
 
         self._lock = threading.Lock()  # guards the snapshot below
@@ -830,14 +851,10 @@ class NfcReader:
         antenna so the caller can post the write first and present the tag
         after. Returns an error result rather than raising.
         """
-        if not driver_available():
-            return NfcWriteResult(success=False, error="DRIVER_MISSING")
-        if not self.is_connected():
-            return NfcWriteResult(success=False, error="NOT_CONNECTED")
-
-        return self._post_write(
-            lambda session: session.write(request.text, request.uri), timeout
-        )
+        job = _WriteJob(lambda s: s.write(request.text, request.uri), timeout)
+        # The thread has until the deadline, plus one poll period to notice
+        # the job and one more to answer it.
+        return self._submit(job, timeout + 2 * self._poll_interval + 1.0)
 
     def erase(
         self, request: NfcEraseRequest, timeout: float = ERASE_TIMEOUT
@@ -847,31 +864,8 @@ class NfcReader:
         Same waiting behaviour as a write, with a longer timeout (see
         ``ERASE_TIMEOUT``).
         """
-        if not driver_available():
-            return NfcWriteResult(success=False, error="DRIVER_MISSING")
-        if not self.is_connected():
-            return NfcWriteResult(success=False, error="NOT_CONNECTED")
-
-        return self._post_write(lambda session: session.erase(request.full), timeout)
-
-    def _post_write(
-        self,
-        action: Callable[[NfcSession], NfcWriteResult],
-        timeout: float,
-    ) -> NfcWriteResult:
-        """Hand one tag-modifying operation to the reader thread and wait."""
-        if not self._job_lock.acquire(timeout=JOB_LOCK_TIMEOUT):
-            return NfcWriteResult(success=False, error="BUSY")
-        try:
-            job = _WriteJob(action=action, deadline=time.monotonic() + timeout)
-            self._jobs.put(job)
-            # The thread has until the deadline, plus one poll period to notice
-            # the job and one more to answer it.
-            if not job.wait(timeout + 2 * self._poll_interval + 1.0):
-                return NfcWriteResult(success=False, error="TIMEOUT")
-            return job.result or NfcWriteResult(success=False, error="LINK_LOST")
-        finally:
-            self._job_lock.release()
+        job = _WriteJob(lambda s: s.erase(request.full), timeout)
+        return self._submit(job, timeout + 2 * self._poll_interval + 1.0)
 
     def dump(self, timeout: float = 5.0) -> NfcDump:
         """Read the whole user memory of the tag currently on the antenna.
@@ -879,19 +873,26 @@ class NfcReader:
         Goes through the reader thread like a write does: the chip has a single
         owner, and a ~180 ms transfer must not interleave with a poll.
         """
-        if not driver_available():
-            return NfcDump(present=False, error="DRIVER_MISSING")
-        if not self.is_connected():
-            return NfcDump(present=False, error="NOT_CONNECTED")
+        return self._submit(_DumpJob(), timeout + self._poll_interval)
 
+    def _submit(self, job: _Job[_Outcome], wait: float) -> _Outcome:
+        """Hand one job to the reader thread and wait up to ``wait`` for it.
+
+        The single path every write, erase and dump goes through, so they
+        refuse, queue and time out the same way. Every failure comes back as
+        an outcome of the job's own type, never as an exception.
+        """
+        if not driver_available():
+            return job.failed("DRIVER_MISSING")
+        if not self.is_connected():
+            return job.failed("NOT_CONNECTED")
         if not self._job_lock.acquire(timeout=JOB_LOCK_TIMEOUT):
-            return NfcDump(present=False, error="BUSY")
+            return job.failed("BUSY")
         try:
-            job = _DumpJob()
             self._jobs.put(job)
-            if not job.wait(timeout + self._poll_interval):
-                return NfcDump(present=False, error="TIMEOUT")
-            return job.dump or NfcDump(present=False, error="LINK_LOST")
+            if not job.wait(wait):
+                return job.failed("TIMEOUT")
+            return job.outcome if job.outcome is not None else job.failed("LINK_LOST")
         finally:
             self._job_lock.release()
 
@@ -965,7 +966,7 @@ class NfcReader:
                 job.abandon("LINK_LOST")
                 job.done.set()
 
-    def _serve_job(self, session: NfcSession, job: _Job) -> None:
+    def _serve_job(self, session: NfcSession, job: _Job[Any]) -> None:
         """Run one job, retrying it while it asks to be retried."""
         while True:
             if not job.begin():
