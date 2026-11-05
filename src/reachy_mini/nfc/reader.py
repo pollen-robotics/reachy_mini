@@ -174,6 +174,10 @@ class NfcWriteResult(BaseModel):
     ``WRITE_ERROR``, ``COLLISION``, ``NOT_CONNECTED``, ``LINK_LOST``,
     ``TIMEOUT``, ``UNCERTAIN``, ``BUSY``, ``DRIVER_MISSING``.
 
+    ``WRITE_REFUSED``: the tag refused a page (locked or password-protected
+    page on a tag otherwise declared writable). When the refusal comes after
+    the first page, the tag now reads as blank: its previous content is lost.
+    The same applies to ``NO_TAG`` when the tag is removed during the write.
     ``TIMEOUT``: no tag came in time, nothing was written. ``UNCERTAIN``: the
     caller stopped waiting while the operation was running on the tag.
     """

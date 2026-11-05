@@ -50,6 +50,10 @@ async def get_tag(reader: NfcReader | None = Depends(get_nfc_reader)) -> NfcTag:
 
     The ``uid`` is read on any ISO 14443-A tag, the NDEF ``records`` only on
     Type 2 tags. An unreadable tag has ``readable`` false and an ``error``.
+
+    Reports the UID and content of any card put on the reader (an access
+    badge, a transport card) to every client of the API, including remote
+    ones over WebRTC (``nfc.tag``).
     """
     return nfc_switch.tag(reader)
 
