@@ -568,6 +568,147 @@ def test_erase_without_a_link_answers_instead_of_blocking(driver_installed, no_b
         reader.stop()
 
 
+class BlockingSession(FakeSession):
+    """A session whose erase (or poll) holds the chip until released."""
+
+    def __init__(self, block_erase=False, block_polls=False, **kwargs):
+        super().__init__(**kwargs)
+        self.release = threading.Event()
+        self.erasing = threading.Event()
+        self.block_erase = block_erase
+        self.block_polls = block_polls
+
+    def read_tag(self):
+        if self.block_polls:
+            self.release.wait(5)
+        return super().read_tag()
+
+    def erase(self, full):
+        if self.block_erase:
+            self.erasing.set()
+            self.release.wait(5)
+        return super().erase(full)
+
+
+def _reader_threads():
+    return [t for t in threading.enumerate() if t.name == "nfc-reader"]
+
+
+def test_a_restart_during_a_long_job_never_runs_two_threads(driver_installed):
+    # A full erase cannot be interrupted, so stop() times out on it. Starting
+    # again must reuse that thread, not open a second one on the same port.
+    session = BlockingSession(block_erase=True)
+    opened = []
+
+    def factory(port):
+        opened.append(port)
+        return session
+
+    reader = NfcReader(
+        port="/dev/ttyACM0",
+        poll_interval=0.01,
+        retry_interval=0.01,
+        session_factory=factory,
+    )
+    started(reader)
+    eraser = threading.Thread(
+        target=lambda: reader.erase(NfcEraseRequest(full=True), timeout=10)
+    )
+    eraser.start()
+    try:
+        assert session.erasing.wait(2)
+        reader.stop(timeout=0.05)
+        reader.start()
+        assert len(_reader_threads()) == 1
+        session.release.set()
+        eraser.join(timeout=5)
+        assert reader.get_status().enabled
+        assert wait_until(reader.is_connected)
+        assert len(_reader_threads()) == 1
+        assert opened == ["/dev/ttyACM0"]
+    finally:
+        session.release.set()
+        reader.stop()
+    assert wait_until(lambda: not _reader_threads())
+
+
+def test_a_stop_during_a_long_job_still_ends_the_thread(driver_installed):
+    session = BlockingSession(block_erase=True)
+    reader = make_reader(session)
+    started(reader)
+    eraser = threading.Thread(
+        target=lambda: reader.erase(NfcEraseRequest(full=True), timeout=10)
+    )
+    eraser.start()
+    assert session.erasing.wait(2)
+    reader.stop(timeout=0.05)
+    session.release.set()
+    eraser.join(timeout=5)
+    assert wait_until(lambda: not _reader_threads())
+    assert not reader.is_connected()
+
+
+def test_a_timed_out_write_never_reaches_the_tag(driver_installed):
+    # The reader thread is stuck on a poll: the write times out while still
+    # queued, and must not be carried out once the thread gets to it.
+    session = BlockingSession()
+    reader = make_reader(session)
+    started(reader)
+    try:
+        session.block_polls = True
+        time.sleep(0.05)  # let the thread enter a blocked poll
+        result = reader.write(NfcWriteRequest(text="x"), timeout=0.01)
+        assert result.error == "TIMEOUT"
+        session.block_polls = False
+        session.release.set()
+        time.sleep(0.2)
+        assert session.write_calls == []
+    finally:
+        session.release.set()
+        reader.stop()
+
+
+def test_a_write_whose_attempt_is_running_waits_for_its_outcome(driver_installed):
+    # The erase is already on the tag when the caller's wait runs out: the
+    # real outcome is reported, not a TIMEOUT for an erase that happened.
+    session = BlockingSession(block_erase=True)
+    reader = make_reader(session)
+    started(reader)
+    results = []
+    eraser = threading.Thread(
+        target=lambda: results.append(reader.erase(NfcEraseRequest(), timeout=0.01))
+    )
+    try:
+        eraser.start()
+        assert session.erasing.wait(2)
+        time.sleep(1.2)  # past the caller's first wait (timeout + ~1 s)
+        session.release.set()
+        eraser.join(timeout=5)
+        assert results[0].success
+    finally:
+        session.release.set()
+        reader.stop()
+
+
+def test_a_job_queued_behind_a_long_one_answers_busy(driver_installed, monkeypatch):
+    monkeypatch.setattr("reachy_mini.nfc.reader.JOB_LOCK_TIMEOUT", 0.05)
+    session = BlockingSession(block_erase=True)
+    reader = make_reader(session)
+    started(reader)
+    eraser = threading.Thread(
+        target=lambda: reader.erase(NfcEraseRequest(full=True), timeout=10)
+    )
+    try:
+        eraser.start()
+        assert session.erasing.wait(2)
+        assert reader.write(NfcWriteRequest(text="x")).error == "BUSY"
+        assert reader.dump().error == "BUSY"
+    finally:
+        session.release.set()
+        eraser.join(timeout=5)
+        reader.stop()
+
+
 # --------------------------------------------------------------- the snapshot
 
 
