@@ -144,3 +144,20 @@ def test_switch_answers_503_without_a_reader(saved: list[bool]) -> None:
     response = client.post("/nfc/enabled", json={"enabled": True})
     assert response.status_code == 503
     assert saved == []
+
+
+@pytest.mark.parametrize(
+    ("args", "wanted"),
+    [
+        ({}, True),
+        ({"nfc_enabled": False}, False),
+        ({"sim": True}, False),
+        ({"mockup_sim": True}, False),
+    ],
+)
+def test_the_daemon_runs_the_reader_only_on_a_real_robot(
+    args: dict[str, bool], wanted: bool
+) -> None:
+    from reachy_mini.daemon.app.main import Args, nfc_reader_wanted
+
+    assert nfc_reader_wanted(Args(**args)) is wanted

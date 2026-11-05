@@ -128,6 +128,14 @@ def _resolve_bind_host(args: Args) -> str:
     return "0.0.0.0" if args.wireless_version else "127.0.0.1"
 
 
+def nfc_reader_wanted(args: Args) -> bool:
+    """Whether the daemon runs the NFC reader.
+
+    Not in simulation: there is no robot, so no accessory board to look for.
+    """
+    return args.nfc_enabled and not (args.sim or args.mockup_sim)
+
+
 def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
 
@@ -357,7 +365,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             port=args.nfc_port,
             exclude_ports=(() if args.serialport == "auto" else (args.serialport,)),
         )
-        if args.nfc_enabled
+        if nfc_reader_wanted(args)
         else None
     )
     # Served over WebRTC as nfc.* by the JSON-RPC relay.
@@ -794,7 +802,8 @@ def main() -> None:
         "--no-nfc",
         action="store_false",
         dest="nfc_enabled",
-        help="Disable the optional NFC reader accessory (default: enabled).",
+        help="Disable the optional NFC reader accessory (default: enabled, "
+        "except in simulation).",
     )
     parser.add_argument(
         "--nfc-port",
