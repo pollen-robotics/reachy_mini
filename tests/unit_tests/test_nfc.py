@@ -36,7 +36,6 @@ def comport(device, product=None):
     "product, expected",
     [
         ("Winnie NFC 1.2", (True, "1.2")),
-        ("Winnie NFC [1.2]", (True, "1.2")),
         ("  winnie nfc v2 ", (True, "v2")),
         ("Winnie NFC", (True, None)),
         ("USB Single Serial", (False, None)),

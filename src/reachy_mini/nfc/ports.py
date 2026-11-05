@@ -37,16 +37,15 @@ def parse_product(product: str | None) -> tuple[bool, str | None]:
     """Tell whether a USB product string is the NFC board's, and its version.
 
     Returns ``(is_nfc_board, version)``. The version is whatever follows the
-    prefix, brackets and surrounding blanks removed: ``"Winnie NFC 1.2"`` and
-    ``"Winnie NFC [1.2]"`` both give ``"1.2"``; a bare ``"Winnie NFC"`` is the
-    board with no version.
+    prefix, surrounding blanks removed: ``"Winnie NFC 1.2"`` gives ``"1.2"``;
+    a bare ``"Winnie NFC"`` is the board with no version.
     """
     if not product:
         return False, None
     product = product.strip()
     if not product.casefold().startswith(NFC_PRODUCT_PREFIX.casefold()):
         return False, None
-    version = product[len(NFC_PRODUCT_PREFIX) :].strip().strip("[]()").strip()
+    version = product[len(NFC_PRODUCT_PREFIX) :].strip()
     return True, version or None
 
 
