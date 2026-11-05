@@ -1,15 +1,8 @@
 """Serial port discovery for the NFC reader board.
 
-The NFC reader (the Winnie board, a CLRC663 driven by ``winnie_nfc``) is
-recognised by its USB product string alone: ``Winnie NFC <version>``. The
-version is read from it at the same time, at no cost: the OS has it already,
-nothing is sent to the board.
-
-pyserial reports the product string on Linux and macOS. On Windows it does not,
-so it is read from the device's bus-reported description through SetupAPI.
-
-This module is imported by ``daemon.utils.find_serial_port`` as well, to keep
-the NFC board out of the motor controller's candidate list.
+The board is recognised by its USB product string, ``Winnie NFC <version>``.
+pyserial reports it on Linux and macOS; on Windows it is read through
+SetupAPI.
 """
 
 from __future__ import annotations
@@ -92,11 +85,7 @@ def find_nfc_board(
 
 
 def describe_port(port: str, comports: Sequence[Any] | None = None) -> NfcBoard:
-    """Describe an explicitly configured port, reading its version if it has one.
-
-    Used when the port is given rather than looked up: the board is trusted to
-    be there, and only its version is wanted.
-    """
+    """Describe an explicitly configured port, with its version if known."""
     for p in _comports() if comports is None else comports:
         if p.device == port:
             return NfcBoard(port=port, version=parse_product(port_product(p))[1])
@@ -106,15 +95,12 @@ def describe_port(port: str, comports: Sequence[Any] | None = None) -> NfcBoard:
 def _windows_product(device: str) -> str | None:
     """Read the USB product string of the device behind a COM port, on Windows.
 
-    pyserial leaves ``product`` empty there: Windows names ports after their
-    driver ("USB Serial Device (COM5)"), and keeps what the device itself
-    reported as its bus-reported description. That is the product string on
-    the USB device node; with the inbox CDC driver the COM port sits on an
-    interface node below it, so the parents are looked at too.
+    It is the device's bus-reported description, on the COM port's node or one
+    of its parents.
     """
     try:
         return _windows_product_unsafe(device)
-    except Exception as e:  # noqa: BLE001 - a missing name is not worth a crash
+    except Exception as e:  # noqa: BLE001
         logger.debug("Cannot read the USB product string of %s: %s", device, e)
         return None
 
@@ -249,8 +235,7 @@ def _windows_product_unsafe(device: str) -> str | None:
             index += 1
             if port_name(devices, info) != device:
                 continue
-            # The COM port's own node, then up to the USB device node: the
-            # first description that is the board's wins, else the first one.
+            # From the COM port's node up to the USB device node.
             first: str | None = None
             devinst = info.DevInst
             for _ in range(3):

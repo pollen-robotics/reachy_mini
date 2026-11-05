@@ -1,8 +1,6 @@
 """Example: read and write NFC tags through the daemon's REST API.
 
 ``NfcClient`` wraps the ``/api/nfc`` routes; run this file for a small demo.
-Field meanings and error codes are documented on the daemon's models
-(``reachy_mini.nfc``) and in its OpenAPI page.
 """
 
 import time
@@ -44,14 +42,12 @@ class NfcClient:
         Returns ``{"success", "error", "detail"}``.
         """
         body = {"text": text} if uri is None else {"uri": uri}
-        # The daemon answers within ~15 s at worst (WRITE_TIMEOUT, then as long
-        # again when a write is already on the tag at that point).
+        # The daemon answers within ~15 s at worst.
         return self._call("POST", "/write", json=body, timeout=20)
 
     def erase(self, full: bool = False) -> dict[str, Any]:
         """Make the next tag presented blank again (``full`` wipes all memory)."""
-        # Up to ~33 s at worst (ERASE_TIMEOUT, twice over when a full erase is
-        # already running at that point).
+        # Up to ~33 s at worst for a full erase.
         return self._call("POST", "/erase", json={"full": full}, timeout=40)
 
     def _call(

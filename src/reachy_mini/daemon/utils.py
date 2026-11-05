@@ -167,8 +167,7 @@ def find_serial_port(
     vid = vid.upper()
     pid = pid.upper()
 
-    # The NFC reader board can share these USB ids: tell it apart by its USB
-    # product string (see reachy_mini.nfc.ports).
+    # The NFC reader board can share these USB ids.
     from ..nfc.ports import is_nfc_board
 
     return [

@@ -2224,7 +2224,7 @@
     "/api/nfc/tag": {
       "get": {
         "summary": "Get Tag",
-        "description": "Get the tag currently on the reader.\n\nAlways reports what is known: a tag whose content cannot be decoded still\ncarries its ``uid``, with ``readable`` false and ``error`` saying why. The\nUID is available on any ISO 14443-A tag, the NDEF ``records`` only on the\nType 2 families the driver supports.",
+        "description": "Get the tag currently on the reader.\n\nThe ``uid`` is read on any ISO 14443-A tag, the NDEF ``records`` only on\nType 2 tags. An unreadable tag has ``readable`` false and an ``error``.",
         "operationId": "get_tag_api_nfc_tag_get",
         "responses": {
           "200": {
@@ -2262,7 +2262,7 @@
     "/api/nfc/enabled": {
       "post": {
         "summary": "Set Enabled",
-        "description": "Switch the NFC reader on or off, and remember it across restarts.\n\nOff, the reader thread stops and the serial port is released; on, it goes\nback to looking for the board. Answers with the status right after the\nswitch: when switching on, the board is usually not connected yet.\n``setting_saved`` is false when the switch applied but could not be saved,\nand will be lost at the next restart.\n\nNot available when the daemon was started with ``--no-nfc``.",
+        "description": "Switch the NFC reader on or off, and remember it across restarts.\n\nOff, the serial port is released. Answers with the status right after the\nswitch; ``setting_saved`` is false when the choice could not be persisted.\nAnswers 503 when the daemon was started with ``--no-nfc``.",
         "operationId": "set_enabled_api_nfc_enabled_post",
         "requestBody": {
           "content": {
@@ -2301,7 +2301,7 @@
     "/api/nfc/dump": {
       "get": {
         "summary": "Dump Tag",
-        "description": "Read the whole user memory of the tag on the reader, as hex.\n\nFor tags that carry a bare code rather than an NDEF message \u2014 a badge\nprogrammed with an ASCII identifier in page 4, say. ``GET /tag`` reports\nthe first bytes of such a payload in ``raw_hex``; this returns all of it.\n\nCosts a full transfer (~180 ms on an NTAG215), hence a separate endpoint\ninstead of a field served on every poll.",
+        "description": "Read the whole user memory of the tag on the reader, as hex.\n\nFor tags carrying raw data rather than NDEF; ``GET /tag`` only reports its\nfirst bytes in ``raw_hex``.",
         "operationId": "dump_tag_api_nfc_dump_get",
         "responses": {
           "200": {
@@ -2320,7 +2320,7 @@
     "/api/nfc/erase": {
       "post": {
         "summary": "Erase Tag",
-        "description": "Make the next tag presented to the reader blank again.\n\nBy default one page is written: an NDEF message of length zero. The tag\nstays formatted, so it is immediately rewritable and a phone still sees it\nas an (empty) NFC tag.\n\n``full`` also zeroes the whole user memory \u2014 the only way to remove a\npayload that is not NDEF, such as a bare code written straight into\npage 4. It costs one write per page, so it takes a few seconds.\n\nNeither restores the capability container, the lock bytes or a password:\nthose pages are one-time programmable. A formatted tag stays formatted.",
+        "description": "Make the next tag presented to the reader blank again.\n\nBy default, writes an empty NDEF message: the tag stays formatted. ``full``\nalso zeroes the whole user memory (a few seconds). The capability\ncontainer, lock bytes and password are never touched.",
         "operationId": "erase_tag_api_nfc_erase_post",
         "requestBody": {
           "content": {
@@ -2359,7 +2359,7 @@
     "/api/nfc/write": {
       "post": {
         "summary": "Write Tag",
-        "description": "Write text or a URI onto the next tag presented to the reader.\n\nExactly one of ``text`` or ``uri``. Blocks until the reader reports the\noutcome (or a timeout), retrying meanwhile so the tag can be presented\nafter the request is posted. Failures come back as an error code in the\nresult; only a reader switched off answers 503.\n\nThe tag's own declared capacity is authoritative: 144 bytes of NDEF on an\nNTAG213, 496 on an NTAG215, 872 on an NTAG216. A message that does not fit\ncomes back as ``TOO_LONG`` without anything having been written.",
+        "description": "Write text or a URI onto the next tag presented to the reader.\n\nExactly one of ``text`` or ``uri``. Waits for a tag to be presented. A\nmessage larger than the tag's capacity (144 bytes on an NTAG213, 496 on an\nNTAG215, 872 on an NTAG216) answers ``TOO_LONG``.",
         "operationId": "write_tag_api_nfc_write_post",
         "requestBody": {
           "content": {
@@ -4154,7 +4154,7 @@
           "kind"
         ],
         "title": "NfcRecord",
-        "description": "One NDEF record read from a tag.\n\n``kind`` is ``\"text\"``, ``\"uri\"``, or ``\"other\"`` for a record this driver\ndoes not decode (a vCard, a MIME payload, an Android Application Record).\nThose are reported rather than dropped: a tag carrying one would otherwise\nbe indistinguishable from a blank tag."
+        "description": "One NDEF record read from a tag.\n\n``kind`` is ``\"text\"``, ``\"uri\"``, or ``\"other\"`` for a record that is not\ndecoded (vCard, MIME payload...), reported with its raw payload."
       },
       "NfcStatus": {
         "properties": {
@@ -4412,7 +4412,7 @@
         },
         "type": "object",
         "title": "NfcWriteRequest",
-        "description": "Request body to write onto the next presented tag.\n\nExactly one of ``text`` or ``uri``. A URI is what a phone acts on \u2014 tapping\nthe tag offers to open it \u2014 while text is for robot-internal payloads."
+        "description": "Request body to write onto the next presented tag: ``text`` or ``uri``."
       },
       "NfcWriteResult": {
         "properties": {
@@ -4448,7 +4448,7 @@
           "success"
         ],
         "title": "NfcWriteResult",
-        "description": "Result of a write attempt.\n\n``error`` is a stable code rather than a sentence: ``NO_TAG``,\n``TOO_LONG``, ``LOCKED``, ``UNKNOWN_TAG``, ``WRITE_REFUSED``,\n``WRITE_ERROR``, ``COLLISION``, ``NOT_CONNECTED``, ``LINK_LOST``,\n``TIMEOUT``, ``UNCERTAIN``, ``BUSY``, ``DRIVER_MISSING``.\n\n``TIMEOUT`` means the tag was left untouched: no tag came in time.\n``UNCERTAIN`` means the caller stopped waiting while the operation was on\nthe tag: it may or may not have landed, read the tag to know."
+        "description": "Result of a write attempt.\n\n``error`` is a stable code rather than a sentence: ``NO_TAG``,\n``TOO_LONG``, ``LOCKED``, ``UNKNOWN_TAG``, ``WRITE_REFUSED``,\n``WRITE_ERROR``, ``COLLISION``, ``NOT_CONNECTED``, ``LINK_LOST``,\n``TIMEOUT``, ``UNCERTAIN``, ``BUSY``, ``DRIVER_MISSING``.\n\n``TIMEOUT``: no tag came in time, nothing was written. ``UNCERTAIN``: the\ncaller stopped waiting while the operation was running on the tag."
       },
       "PlaySoundRequest": {
         "properties": {

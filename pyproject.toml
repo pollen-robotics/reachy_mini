@@ -88,9 +88,7 @@ wireless-version = [
     "reachy_mini[nfc]",
 ]
 opencv = ["opencv-python<=5.0", "cv2_enumerate_cameras>=1.2.1"]
-# Optional NFC reader accessory: the host driver for the CLRC663 board. Kept
-# out of the base install because the accessory is optional and the daemon
-# reports it as unavailable rather than failing when the driver is missing.
+# Driver of the optional NFC reader accessory (CLRC663 board).
 nfc = ["winnie_nfc>=1.0.0"]
 # `media.central_consumer` only: a cloud backend consuming a robot over the
 # HF central relay. Kept out of the base install because a robot never runs

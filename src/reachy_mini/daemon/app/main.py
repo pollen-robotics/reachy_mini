@@ -264,9 +264,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
                 daemon_instance.backend.set_robot_name_callback(_apply_robot_name_live)
 
-            # Start the optional NFC reader, unless a client switched it off.
-            # It is fully decoupled from the robot backend and must never
-            # block or break daemon startup.
+            # Start the NFC reader unless it was switched off.
             if (
                 app.state.nfc_reader is not None
                 and startup_app_config.get_nfc_enabled()
@@ -298,8 +296,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             # Unregister mDNS service
             mdns.unregister()
 
-            # Stop the NFC reader if it was started. stop() joins the reader
-            # thread (seconds during a full erase): keep it off the event loop.
+            # stop() joins the reader thread: keep it off the event loop.
             if app.state.nfc_reader is not None:
                 try:
                     await asyncio.to_thread(app.state.nfc_reader.stop)
@@ -353,8 +350,8 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     # wire the JSON-RPC app relay (apps.* + conversation.* over the DataChannel).
     app.state.daemon.app_manager = app.state.app_manager
 
-    # The NFC board shares the motor controller's USB ids (see
-    # reachy_mini.nfc.ports): never take an explicitly configured motor port.
+    # The NFC board can share the motor controller's USB ids: never take an
+    # explicitly configured motor port.
     app.state.nfc_reader = (
         NfcReader(
             port=args.nfc_port,
@@ -363,8 +360,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         if args.nfc_enabled
         else None
     )
-    # The JSON-RPC relay serves nfc.* to clients that only reach the daemon
-    # over WebRTC (the mobile app).
+    # Served over WebRTC as nfc.* by the JSON-RPC relay.
     app.state.daemon.nfc_reader = app.state.nfc_reader
 
     router = APIRouter(prefix="/api")
@@ -793,7 +789,7 @@ def main() -> None:
         default=default_hw_config_path,
         help=f"Path to the hardware configuration YAML file (default: {default_hw_config_path}).",
     )
-    # Optional NFC reader accessory (CLRC663 board over USB serial)
+    # Optional NFC reader accessory
     parser.add_argument(
         "--no-nfc",
         action="store_false",

@@ -1,28 +1,15 @@
 """Optional NFC reader accessory (CLRC663 board driven by ``winnie_nfc``).
 
-The reader is fully decoupled from the robot backend: a background thread owns
-the serial link and the chip, polls the antenna, and keeps a thread-safe
-snapshot of the latest tag state. Its absence or failure never blocks the
-daemon — an unplugged board simply leaves the state as "not connected", and the
-thread keeps retrying so the reader can be hot-plugged.
+A background thread owns the serial link, polls the antenna and keeps a
+thread-safe snapshot of the tag on it. It is independent of the robot backend
+and keeps retrying while no board is plugged in.
 
-Two levels of information come out of a tag, and they do not have the same
-domain of validity:
+The UID is read from any ISO 14443-A tag; the NDEF content only from Type 2
+tags (NTAG213/215/216, Ultralight EV1). A tag whose content cannot be read
+still reports its UID, with ``readable`` false and ``error`` saying why.
 
-* the **UID**, available on every ISO 14443-A tag — blank, locked, or of a
-  family whose memory this driver cannot read. It is the robust primitive for
-  mapping a tag to a robot behaviour.
-* the **NDEF content**, available on Type 2 tags (NTAG213/215/216, Ultralight
-  EV1). Richer, but conditional: a MIFARE Classic or a phone in card emulation
-  answers a UID and nothing this driver can decode.
-
-``NfcTag`` therefore always reports what is known rather than failing: a tag
-whose content could not be read still carries its UID, with ``readable`` false
-and ``error`` saying why.
-
-The ``winnie_nfc`` driver is an optional dependency (``reachy_mini[nfc]``). It is
-imported lazily, so a daemon without it starts normally and reports
-``driver_available: false`` instead of failing.
+``winnie_nfc`` is an optional dependency (``reachy_mini[nfc]``), imported
+lazily.
 """
 
 from __future__ import annotations
@@ -51,60 +38,40 @@ from .ports import NfcBoard, describe_port, find_nfc_board
 
 logger = logging.getLogger(__name__)
 
-# Antenna polling period. A detection costs ~70 ms and a full NDEF read ~180,
-# so 5 Hz is the practical ceiling of the hardware, not an arbitrary choice.
+# Antenna polling period: a detection takes ~70 ms, a full read ~180 ms.
 POLL_INTERVAL = 0.2
 
-# Wait before retrying after a failure, so a missing board does not spin.
+# Wait before retrying after a failure.
 RETRY_INTERVAL = 2.0
 
-# Consecutive polls without an answer before a tag is declared gone.
-# Detection is intermittent at the RF level: measured on this hardware at 5 Hz,
-# a tag sitting still on the antenna answers every poll in a good position but
-# misses one to three polls out of twenty in a mediocre one. Publishing the
-# first miss as "tag removed" would make presence flicker for a tag nobody
-# touched, so absence has to be confirmed (~0.6 s at 5 Hz).
+# Consecutive missed polls before a tag is declared gone: detection is
+# intermittent at the RF level.
 ABSENCE_POLLS = 3
 
-# Polls a tag whose content could not be read gets re-read before the failure
-# is kept for as long as the tag stays on (~1 s at 5 Hz). A failed read is most
-# often a weak coupling of the moment, and the next poll gets through; a tag
-# this driver cannot read at all — a MIFARE Classic — would otherwise be paid
-# for at full price on every poll.
+# Polls that re-read a tag whose content could not be read, before giving up
+# until the tag is removed.
 CONTENT_READ_POLLS = 5
 
-# Attempts a dump gets before reporting no tag, for the same reason.
+# Attempts of a dump before reporting no tag.
 DUMP_ATTEMPTS = 3
 
-# How long a write waits for a tag to be presented: the caller posts a write,
-# then puts a tag on the antenna.
+# How long a write waits for a tag to be presented.
 WRITE_TIMEOUT = 6.0
 
-# An erase waits for a tag the same way. A full erase then writes every user
-# page one at a time — over a hundred on an NTAG215, each paying the tag's own
-# programming time — so it needs more room than a write.
+# How long an erase waits for a tag; a full erase writes every user page.
 ERASE_TIMEOUT = 15.0
 
-# How long a write, erase or dump waits for the job ahead of it before
-# answering BUSY. Jobs run one at a time and a full erase holds the chip for
-# seconds: queueing callers without bound would park one executor thread each.
+# How long a job waits for the one ahead of it before answering BUSY.
 JOB_LOCK_TIMEOUT = 1.0
 
-# Sanity bound on a write request. The authoritative limit is the tag's own
-# declared NDEF capacity (144 bytes on an NTAG213, 496 on an NTAG215, 872 on an
-# NTAG216) and the driver enforces it; this only rejects the absurd before the
-# request reaches the reader thread.
+# Upper bound on a write request; the tag's own capacity is checked by the
+# driver.
 MAX_WRITE_CHARS = 860
 
-# How much of a non-NDEF tag's memory to report in a tag snapshot. Tags are
-# routinely programmed with a bare code in page 4, with no NDEF structure at
-# all, and calling such a tag blank would throw away the only thing it holds.
-# The full memory is available through ``dump()`` and ``GET /api/nfc/dump``.
+# Bytes of user memory reported in ``raw_hex`` for a tag without NDEF.
 RAW_PREVIEW_BYTES = 32
 
-# Why the reader is not serving, as a stable code for clients to branch on
-# (``NfcStatus.error_code``); ``NfcStatus.error`` is the matching sentence, for
-# people, and free to change.
+# Why the reader is not serving (``NfcStatus.error_code``).
 NfcStatusError = Literal[
     "DISABLED",  # switched off, or the daemon runs with --no-nfc
     "NO_BOARD",  # switched on, no board plugged in: the usual state
@@ -113,8 +80,6 @@ NfcStatusError = Literal[
     "LINK_ERROR",  # the board is there but the serial link failed
 ]
 
-# Sentences of the codes above that have a fixed one. DISABLED_ERROR is also
-# what the APIs refuse tag operations with while the reader is off.
 DISABLED_ERROR = "NFC reader disabled"
 NO_BOARD_ERROR = "no NFC reader board found"
 DRIVER_MISSING_ERROR = "winnie_nfc is not installed (pip install 'reachy_mini[nfc]')"
@@ -123,10 +88,8 @@ DRIVER_MISSING_ERROR = "winnie_nfc is not installed (pip install 'reachy_mini[nf
 class NfcRecord(BaseModel):
     """One NDEF record read from a tag.
 
-    ``kind`` is ``"text"``, ``"uri"``, or ``"other"`` for a record this driver
-    does not decode (a vCard, a MIME payload, an Android Application Record).
-    Those are reported rather than dropped: a tag carrying one would otherwise
-    be indistinguishable from a blank tag.
+    ``kind`` is ``"text"``, ``"uri"``, or ``"other"`` for a record that is not
+    decoded (vCard, MIME payload...), reported with its raw payload.
     """
 
     kind: str
@@ -165,18 +128,13 @@ class NfcStatus(BaseModel):
     error: str | None = None  # why the reader is not serving, for people
     error_code: NfcStatusError | None = None  # the same, for clients
     last_seen_at: datetime | None = None
-    # Only set in the answer to a switch on/off: False when the choice could
-    # not be saved, so the reader is switched as asked but goes back to its
-    # previous setting at the next daemon restart.
+    # Answer to a switch on/off only: False when the choice could not be
+    # persisted and will be lost at the next restart.
     setting_saved: bool | None = None
 
 
 class NfcWriteRequest(BaseModel):
-    """Request body to write onto the next presented tag.
-
-    Exactly one of ``text`` or ``uri``. A URI is what a phone acts on — tapping
-    the tag offers to open it — while text is for robot-internal payloads.
-    """
+    """Request body to write onto the next presented tag: ``text`` or ``uri``."""
 
     text: str | None = None
     uri: str | None = None
@@ -216,9 +174,8 @@ class NfcWriteResult(BaseModel):
     ``WRITE_ERROR``, ``COLLISION``, ``NOT_CONNECTED``, ``LINK_LOST``,
     ``TIMEOUT``, ``UNCERTAIN``, ``BUSY``, ``DRIVER_MISSING``.
 
-    ``TIMEOUT`` means the tag was left untouched: no tag came in time.
-    ``UNCERTAIN`` means the caller stopped waiting while the operation was on
-    the tag: it may or may not have landed, read the tag to know.
+    ``TIMEOUT``: no tag came in time, nothing was written. ``UNCERTAIN``: the
+    caller stopped waiting while the operation was running on the tag.
     """
 
     success: bool
@@ -260,18 +217,12 @@ def _now() -> datetime:
 
 @functools.cache
 def driver_available() -> bool:
-    """Whether the optional ``winnie_nfc`` driver is installed and importable.
-
-    Cached for the life of the process, since the status a client polls asks
-    every time and a missing package would otherwise cost a full ``sys.path``
-    search per request. Installing the ``[nfc]`` extra therefore takes a
-    daemon restart, which a new dependency needs anyway.
-    """
+    """Whether the optional ``winnie_nfc`` driver is importable (cached)."""
     try:
         import winnie_nfc  # noqa: F401
     except ImportError:
         return False
-    except Exception as e:  # noqa: BLE001 - a broken install must not 500 /status
+    except Exception as e:  # noqa: BLE001 - a broken install reads as missing
         logger.warning("winnie_nfc is installed but failed to import: %s", e)
         return False
     return True
@@ -316,13 +267,8 @@ def _field_off_after(
 ) -> Callable[Concatenate[Clrc663Session, _P], _R]:
     """Switch the RF field off once the call is over, however it ends.
 
-    The driver leaves the field on after each operation: without this, the
-    antenna would stay powered between polls for as long as the link is open.
-
-    A failing ``field_off`` must not replace the call's own outcome: a write
-    that landed would otherwise be reported as ``LINK_LOST``. It is logged and
-    swallowed: if the link is really gone, the next poll fails on its own and
-    the reader thread reconnects.
+    A failure to switch it off is only logged, so it never replaces the call's
+    own result.
     """
 
     @functools.wraps(method)
@@ -332,20 +278,14 @@ def _field_off_after(
         finally:
             try:
                 self._reader.field_off()
-            except Exception as e:  # noqa: BLE001 - see docstring
+            except Exception as e:  # noqa: BLE001
                 logger.debug("Could not switch the NFC field off: %r", e)
 
     return call
 
 
 class Clrc663Session:
-    """An ``winnie_nfc`` reader kept open for the lifetime of the link.
-
-    ``NTagReader`` is a context manager, but this session outlives any single
-    statement: the thread opens it once and serves many polls and writes from
-    it. Entering and exiting it explicitly is deliberate — it is what gets the
-    field switched off and the port closed on the way out.
-    """
+    """A ``winnie_nfc`` reader kept open for the lifetime of the link."""
 
     def __init__(self, port: str) -> None:
         """Open the serial link and initialise the chip."""
@@ -354,10 +294,7 @@ class Clrc663Session:
         self._reader = NTagReader(port=port)
         self._reader.__enter__()
         self.chip_version = self._chip_version()
-        # Last full read, kept so that a tag sitting on the antenna is not
-        # re-read at every poll: a detection costs ~70 ms, a full NDEF read
-        # ~180. Polling only detects, and reads content when the UID changes
-        # or while the content has not been read yet.
+        # Last full read: a tag that stays on the antenna is not re-read.
         self._last_uid: str | None = None
         self._last_tag: NfcTag | None = None
         self._failed_reads = 0  # content reads that failed on _last_uid
@@ -365,7 +302,7 @@ class Clrc663Session:
     def _chip_version(self) -> str | None:
         try:
             return f"0x{self._reader.chip_version():02X}"
-        except Exception:  # noqa: BLE001 - a version is nice to have, not vital
+        except Exception:  # noqa: BLE001 - optional information
             return None
 
     def close(self) -> None:
@@ -376,38 +313,23 @@ class Clrc663Session:
     def read_tag(self) -> NfcTag:
         """Poll the antenna once.
 
-        Only the detection happens on every poll; the content is read when the
-        UID changes. That is what makes 5 Hz reachable — a detection costs
-        ~70 ms against ~180 for a full memory transfer, and re-reading an
-        unchanged tag five times a second would buy nothing.
+        Every poll detects the UID; the content is read when the UID changes,
+        and re-read up to ``CONTENT_READ_POLLS`` times while it fails. The
+        cached read is kept until :meth:`forget`.
 
-        Only a read that succeeded is kept. A failed one is published as it is
-        — the UID with ``readable`` false — and the content is read again on
-        the next polls, up to ``CONTENT_READ_POLLS``: keeping the first failure
-        would leave a perfectly good tag unreadable until it is lifted off.
-
-        The cache also outlives missed detections, until the reader thread
-        confirms the absence and calls :meth:`forget`, so a tag that flickers
-        at the RF level is not re-read — and exposed to another failed read —
-        every time it answers again.
-
-        Transport failures propagate: they mean the link is gone, and the
-        reader thread reconnects. Tag-level failures do not — they are
-        reported inside the snapshot, because "a tag is there but I cannot
-        read it" is information, not an outage.
+        Transport failures propagate (the reader thread reconnects); tag-level
+        failures are reported in the snapshot.
         """
         from winnie_nfc.core import CollisionError, TagError
 
         try:
             uid = self._reader.uid().hex().upper()
         except CollisionError as e:
-            # Several tags on the antenna: something is there, but nothing
-            # usable came back.
+            # Several tags on the antenna.
             self.forget()
             return NfcTag(present=True, error=str(e), last_read_at=_now())
         except TagError:
-            # No answer, or a malformed frame: a missed detection either way.
-            # A tag that is really there answers properly on the next poll.
+            # No answer or a malformed frame: a missed detection.
             return no_tag()
 
         if uid != self._last_uid:
@@ -415,8 +337,7 @@ class Clrc663Session:
         elif self._last_tag is not None and (
             self._last_tag.readable or self._failed_reads >= CONTENT_READ_POLLS
         ):
-            # Same tag as last time: refresh when it was last seen, keep what
-            # was read from it.
+            # Same tag: keep its content, refresh its timestamp.
             fresh = self._last_tag.model_copy(deep=True)
             fresh.last_read_at = _now()
             return fresh
@@ -429,15 +350,11 @@ class Clrc663Session:
 
         try:
             tag = _snapshot(read)
-        except Exception as e:  # noqa: BLE001 - see below
-            # A driver answer this code does not expect (a record missing a
-            # field, say). Pure data conversion, no I/O: letting it escape
-            # would read as a broken link and reopen a healthy one every poll
-            # for as long as the tag stays on.
+        except Exception as e:  # noqa: BLE001 - decoding error, not a link error
             logger.warning("Could not decode the NFC tag: %r", e)
             tag = NfcTag(
                 present=True,
-                uid=uid,  # from the detection above, known to be good
+                uid=uid,
                 readable=False,
                 error=f"undecodable tag: {e!r}",
                 last_read_at=_now(),
@@ -487,18 +404,12 @@ class Clrc663Session:
         return self._tag_write(lambda r: r.erase(full=full))
 
     def _tag_write(self, operation: Callable[[Any], None]) -> NfcWriteResult:
-        """Run one tag-modifying driver call, turning its failures into codes.
-
-        Every write path shares this translation, so a failure cannot be
-        reported one way by a write and another way by an erase.
-        """
+        """Run one tag-modifying driver call, turning its failures into codes."""
         from winnie_nfc import ndef, type2
         from winnie_nfc.core import CollisionError, NoTagError, TagError
         from winnie_nfc.transport import TransportError
 
-        # The tag keeps its UID across a write, so the cached read would
-        # otherwise be served until the tag is lifted off. Dropped whatever
-        # the outcome: a failed write may still have changed some pages.
+        # The tag keeps its UID: drop the cached read, whatever the outcome.
         self.forget()
         try:
             operation(self._reader)
@@ -515,24 +426,17 @@ class Clrc663Session:
         except type2.WriteRefusedError as e:
             return NfcWriteResult(success=False, error="WRITE_REFUSED", detail=str(e))
         except ndef.NdefError as e:
-            # The driver refuses a message no supported tag could hold, before
-            # touching the antenna.
+            # Larger than any supported tag; refused before touching the tag.
             return NfcWriteResult(success=False, error="TOO_LONG", detail=str(e))
         except type2.Type2Error as e:
             return NfcWriteResult(success=False, error="WRITE_ERROR", detail=str(e))
         except TagError as e:
-            # A tag that answers the SELECT but not a Type 2 READ — a MIFARE
-            # Classic, say. This must be caught here: letting it escape would
-            # look like a broken serial link to the reader thread, which would
-            # then drop and reopen a perfectly healthy one.
+            # Not a Type 2 tag (MIFARE Classic...).
             return NfcWriteResult(success=False, error="WRITE_ERROR", detail=str(e))
         except (TransportError, OSError):
-            # The link itself (pyserial's SerialException is an OSError): the
-            # one failure the reader thread must see, to reopen the port.
+            # Link failure (SerialException is an OSError): the thread reconnects.
             raise
-        except Exception as e:  # noqa: BLE001 - anything else is about the tag
-            # The driver rejecting an argument (ValueError, an encoding error):
-            # an answer for the caller, not a reason to drop a healthy link.
+        except Exception as e:  # noqa: BLE001 - argument rejected by the driver
             logger.warning("Unexpected NFC write failure: %r", e)
             return NfcWriteResult(success=False, error="WRITE_ERROR", detail=repr(e))
         return NfcWriteResult(success=True)
@@ -558,11 +462,8 @@ def _snapshot(read: Any) -> NfcTag:
         None,
     )
 
-    # Two ways of carrying no content, and they must not be confused. Either
-    # there is no NDEF message at all — a factory tag, or one holding a bare
-    # code written straight into page 4 — or there is a message with zero
-    # records, which is what an erase leaves behind. Both read as blank, but
-    # only the first can hide raw bytes worth reporting.
+    # No NDEF message (factory tag, or a raw code in page 4) or an empty one
+    # (an erased tag): both are blank, but only the first can hold raw bytes.
     raw: bytes = read.data
     no_message = read.records is None and read.error is None
     empty_message = read.records == []
@@ -586,9 +487,7 @@ def _snapshot(read: Any) -> NfcTag:
     )
 
 
-# The driver's record kinds are "text", "uri" and "other" — the same names the
-# HTTP API uses, so nothing is translated here. Anything unexpected is reported
-# as "other" rather than dropped.
+# Record kinds of the driver, kept as is; anything else is reported as "other".
 _KINDS = ("text", "uri", "other")
 
 
@@ -631,12 +530,7 @@ class _Job(Generic[_Outcome]):
             self._running = False
 
     def cancel(self) -> bool:
-        """Withdraw the job unless an attempt is on the tag right now.
-
-        Returns False when the attempt is running: its outcome is then the
-        real answer and the caller must wait for it rather than report a
-        timeout for a write that may still land.
-        """
+        """Withdraw the job unless an attempt is running. False if it is."""
         with self._state:
             if self._running:
                 return False
@@ -646,17 +540,14 @@ class _Job(Generic[_Outcome]):
     def wait(self, timeout: float) -> Literal["done", "withdrawn", "running"]:
         """Wait for the outcome; on timeout, make sure the job never runs again.
 
-        Returns ``"done"`` when the outcome is in, ``"withdrawn"`` when the job
-        timed out between two attempts (nothing is on the tag, and nothing
-        will be), ``"running"`` when an attempt is still on the tag and its
-        outcome is unknown.
+        Returns ``"done"``, ``"withdrawn"`` (timed out between two attempts) or
+        ``"running"`` (an attempt is still running, outcome unknown).
         """
         if self.done.wait(timeout):
             return "done"
         if self.cancel():
             return "withdrawn"
-        # An attempt is running: it is bounded by the driver, give it as long
-        # again, then withdraw whatever retries are left.
+        # An attempt is running: give it as long again.
         if self.done.wait(timeout):
             return "done"
         if self.cancel():
@@ -664,7 +555,7 @@ class _Job(Generic[_Outcome]):
         logger.warning("NFC job still running after its caller gave up.")
         return "running"
 
-    # The error reported when the caller gives up during an attempt.
+    # Error reported when the caller gives up during an attempt.
     unsure_error = "TIMEOUT"
 
     def run(self, session: NfcSession) -> bool:
@@ -682,14 +573,8 @@ class _Job(Generic[_Outcome]):
 
 
 class _WriteJob(_Job[NfcWriteResult]):
-    """A tag-modifying operation, retried while no tag has been presented yet.
+    """A write or an erase, retried while no tag has been presented yet."""
 
-    Holds the operation rather than its arguments so that a write and an erase
-    share one retry policy: both are things a caller posts before putting a
-    tag on the antenna.
-    """
-
-    # An attempt cut short may have written some pages, or all of them.
     unsure_error = "UNCERTAIN"
 
     def __init__(
@@ -698,16 +583,14 @@ class _WriteJob(_Job[NfcWriteResult]):
         super().__init__()
         self.action = action
         self.timeout = timeout
-        # Starts when the reader thread first picks the job up: the time a
-        # caller has to present a tag, whatever the job waited before that.
+        # Set when the reader thread first runs the job.
         self.deadline: float | None = None
 
     def run(self, session: NfcSession) -> bool:
         if self.deadline is None:
             self.deadline = time.monotonic() + self.timeout
         result = self.action(session)
-        # Only "no tag yet" is worth retrying; past the deadline it becomes the
-        # answer.
+        # Only NO_TAG is retried, until the deadline.
         if (
             result.success
             or result.error != "NO_TAG"
@@ -734,8 +617,6 @@ class _DumpJob(_Job[NfcDump]):
         if dump.present or dump.error is not None or self._left <= 0:
             self.outcome = dump
             return True
-        # No tag answered, but detection misses a poll now and then: retry
-        # rather than tell the caller the antenna is empty.
         return False
 
     def failed(self, error: str) -> NfcDump:
@@ -753,9 +634,8 @@ class _BoardError(RuntimeError):
 class NfcReader:
     """Background NFC reader service.
 
-    The chip is owned by one thread from end to end: polls and writes are
-    serialised through a queue rather than sharing the serial link, because the
-    CLRC663 register protocol has no way to interleave two conversations.
+    One thread owns the chip: polls and jobs (write, erase, dump) are
+    serialised through a queue.
     """
 
     def __init__(
@@ -776,9 +656,8 @@ class NfcReader:
             poll_interval: seconds between two antenna polls.
             retry_interval: seconds before retrying after a failure.
             session_factory: opens a session on a port (injectable for tests).
-            absence_polls: consecutive polls without an answer before a tag is
-                declared gone. Detection misses a poll now and then, so a
-                single miss must not read as a removal.
+            absence_polls: consecutive missed polls before a tag is declared
+                gone.
 
         """
         self._port_setting = port
@@ -790,8 +669,7 @@ class NfcReader:
 
         self._thread: threading.Thread | None = None
         self._should_stop = threading.Event()
-        # Serialises start()/stop() with the thread's own decision to exit, so
-        # a restart never ends up with two threads on one serial port.
+        # Serialises start()/stop() with the thread's exit: one thread at most.
         self._lifecycle = threading.Lock()
         self._running = False  # a reader thread exists and has not exited
         self._enabled = False  # between start() and stop()
@@ -817,16 +695,13 @@ class NfcReader:
         with self._lifecycle:
             self._enabled = True
             if self._running:
-                # Still running, or stopped but busy finishing a job it cannot
-                # abandon (a full erase): cancel the stop, it keeps serving.
+                # The thread has not exited yet: it keeps serving.
                 self._should_stop.clear()
                 return
             self._start_thread()
 
     def _start_thread(self) -> None:
         if not driver_available():
-            # Not an error: the driver is an optional extra. Say so once, in
-            # the status, instead of retrying an import that cannot succeed.
             with self._lock:
                 self._error = DRIVER_MISSING_ERROR
                 self._error_code = "DRIVER_MISSING"
@@ -841,11 +716,7 @@ class NfcReader:
         logger.info("NFC reader thread started (port=%s).", self._port_setting)
 
     def stop(self, timeout: float = 3.0) -> None:
-        """Stop the reader thread and release the serial link.
-
-        The reader can be started again afterwards: this is how it is switched
-        off and on at runtime.
-        """
+        """Stop the reader thread and release the serial link (restartable)."""
         with self._lifecycle:
             self._enabled = False
             self._should_stop.set()
@@ -853,19 +724,12 @@ class NfcReader:
         if thread is not None:
             thread.join(timeout=timeout)
             if thread.is_alive():
-                # Kept as the reader thread: it exits on its own once its job
-                # is done, or carries on if start() is called before that.
+                # It exits once its current job is done.
                 logger.warning("NFC reader thread did not stop in time.")
-        # A write posted just before the stop would otherwise wait out its
-        # whole deadline: nobody is left to serve it.
         self._abandon_queued("NOT_CONNECTED")
 
     def _abandon_queued(self, error: str) -> None:
-        """Answer every job still waiting in the queue with ``error``.
-
-        Cancelled first, so a job answered here can never run later: once its
-        caller has its answer, it must not touch a tag.
-        """
+        """Answer every queued job with ``error``; none of them will run."""
         while True:
             try:
                 job = self._jobs.get_nowait()
@@ -915,44 +779,31 @@ class NfcReader:
         """Write onto the next tag presented to the reader.
 
         Blocks until the outcome is known, retrying while no tag is on the
-        antenna so the caller can post the write first and present the tag
-        after. Returns an error result rather than raising.
+        antenna. Failures come back in the result.
         """
         return self._submit_write(lambda s: s.write(request.text, request.uri), timeout)
 
     def erase(
         self, request: NfcEraseRequest, timeout: float = ERASE_TIMEOUT
     ) -> NfcWriteResult:
-        """Make the next tag presented to the reader blank again.
-
-        Same waiting behaviour as a write, with a longer timeout (see
-        ``ERASE_TIMEOUT``).
-        """
+        """Make the next tag presented to the reader blank again (see ``write``)."""
         return self._submit_write(lambda s: s.erase(request.full), timeout)
 
     def dump(self, timeout: float = 5.0) -> NfcDump:
-        """Read the whole user memory of the tag currently on the antenna.
-
-        Goes through the reader thread like a write does: the chip has a single
-        owner, and a ~180 ms transfer must not interleave with a poll.
-        """
+        """Read the whole user memory of the tag currently on the antenna."""
         return self._submit(_DumpJob(), timeout + self._poll_interval)
 
     def _submit_write(
         self, action: Callable[[NfcSession], NfcWriteResult], timeout: float
     ) -> NfcWriteResult:
         """Submit a tag-modifying job that waits up to ``timeout`` for a tag."""
-        # The thread has until the deadline, plus one poll period to notice
-        # the job and one more to answer it.
         wait = timeout + 2 * self._poll_interval + 1.0
         return self._submit(_WriteJob(action, timeout), wait)
 
     def _submit(self, job: _Job[_Outcome], wait: float) -> _Outcome:
         """Hand one job to the reader thread and wait up to ``wait`` for it.
 
-        The single path every write, erase and dump goes through, so they
-        refuse, queue and time out the same way. Every failure comes back as
-        an outcome of the job's own type, never as an exception.
+        Failures come back as an outcome of the job's type, never raised.
         """
         if not driver_available():
             return job.failed("DRIVER_MISSING")
@@ -977,9 +828,6 @@ class NfcReader:
         if self._port_setting == "auto":
             return find_nfc_board(exclude=self._exclude_ports)
         if self._port_setting in self._exclude_ports:
-            # A misconfigured --nfc-port: driving the CLRC663 protocol onto
-            # the motor bus would garble it. Reported in the status, retried
-            # like a missing board.
             raise _BoardError(
                 "PORT_CONFLICT",
                 f"{self._port_setting} is the motor controller's port, "
@@ -995,7 +843,7 @@ class NfcReader:
                     self._running = False
                     self._set_disconnected(None, None)
                     return
-            # start() was called again while this thread was finishing up.
+            # Restarted while finishing up: keep serving.
 
     def _run_until_stopped(self) -> None:
         while not self._should_stop.is_set():
@@ -1014,8 +862,6 @@ class NfcReader:
             except Exception as e:  # noqa: BLE001 - the board may be absent
                 code = e.code if isinstance(e, _BoardError) else "LINK_ERROR"
                 self._set_disconnected(str(e), code)
-                # A job posted while the link was still up, just before it
-                # dropped: answer it now rather than at its deadline.
                 self._abandon_queued("NOT_CONNECTED")
                 logger.debug("NFC reader not available: %s", e)
                 self._close(session)
@@ -1027,9 +873,6 @@ class NfcReader:
             except Exception as e:  # noqa: BLE001 - the link may drop anytime
                 logger.warning("NFC reader link lost: %s", e)
                 self._set_disconnected(str(e), "LINK_ERROR")
-                # Nobody serves the queue while reconnecting: without this a
-                # queued write waits out its whole deadline for a TIMEOUT, or
-                # fires on a reconnect the user no longer expects.
                 self._abandon_queued("LINK_LOST")
                 self._should_stop.wait(self._retry_interval)
             finally:
@@ -1046,8 +889,7 @@ class NfcReader:
             try:
                 self._serve_job(session, job)
             finally:
-                # Only bites if _serve_job raised: the link is going down, and
-                # nobody else will answer this caller.
+                # No-op unless _serve_job raised.
                 job.abandon("LINK_LOST")
                 job.done.set()
 
@@ -1055,12 +897,10 @@ class NfcReader:
         """Run one job, retrying it while it asks to be retried."""
         while True:
             if self._should_stop.is_set():
-                # Stopped, possibly while this job was being dequeued: the
-                # reader is off, it must not touch a tag any more.
                 job.abandon("NOT_CONNECTED")
                 return
             if not job.begin():
-                return  # the caller timed out: do not touch the tag any more
+                return  # the caller gave up
             try:
                 finished = job.run(session)
             finally:
@@ -1087,9 +927,7 @@ class NfcReader:
                 self._tag = tag
                 return False
 
-            # No answer. Keep the last known tag until absence is confirmed,
-            # so one missed detection does not read as a removal. This is the
-            # only absence count: the session's cache follows it (forget()).
+            # Keep the last tag until its absence is confirmed.
             self._misses += 1
             if self._misses == self._absence_polls:
                 self._tag = tag
@@ -1110,9 +948,6 @@ class NfcReader:
         with self._lock:
             self._connected = True
             self._chip_detected = True
-            # The chip answered its version register to open the session, so
-            # it has been seen just now — leaving this null until the first
-            # poll would read as "never answered".
             self._last_seen_at = _now()
             self._port = board.port
             self._board_version = board.version

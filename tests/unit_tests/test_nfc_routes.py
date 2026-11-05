@@ -1,9 +1,4 @@
-"""Tests for the REST NFC router (``/api/nfc``).
-
-The reader itself is covered in ``test_nfc.py`` and the RPC mirror in
-``test_jsonrpc_relay.py``; these check the HTTP side of the shared rules in
-``daemon.nfc_switch``: what answers without a reader, and what answers 503.
-"""
+"""Tests for the REST NFC router (``/api/nfc``)."""
 
 from typing import Any
 
@@ -90,7 +85,7 @@ def test_status_and_tag_are_served_from_the_reader() -> None:
 
 
 def test_status_and_tag_answer_without_a_reader() -> None:
-    # --no-nfc: the polled routes still answer, with an empty state.
+    # --no-nfc: the polled routes answer with an empty state.
     client = make_client(None)
     status = client.get("/nfc/status")
     assert status.status_code == 200

@@ -98,7 +98,7 @@ class Daemon:
         # Set by the daemon FastAPI factory so `Daemon.start` can wire the
         # JSON-RPC app relay (apps.* + conversation.* over the DataChannel).
         self.app_manager: "AppManager | None" = None
-        # Set by the same factory: the relay serves nfc.* from it.
+        # Set by the same factory, for the relay's nfc.* methods.
         self.nfc_reader: "NfcReader | None" = None
         self._jsonrpc_relay: "JsonRpcRelay | None" = None
         # Loop the JSON-RPC relay runs on, set by the FastAPI factory because

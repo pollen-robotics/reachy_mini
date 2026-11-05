@@ -1,9 +1,6 @@
 """Unit tests for the optional NFC reader accessory.
 
-No hardware and no ``winnie_nfc`` install needed: the serial ports and the
-reader session are both injected. What is under test is the part that has to
-be right whatever the tag — port disambiguation against the motor controller,
-and the reader thread's state machine.
+Serial ports and reader sessions are injected: no hardware needed.
 """
 
 import threading
@@ -48,7 +45,7 @@ def test_parse_product(product, expected):
 
 
 def test_find_nfc_board_goes_by_the_product_string():
-    # Only the product string identifies the board, and it carries its version.
+    # Only the product string identifies the board; it carries the version.
     found = ports.find_nfc_board(
         comports=[
             comport("/dev/ttyACM0", product="USB Single Serial"),  # motors
@@ -71,7 +68,6 @@ def test_find_nfc_board_honours_exclusions():
 
 
 def test_find_nfc_board_returns_none_without_the_product_string():
-    # A port without the board's product string is not taken for the reader.
     assert ports.find_nfc_board(comports=[comport("/dev/ttyACM0")]) is None
 
 
@@ -89,8 +85,7 @@ def test_describe_port_reads_the_version_of_a_configured_port():
 class FakeSession:
     """A reader session whose answers the test dictates.
 
-    ``tags`` overrides ``tag`` and is consumed one snapshot per poll, the last
-    one repeating — enough to script an intermittent detection.
+    ``tags`` overrides ``tag``: one snapshot per poll, the last one repeating.
     """
 
     def __init__(
@@ -279,8 +274,7 @@ def test_the_reader_can_be_switched_off_and_on_again(driver_installed):
 
 
 def test_stopping_answers_a_pending_write(driver_installed):
-    # No tag ever comes: the write keeps retrying until the reader is stopped,
-    # and must then answer rather than wait out its deadline.
+    # A pending write is answered when the reader stops.
     session = FakeSession(
         write_results=[NfcWriteResult(success=False, error="NO_TAG")] * 1000
     )
@@ -343,7 +337,7 @@ def test_a_switch_that_cannot_be_saved_still_applies(
     from reachy_mini.daemon import startup_app_config
     from reachy_mini.daemon import nfc_switch
 
-    # A file where the config dir should be: mkdir fails, like a read-only fs.
+    # mkdir fails, as on a read-only filesystem.
     (tmp_path / "blocker").write_text("")
     monkeypatch.setattr(
         startup_app_config,
@@ -364,9 +358,7 @@ def test_a_switch_that_cannot_be_saved_still_applies(
 def test_concurrent_switches_leave_the_saved_and_live_state_in_agreement(
     driver_installed, monkeypatch
 ):
-    # Saving and applying are two steps: a switch must not run between them.
-    # "On" is slow to apply, so without the lock "off" is saved after it but
-    # applied before it, and the reader ends up running with "off" saved.
+    # A switch must not run between saving and applying another one.
     from reachy_mini.daemon import nfc_switch, startup_app_config
 
     saved = []
@@ -393,8 +385,7 @@ def test_concurrent_switches_leave_the_saved_and_live_state_in_agreement(
 
 
 def test_concurrent_config_writes_keep_every_key(daemon_config):
-    # The NFC switch writes from a worker thread while the event loop writes
-    # other keys: no write may be lost, and the file must stay valid JSON.
+    # Concurrent writes from several threads keep every key.
     import json
 
     from reachy_mini.daemon import startup_app_config as config
@@ -438,8 +429,7 @@ def test_write_is_served_by_the_reader_thread(driver_installed):
 
 
 def test_write_retries_while_no_tag_is_presented(driver_installed):
-    # The caller posts the write, then puts a tag on the antenna: the first
-    # attempts legitimately fail with NO_TAG and must not end the write.
+    # NO_TAG is retried until a tag is presented.
     session = FakeSession(
         write_results=[
             NfcWriteResult(success=False, error="NO_TAG"),
@@ -472,7 +462,7 @@ def test_write_gives_up_at_its_deadline(driver_installed):
 
 
 def test_a_definitive_refusal_is_not_retried(driver_installed):
-    # A tag too small, or locked, will not become writable by waiting.
+    # Definitive refusals are not retried.
     session = FakeSession(
         write_results=[NfcWriteResult(success=False, error="TOO_LONG")]
     )
@@ -553,8 +543,7 @@ def test_the_driver_lookup_is_done_once(monkeypatch):
 
 
 def test_a_broken_driver_install_reads_as_unavailable(monkeypatch):
-    # Not only ImportError: a driver failing inside its own import must not
-    # turn every status poll into a 500.
+    # Any import failure, not only ImportError, reads as a missing driver.
     import builtins
 
     from reachy_mini.nfc.reader import driver_available
@@ -591,9 +580,7 @@ def test_a_missing_driver_disables_the_reader_without_failing(monkeypatch):
 
 
 def test_a_single_missed_detection_is_not_a_removal(driver_installed):
-    # Detection is intermittent at the RF level: a tag nobody touched misses a
-    # poll now and then, and publishing that as a removal would make presence
-    # flicker.
+    # One missed detection is not a removal.
     here = NfcTag(present=True, uid="04", readable=True)
     gone = NfcTag(present=False)
     session = FakeSession(tags=[here, gone, here, here, here])
@@ -687,8 +674,7 @@ def test_erase_is_served_by_the_reader_thread(driver_installed):
 
 
 def test_erase_waits_for_a_tag_like_a_write_does(driver_installed):
-    # Same posture as a write: the caller posts the erase, then presents the
-    # tag. NO_TAG is not yet an answer.
+    # NO_TAG is retried until a tag is presented, as for a write.
     session = FakeSession(
         erases=[
             NfcWriteResult(success=False, error="NO_TAG"),
@@ -730,8 +716,7 @@ def test_erase_without_a_link_answers_instead_of_blocking(driver_installed, no_b
 
 
 def test_an_explicit_port_that_is_the_motor_port_is_refused(driver_installed):
-    # --nfc-port pointing at the motor controller: the board protocol must
-    # never be driven onto the motor bus.
+    # An explicit port that is the motor controller's is never opened.
     opened = []
 
     def factory(port):
@@ -756,8 +741,6 @@ def test_an_explicit_port_that_is_the_motor_port_is_refused(driver_installed):
 
 
 def test_a_missing_board_has_its_own_code(driver_installed, no_board):
-    # The usual state of a robot without the add-on: clients tell it apart
-    # from a fault by its code, not by the wording of the error.
     reader = NfcReader(poll_interval=0.01, retry_interval=0.01)
     reader.start()
     try:
@@ -797,8 +780,7 @@ def test_a_connected_reader_reports_no_error_code(driver_installed):
 
 
 def test_a_job_dequeued_after_a_stop_never_reaches_the_tag():
-    # The thread took the job off the queue just as stop() was called: the
-    # reader is off, so the job is answered without touching the tag.
+    # A job dequeued after stop() is answered without touching the tag.
     from reachy_mini.nfc.reader import _WriteJob
 
     session = FakeSession()
@@ -838,8 +820,7 @@ def _reader_threads():
 
 
 def test_a_restart_during_a_long_job_never_runs_two_threads(driver_installed):
-    # A full erase cannot be interrupted, so stop() times out on it. Starting
-    # again must reuse that thread, not open a second one on the same port.
+    # Restarting during a long job reuses the running thread.
     session = BlockingSession(block_erase=True)
     opened = []
 
@@ -892,8 +873,7 @@ def test_a_stop_during_a_long_job_still_ends_the_thread(driver_installed):
 
 
 def test_a_timed_out_write_never_reaches_the_tag(driver_installed):
-    # The reader thread is stuck on a poll: the write times out while still
-    # queued, and must not be carried out once the thread gets to it.
+    # A write that timed out while queued never runs.
     session = BlockingSession()
     reader = make_reader(session)
     started(reader)
@@ -912,8 +892,7 @@ def test_a_timed_out_write_never_reaches_the_tag(driver_installed):
 
 
 def test_a_write_whose_attempt_is_running_waits_for_its_outcome(driver_installed):
-    # The erase is already on the tag when the caller's wait runs out: the
-    # real outcome is reported, not a TIMEOUT for an erase that happened.
+    # An attempt running when the first wait ends: its real outcome is returned.
     session = BlockingSession(block_erase=True)
     reader = make_reader(session)
     started(reader)
@@ -936,8 +915,7 @@ def test_a_write_whose_attempt_is_running_waits_for_its_outcome(driver_installed
 def test_a_write_still_on_the_tag_when_the_caller_gives_up_is_uncertain(
     driver_installed,
 ):
-    # The erase outlives both of the caller's waits: it may yet land, so the
-    # answer is UNCERTAIN, never TIMEOUT (which promises an untouched tag).
+    # An attempt still running after both waits: UNCERTAIN.
     session = BlockingSession(block_erase=True)
     reader = make_reader(session)
     started(reader)
@@ -956,10 +934,7 @@ def test_a_write_still_on_the_tag_when_the_caller_gives_up_is_uncertain(
 
 
 def test_a_job_queued_when_the_link_drops_is_answered_at_once(driver_installed):
-    # The write is queued while the thread is busy on a poll; that poll then
-    # finds the link gone and the board does not come back. The caller hears
-    # LINK_LOST right away, not a TIMEOUT at its deadline, and nothing is
-    # written behind its back later on.
+    # A job queued when the link drops is answered LINK_LOST at once and never runs.
     session = BlockingSession()
     opened = []
 
@@ -1075,9 +1050,7 @@ def test_snapshot_of_a_factory_blank_tag():
 
 
 def test_snapshot_of_an_erased_tag_is_blank():
-    # What an erase leaves behind: an NDEF message with zero records. The tag
-    # is formatted and rewritable, and it must read as blank — reporting
-    # "not blank, no content" would be a state nobody can act on.
+    # An empty NDEF message (an erased tag) reads as blank.
     tag = _snapshot(reading(records=[], data=b"\x03\x00\xfe\x00"))
     assert tag.blank
     assert tag.readable and tag.content is None and tag.records == []
@@ -1085,8 +1058,7 @@ def test_snapshot_of_an_erased_tag_is_blank():
 
 
 def test_snapshot_of_a_tag_carrying_a_bare_code_is_not_blank():
-    # The real case met on the hardware: ASCII written straight into page 4,
-    # no NDEF structure. Reporting it as blank would drop the only content.
+    # Raw bytes in page 4 without NDEF are reported in raw_hex, not as blank.
     tag = _snapshot(reading(records=None, data=b"FC7FB644" + bytes(496)))
     assert not tag.blank
     assert tag.readable
@@ -1124,7 +1096,6 @@ def test_snapshot_reports_records_it_cannot_decode():
     assert record.kind == "other"
     assert record.type_name == "text/vcard"
     assert bytes.fromhex(record.data_hex) == b"BEGIN"
-    # Nothing to show as content, but the tag is not blank either.
     assert tag.content is None and not tag.blank
 
 
@@ -1140,8 +1111,7 @@ def test_a_write_request_takes_exactly_one_of_text_or_uri():
 
 
 def test_an_absurdly_long_write_is_refused_up_front():
-    # The tag's own capacity is the real limit and the driver enforces it; this
-    # only keeps the absurd from reaching the reader thread.
+    # Upper bound only; the tag's capacity is checked by the driver.
     with pytest.raises(ValueError):
         NfcWriteRequest(text="x" * 10_000)
 
@@ -1151,12 +1121,7 @@ def test_an_absurdly_long_write_is_refused_up_front():
 
 @pytest.fixture
 def fake_ntag_reader(monkeypatch):
-    """Replace winnie_nfc's NTagReader so the session can be driven from a test.
-
-    Skipped when the optional driver is not installed — this is the one part
-    of the service that genuinely needs it, since what is under test is how
-    the driver's own exceptions are translated.
-    """
+    """Replace winnie_nfc's NTagReader (skipped when the driver is not installed)."""
     pytest.importorskip("winnie_nfc")
     import winnie_nfc.reader as driver
 
@@ -1219,9 +1184,7 @@ def driver_exceptions():
         (type2.WriteRefusedError("NAK"), "WRITE_REFUSED"),
         (ndef.NdefError("beyond any capacity"), "TOO_LONG"),
         (type2.Type2Error("odd"), "WRITE_ERROR"),
-        # A tag that answers the SELECT but no Type 2 command — a MIFARE
-        # Classic. Uncaught, this looked like a dead serial link and made the
-        # reader thread drop a healthy one.
+        # Not a Type 2 tag (MIFARE Classic).
         (TagError("not a Type 2 tag"), "WRITE_ERROR"),
     ]
 
@@ -1239,8 +1202,7 @@ def test_every_driver_failure_maps_to_a_write_code(fake_ntag_reader):
 
 
 def test_a_transport_failure_is_left_to_the_reader_thread(fake_ntag_reader):
-    # The one failure that must escape: the link is gone, and only the thread
-    # can reopen it.
+    # A transport failure propagates so the reader thread reconnects.
     from winnie_nfc.transport import TransportError
 
     from reachy_mini.nfc.reader import Clrc663Session
@@ -1267,7 +1229,7 @@ def test_an_unexpected_write_failure_is_a_write_error_not_a_link_loss(
 
 
 def test_a_serial_failure_still_reaches_the_reader_thread(fake_ntag_reader):
-    # pyserial's SerialException is an OSError: the link is gone.
+    # SerialException is an OSError: the link is gone.
     from reachy_mini.nfc.reader import Clrc663Session
 
     session = Clrc663Session("/dev/null")
@@ -1293,8 +1255,7 @@ def test_erase_shares_the_write_error_map(fake_ntag_reader):
 def test_a_failing_field_off_does_not_hide_a_landed_write(
     fake_ntag_reader, monkeypatch
 ):
-    # The write reached the tag; switching the field off afterwards failed.
-    # The caller must hear success, not LINK_LOST for a tag that changed.
+    # A failing field_off does not change the write's result.
     from reachy_mini.nfc.reader import Clrc663Session
 
     session = Clrc663Session("/dev/null")
@@ -1309,7 +1270,6 @@ def test_a_failing_field_off_does_not_hide_a_landed_write(
 
 
 def test_every_session_call_ends_with_the_field_off(fake_ntag_reader):
-    # Otherwise the antenna stays powered between polls.
     from winnie_nfc.core import NoTagError
 
     from reachy_mini.nfc.reader import Clrc663Session
@@ -1336,8 +1296,7 @@ def test_every_session_call_ends_with_the_field_off(fake_ntag_reader):
 
 
 def test_a_write_is_seen_without_lifting_the_tag(fake_ntag_reader):
-    # The session only re-reads a tag when its UID changes; a write keeps the
-    # UID, so it must drop the cached content itself.
+    # A write keeps the UID: the cached content must be dropped.
     from reachy_mini.nfc.reader import Clrc663Session
 
     session = Clrc663Session("/dev/null")
@@ -1384,8 +1343,7 @@ def _session_reading(results):
 
 
 def test_a_failed_content_read_is_not_kept(fake_ntag_reader):
-    # The UID came through but not the memory: keeping that read would leave
-    # the tag unreadable until it is lifted off, however well it reads next.
+    # A failed content read is retried on the next polls.
     good = reading(records=[{"type": "text", "value": "hf_pirate"}])
     session = _session_reading([reading(error="cannot read: no answer"), good])
 
@@ -1411,8 +1369,7 @@ def test_a_tag_that_never_reads_stops_being_re_read(fake_ntag_reader):
 
 
 def test_a_missed_detection_keeps_the_content_read(fake_ntag_reader):
-    # Detection flickers on a mediocre coupling: re-reading the tag every time
-    # it answers again would expose its content to another failed read.
+    # The cached read survives missed detections.
     from winnie_nfc.core import NoTagError
 
     from reachy_mini.nfc.reader import ABSENCE_POLLS
@@ -1429,7 +1386,6 @@ def test_a_missed_detection_keeps_the_content_read(fake_ntag_reader):
 
 
 def test_forgetting_drops_the_content_read(fake_ntag_reader):
-    # The reader thread calls forget() once it has confirmed the absence.
     from winnie_nfc.core import NoTagError
 
     first = reading(records=[{"type": "text", "value": "v1"}])
@@ -1443,8 +1399,7 @@ def test_forgetting_drops_the_content_read(fake_ntag_reader):
 
 
 def test_the_session_cache_follows_the_readers_absence_count(driver_installed):
-    # One absence count, the reader's: the session forgets exactly when the
-    # published tag clears, whatever absence_polls is set to.
+    # The session forgets exactly when the reader confirms the absence.
     here = NfcTag(present=True, uid="04", readable=True)
     gone = NfcTag(present=False)
     session = FakeSession(tags=[here, gone, gone, gone, gone, gone, gone])
@@ -1476,8 +1431,7 @@ def test_the_reader_thread_tells_the_session_to_forget(driver_installed):
 def test_an_undecodable_tag_is_reported_not_taken_for_a_link_loss(
     fake_ntag_reader,
 ):
-    # A record missing its value: the tag is there, its UID is known, and the
-    # failure belongs in the snapshot rather than in a reconnect loop.
+    # An undecodable record is reported in the snapshot, not as a link error.
     session = _session_reading([reading(records=[{"type": "text"}])])
     tag = session.read_tag()
     assert tag.present
@@ -1487,8 +1441,6 @@ def test_an_undecodable_tag_is_reported_not_taken_for_a_link_loss(
 
 
 def test_a_malformed_frame_at_detection_is_a_miss_not_a_tag(fake_ntag_reader):
-    # Reported as a present tag with nothing on it, it read as a blank
-    # accessory to the clients.
     from winnie_nfc.iso14443a import MalformedResponseError
 
     good = reading(records=[{"type": "text", "value": "hf_pirate"}])

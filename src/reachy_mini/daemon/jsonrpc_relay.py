@@ -10,10 +10,8 @@ Incoming JSON-RPC frames from any client transport (WebRTC DataChannel,
   installed version, whether the Hub has a newer one, and a running update)
   and the startup app the antennas launch. This *is* the "apps API"
   exposed over WebRTC, for clients that can't reach the LAN-only REST API.
-* ``nfc.*`` — handled locally against the optional NFC reader, mirroring the
-  ``/api/nfc`` routes for clients that only reach the daemon over WebRTC —
-  except ``dump``: it reads the whole memory of any card put on the reader (an
-  access badge, say), and stays a LAN-only diagnostic on ``GET /api/nfc/dump``.
+* ``nfc.*`` — handled locally against the optional NFC reader, like the
+  ``/api/nfc`` routes except ``dump``, which stays LAN-only.
 * anything else (e.g. ``conversation.*``) — relayed to the running app's
   ``/rpc`` WebSocket. The relay holds one persistent connection to that
   endpoint, which doubles as the daemon's subscription to the app's event
@@ -502,7 +500,6 @@ class JsonRpcRelay:
                 result = nfc_switch.tag(reader).model_dump(mode="json")
             elif verb == "set_enabled":
                 enable = NfcEnableRequest.model_validate(req.params)
-                # stop() joins the reader thread: keep it off the event loop.
                 status = await asyncio.to_thread(
                     nfc_switch.switch_reader,
                     nfc_switch.require_reader(reader),
@@ -511,7 +508,6 @@ class JsonRpcRelay:
                 result = status.model_dump(mode="json")
             elif verb == "erase":
                 erase = NfcEraseRequest.model_validate(req.params)
-                # Blocks until a tag is presented: keep it off the event loop.
                 outcome = await asyncio.to_thread(
                     nfc_switch.require_enabled(reader).erase, erase
                 )
@@ -529,7 +525,6 @@ class JsonRpcRelay:
                     code=-32601,
                 )
         except nfc_switch.NfcDisabledError as e:
-            # Same refusal as the REST routes' 503.
             raise JsonRpcError(str(e), reason="nfc_disabled") from e
         except ValidationError as e:
             raise JsonRpcError(

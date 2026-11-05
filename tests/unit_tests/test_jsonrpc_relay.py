@@ -1001,7 +1001,7 @@ async def test_nfc_set_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     assert saved == [False]
     assert reply["result"]["enabled"] is False
     assert reply["result"]["setting_saved"] is True
-    # Off, tag operations are refused like the REST routes' 503.
+    # Off, tag operations are refused.
     write = await _call(relay, "nfc.write", {"text": "hi"})
     assert write["error"]["data"]["reason"] == "nfc_disabled"
 
@@ -1010,8 +1010,7 @@ async def test_nfc_set_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_nfc_set_enabled_reports_a_switch_that_was_not_saved(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # The config dir is read-only: the reader still switches off, and the
-    # caller is told the choice will not survive a restart.
+    # The choice cannot be saved: the reader still switches off.
     monkeypatch.setattr(
         "reachy_mini.daemon.startup_app_config.set_nfc_enabled", lambda _: False
     )
@@ -1035,7 +1034,7 @@ async def test_nfc_status_does_not_carry_setting_saved() -> None:
 
 @pytest.mark.asyncio
 async def test_nfc_dump_is_not_served_over_rpc() -> None:
-    # The whole memory of any card on the reader stays LAN-only (REST).
+    # dump is REST-only.
     reader = FakeNfcReader()
     reader.dumps = 0
 

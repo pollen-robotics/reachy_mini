@@ -21,9 +21,7 @@ _TURN_KEY = "turn_enabled"
 _FIRST_WAKE_UP_KEY = "first_wake_up_completed"
 _TELEMETRY_KEY = "telemetry_enabled"
 _NFC_KEY = "nfc_enabled"
-# Serialises _update(): it is called from the event loop and from worker
-# threads (the NFC switch), and two unguarded read-modify-writes would lose a
-# key, or interleave on the shared .tmp file and corrupt the whole config.
+# Serialises _update(), called from the event loop and from worker threads.
 _update_lock = threading.Lock()
 # equalizer-10bands accepts per-band gains in [-24, +12] dB.
 _EQ_GAIN_MIN, _EQ_GAIN_MAX = -24.0, 12.0
@@ -183,20 +181,12 @@ def set_startup_app(name: str | None) -> None:
 
 
 def get_nfc_enabled() -> bool:
-    """Return whether the NFC reader is switched on.
-
-    On by default: True when unset or malformed. ``--no-nfc`` still wins, it
-    removes the reader altogether.
-    """
+    """Return whether the NFC reader is switched on (default: True)."""
     return _get_bool(_NFC_KEY) is not False
 
 
 def set_nfc_enabled(enabled: bool) -> bool:
-    """Persist the NFC reader switch. Returns True on success.
-
-    Fail-safe: a write error is logged and reported as False instead of
-    raising, so the caller can say the choice will not survive a restart.
-    """
+    """Persist the NFC reader switch. Returns False on a write error."""
     try:
         _update(_NFC_KEY, bool(enabled))
         return True
