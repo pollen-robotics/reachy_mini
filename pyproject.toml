@@ -77,7 +77,7 @@ placo_kinematics = [
 rerun = ["rerun-sdk>=0.29.0,<=0.31.3"]
 wireless-version = [
     "semver>=3,<4",
-    "nmcli>=1.5; sys_platform == 'linux'",
+    "nmcli>=1.8.0; sys_platform == 'linux'",
     # Sealed BLE WiFi provisioning (wifi_config.py) does X25519 + HKDF +
     # AES-GCM to keep the WiFi password off the air in cleartext. Was only
     # present transitively before; declared here now that it's a direct import.
