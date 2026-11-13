@@ -32,7 +32,7 @@ Reachy Mini comes with an app store powered by Hugging Face Spaces. Use the Appl
 * **📻 [Radio](https://huggingface.co/spaces/pollen-robotics/reachy_mini_radio):** Listen to the radio with Reachy Mini!
 * **👋 [Hand Tracker](https://huggingface.co/spaces/pollen-robotics/hand_tracker_v2):** The robot follows your hand movements in real-time.
 
-👉 [**Browse all apps on Hugging Face**](https://hf.co/reachy-mini/#/apps)
+👉 [**Browse all apps on Hugging Face**](https://pollen-robotics.com/reachy-mini/apps/)
 
 <br>
 

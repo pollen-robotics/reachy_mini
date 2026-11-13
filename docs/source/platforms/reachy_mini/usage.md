@@ -6,7 +6,7 @@ Now that your robot is connected, here is how to interact with it. You can contr
 
 **Reachy Mini Control** is the desktop app for your robot. It allows you to check the robot's status, update the system, and manage applications.
 
-**Download:** Get the latest version of **Reachy Mini Control** from the [official website](https://hf.co/reachy-mini/#/download).
+**Download:** Get the latest version of **Reachy Mini Control** from the [official website](https://pollen-robotics.com/reachy-mini/download/).
 
 **Open Reachy Mini Control** and connect to your robot. Once connected, you will see real-time information about your robot.
 
