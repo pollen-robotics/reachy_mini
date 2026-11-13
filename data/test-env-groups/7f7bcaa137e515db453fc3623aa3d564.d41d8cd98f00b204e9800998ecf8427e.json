@@ -1,1 +1,1 @@
-{"id":"7f7bcaa137e515db453fc3623aa3d564.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_telemetry#test_garbage_hello_is_ignored","name":"test_garbage_hello_is_ignored","status":"passed","testResultsByEnv":{"default":"e352beeb4a2ad5041b443ad5046d2462"}}
+{"id":"7f7bcaa137e515db453fc3623aa3d564.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_telemetry#test_garbage_hello_is_ignored","name":"test_garbage_hello_is_ignored","status":"passed","testResultsByEnv":{"default":"bb8464a180de0c88b34b222afc7b5980"}}

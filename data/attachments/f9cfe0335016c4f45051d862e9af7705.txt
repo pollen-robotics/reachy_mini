@@ -1,2 +1,0 @@
-ERROR    _ble_auth_binding_under_test:bluetooth_service.py:930 Failed to emit BLE notification: 'NoneType' object has no attribute 'services'
-WARNING  _ble_bluetooth_service_under_test:bluetooth_service.py:915 Wrong PIN (4 consecutive). PIN locked for 5s.
