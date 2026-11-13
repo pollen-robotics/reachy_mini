@@ -4,7 +4,7 @@ If you need to reset the robot's Wi-Fi hotspot, restart the daemon, or run other
 
 ## 1. Reachy Mini Control — Bluetooth console (recommended)
 
-Use the **Reachy Mini Control** desktop app ([download](https://hf.co/reachy-mini/#/download)). Bluetooth must be enabled on your computer.
+Use the **Reachy Mini Control** desktop app ([download](https://pollen-robotics.com/reachy-mini/download/)). Bluetooth must be enabled on your computer.
 
 1. Open **Reachy Mini Control**. On the **Connect to Reachy** screen (before you start a session), scroll to the footer and click **First time WiFi setup**.
 
