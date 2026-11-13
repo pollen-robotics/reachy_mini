@@ -68,6 +68,42 @@ def get_hardware_id() -> str | None:
     return hashlib.sha256(raw.encode("ascii")).hexdigest()[:16]
 
 
+# ─── Robot display name (inlined) ─────────────────────────────────────────
+#
+# Same constraint as above: the canonical store is `reachy_mini.utils.robot_name`,
+# which this file can't import. The service runs as the daemon's user (`User=`
+# in the systemd unit), so it reads the same file. It deliberately does not ask
+# the daemon: `GET /api/daemon/robot-name` falls back to the `--robot-name`
+# default ("reachy_mini"), which would rename the advert of every robot that
+# was never renamed, and the daemon is not up yet when this service starts.
+DEFAULT_DEVICE_NAME = "ReachyMini"
+ROBOT_NAME_PATH = Path.home() / ".config" / "reachy_mini" / "robot_name.json"
+# The advert is nearly full with the 128-bit service UUID, so BlueZ carries the
+# name in the scan response: 31 bytes minus the 2-byte AD header. BlueZ cuts a
+# longer name byte-wise, possibly in the middle of a UTF-8 character.
+MAX_ADVERTISED_NAME_BYTES = 29
+# A rename made from the app over WebRTC never reaches this process, so the
+# file is polled. It is a tiny local read.
+NAME_POLL_INTERVAL_S = 10
+
+
+def get_persisted_robot_name() -> str | None:
+    """Return the user-set robot name, or None if the robot was never renamed."""
+    try:
+        name = json.loads(ROBOT_NAME_PATH.read_text()).get("name")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    return None
+
+
+def advertised_name(name: str) -> str:
+    """Cut a name to the advert's byte budget without splitting a character."""
+    encoded = name.encode("utf-8")[:MAX_ADVERTISED_NAME_BYTES]
+    return encoded.decode("utf-8", errors="ignore")
+
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -714,7 +750,7 @@ class BluetoothCommandService:
     PIN_LOCKOUT_BASE_S = 5
     PIN_LOCKOUT_MAX_S = 300
 
-    def __init__(self, device_name="ReachyMini", pin_code="00000"):
+    def __init__(self, device_name=DEFAULT_DEVICE_NAME, pin_code="00000"):
         """Initialize the Bluetooth Command Service."""
         self.device_name = device_name
         self.pin_code = pin_code
@@ -744,6 +780,8 @@ class BluetoothCommandService:
         # _on_device_properties_changed.
         self._ad_manager = None
         self._connected_device_path = None
+        # Adapter properties, kept to follow renames with the adapter Alias.
+        self._adapter_props = None
 
     def _start_journal(self) -> str:
         """Start journalctl -f and buffer output for poll-based reading."""
@@ -1035,7 +1073,14 @@ class BluetoothCommandService:
             if not self._is_authed(device):
                 return "ERROR: Not connected. Please authenticate first."
             name = command_str[len("SET_NAME ") :].strip()
-            self._run_async(lambda: _set_robot_name(name))
+
+            def set_name() -> str:
+                result = _set_robot_name(name)
+                # Advertise the new name now rather than at the next poll.
+                GLib.idle_add(self._apply_persisted_name)
+                return result
+
+            self._run_async(set_name)
             return "OK: working"
 
         # else if command starts with "CMD_xxxxx" check if  commands directory contains the said named script command xxxx.sh and run its, show output or/and send to read
@@ -1091,6 +1136,7 @@ class BluetoothCommandService:
             raise Exception("Bluetooth adapter not found")
 
         adapter_props = dbus.Interface(adapter, DBUS_PROP_IFACE)
+        self._adapter_props = adapter_props
         adapter_props.Set("org.bluez.Adapter1", "Powered", dbus.Boolean(True))
         adapter_props.Set("org.bluez.Adapter1", "Discoverable", dbus.Boolean(True))
         adapter_props.Set("org.bluez.Adapter1", "DiscoverableTimeout", dbus.UInt32(0))
@@ -1114,6 +1160,9 @@ class BluetoothCommandService:
             reply_handler=lambda: logger.info("GATT app registered"),
             error_handler=lambda e: logger.error(f"Failed to register GATT app: {e}"),
         )
+
+        # Advertise the user-set name from the start, not after the first poll.
+        self._apply_persisted_name()
 
         # Register advertisement
         ad_manager = dbus.Interface(adapter, LE_ADVERTISING_MANAGER_IFACE)
@@ -1149,6 +1198,7 @@ class BluetoothCommandService:
 
         # Setup periodic network status updates (every 10 seconds)
         GLib.timeout_add_seconds(10, self.app.reachy_status.update_network_status)
+        GLib.timeout_add_seconds(NAME_POLL_INTERVAL_S, self._poll_device_name)
 
         logger.info(f"✓ Bluetooth service started as '{self.device_name}'")
 
@@ -1191,6 +1241,41 @@ class BluetoothCommandService:
         self._stop_journal()
         self._reassert_advertising()
 
+    def _apply_persisted_name(self) -> bool:
+        """Advertise the user-set robot name if it differs from the current one.
+
+        A robot that was never renamed keeps DEFAULT_DEVICE_NAME. The adapter
+        Alias follows too: it is the GAP Device Name that iOS caches after a
+        connection and may show instead of the advertised name.
+        """
+        persisted = get_persisted_robot_name()
+        if persisted is None:
+            return False
+        name = advertised_name(persisted)
+        if name == self.device_name:
+            return False
+        self.device_name = name
+        if self._adapter_props is not None:
+            try:
+                self._adapter_props.Set(
+                    "org.bluez.Adapter1", "Alias", dbus.String(persisted)
+                )
+            except dbus.exceptions.DBusException as e:
+                logger.warning(f"Could not set adapter alias: {e}")
+        if self.adv is not None:
+            self.adv.local_name = name
+            # While a central is connected the new advert waits for the
+            # disconnect, which re-registers it anyway.
+            if self._connected_device_path is None:
+                self._reassert_advertising()
+        logger.info(f"Advertising as '{name}'")
+        return False  # GLib.idle_add: run once
+
+    def _poll_device_name(self) -> bool:
+        """Pick up a rename made while running (GLib timer: keep firing)."""
+        self._apply_persisted_name()
+        return True
+
     def _reassert_advertising(self):
         """Re-register the advertisement so the robot stays discoverable.
 
@@ -1209,9 +1294,7 @@ class BluetoothCommandService:
             self._ad_manager.RegisterAdvertisement(
                 self.adv.get_path(),
                 {},
-                reply_handler=lambda: logger.info(
-                    "Advertisement re-asserted after disconnect"
-                ),
+                reply_handler=lambda: logger.info("Advertisement re-asserted"),
                 error_handler=lambda e: logger.warning(
                     f"Re-assert advertisement failed (non-fatal): {e}"
                 ),
@@ -1683,7 +1766,7 @@ def main():
     """Run the Bluetooth Command Service."""
     pin = get_pin()
 
-    bt_service = BluetoothCommandService(device_name="ReachyMini", pin_code=pin)
+    bt_service = BluetoothCommandService(pin_code=pin)
     bt_service.run()
 
 
