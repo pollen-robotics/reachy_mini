@@ -255,6 +255,11 @@ If you want to use the simulation mode, you need to add the `mujoco` extra:
 uv pip install "reachy-mini[mujoco]"
 ```
 
+> **⚠️ macOS users:** `uv` may have compatibility issues with MuJoCo on macOS. If you hit installation or runtime problems, use `pip` directly instead of `uv` for MuJoCo-related packages:
+> ```bash
+> pip install "reachy-mini[mujoco]"
+> ```
+
 > [!TIP]
 > The post installation of gstreamer is due to an [issue](https://github.com/pypi/support/issues/8847#issuecomment-3899714506) with PyPi and should be solved in the future.
 
