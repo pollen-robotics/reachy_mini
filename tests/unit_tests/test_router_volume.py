@@ -104,8 +104,8 @@ def test_set_output_volume_success(monkeypatch, router_app):
     assert resp.json() == {"volume": 55, "platform": "TestOS", "device": "Speaker"}
 
 
-def test_set_output_volume_plays_test_sound(monkeypatch, router_app):
-    """A ready backend on app.state triggers a test sound after the set."""
+def test_set_output_volume_does_not_play_test_sound(monkeypatch, router_app):
+    """Changing the output volume must not interrupt active audio playback."""
     _patch_vc(monkeypatch, _StubVolumeControl(set_ok=True))
     daemon = MagicMock()
     daemon.backend.ready.is_set.return_value = True
@@ -114,20 +114,7 @@ def test_set_output_volume_plays_test_sound(monkeypatch, router_app):
     resp = client.post("/volume/set", json={"volume": 55})
 
     assert resp.status_code == 200
-    daemon.backend.play_sound.assert_called_once_with("impatient1.wav")
-
-
-def test_set_output_volume_test_sound_failure_ignored(monkeypatch, router_app):
-    """A failing test sound is swallowed — the set still returns 200."""
-    _patch_vc(monkeypatch, _StubVolumeControl(set_ok=True))
-    daemon = MagicMock()
-    daemon.backend.ready.is_set.return_value = True
-    daemon.backend.play_sound.side_effect = RuntimeError("boom")
-    client = router_app(volume.router, daemon=daemon)
-
-    resp = client.post("/volume/set", json={"volume": 55})
-
-    assert resp.status_code == 200
+    daemon.backend.play_sound.assert_not_called()
 
 
 def test_set_output_volume_failure(monkeypatch, router_app):
