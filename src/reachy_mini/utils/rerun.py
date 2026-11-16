@@ -20,7 +20,6 @@ import requests
 import rerun as rr
 
 from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
-from reachy_mini.media.media_manager import MediaBackend
 from reachy_mini.reachy_mini import ReachyMini
 
 
@@ -85,10 +84,7 @@ class Rerun:
 
         self.running = Event()
         self.thread_log_camera: Optional[Thread] = None
-        if (
-            reachymini.media.backend == MediaBackend.GSTREAMER
-            or reachymini.media.backend == MediaBackend.DEFAULT
-        ):
+        if reachymini.media.camera is not None:  # local or WebRTC
             self.thread_log_camera = Thread(target=self.log_camera, daemon=True)
         self.thread_log_movements = Thread(target=self.log_movements, daemon=True)
 
@@ -154,14 +150,10 @@ class Rerun:
 
         while not self.running.is_set():
             frame = self._reachymini.media.get_frame()
-            if frame is not None:
-                if isinstance(frame, bytes):
-                    self.logger.warning(
-                        "Received frame is jpeg. Please use default backend."
-                    )
-                    return
-            else:
-                return
+            if frame is None:
+                # No frame yet (WebRTC gives up after 20 ms): keep waiting.
+                self.running.wait(0.01)
+                continue
 
             # TODO: Real timestamps exist in the pipeline (GStreamer buf.pts,
             # MuJoCo self.data.time) but camera.read() only returns raw pixels.

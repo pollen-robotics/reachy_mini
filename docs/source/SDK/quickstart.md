@@ -18,7 +18,7 @@ If you want to run the SDK directly on your wireless Reachy Mini instead of remo
 Open a terminal and run:
 
 ```bash
-ssh pollen@reachy-mini
+ssh pollen@reachy-mini.local
 ```
 
 When prompted, use these **default credentials**:

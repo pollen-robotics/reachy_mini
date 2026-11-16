@@ -18,9 +18,9 @@ The whole sequence loops until interrupted with Ctrl+C.
 import time
 
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini
+from reachy_mini.utils.rotation import Rotation as R
 
 
 def main() -> None:

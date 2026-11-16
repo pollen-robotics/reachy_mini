@@ -4,15 +4,15 @@ import asyncio
 import logging
 import os
 import signal
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
-import numpy as np
 import psutil
 from pydantic import BaseModel
 
-from reachy_mini.daemon.backend.robot import RobotBackend
+from reachy_mini.daemon.telemetry import app_id_for, telemetry
 from reachy_mini.io.protocol import MotorControlMode
 from reachy_mini.utils.interpolation import distance_between_poses
 
@@ -51,6 +51,8 @@ class RunningApp:
     process: asyncio.subprocess.Process
     monitor_task: asyncio.Task[None]
     status: AppStatus
+    # Set by stop_current_app; the state can't tell, the monitor overwrites it.
+    stop_requested: asyncio.Event
 
 
 def _get_catalog_app_key(app: AppInfo) -> str:
@@ -186,6 +188,15 @@ class AppManager:
             #   * The app ends up using .venv's plugin scanner binary and registry cache,
             #     which can mask issues specific to apps_venv's own gstreamer install.
             # See pollen-robotics/reachy-mini-desktop-app#185.
+            #
+            # PYTHONPATH and GST_PYTHONPATH_1_0 belong to the same set and are the
+            # most damaging members: they point at the daemon's own site-packages and
+            # take precedence over the target interpreter's. An app launched with
+            # apps_venv's Python therefore imports `reachy_mini` and `gi` from the
+            # *daemon's* venv, so an app pinned to a different SDK than the daemon
+            # fails at import time (ModuleNotFoundError for `reachy_mini.io.jsonrpc`
+            # and `gi` respectively). apps_venv's own gstreamer_bundle.pth sets both
+            # afresh at interpreter startup.
             app_env = os.environ.copy()
             for key in (
                 "GST_PLUGIN_PATH_1_0",
@@ -196,6 +207,8 @@ class AppManager:
                 "PYGI_DLL_DIRS",
                 "XDG_DATA_DIRS",
                 "XDG_CONFIG_DIRS",
+                "PYTHONPATH",
+                "GST_PYTHONPATH_1_0",
             ):
                 app_env.pop(key, None)
 
@@ -223,6 +236,11 @@ class AppManager:
             state=AppState.STARTING,
             error=None,
         )
+        app_id = app_id_for(local_common_venv._load_app_metadata(app_name))
+        started_at = time.monotonic()
+        stop_requested = asyncio.Event()
+        telemetry.capture("robot_app_started", app_id=app_id)
+        telemetry.session_begin(f"app:{app_name}", "python_app", app_id)
 
         async def monitor_process() -> None:
             """Monitor the subprocess and update status."""
@@ -284,9 +302,21 @@ class AppManager:
                 # Always release the robot lock when the subprocess exits, no
                 # matter how: clean exit, crash, SIGKILL, OOM, or cancellation
                 # of this monitor task. Idempotent — stop_current_app's own
-                # release is fine too.
+                # release is fine too. A requested stop skips the daemon's idle
+                # reset: stop_current_app resets the robot itself.
                 if self.daemon is not None:
-                    self.daemon.robot_app_lock.release_local(app_name)
+                    self.daemon.robot_app_lock.release_local(
+                        app_name, cleaned_up=stop_requested.is_set()
+                    )
+                exit_code = process.returncode
+                telemetry.session_end(f"app:{app_name}")
+                telemetry.capture(
+                    "robot_app_stopped",
+                    app_id=app_id,
+                    duration_s=int(time.monotonic() - started_at),
+                    exit_code=exit_code,
+                    crashed=exit_code not in (0, None) and not stop_requested.is_set(),
+                )
 
         monitor_task = asyncio.create_task(monitor_process())
 
@@ -294,6 +324,7 @@ class AppManager:
             process=process,
             monitor_task=monitor_task,
             status=status,
+            stop_requested=stop_requested,
         )
 
         return self.current_app.status
@@ -309,6 +340,7 @@ class AppManager:
         assert self.current_app is not None
 
         self.current_app.status.state = AppState.STOPPING
+        self.current_app.stop_requested.set()
         self.logger.getChild("runner").info(
             f"Stopping app {self.current_app.status.info.name}"
         )
@@ -346,44 +378,46 @@ class AppManager:
                 pass
 
         # Return to zero after an app stops, unless the app left it asleep.
-        if self.daemon is not None and self.daemon.backend is not None:
-            backend = self.daemon.backend
-            _, _, dist_to_sleep = distance_between_poses(
-                backend.get_current_head_pose(), backend.SLEEP_HEAD_POSE
-            )
-            if dist_to_sleep <= SLEEP_POSE_MAGIC_DISTANCE:
-                # pose check only; ensure limp (idempotent)
-                backend.set_motor_control_mode(MotorControlMode.Disabled)
-                self.logger.getChild("runner").info(
-                    "Robot is asleep; leaving it limp in the sleep pose."
-                )
-            else:
-                if isinstance(backend, RobotBackend):
-                    backend.enable_motors()
-
+        try:
+            if self.daemon is not None and self.daemon.backend is not None:
+                backend = self.daemon.backend
                 try:
-                    from reachy_mini.reachy_mini import (
-                        INIT_ANTENNAS_JOINT_POSITIONS,
-                        INIT_HEAD_POSE,
+                    # Stop the app's move first: the asleep branch below would leave it
+                    # running and holding the move guard (#1401).
+                    await backend.stop_running_move()
+                    _, _, dist_to_sleep = distance_between_poses(
+                        backend.get_current_head_pose(), backend.SLEEP_HEAD_POSE
                     )
-
-                    self.logger.getChild("runner").info(
-                        "Returning robot to zero position"
-                    )
-                    await backend.goto_target(
-                        head=INIT_HEAD_POSE,
-                        antennas=np.array(INIT_ANTENNAS_JOINT_POSITIONS),
-                        duration=1.0,
-                    )
+                    if dist_to_sleep <= SLEEP_POSE_MAGIC_DISTANCE:
+                        # pose check only; ensure limp (idempotent)
+                        backend.set_motor_control_mode(MotorControlMode.Disabled)
+                        self.logger.getChild("runner").info(
+                            "Robot is asleep; leaving it limp in the sleep pose."
+                        )
+                    else:
+                        self.logger.getChild("runner").info(
+                            "Returning robot to zero position"
+                        )
+                        # Not a bare goto: the app may have left gravity
+                        # compensation, limp motors or head tracking behind.
+                        await backend.reset_to_init()
                 except Exception as e:
                     self.logger.getChild("runner").warning(
                         f"Could not return to zero position: {e}"
                     )
+                    # The idle reset was skipped for this requested stop: fall
+                    # back to it so the robot isn't left in whatever state the
+                    # app (or the failed lift) left behind.
+                    backend.request_idle_reset()
+        finally:
+            self.current_app = None
 
-        self.current_app = None
+    async def restart_current_app(self, keep_remote: bool = False) -> AppStatus:
+        """Restart the current app.
 
-    async def restart_current_app(self) -> AppStatus:
-        """Restart the current app."""
+        ``keep_remote`` is forwarded to :meth:`start_app`: the JSON-RPC relay
+        sets it so the remote client asking for the restart keeps its session.
+        """
         if not self.is_app_running():
             raise RuntimeError("No app is currently running")
 
@@ -392,7 +426,7 @@ class AppManager:
         app_info = self.current_app.status.info
 
         await self.stop_current_app()
-        await self.start_app(app_info.name)
+        await self.start_app(app_info.name, keep_remote=keep_remote)
 
         return self.current_app.status
 
@@ -449,23 +483,37 @@ class AppManager:
 
     async def install_new_app(self, app: AppInfo, logger: logging.Logger) -> None:
         """Install a new app by name."""
-        success = await local_common_venv.install_package(
-            app,
-            logger,
-            wireless_version=self.wireless_version,
-            desktop_app_daemon=self.desktop_app_daemon,
-        )
+        success = -1
+        try:
+            success = await local_common_venv.install_package(
+                app,
+                logger,
+                wireless_version=self.wireless_version,
+                desktop_app_daemon=self.desktop_app_daemon,
+            )
+        finally:
+            telemetry.capture(
+                "robot_app_installed",
+                app_id=app_id_for(app.extra),
+                success=success == 0,
+            )
         if success != 0:
             raise RuntimeError(f"Failed to install app '{app.name}'")
 
     async def remove_app(self, app_name: str, logger: logging.Logger) -> None:
         """Remove an installed app by name."""
-        success = await local_common_venv.uninstall_package(
-            app_name,
-            logger,
-            wireless_version=self.wireless_version,
-            desktop_app_daemon=self.desktop_app_daemon,
-        )
+        # Read before uninstalling, which may delete the metadata.
+        app_id = app_id_for(local_common_venv._load_app_metadata(app_name))
+        success = -1
+        try:
+            success = await local_common_venv.uninstall_package(
+                app_name,
+                logger,
+                wireless_version=self.wireless_version,
+                desktop_app_daemon=self.desktop_app_daemon,
+            )
+        finally:
+            telemetry.capture("robot_app_removed", app_id=app_id, success=success == 0)
         if success != 0:
             raise RuntimeError(f"Failed to uninstall app '{app_name}'")
 

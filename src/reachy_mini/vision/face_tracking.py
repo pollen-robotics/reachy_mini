@@ -173,6 +173,9 @@ def to_observation(
 class FaceTracker:
     """Run the face detector in a daemon thread and expose the latest observation."""
 
+    # How long stop() waits for the detector thread before giving up on it.
+    STOP_JOIN_TIMEOUT_S = 2.0
+
     def __init__(self) -> None:
         """Initialize the tracker; no thread is started until ``start``."""
         self._thread: threading.Thread | None = None
@@ -215,7 +218,7 @@ class FaceTracker:
         self._stop.set()
         if self._thread is None:
             return
-        self._thread.join(timeout=2.0)
+        self._thread.join(timeout=self.STOP_JOIN_TIMEOUT_S)
         if self._thread.is_alive():
             # Keep the handle: forgetting a live thread lets start() clear its stop flag and double-run.
             logger.warning("Face tracker thread did not stop in time.")

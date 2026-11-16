@@ -22,7 +22,7 @@ Reachy Mini comes as a kit. Building it is the first step of your journey!
 Once assembled, you need to connect the robot to your Wi-Fi network.
 
 1.  **Power On:** Turn on your Reachy Mini.
-2. **Download Reachy Mini Control:** If you haven't already, download and install the **Reachy Mini Control** app from the [official website](https://hf.co/reachy-mini/#/download).
+2. **Download Reachy Mini Control:** If you haven't already, download and install the **Reachy Mini Control** app from the [official website](https://pollen-robotics.com/reachy-mini/download/).
 3. **Run the App:** Open **Reachy Mini Control** and click on the bottom link **"First time connecting..."**.
 ![First time connecting](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/first-setup-wifi-1.png)
 4. **Follow the Instructions:** The app will guide you through the connection process. It will ask you to connect to the robot's Wi-Fi AP and then configure your Wi-Fi.

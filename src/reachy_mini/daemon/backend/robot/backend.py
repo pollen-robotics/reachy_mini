@@ -12,7 +12,6 @@ from datetime import timedelta
 from multiprocessing import Event  # It seems to be more accurate than threading.Event
 from typing import Annotated, Any
 
-import log_throttling
 import numpy as np
 import numpy.typing as npt
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
@@ -92,6 +91,12 @@ class RobotBackend(Backend):
 
         self.motor_control_mode = self._infer_control_mode()
         self._torque_enabled = self.motor_control_mode != MotorControlMode.Disabled
+        # set_motor_torque_ids() drives the controller under the global mode's
+        # back, so afterwards `motor_control_mode` describes an intent the
+        # hardware no longer matches. This flag records that divergence so the
+        # next set_motor_control_mode() does the real work instead of
+        # short-circuiting on an equal-looking mode.
+        self._partial_torque_override = False
         self.logger.info(f"Motor control mode: {self.motor_control_mode}")
         self.last_alive: float | None = None
 
@@ -250,9 +255,7 @@ class RobotBackend(Backend):
                             self.target_head_pose, self.target_body_yaw
                         )
                     except ValueError as e:
-                        log_throttling.by_time(self.logger, interval=0.5).warning(
-                            f"IK error: {e}"
-                        )
+                        self._log_ik_error(e)
 
                 if not self.is_shutting_down:
                     self.joint_positions_publisher.put(
@@ -601,9 +604,21 @@ class RobotBackend(Backend):
 
     def set_motor_control_mode(self, mode: MotorControlMode) -> None:
         """Set the motor control mode."""
-        # Check if the mode is already set
-        if mode == self.motor_control_mode:
+        # Check if the mode is already set. A pending per-motor override means
+        # the stored mode no longer describes the hardware, so re-apply it even
+        # when it looks unchanged - that re-torques the motors an app detorqued
+        # individually.
+        if mode == self.motor_control_mode and not self._partial_torque_override:
             return
+        # Reject before touching state, so a pending override survives.
+        if (
+            mode == MotorControlMode.GravityCompensation
+            and self.kinematics_engine != "Placo"
+        ):
+            raise ValueError(
+                "Gravity compensation requires the Placo kinematics engine."
+            )
+        self._partial_torque_override = False
 
         if mode == MotorControlMode.Enabled:
             if self.motor_control_mode == MotorControlMode.GravityCompensation:
@@ -620,11 +635,6 @@ class RobotBackend(Backend):
             self.disable_motors()
 
         elif mode == MotorControlMode.GravityCompensation:
-            if self.kinematics_engine != "Placo":
-                raise RuntimeError(
-                    "Gravity compensation mode is only supported with the Placo kinematics engine."
-                )
-
             self.disable_motors()
             self.set_head_operation_mode(0)
             self.set_antennas_operation_mode(0)
@@ -651,6 +661,10 @@ class RobotBackend(Backend):
             self.c.enable_torque_on_ids(ids_int)
         else:
             self.c.disable_torque_on_ids(ids_int)
+
+        # Either direction leaves a subset in a state the global mode doesn't
+        # know about, so both must force the next mode set to re-apply.
+        self._partial_torque_override = True
 
     def _infer_control_mode(self) -> MotorControlMode:
         assert self.c is not None, "Motor controller not initialized or already closed."

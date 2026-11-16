@@ -15,8 +15,6 @@ from typing import Dict, List, Literal, Optional, Union, cast
 
 import numpy as np
 import numpy.typing as npt
-from asgiref.sync import async_to_sync
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import (
@@ -44,6 +42,7 @@ from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.discovery import find_robots
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
+from reachy_mini.utils.rotation import Rotation as R
 from reachy_mini.vision.look_at import (
     default_head_to_camera_transform,
     look_at_image_pose,
@@ -605,6 +604,9 @@ class ReachyMini:
                 f"Daemon at {host!r} is named {status.robot_name!r}, "
                 f"expected {self.robot_name!r}."
             )
+        # get_status() consumed the status; keep it for the media setup, which
+        # would otherwise wait for the daemon's next 1 Hz publish.
+        client.status_received.set()
         return client
 
     def set_target(
@@ -690,6 +692,7 @@ class ReachyMini:
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
+            MoveBusyError: If another move (from the dashboard, another client, or the daemon itself) is already running.
 
         """
         if head is None and antennas is None and body_yaw is None:
@@ -1168,4 +1171,18 @@ class ReachyMini:
             else:
                 await asyncio.sleep(0.001)
 
-    play_move = async_to_sync(async_play_move)
+    def play_move(
+        self,
+        move: Move,
+        play_frequency: float = 100.0,
+        initial_goto_duration: float = 0.0,
+        sound: bool = True,
+    ) -> None:
+        """Play a Move and block until it ends. See ``async_play_move``.
+
+        Runs in the caller's thread, so Ctrl+C stops the move. From async code,
+        await ``async_play_move`` instead.
+        """
+        asyncio.run(
+            self.async_play_move(move, play_frequency, initial_goto_duration, sound)
+        )

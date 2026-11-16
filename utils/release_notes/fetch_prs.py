@@ -3,7 +3,7 @@
 
 Uses PyGithub to:
 - Get commits between a tag and HEAD on main
-- Extract PR numbers from merge commits (GitHub squash-merge format)
+- Extract PR numbers from squash-merge and merge commit titles
 - Fetch full PR details and save as JSON files
 """
 
@@ -16,9 +16,9 @@ from pathlib import Path
 
 from github import Github
 
-# Pattern to extract PR number from squash-merge commit titles
-# Format: "PR title (#1234)"
-PR_NUMBER_PATTERN = re.compile(r"\(#(\d+)\)$")
+# PR number from a commit title, squash merge ("PR title (#1234)")
+# or merge commit ("Merge pull request #1234 from owner/branch")
+PR_NUMBER_PATTERN = re.compile(r"^Merge pull request #(\d+) |\(#(\d+)\)$")
 
 OUTPUT_DIR = Path(os.environ.get("RELEASE_NOTES_OUTPUT_DIR", ".release-notes"))
 TMP_DIR = OUTPUT_DIR / "tmp"
@@ -54,12 +54,12 @@ def get_commits_since_tag(repo, tag_name: str) -> list:
 
 
 def extract_pr_number(commit_message: str) -> int | None:
-    """Extract PR number from a squash-merge commit message."""
+    """Extract PR number from a squash-merge or merge commit message."""
     # Get the first line (title) of the commit message
     title = commit_message.split("\n")[0].strip()
     match = PR_NUMBER_PATTERN.search(title)
     if match:
-        return int(match.group(1))
+        return int(match.group(1) or match.group(2))
     return None
 
 

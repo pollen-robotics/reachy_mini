@@ -22,7 +22,8 @@ Platform audio sources / sinks are discovered at runtime:
 * **macOS**: ``osxaudiosrc`` / ``osxaudiosink``
 * **Fallback**: ``autoaudiosrc`` / ``autoaudiosink``
 
-The "Reachy Mini Audio" card is located by name via ``Gst.DeviceMonitor``.
+The "Reachy Mini Audio" card is located by name via GStreamer device
+discovery (see :func:`~reachy_mini.media.device_detection.get_audio_device`).
 If no matching card is found the platform default is used instead.
 
 Note:
@@ -90,8 +91,8 @@ class GStreamerAudio(AudioBase):
 
     Extends ``AudioBase`` with a GStreamer-specific helper:
 
-    - ``clear_player()``: flush the playback appsrc immediately via GStreamer
-      flush events, dropping any queued audio.
+    - ``clear_player()``: flush the playback path (appsrc branch and mixer
+      output) via GStreamer flush events, dropping any queued audio.
 
     (``clear_output_buffer()`` is deprecated and does nothing; use
     ``clear_player()`` instead.)
@@ -375,6 +376,7 @@ class GStreamerAudio(AudioBase):
         self._appsrc.set_property("caps", caps)
 
         mixer = Gst.ElementFactory.make("audiomixer")
+        self._mixer = mixer
         appsrc_queue = Gst.ElementFactory.make("queue")
 
         silence = Gst.ElementFactory.make("audiotestsrc")
@@ -383,13 +385,7 @@ class GStreamerAudio(AudioBase):
         # Pin silence caps to the appsrc format so audiomixer sees matching
         # inputs (it can't aggregate F32LE@N and S16@44100 together).
         silence_caps = Gst.ElementFactory.make("capsfilter")
-        silence_caps.set_property(
-            "caps",
-            Gst.Caps.from_string(
-                f"audio/x-raw,format=F32LE,channels={self.CHANNELS},"
-                f"rate={self.SAMPLE_RATE},layout=interleaved"
-            ),
-        )
+        silence_caps.set_property("caps", caps)
         silence_queue = Gst.ElementFactory.make("queue")
 
         tee = Gst.ElementFactory.make("tee")
@@ -430,6 +426,12 @@ class GStreamerAudio(AudioBase):
         silence_caps.link(silence_queue)
         silence_queue.link(mixer)
 
+        # Pin output to the input format: mixer-side conversion segfaults on GStreamer 1.28 (#1525).
+        mixer_caps = Gst.ElementFactory.make("capsfilter")
+        mixer_caps.set_property("caps", caps)
+        pipeline.add(mixer_caps)
+        mixer.link(mixer_caps)
+
         if self._webrtcechoprobe is not None:
             # webrtcechoprobe requires S16LE at 8/16/32/48 kHz.
             ac_probe = Gst.ElementFactory.make("audioconvert")
@@ -444,13 +446,13 @@ class GStreamerAudio(AudioBase):
             )
             for el in (ac_probe, ar_probe, cf_probe, self._webrtcechoprobe):
                 pipeline.add(el)
-            mixer.link(ac_probe)
+            mixer_caps.link(ac_probe)
             ac_probe.link(ar_probe)
             ar_probe.link(cf_probe)
             cf_probe.link(self._webrtcechoprobe)
             self._webrtcechoprobe.link(tee)
         else:
-            mixer.link(tee)
+            mixer_caps.link(tee)
 
         tee.link(queue_speaker)
         queue_speaker.link(ac_speaker)
@@ -503,14 +505,25 @@ class GStreamerAudio(AudioBase):
             self._teardown_playbin(self._playbin)
 
     def clear_player(self) -> None:
-        """Flush the player's appsrc to drop any queued audio immediately."""
+        """Drop all queued playback audio immediately (barge-in)."""
         if self._head_wobbler is not None:
             self._head_wobbler.reset()
         if self._appsrc is not None:
             self._appsrc_pts = -1
+            # Paused so the mixer can't push into the flush: FLUSHING would
+            # stop its output task for good.
             self._pipeline.set_state(Gst.State.PAUSED)
             self._appsrc.send_event(Gst.Event.new_flush_start())
-            self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=True))
+            self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=False))
+            # audiomixer doesn't forward a single-pad flush: flush its output
+            # too, then resend the segment the flush cleared downstream.
+            mixer_src = self._mixer.get_static_pad("src")
+            segment = mixer_src.get_sticky_event(Gst.EventType.SEGMENT, 0)
+            mixer_src.push_event(Gst.Event.new_flush_start())
+            mixer_src.push_event(Gst.Event.new_flush_stop(reset_time=False))
+            if segment is not None:
+                # A copy: GStreamer 1.24 skips re-pushing the same event object.
+                mixer_src.push_event(Gst.Event.new_segment(segment.parse_segment()))
             self._pipeline.set_state(Gst.State.PLAYING)
             self.logger.info("Cleared player queue")
         else:

@@ -2,23 +2,25 @@ import asyncio
 import threading
 from pathlib import Path
 from threading import Event
-import time
 import pytest
 import uvicorn
 
 from reachy_mini import ReachyMiniApp
 from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.manager import AppManager, AppState
+from reachy_mini.apps.sources import local_common_venv
 from reachy_mini.daemon.app.main import Args, create_app
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.reachy_mini import ReachyMini
+
+pytestmark = pytest.mark.usefixtures("no_daemon_mdns_advertising")
 
 
 @pytest.mark.asyncio
 async def test_app() -> None:
     class MockApp(ReachyMiniApp):
         def run(self, reachy_mini: ReachyMini, stop_event: Event) -> None:
-            time.sleep(1)  # Simulate some processing time
+            reachy_mini.get_current_joint_positions()  # use the robot, then return
 
     args = Args(
         sim=True,
@@ -144,10 +146,10 @@ async def test_faulty_app() -> None:
         status = await app_mngr.start_app("faulty_app", media_backend="no_media")
 
         success = False
-        for _ in range(10):
+        for _ in range(100):  # same 10 s budget, polled finely
             status = await app_mngr.current_app_status()
             if status is None or status.state in (AppState.STARTING, AppState.RUNNING):
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(0.1)
                 continue
 
             if status is not None and status.state == AppState.ERROR:
@@ -165,3 +167,64 @@ async def test_faulty_app() -> None:
         await daemon.stop(goto_sleep_on_stop=False)
         server.should_exit = True
         server_thread.join(timeout=10)
+
+
+@pytest.mark.asyncio
+async def test_start_app_scrubs_leaking_env_vars(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The app subprocess must not inherit env vars pointing at the daemon's venv.
+
+    PYTHONPATH and GST_PYTHONPATH_1_0 are set by the daemon's own
+    gstreamer_bundle.pth and take precedence over the target interpreter's
+    site-packages. Leaking them makes an app launched with apps_venv's Python
+    import `reachy_mini` and `gi` from the daemon's venv instead, which breaks
+    whenever the two environments hold different SDK versions.
+    """
+    leaking = {
+        "PYTHONPATH": "/daemon_venv/lib/python3.12/site-packages",
+        "GST_PYTHONPATH_1_0": "/daemon_venv/lib/python3.12/site-packages/gstreamer_python",
+        "GST_REGISTRY_1_0": "/daemon_venv/registry.bin",
+        "XDG_DATA_DIRS": "/daemon_venv/share",
+    }
+    for key, value in leaking.items():
+        monkeypatch.setenv(key, value)
+
+    captured_env: dict[str, str] = {}
+
+    class _FakeProcess:
+        returncode = 0
+
+        def __init__(self) -> None:
+            self.stdout = asyncio.StreamReader()
+            self.stderr = asyncio.StreamReader()
+            self.stdout.feed_eof()
+            self.stderr.feed_eof()
+
+        async def wait(self) -> int:
+            return 0
+
+    async def fake_exec(*args: object, **kwargs: object) -> _FakeProcess:
+        captured_env.update(kwargs["env"])  # type: ignore[arg-type]
+        return _FakeProcess()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(
+        local_common_venv, "get_app_module", lambda *a, **k: "some_app.main"
+    )
+    monkeypatch.setattr(
+        local_common_venv, "get_app_python", lambda *a, **k: "/apps_venv/bin/python"
+    )
+
+    app_mngr = AppManager()
+    await app_mngr.start_app("some_app")
+    try:
+        assert captured_env, "subprocess was never launched"
+        for key in leaking:
+            assert key not in captured_env, (
+                f"{key} leaked into the app subprocess environment"
+            )
+        # A neutral variable must still be forwarded.
+        assert "PATH" in captured_env
+    finally:
+        await app_mngr.stop_current_app()

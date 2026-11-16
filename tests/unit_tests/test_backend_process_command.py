@@ -23,6 +23,7 @@ from reachy_mini.io.protocol import (
     AudioParamPair,
     ClearIncomingAudioCmd,
     DeleteHfTokenCmd,
+    GetFirstWakeUpCmd,
     GetHardwareIdCmd,
     GetImuCmd,
     GetMicrophoneVolumeCmd,
@@ -39,6 +40,7 @@ from reachy_mini.io.protocol import (
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
     SetBodyYawCmd,
+    SetFirstWakeUpCmd,
     SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
@@ -173,10 +175,27 @@ async def test_goto_sleep_completes(sim_backend: Any) -> None:
 
 def test_play_sound_delegates(sim_backend: Any) -> None:
     """PlaySoundCmd forwards the file name to play_sound."""
-    sim_backend.play_sound = Mock()
+    sim_backend.play_sound = Mock(return_value=True)
     responses = _dispatch(sim_backend, PlaySoundCmd(file="wake_up.wav"))
     sim_backend.play_sound.assert_called_once_with("wake_up.wav")
     assert responses == [{"status": "ok", "command": "play_sound"}]
+
+
+def test_play_sound_unknown_file_errors(sim_backend: Any) -> None:
+    """An unknown sound file is an error reply naming the command."""
+    sim_backend.play_sound = Mock(return_value=False)
+    responses = _dispatch(sim_backend, PlaySoundCmd(file="does_not_exist.wav"))
+    assert len(responses) == 1
+    assert responses[0]["command"] == "play_sound"
+    assert "no such sound" in responses[0]["error"]
+    assert "status" not in responses[0]
+
+
+def test_play_sound_playback_failure_errors(sim_backend: Any) -> None:
+    """A playback failure is an error reply naming the command."""
+    sim_backend.play_sound = Mock(side_effect=RuntimeError("no playbin"))
+    responses = _dispatch(sim_backend, PlaySoundCmd(file="wake_up.wav"))
+    assert responses == [{"error": "no playbin", "command": "play_sound"}]
 
 
 def test_clear_incoming_audio_delegates(sim_backend: Any) -> None:
@@ -325,6 +344,13 @@ def test_set_gravity_compensation_value_error(sim_backend: Any) -> None:
     ]
 
 
+def test_set_motor_mode_value_error(sim_backend: Any) -> None:
+    """A refused mode (e.g. gravity comp without Placo) is an error response."""
+    sim_backend.set_motor_control_mode = Mock(side_effect=ValueError("no grav comp"))
+    responses = _dispatch(sim_backend, SetMotorModeCmd(mode="gravity_compensation"))
+    assert responses == [{"error": "no grav comp", "command": "set_motor_mode"}]
+
+
 def test_set_automatic_body_yaw(sim_backend: Any) -> None:
     """SetAutomaticBodyYawCmd forwards the flag to set_automatic_body_yaw."""
     sim_backend.set_automatic_body_yaw = Mock()
@@ -357,11 +383,19 @@ def test_get_state(sim_backend: Any) -> None:
     assert state["is_move_running"] is False
 
 
-def test_get_version(sim_backend: Any) -> None:
-    """GetVersionCmd returns the installed reachy_mini version string."""
+@pytest.mark.parametrize("active", [True, False])
+def test_get_version(
+    sim_backend: Any, monkeypatch: pytest.MonkeyPatch, active: bool
+) -> None:
+    """GetVersionCmd returns the version, and client_hello only while telemetry runs."""
+    from reachy_mini.daemon import telemetry as tm
+
+    monkeypatch.setattr(tm.Telemetry, "active", property(lambda self: active))
     responses = _dispatch(sim_backend, GetVersionCmd())
     assert len(responses) == 1
     assert isinstance(responses[0]["version"], str)
+    # The JS SDK only sends client_hello (and checks the Hub) when advertised.
+    assert responses[0]["client_hello"] is active
 
 
 def test_get_hardware_id(sim_backend: Any, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -461,6 +495,51 @@ def test_delete_hf_token_error(
     monkeypatch.setattr(hf_auth, "delete_hf_token", lambda: False)
     responses = _dispatch(sim_backend, DeleteHfTokenCmd())
     assert responses == [{"command": "delete_hf_token", "status": "error"}]
+
+
+# ------------------------------------------------------------------
+# First wake-up flag
+# ------------------------------------------------------------------
+
+
+@pytest.fixture
+def first_wake_up_config(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the daemon config at a throwaway path."""
+    from reachy_mini.daemon import startup_app_config
+
+    monkeypatch.setattr(
+        startup_app_config, "_config_path", lambda: tmp_path / "daemon_config.json"
+    )
+
+
+def test_first_wake_up_round_trips(
+    sim_backend: Any, first_wake_up_config: None
+) -> None:
+    """Get defaults to False; a successful set acks ok and persists."""
+    assert _dispatch(sim_backend, GetFirstWakeUpCmd()) == [
+        {"command": "get_first_wake_up", "is_completed": False}
+    ]
+    assert _dispatch(sim_backend, SetFirstWakeUpCmd(is_completed=True)) == [
+        {"command": "set_first_wake_up", "status": "ok", "is_completed": True}
+    ]
+    assert _dispatch(sim_backend, GetFirstWakeUpCmd()) == [
+        {"command": "get_first_wake_up", "is_completed": True}
+    ]
+
+
+def test_first_wake_up_write_failure_acks_stored_value(
+    sim_backend: Any, first_wake_up_config: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed set acks status error with the STORED value, not the requested one."""
+    from reachy_mini.daemon import startup_app_config
+
+    def boom(*a: Any, **k: Any) -> None:
+        raise OSError("read-only filesystem")
+
+    monkeypatch.setattr(startup_app_config, "_update", boom)
+    assert _dispatch(sim_backend, SetFirstWakeUpCmd(is_completed=True)) == [
+        {"command": "set_first_wake_up", "status": "error", "is_completed": False}
+    ]
 
 
 # ------------------------------------------------------------------

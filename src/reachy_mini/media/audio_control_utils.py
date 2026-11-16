@@ -216,18 +216,22 @@ class ReSpeaker:
                 if isinstance(data_list, str)
                 else bytearray(data_list)
             )
+        # Integer types cast explicitly, like the float branch does: values
+        # arriving through JSON (REST apply endpoint, JS applyAudioConfig over
+        # the data channel) are floats after pydantic's list[float] coercion,
+        # and struct.pack("i", 0.0) / float.to_bytes raise on them.
         elif data_type == "uint8":
             for i in range(data_cnt):
-                payload += data_list[i].to_bytes(1, byteorder="little")
+                payload += int(data_list[i]).to_bytes(1, byteorder="little")
         elif data_type == "uint32" or data_type == "int32":
             for i in range(data_cnt):
                 payload += struct.pack(
-                    b"I" if data_type == "uint32" else b"i", data_list[i]
+                    b"I" if data_type == "uint32" else b"i", int(data_list[i])
                 )
         else:
             # Default to int32 for other types
             for i in range(data_cnt):
-                payload += struct.pack(b"i", data_list[i])
+                payload += struct.pack(b"i", int(data_list[i]))
 
         logger.debug(
             "WriteCMD: cmdid: {}, resid: {}, payload: {}".format(

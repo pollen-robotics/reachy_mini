@@ -194,6 +194,8 @@ def test_stuck_stop_never_double_spawns(monkeypatch: pytest.MonkeyPatch) -> None
         release.wait(10.0)
 
     monkeypatch.setattr(FaceTracker, "_run", fake_run)
+    # The stub never stops, so stop() always waits out the whole timeout.
+    monkeypatch.setattr(FaceTracker, "STOP_JOIN_TIMEOUT_S", 0.1)
     specs = cast("CameraSpecs", None)
     tracker = FaceTracker()
     tracker.start(specs)

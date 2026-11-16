@@ -9,17 +9,16 @@
  *
  * Layout (signed in, streaming):
  *
- *   [ logo ]  Telepresence  [ ⏻ End session ]  [ avatar @user ▾ ]
+ *   [ logo ]  Telepresence  [ End session ⏻ ]  [ avatar @user ▾ ]
  *
  * UX rationale
  * ────────────
  * The destructive actions are visually distinct:
- *   - "End session" is a labeled red button that ONLY renders while a
- *     session is live. When there's no session it disappears, so the
+ *   - "End session" is a labeled primary outlined button that ONLY renders
+ *     while a session is live. When there's no session it disappears, so the
  *     bar isn't cluttered with a permanent disabled glyph.
- *   - "Sign out" lives inside an account menu opened by clicking the
- *     avatar+username chip. Standard "click your face to see account
- *     actions" pattern, prevents accidental sign-out clicks.
+ *   - "Sign out" is a primary-colored logout icon button sitting to the
+ *     right of the (borderless) account chip, mirroring the mobile app.
  *
  * Signed-out
  * ──────────
@@ -34,21 +33,16 @@ import {
   Avatar,
   Box,
   Button,
-  ButtonBase,
   CircularProgress,
-  Divider,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
+  IconButton,
   Stack,
   Typography,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 
 import { reachyHeadSvg } from '../assets';
+import { RADIUS } from '../lib/tokens';
 import { IdentityChipBar } from '../ui/design/IdentityChipBar';
 
 export type HostPhase =
@@ -186,20 +180,20 @@ export function TopBar({
         {showEndSession && (
           <Button
             variant="outlined"
-            color="error"
+            color="primary"
             size="small"
             onClick={handleEndSession}
             disabled={isStopping}
-            startIcon={
-              // Wrap both the icon and the spinner in a fixed 16x16
-              // slot so the button width does NOT shift by ~2px when
-              // we swap glyphs during teardown. `CircularProgress`
-              // and `PowerSettingsNewIcon` otherwise render at
-              // slightly different intrinsic sizes.
+            endIcon={
+              // Power glyph sits AFTER the label. Wrap both it and the
+              // spinner in a fixed 18x18 slot so the button width does
+              // NOT shift when we swap glyphs during teardown.
+              // `CircularProgress` and `PowerSettingsNewIcon` otherwise
+              // render at slightly different intrinsic sizes.
               <Box
                 sx={{
-                  width: 16,
-                  height: 16,
+                  width: 18,
+                  height: 18,
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -207,21 +201,24 @@ export function TopBar({
               >
                 {isStopping ? (
                   <CircularProgress
-                    size={14}
+                    size={15}
                     thickness={5}
                     sx={{ color: 'inherit' }}
                   />
                 ) : (
-                  <PowerSettingsNewIcon sx={{ fontSize: 16 }} />
+                  <PowerSettingsNewIcon sx={{ fontSize: 18 }} />
                 )}
               </Box>
             }
             sx={{
-              fontSize: 12.5,
-              fontWeight: 600,
-              py: 0.5,
-              px: 1.25,
-              borderRadius: 999,
+              fontSize: 13.5,
+              fontWeight: 700,
+              py: 0.7,
+              px: 2,
+              // Crisp, squared-off corners matching the Reachy ecosystem
+              // (px value, not the sx multiplier which would scale off
+              // theme.shape.borderRadius = 12 and read as ~18px).
+              borderRadius: `${RADIUS.md}px`,
               textTransform: 'none',
               lineHeight: 1.1,
             }}
@@ -236,7 +233,7 @@ export function TopBar({
             above, so the right cluster shows exactly one primary action
             for the current phase. */}
         {isSignedIn && !showEndSession && (
-          <AccountMenu
+          <AccountChip
             username={userName}
             avatarUrl={avatarUrl}
             disabled={isStopping}
@@ -248,15 +245,15 @@ export function TopBar({
   );
 }
 
-/* ─────────────────── Account menu ─────────────────── */
+/* ─────────────────── Account chip ─────────────────── */
 
 /**
- * Avatar + username chip that opens a small Menu with the "Sign out"
- * action. The chip itself does not perform any destructive action -
- * it's a disclosure trigger - so it's safe to keep prominent in the
- * bar without risking an accidental sign-out click.
+ * Borderless identity row (avatar + "Signed in as @handle"), mirroring the
+ * mobile app's HfAccountBar - no outline, just the account read at a glance -
+ * with a primary-colored logout icon button on the right that signs out
+ * directly (no intermediate menu).
  */
-function AccountMenu({
+function AccountChip({
   username,
   avatarUrl,
   disabled = false,
@@ -267,162 +264,78 @@ function AccountMenu({
   disabled?: boolean;
   onLogout(): void;
 }): JSX.Element {
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-  const open = Boolean(anchorEl);
   const initial = (username ?? '').slice(0, 1).toUpperCase() || null;
 
-  // Close the menu defensively if the parent flips us into the
-  // disabled (stopping) state while it's open. Otherwise the user
-  // could keep mashing "Sign out" inside an already-detached
-  // teardown flow.
-  useEffect(() => {
-    if (disabled) setAnchorEl(null);
-  }, [disabled]);
-
   return (
-    <>
-      <ButtonBase
-        disabled={disabled}
-        onClick={(e) => setAnchorEl(e.currentTarget)}
-        focusRipple
-        aria-label={`Account menu for @${username}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
+    <Stack
+      direction="row"
+      spacing={0.75}
+      sx={{ alignItems: 'center', pl: 0.5, py: 0.25, minWidth: 0 }}
+    >
+      <Avatar
+        src={avatarUrl ?? undefined}
+        alt={username ?? 'Hugging Face user'}
         sx={(theme) => ({
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 0.75,
-          pl: 0.5,
-          pr: 0.75,
-          py: 0.25,
-          borderRadius: 999,
-          border: `1px solid ${theme.palette.divider}`,
-          transition: theme.transitions.create(
-            ['background-color', 'border-color'],
-            { duration: theme.transitions.duration.shortest },
-          ),
-          '&:hover': {
-            backgroundColor:
-              theme.palette.mode === 'dark'
-                ? 'rgba(255,255,255,0.04)'
-                : 'rgba(0,0,0,0.03)',
-          },
-          '&:focus-visible': {
-            outline: `2px solid ${theme.palette.primary.main}`,
-            outlineOffset: 2,
-          },
+          width: 24,
+          height: 24,
+          fontSize: 11,
+          fontWeight: 600,
+          bgcolor:
+            theme.palette.mode === 'dark'
+              ? 'rgba(255,255,255,0.08)'
+              : 'rgba(0,0,0,0.06)',
+          color: 'text.secondary',
         })}
       >
-        <Avatar
-          src={avatarUrl ?? undefined}
-          alt={username ?? 'Hugging Face user'}
-          sx={(theme) => ({
-            width: 24,
-            height: 24,
-            fontSize: 11,
+        {initial}
+      </Avatar>
+      {/* Two-line identity, aligned with the mobile ScanScreen's
+          HfAccountBar: a small "Signed in as" kicker over the `@handle`. */}
+      <Stack spacing={0} sx={{ minWidth: 0, maxWidth: 140, alignItems: 'flex-start' }}>
+        <Typography
+          sx={{
+            fontSize: 9.5,
             fontWeight: 600,
-            bgcolor:
-              theme.palette.mode === 'dark'
-                ? 'rgba(255,255,255,0.08)'
-                : 'rgba(0,0,0,0.06)',
             color: 'text.secondary',
-          })}
+            letterSpacing: 0.5,
+            textTransform: 'uppercase',
+            lineHeight: 1.15,
+          }}
+          noWrap
         >
-          {initial}
-        </Avatar>
+          Signed in as
+        </Typography>
         <Typography
           variant="body2"
           sx={{
             fontWeight: 600,
             color: 'text.primary',
             lineHeight: 1.2,
-            maxWidth: 120,
+            maxWidth: '100%',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}
           noWrap
         >
-          {username}
+          @{username}
         </Typography>
-        <ExpandMoreIcon
-          sx={{
-            fontSize: 16,
-            color: 'text.secondary',
-            transition: 'transform 120ms ease',
-            transform: open ? 'rotate(180deg)' : 'none',
-          }}
-        />
-      </ButtonBase>
-      <Menu
-        anchorEl={anchorEl}
-        open={open}
-        onClose={() => setAnchorEl(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{
-          paper: {
-            sx: {
-              mt: 0.75,
-              minWidth: 220,
-              borderRadius: 1.5,
-              border: (theme) => `1px solid ${theme.palette.divider}`,
-              boxShadow:
-                '0 6px 24px rgba(15,23,42,0.10), 0 1px 2px rgba(15,23,42,0.06)',
-            },
-          },
-        }}
+      </Stack>
+      {/* One-click sign-out, deliberately: mobile parity, and the cost
+          of a mis-click is one silent-auth round trip, not data loss.
+          (The previous menu-behind-avatar guard traded that for a
+          hidden action nobody found.) */}
+      <IconButton
+        onClick={onLogout}
+        disabled={disabled}
+        color="primary"
+        size="small"
+        aria-label={username ? `Sign out @${username}` : 'Sign out'}
+        sx={{ ml: 0.25 }}
       >
-        {/* Read-only identity header. Not a MenuItem on purpose - it
-            shouldn't be focusable / clickable, just informative. */}
-        <Box sx={{ px: 2, py: 1.25 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              display: 'block',
-              color: 'text.disabled',
-              fontWeight: 600,
-              letterSpacing: 0.4,
-              textTransform: 'uppercase',
-              fontSize: 10.5,
-              lineHeight: 1.2,
-            }}
-          >
-            Signed in as
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{
-              fontWeight: 600,
-              color: 'text.primary',
-              lineHeight: 1.3,
-              mt: 0.25,
-            }}
-            noWrap
-          >
-            @{username}
-          </Typography>
-        </Box>
-        <Divider />
-        <MenuItem
-          onClick={() => {
-            setAnchorEl(null);
-            onLogout();
-          }}
-          sx={{ py: 1 }}
-        >
-          <ListItemIcon sx={{ minWidth: 32 }}>
-            <LogoutIcon sx={{ fontSize: 18 }} />
-          </ListItemIcon>
-          <ListItemText
-            primary="Sign out"
-            slotProps={{
-              primary: { sx: { fontSize: 14, fontWeight: 500 } }
-            }}
-          />
-        </MenuItem>
-      </Menu>
-    </>
+        <LogoutIcon sx={{ fontSize: 18 }} />
+      </IconButton>
+    </Stack>
   );
 }
 

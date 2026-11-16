@@ -22,6 +22,8 @@ export type {
   AutoConnectResult,
   MotionAwaitOptions,
   SubscribeLogsOptions,
+  StartDaemonUpdateOptions,
+  UpdateProgressEvent,
 } from '@pollen-robotics/reachy-mini-sdk';
 
 import type { ReachyMiniConstructor } from '@pollen-robotics/reachy-mini-sdk';
@@ -50,6 +52,7 @@ declare global {
       variables?: {
         OAUTH_CLIENT_ID?: string;
         OAUTH_SCOPES?: string;
+        SIGNALING_URL?: string;
         SPACE_HOST?: string;
         SPACE_ID?: string;
       };

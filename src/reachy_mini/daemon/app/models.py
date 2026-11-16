@@ -6,9 +6,9 @@ from typing import cast
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
-from scipy.spatial.transform import Rotation as R
 
-from reachy_mini.io.protocol import DoaSnapshot, MotorControlMode
+from reachy_mini.io.protocol import DoaSnapshot, ImuData, MotorControlMode
+from reachy_mini.utils.rotation import Rotation as R
 
 
 class Matrix4x4Pose(BaseModel):
@@ -151,9 +151,14 @@ class FullState(BaseModel):
 
     control_mode: MotorControlMode | None = None
     head_pose: AnyPose | None = None
+    target_head_pose: AnyPose | None = None
     head_joints: list[float] | None = None
+    target_head_joints: list[float] | None = None
     body_yaw: float | None = None
+    target_body_yaw: float | None = None
     antennas_position: list[float] | None = None
+    target_antennas_position: list[float] | None = None
     timestamp: datetime | None = None
     passive_joints: list[float] | None = None
     doa: DoAInfo | None = None
+    imu: ImuData | None = None

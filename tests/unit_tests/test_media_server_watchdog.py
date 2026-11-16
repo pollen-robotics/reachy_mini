@@ -425,3 +425,144 @@ def test_set_session_failed_handler_records_callback() -> None:
     server._dispatch_session_failed("peer-9", "x", {"a": 1})
 
     assert captured == [("peer-9", "x", {"a": 1})]
+
+
+# ---------------------------------------------------------------------------
+# _consumer_removed with a reconnect overlap
+# ---------------------------------------------------------------------------
+
+
+def _removable_server() -> GstMediaServer:
+    server = _make_server()
+    server._peer_webrtcbins = {}
+    server._open_data_channels = set()
+    server._pose_channel_bins = {}
+    server._pose_subscribed_on = {}
+    server._pose_lock = Lock()
+    for name in (
+        "_forget_session_liveness",
+        "_cleanup_incoming_audio",
+        "_drop_pose_peer",
+        "_teardown_negotiation_watchdog",
+    ):
+        setattr(server, name, MagicMock())
+    server._on_peer_disconnect = MagicMock()
+    return server
+
+
+def test_stale_session_removal_keeps_the_live_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An old session leaving after a reconnect must not end the new one."""
+    from reachy_mini.media import media_server as ms
+
+    monkeypatch.setattr(ms, "_session_id_of", lambda bin: None)
+    server = _removable_server()
+    old_bin, new_bin = MagicMock(), MagicMock()
+    server._peer_webrtcbins["p1"] = new_bin
+
+    server._consumer_removed(MagicMock(), "p1", old_bin)
+    assert server._peer_webrtcbins["p1"] is new_bin
+    server._on_peer_disconnect.assert_not_called()  # type: ignore[attr-defined]
+
+    server._consumer_removed(MagicMock(), "p1", new_bin)
+    assert "p1" not in server._peer_webrtcbins
+    server._on_peer_disconnect.assert_called_once_with("p1")  # type: ignore[attr-defined]
+
+
+def test_stale_session_removal_only_frees_its_own_audio_and_pose(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The old session's audio and pose go; the new session's stay."""
+    from reachy_mini.media import media_server as ms
+
+    monkeypatch.setattr(ms, "_session_id_of", lambda bin: None)
+    server = _make_server()
+    server._peer_webrtcbins = {}
+    server._open_data_channels = set()
+    server._pose_channels = {}
+    server._pose_channel_bins = {}
+    server._pose_subscribers = set()
+    server._pose_subscribed_on = {}
+    server._pose_lock = Lock()
+    server._webrtcechoprobe = None
+    server._on_peer_disconnect = None
+    server._forget_session_liveness = MagicMock()
+    server._teardown_negotiation_watchdog = MagicMock()
+    old_bin, new_bin = MagicMock(), MagicMock()
+
+    def audio(bin: MagicMock) -> dict[str, Any]:
+        return {
+            "playback_pipeline": MagicMock(),
+            "probe_id": 1,
+            "pad": MagicMock(),
+            "webrtcbin": bin,
+        }
+
+    # The new session already plays audio and streams pose.
+    server._peer_webrtcbins["p1"] = new_bin
+    server._incoming_audio = {"p1": audio(new_bin)}
+    server._pose_channels["p1"] = MagicMock()
+    server._pose_channel_bins["p1"] = new_bin
+    server._pose_subscribers.add("p1")
+    server._consumer_removed(MagicMock(), "p1", old_bin)
+    assert server._incoming_audio["p1"]["webrtcbin"] is new_bin
+    assert "p1" in server._pose_channels and "p1" in server._pose_subscribers
+
+    # The new session subscribed, but its channel isn't open yet: the old
+    # session's channel goes, the new subscription stays.
+    server._pose_channel_bins["p1"] = old_bin
+    server._pose_subscribed_on["p1"] = new_bin
+    server._consumer_removed(MagicMock(), "p1", old_bin)
+    assert "p1" not in server._pose_channels and "p1" in server._pose_subscribers
+
+    # The old session still owns them all: they go with it.
+    server._incoming_audio = {"p1": audio(old_bin)}
+    server._pose_channels["p1"] = MagicMock()
+    server._pose_channel_bins["p1"] = old_bin
+    server._pose_subscribed_on["p1"] = old_bin
+    server._consumer_removed(MagicMock(), "p1", old_bin)
+    assert "p1" not in server._incoming_audio
+    assert "p1" not in server._pose_channels and "p1" not in server._pose_subscribers
+
+
+def test_new_audio_pad_stops_the_peers_previous_playback() -> None:
+    """A reconnect's audio replaces the old session's: the old pipeline stops."""
+    from reachy_mini.media import media_server as ms
+
+    server = _make_server()
+    server._webrtcechoprobe = None
+    old_pipe, old_pad = MagicMock(), MagicMock()
+    server._incoming_audio = {
+        "p1": {
+            "playback_pipeline": old_pipe,
+            "probe_id": 7,
+            "pad": old_pad,
+            "webrtcbin": MagicMock(),
+        }
+    }
+
+    caps = MagicMock()
+    caps.get_size.return_value = 1
+    caps.get_structure.return_value.has_field.return_value = True
+    caps.get_structure.return_value.get_string.return_value = "audio"
+    pad = MagicMock()
+    pad.get_direction.return_value = ms.Gst.PadDirection.SRC
+    pad.get_current_caps.return_value = caps
+
+    class _Stop(Exception):
+        pass
+
+    real_cleanup = server._cleanup_incoming_audio
+
+    def cleanup_then_stop(peer_id: str, *args: Any) -> None:
+        real_cleanup(peer_id, *args)
+        raise _Stop  # don't build a real playback pipeline
+
+    server._cleanup_incoming_audio = cleanup_then_stop  # type: ignore[method-assign]
+    with pytest.raises(_Stop):
+        server._on_consumer_pad_added(MagicMock(), pad, "p1")
+
+    assert "p1" not in server._incoming_audio
+    old_pad.remove_probe.assert_called_once_with(7)
+    old_pipe.set_state.assert_called_once_with(ms.Gst.State.NULL)

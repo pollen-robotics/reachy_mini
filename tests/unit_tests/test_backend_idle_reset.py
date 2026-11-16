@@ -23,27 +23,32 @@ GRACE_S = 0.02
 def _fake_backend(
     *,
     motor_mode: MotorControlMode = MotorControlMode.Enabled,
+    at_sleep_pose: bool = False,
     shutting_down: bool = False,
 ) -> SimpleNamespace:
-    return SimpleNamespace(
+    fake = SimpleNamespace(
         IDLE_RESET_DEBOUNCE_S=GRACE_S,
         IDLE_RESET_HANDOFF_GRACE_S=GRACE_S * 10,
         is_shutting_down=shutting_down,
         get_motor_control_mode=lambda: motor_mode,
-        goto_sleep=AsyncMock(),
+        is_at_sleep_pose=lambda: at_sleep_pose,
+        reset_to_sleep=AsyncMock(),
         logger=SimpleNamespace(warning=lambda *a, **k: None),
         _idle_reset_task=None,
     )
+    # Bind the real predicate so these tests exercise it, not a stub.
+    fake._already_idle = lambda: Backend._already_idle(fake)
+    return fake
 
 
 @pytest.mark.asyncio
 async def test_idle_reset_sleeps_after_debounce() -> None:
-    """When the slot stays free past the grace period, goto_sleep runs."""
+    """When the slot stays free past the grace period, the reset runs."""
     fake = _fake_backend()
     task = asyncio.ensure_future(Backend._async_idle_reset(fake, GRACE_S))
     fake._idle_reset_task = task
     await task
-    fake.goto_sleep.assert_awaited_once()
+    fake.reset_to_sleep.assert_awaited_once()
     assert fake._idle_reset_task is None
 
 
@@ -57,27 +62,51 @@ async def test_cancel_during_debounce_skips_motion() -> None:
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
-    fake.goto_sleep.assert_not_awaited()
+    fake.reset_to_sleep.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_idle_reset_skips_when_already_disabled() -> None:
-    """Re-check after the grace period: skip goto_sleep if already limp."""
-    fake = _fake_backend(motor_mode=MotorControlMode.Disabled)
+async def test_idle_reset_skips_when_limp_at_the_sleep_pose() -> None:
+    """Nothing to do: a clean leave sequence already left the robot down."""
+    fake = _fake_backend(motor_mode=MotorControlMode.Disabled, at_sleep_pose=True)
     task = asyncio.ensure_future(Backend._async_idle_reset(fake, GRACE_S))
     fake._idle_reset_task = task
     await task
-    fake.goto_sleep.assert_not_awaited()
+    fake.reset_to_sleep.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_idle_reset_runs_when_limp_away_from_the_sleep_pose() -> None:
+    """The crashed-app signature: torque cut mid-pose, head left drooping.
+
+    Regression guard for the motor-mode-only skip this replaced, which read
+    "limp" as "already asleep" and left the robot hanging wherever it died.
+    """
+    fake = _fake_backend(motor_mode=MotorControlMode.Disabled, at_sleep_pose=False)
+    task = asyncio.ensure_future(Backend._async_idle_reset(fake, GRACE_S))
+    fake._idle_reset_task = task
+    await task
+    fake.reset_to_sleep.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_idle_reset_runs_in_gravity_compensation() -> None:
+    """Gravity compensation is awake, however limp it feels to the hand."""
+    fake = _fake_backend(motor_mode=MotorControlMode.GravityCompensation)
+    task = asyncio.ensure_future(Backend._async_idle_reset(fake, GRACE_S))
+    fake._idle_reset_task = task
+    await task
+    fake.reset_to_sleep.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_idle_reset_skips_when_shutting_down() -> None:
-    """Re-check after the grace period: skip goto_sleep if shutdown started."""
+    """Re-check after the grace period: skip the reset if shutdown started."""
     fake = _fake_backend(shutting_down=True)
     task = asyncio.ensure_future(Backend._async_idle_reset(fake, GRACE_S))
     fake._idle_reset_task = task
     await task
-    fake.goto_sleep.assert_not_awaited()
+    fake.reset_to_sleep.assert_not_awaited()
 
 
 def test_handoff_release_gets_the_long_grace() -> None:
@@ -150,7 +179,7 @@ async def test_remote_acquire_cancels_pending_handoff_grace_reset() -> None:
 
     # Wait well past the handoff grace: the cancelled reset must never fire.
     await asyncio.sleep(fake.IDLE_RESET_HANDOFF_GRACE_S * 1.5)
-    fake.goto_sleep.assert_not_awaited()
+    fake.reset_to_sleep.assert_not_awaited()
     assert fake._idle_reset_task is None
 
 
@@ -169,7 +198,7 @@ async def test_handoff_grace_reset_fires_when_no_successor_arrives() -> None:
     await asyncio.sleep(0)
 
     await asyncio.sleep(fake.IDLE_RESET_HANDOFF_GRACE_S * 1.5)
-    fake.goto_sleep.assert_awaited_once()
+    fake.reset_to_sleep.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -178,7 +207,7 @@ async def test_finally_does_not_clobber_newer_task() -> None:
 
     Regression guard: without the ``is current_task()`` check, the old task's
     ``finally`` would blindly null ``_idle_reset_task``, so a later
-    ``_cancel_idle_reset`` would miss the newer in-flight goto_sleep.
+    ``_cancel_idle_reset`` would miss the newer in-flight reset.
     """
     fake = _fake_backend()
     task_a = asyncio.ensure_future(Backend._async_idle_reset(fake, GRACE_S))

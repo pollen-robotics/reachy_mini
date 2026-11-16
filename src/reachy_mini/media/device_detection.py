@@ -39,6 +39,12 @@ DEFAULT_CAM_NAMES: Sequence[str] = ("Reachy", "Arducam_12MP", "imx708")
 # Default target name for audio device detection.
 DEFAULT_AUDIO_TARGET: str = "Reachy Mini Audio"
 
+# Only provider queried for audio devices on Windows. A full DeviceMonitor
+# also starts the ASIO provider, which loads every registered ASIO driver:
+# Realtek ASIO invalidates all open WASAPI streams when loaded (the daemon's
+# mic, and with it the shared WebRTC pipeline) or crashes the process (#1210).
+WINDOWS_AUDIO_PROVIDER: str = "wasapi2deviceprovider"
+
 
 @dataclass
 class DeviceInfo:
@@ -292,6 +298,29 @@ def gst_monitor_devices(filter_class: str) -> list[DeviceInfo]:
                 _logger.exception("Gst.DeviceMonitor.stop() failed")
 
 
+def gst_provider_devices(provider_name: str, filter_class: str) -> list[DeviceInfo]:
+    """Query a single ``Gst.DeviceProvider`` instead of every installed one.
+
+    Args:
+        provider_name: Device provider factory name, e.g.
+            ``"wasapi2deviceprovider"``.
+        filter_class: GStreamer device class filter, e.g. ``"Audio/Source"``.
+
+    Returns:
+        List of :class:`DeviceInfo` for the provider's devices matching the
+        filter, or an empty list when the provider is not installed.
+
+    """
+    factory = Gst.DeviceProviderFactory.find(provider_name)
+    if factory is None:
+        _logger.warning("GStreamer device provider %s not found", provider_name)
+        return []
+    devices = factory.get().get_devices()
+    return gst_devices_to_device_infos(
+        [d for d in devices if d.has_classes(filter_class)]
+    )
+
+
 def find_audio_device(
     devices: List[DeviceInfo],
     device_type: str,
@@ -471,12 +500,16 @@ def find_video_device(
 
 
 def get_audio_device(device_type: str = "Source") -> Optional[str]:
-    """Detect the Reachy Mini audio device via ``Gst.DeviceMonitor``.
+    """Detect the Reachy Mini audio device through GStreamer device discovery.
 
     This is the high-level entry point that both ``GstMediaServer`` and
-    ``GStreamerAudio`` should call.  It handles the full monitor
-    lifecycle (start / query / stop) and delegates to
-    :func:`find_audio_device` for the actual matching.
+    ``GStreamerAudio`` should call.  It handles the device query (a
+    ``Gst.DeviceMonitor``, or a single provider on Windows) and delegates
+    to :func:`find_audio_device` for the actual matching.
+
+    On Windows only :data:`WINDOWS_AUDIO_PROVIDER` is queried: the matching
+    keeps WASAPI devices only, and probing the other providers can break
+    open audio streams (see :data:`WINDOWS_AUDIO_PROVIDER`).
 
     Args:
         device_type: ``"Source"`` for microphone or ``"Sink"`` for speaker.
@@ -485,8 +518,12 @@ def get_audio_device(device_type: str = "Source") -> Optional[str]:
         The platform-specific device identifier, or ``None``.
 
     """
+    filter_class = f"Audio/{device_type}"
     try:
-        devices = gst_monitor_devices(f"Audio/{device_type}")
+        if platform.system() == "Windows":
+            devices = gst_provider_devices(WINDOWS_AUDIO_PROVIDER, filter_class)
+        else:
+            devices = gst_monitor_devices(filter_class)
         return find_audio_device(devices, device_type)
     except Exception:
         _logger.exception("Error detecting audio %s device", device_type)

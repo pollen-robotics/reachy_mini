@@ -155,3 +155,18 @@ You can override these gains — or disable the EQ — through the daemon config
 Provide exactly 10 values (dB), in the band order above. Set them all to `0.0` to bypass the equalizer entirely, then restart the daemon to apply the change.
 
 To re-derive gains for a different shell or speaker, see the calibration tool at [`src/reachy_mini/tools/speaker_eq_calibration/`](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/tools/speaker_eq_calibration).
+
+## WebRTC receive latency
+
+When the SDK streams from a Wireless robot (`connection_mode="network"`), the receiving side holds incoming packets in a jitter buffer for 10 ms by default, to keep latency low. On a lossy Wi-Fi link that can be too short: late packets get dropped and the video smears until the next keyframe. Raise it with `webrtc_latency_ms` in the daemon config file of the machine **receiving** the stream, usually your computer:
+
+- Linux: `~/.config/reachy_mini/daemon_config.json`
+- macOS: `~/Library/Application Support/reachy_mini/daemon_config.json`
+- Windows: `%LOCALAPPDATA%\reachy_mini\reachy_mini\daemon_config.json`
+- Apps running on the robot itself: `/home/pollen/.config/reachy_mini/daemon_config.json`
+
+```json
+{ "webrtc_latency_ms": 200 }
+```
+
+The value is an integer in milliseconds, from 0 to 10000 (200 is the GStreamer default). Higher values give smoother video at the cost of delay. It is read when the media connection opens, so restart your script to apply it.

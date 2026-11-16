@@ -53,6 +53,8 @@
       title: JavaScript SDK & Web Apps
     - local: SDK/apps
       title: Building & Publishing Apps
+    - local: SDK/lifecycle-contract
+      title: Wake & Sleep Lifecycle
     - local: SDK/integration
       title: AI Integrations
     - local: SDK/python-sdk
@@ -61,8 +63,12 @@
       title: REST API
     - local: SDK/media-architecture
       title: Media Architecture
+    - local: SDK/cloud-backend-consumer
+      title: Cloud-Backend Consumer
     - local: SDK/gstreamer-installation
       title: GStreamer Installation
+    - local: SDK/telemetry
+      title: Telemetry
   title: Software guide
 - sections:
     - local: troubleshooting
