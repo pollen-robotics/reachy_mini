@@ -352,34 +352,13 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._pipeline_record.set_state(Gst.State.NULL)
 
     def start_recording(self) -> None:
-        """Start recording.
-
-        The WebRTC pipeline keeps running between recordings, so the
-        appsink keeps queuing samples even while recording is stopped.
-        Flush any samples captured while stopped so ``get_audio_sample()``
-        only returns audio captured from this point on, matching the
-        behaviour of the local GStreamer backend.
-        """
-        self._flush_audio_appsink()
+        """Drop audio queued while stopped; the WebRTC stream never pauses."""
+        while self._appsink_audio.try_pull_sample(0) is not None:
+            pass
 
     def stop_recording(self) -> None:
-        """Stop recording and drop any queued samples.
-
-        Draining the appsink on stop prevents stale audio from leaking
-        into the next recording.
-        """
-        self._flush_audio_appsink()
-
-    def _flush_audio_appsink(self) -> None:
-        """Drain all pending samples from the audio appsink queue."""
-        appsink = getattr(self, "_appsink_audio", None)
-        if appsink is None:
-            return
-        try:
-            while appsink.try_pull_sample(0) is not None:
-                pass
-        except Exception as exc:  # pragma: no cover - defensive
-            self.logger.debug(f"Failed to flush audio appsink: {exc}")
+        """No-op: capture keeps running, ``start_recording()`` drops the backlog."""
+        pass
 
     def _setup_audio_send_chain(self) -> None:
         """Set up the audio send chain through the existing webrtcbin.
