@@ -101,6 +101,13 @@ class GstWebRTCClient(CameraBase, AudioBase):
         CameraBase.__init__(self, log_level=log_level)
         AudioBase.__init__(self, log_level=log_level)
 
+        from reachy_mini.daemon.startup_app_config import get_webrtc_latency_ms
+
+        latency = get_webrtc_latency_ms()
+        self._webrtcbin_latency_ms = (
+            DEFAULT_WEBRTCBIN_LATENCY_MS if latency is None else latency
+        )
+
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
@@ -255,13 +262,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
             assert webrtcbin is not None, (
                 "Could not find webrtcbin element in webrtcsrc"
             )
-            from reachy_mini.daemon.startup_app_config import get_webrtc_latency_ms
-
-            latency = get_webrtc_latency_ms()
-            if latency is None:
-                latency = DEFAULT_WEBRTCBIN_LATENCY_MS
-            self.logger.debug(f"webrtcbin latency: {latency} ms")
-            webrtcbin.set_property("latency", latency)
+            self.logger.debug(f"webrtcbin latency: {self._webrtcbin_latency_ms} ms")
+            webrtcbin.set_property("latency", self._webrtcbin_latency_ms)
 
     def _webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
         self._configure_webrtcbin(webrtcsrc)
