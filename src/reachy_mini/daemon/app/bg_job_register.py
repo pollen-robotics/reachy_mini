@@ -164,20 +164,22 @@ async def ws_poll_info(websocket: WebSocket, job_uuid: str) -> None:
             evt.clear()
 
             new_logs = job.info.logs[last_log_len:]
+            # Read once: the job thread may flip it while we send.
+            status = job.info.status
 
             if new_logs:
                 for log_entry in new_logs:
                     await websocket.send_text(log_entry)
-                last_log_len = len(job.info.logs)
+                last_log_len += len(new_logs)
 
                 await websocket.send_text(
                     JobInfo(
                         command=job.info.command,
-                        status=job.info.status,
+                        status=status,
                         logs=new_logs,
                     ).model_dump_json()
                 )
-                if job.info.status in (JobStatus.DONE, JobStatus.FAILED):
+                if status in (JobStatus.DONE, JobStatus.FAILED):
                     break
     except WebSocketDisconnect:
         pass

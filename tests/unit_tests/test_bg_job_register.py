@@ -70,7 +70,6 @@ async def test_ws_poll_info_joining_after_job_ended():
     job_id = bg_job_register.run_command("test", job)
     while bg_job_register.get_info(job_id).status != JobStatus.FAILED:
         await asyncio.sleep(0.01)
-    await asyncio.sleep(0.05)  # status flips just before the final log line
 
     ws = _FakeWebSocket()
     await asyncio.wait_for(bg_job_register.ws_poll_info(ws, job_id), timeout=5)
@@ -78,3 +77,34 @@ async def test_ws_poll_info_joining_after_job_ended():
     terminal = json.loads(ws.texts[-1])
     assert terminal["status"] == JobStatus.FAILED.value
     assert any("boom" in t for t in ws.texts)
+
+
+@pytest.mark.asyncio
+async def test_ws_poll_info_status_flips_while_sending():
+    """The job ending mid-send must not stop the stream before DONE is sent.
+
+    Seen on a Wireless: a remove job ended while ``ws_poll_info`` was sending
+    an ``in_progress`` update; it re-read the status, broke out, and the
+    client never got DONE.
+    """
+    proceed = threading.Event()
+
+    async def job(logger):
+        logger.info("working")
+        await asyncio.to_thread(proceed.wait)
+
+    job_id = bg_job_register.run_command("test", job)
+
+    class _JobEndsDuringSend(_FakeWebSocket):
+        async def send_text(self, text: str) -> None:
+            await super().send_text(text)
+            if text.startswith("{") and not proceed.is_set():
+                # status flips first, the final log line follows
+                bg_job_register.get_info(job_id).status = JobStatus.DONE
+                proceed.set()
+
+    ws = _JobEndsDuringSend()
+    await asyncio.wait_for(bg_job_register.ws_poll_info(ws, job_id), timeout=5)
+
+    terminal = json.loads(ws.texts[-1])
+    assert terminal["status"] == JobStatus.DONE.value
