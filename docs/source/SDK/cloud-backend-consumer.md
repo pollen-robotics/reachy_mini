@@ -107,7 +107,10 @@ so visitors only see their own robots.
   the SSE response so the reader reopens it. The session continues.
 - **Robot data channel capture**: the daemon offers a `"data"`
   bidirectional channel; `ReachyCentralConsumer` attaches and exposes
-  `send_command(envelope)` for outbound JSON.
+  `send_command(envelope)` for outbound JSON. Inbound messages over
+  64 KiB arrive as ordered `{"type": "message_chunk", "id", "index",
+  "count", "data"}` frames: join the `data` fields of one `id` in
+  `index` order to get the original message.
 - **Thread-safe `send_command`**: callers running in worker threads
   (e.g. a GPU pipeline) can call it directly. The actual
   `RTCDataChannel.send` is marshalled onto aiortc's event loop via

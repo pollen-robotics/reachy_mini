@@ -28,6 +28,24 @@ def test_media_server_constructs_in_mujoco_sim() -> None:
         server.close()
 
 
+def test_first_start_reuses_the_pipeline_built_in_init() -> None:
+    """Only a start() after stop() rebuilds the pipeline."""
+    server = GstMediaServer(sim_mode=SimulationMode.MUJOCO, enable_turn=False)
+    built = server._pipeline_sender
+    bus = server._bus_sender
+    try:
+        server.start()
+        assert server._pipeline_sender is built
+
+        server.stop()
+        server.start()
+        assert server._pipeline_sender is not built
+        assert bus.remove_watch() is False  # already dropped by the rebuild
+    finally:
+        server.stop()
+        server.close()
+
+
 def test_enable_turn_false_starts_no_refresher() -> None:
     """Opting out means no credentials object, hence no thread and no fetch."""
     server = GstMediaServer(sim_mode=SimulationMode.MUJOCO, enable_turn=False)
@@ -65,3 +83,44 @@ def test_rpi_encoder_probe_requires_runtime_bitrate_property(
     # New OS image (reachy-mini-os#65): patched encoder with runtime bitrate
     fake_encoder(present=True, has_bitrate=True)
     assert GstMediaServer._webrtcsink_handles_rpi_encoder() is True
+
+
+def test_disable_upnp_turns_off_the_nice_agent_port_mapping() -> None:
+    """Consumers never ask the home router for UPnP port mappings."""
+    import gc
+    import logging
+    import types
+
+    from gi.repository import Gst
+
+    Gst.init(None)
+    webrtcbin = Gst.ElementFactory.make("webrtcbin")
+    if webrtcbin is None:
+        pytest.skip("webrtcbin not available")
+    ice = webrtcbin.get_property("ice-agent")
+    from reachy_mini.media.media_server import _keep_ice_agent_alive
+
+    _keep_ice_agent_alive(ice)  # reading the property alone would free it
+    agent = ice.get_property("agent")
+    assert agent.get_property("upnp") is True  # libnice default
+    del ice
+
+    del agent
+    fake = types.SimpleNamespace(_logger=logging.getLogger("test"))
+    GstMediaServer._disable_upnp(fake, webrtcbin)  # type: ignore[arg-type]
+    gc.collect()
+
+    # The ICE agent survives the Python wrappers being collected (webrtcbin
+    # hands out a floating reference) and keeps UPnP off.
+    ice = webrtcbin.get_property("ice-agent")
+    assert ice is not None
+    assert ice.get_property("agent").get_property("upnp") is False
+
+
+def test_disable_upnp_tolerates_an_unreachable_agent() -> None:
+    """An ICE agent without a NiceAgent (older GStreamer) only logs."""
+    import logging
+    import types
+
+    fake = types.SimpleNamespace(_logger=logging.getLogger("test"))
+    GstMediaServer._disable_upnp(fake, object())  # type: ignore[arg-type]

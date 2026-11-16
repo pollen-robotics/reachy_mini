@@ -2,18 +2,11 @@
 
 ## When to Use
 
-- User wants to create a new Reachy Mini application
-- User asks how to structure an app
-- User wants to publish an app to Hugging Face
+- You chose the **Python** flavour (see the flavour table in `AGENTS.md`)
+- User asks how to structure a Python app
+- User wants to publish a Python app to Hugging Face
 
-## Important: Always Python Apps
-
-**Always create Python apps using the app assistant.** Python apps are:
-- Easily discoverable on Hugging Face
-- Shareable via the robot's app store
-- Can include web GUIs (via the `static/` folder)
-
-JS-only apps are not yet supported for discovery/sharing. If the user needs a web UI, create a Python app with a web frontend in `static/`.
+JS apps are the default and are covered by `skills/create-js-app.md`. Python apps can still bundle a web UI in `static/`.
 
 ## Quick Check
 

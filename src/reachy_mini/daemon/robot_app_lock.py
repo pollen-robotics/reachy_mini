@@ -270,7 +270,9 @@ class RobotAppLock:
                 prev.value,
             )
 
-    def release_local(self, app_name: Optional[str] = None) -> None:
+    def release_local(
+        self, app_name: Optional[str] = None, *, cleaned_up: bool = False
+    ) -> None:
         """Release the lock held by a local app.
 
         Idempotent: if the lock is free or held by a remote session, this
@@ -282,6 +284,8 @@ class RobotAppLock:
                 If provided and the current holder differs, logs a warning
                 but still releases — this protects against stale releases
                 after a rapid stop/start cycle.
+            cleaned_up: True when the caller resets the robot itself (a
+                user-requested stop), so the became-free handler is not fired.
 
         """
         with self._mutex:
@@ -302,7 +306,8 @@ class RobotAppLock:
             self._holder_name = None
             logger.info("RobotAppLock: released by local app %r", released_name)
 
-        self._fire_became_free()
+        if not cleaned_up:
+            self._fire_became_free()
 
     # ------------------------------------------------------------------
     # Remote acquire / release

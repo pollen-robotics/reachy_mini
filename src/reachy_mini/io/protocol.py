@@ -8,7 +8,8 @@ Client->Server command types:
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
     get_state, get_version, get_imu, start_recording, stop_recording, append_record,
-    get_robot_name, set_robot_name, delete_hf_token,
+    get_robot_name, set_robot_name, delete_hf_token, get_telemetry, set_telemetry,
+    client_hello,
     subscribe_logs, unsubscribe_logs, subscribe_pose, unsubscribe_pose,
     restart_daemon, start_update,
     upload_move_start, upload_move_chunk, upload_move_finish,
@@ -455,6 +456,31 @@ class SetFirstWakeUpCmd(BaseModel):
 
     type: Literal["set_first_wake_up"] = "set_first_wake_up"
     is_completed: bool = True
+
+
+# Anonymous telemetry choice. Remote counterpart of `GET/PUT /api/telemetry`
+# for clients that only reach the robot over the data channel.
+class GetTelemetryCmd(BaseModel):
+    """Query the telemetry choice."""
+
+    type: Literal["get_telemetry"] = "get_telemetry"
+
+
+class SetTelemetryCmd(BaseModel):
+    """Enable or disable telemetry. Disabling also forgets the robot id."""
+
+    type: Literal["set_telemetry"] = "set_telemetry"
+    enabled: bool
+
+
+class ClientHelloCmd(BaseModel):
+    """Identify the client to the anonymous telemetry, once per session."""
+
+    type: Literal["client_hello"] = "client_hello"
+    # Same format as the X-Reachy-Client header: "<type>/<version> (<os>)".
+    client: str = Field(..., max_length=64)
+    # Public Hugging Face Space id of the JS app, "private", or None.
+    app: Optional[str] = Field(None, max_length=200)
 
 
 class SetSpeechOffsetsCmd(BaseModel):
@@ -961,6 +987,9 @@ AnyCommand = Annotated[
     | DeleteHfTokenCmd
     | GetFirstWakeUpCmd
     | SetFirstWakeUpCmd
+    | GetTelemetryCmd
+    | SetTelemetryCmd
+    | ClientHelloCmd
     | SubscribeLogsCmd
     | UnsubscribeLogsCmd
     | SubscribePoseCmd
@@ -1108,6 +1137,17 @@ class TaskRequest(BaseModel):
 
 AnyMessage = Annotated[AnyCommand | TaskRequest, Field(discriminator="type")]
 message_adapter: TypeAdapter[AnyMessage] = TypeAdapter(AnyMessage)
+
+
+MOVE_BUSY_ERROR = "a move is already running"
+
+
+class MoveBusyError(RuntimeError):
+    """A move was rejected because another move is already running.
+
+    Raised by the daemon's ``play_move`` and, client side, by
+    ``ReachyMini.goto_target`` when the daemon answers with this error.
+    """
 
 
 class TaskProgress(BaseModel):

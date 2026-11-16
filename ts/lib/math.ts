@@ -36,11 +36,15 @@ export function rpyToMatrix(
 }
 
 /**
- * Rotation matrix (3×3 or 4×4) → { roll, pitch, yaw } in degrees.
+ * Rotation matrix (3×3 or 4×4 nested, or the flat row-major `number[16]`
+ * of `state.head`) → { roll, pitch, yaw } in degrees.
  */
 export function matrixToRpy(
-    m: number[][],
+    matrix: number[][] | number[],
 ): { roll: number; pitch: number; yaw: number } {
+    const m = Array.isArray(matrix[0])
+        ? (matrix as number[][])
+        : [0, 1, 2, 3].map((r) => (matrix as number[]).slice(r * 4, r * 4 + 4));
     return {
         roll: radToDeg(Math.atan2(m[2]![1]!, m[2]![2]!)),
         pitch: radToDeg(Math.asin(-m[2]![0]!)),

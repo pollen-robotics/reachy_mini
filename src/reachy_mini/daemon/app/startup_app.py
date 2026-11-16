@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from reachy_mini.apps import SourceKind
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.robot_app_lock import RobotAppLockState
 from reachy_mini.io.protocol import MotorControlMode
 
@@ -316,3 +317,41 @@ async def rearm_startup_app_watcher(
     return asyncio.create_task(
         watch_antennas_for_startup_app(app_manager, daemon, name)
     )
+
+
+async def apply_startup_app(
+    app_manager: AppManager, daemon: "Daemon", name: str | None
+) -> None:
+    """Persist the startup app (``None`` clears it) and re-arm its watcher live.
+
+    Raises ``ValueError`` when ``name`` is not installed; nothing is persisted then.
+    Calls are serialized, so the last one wins for both the config and the watcher.
+    """
+    async with daemon.startup_app_lock:
+        if name:
+            installed = await app_manager.list_available_apps(SourceKind.INSTALLED)
+            if not any(a.name == name for a in installed):
+                raise ValueError(f"App '{name}' is not installed")
+        startup_app_config.set_startup_app(name)
+        daemon.startup_app_watcher_task = await rearm_startup_app_watcher(
+            app_manager, daemon, name, daemon.startup_app_watcher_task
+        )
+
+
+async def arm_startup_app_at_boot(
+    app_manager: AppManager, daemon: "Daemon", name: str
+) -> None:
+    """Arm the watcher for ``name``, the startup app read before ``daemon.start()``.
+
+    The relay is live during start() (a wake-up takes seconds), so a client may
+    have changed the startup app meanwhile: its choice wins, boot arms nothing.
+    """
+    async with daemon.startup_app_lock:
+        if (
+            daemon.startup_app_watcher_task is None
+            and startup_app_config.get_startup_app() == name
+        ):
+            daemon.startup_app_watcher_task = asyncio.create_task(
+                watch_antennas_for_startup_app(app_manager, daemon, name)
+            )
+            logger.info(f"Startup app antenna watcher started for app: {name}")

@@ -4,6 +4,10 @@
 
 Follow the [instructions](https://huggingface.co/docs/reachy_mini/SDK/installation) to install the SDK. Please note that the Linux users have to [manually install gstreamer](https://huggingface.co/docs/reachy_mini/SDK/gstreamer-installation).
 
+Use uv **0.13.4 or newer**. Before syncing an existing checkout, follow the
+[certificate security update](source/SDK/installation.md#certificate-security-update-october-2026)
+to update older pip/uv installations securely.
+
 ## Code quality
 
 The quality of code is ensured by ruff and mypy. Please make sure to run them before pushing your code.
@@ -56,6 +60,8 @@ For instance
 ```bash
 pytest -m "audio"
 ```
+
+To test a daemon change on a physical robot (putting a branch on it, reading its logs and state, driving the JSON-RPC relay), see [`AGENT_TESTING.md`](AGENT_TESTING.md).
 
 ## Issues and Pull Requests
 

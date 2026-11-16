@@ -19,6 +19,9 @@ on:
     - cron: "17 4 * * 1" # Mondays 04:17 UTC
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   contract-latest:
     runs-on: ubuntu-latest
@@ -28,6 +31,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
+          version: ">=0.13.4"
           python-version: 3.12
           enable-cache: true
       # --isolated ignores the project's uv config (incl. exclude-newer) and

@@ -175,10 +175,27 @@ async def test_goto_sleep_completes(sim_backend: Any) -> None:
 
 def test_play_sound_delegates(sim_backend: Any) -> None:
     """PlaySoundCmd forwards the file name to play_sound."""
-    sim_backend.play_sound = Mock()
+    sim_backend.play_sound = Mock(return_value=True)
     responses = _dispatch(sim_backend, PlaySoundCmd(file="wake_up.wav"))
     sim_backend.play_sound.assert_called_once_with("wake_up.wav")
     assert responses == [{"status": "ok", "command": "play_sound"}]
+
+
+def test_play_sound_unknown_file_errors(sim_backend: Any) -> None:
+    """An unknown sound file is an error reply naming the command."""
+    sim_backend.play_sound = Mock(return_value=False)
+    responses = _dispatch(sim_backend, PlaySoundCmd(file="does_not_exist.wav"))
+    assert len(responses) == 1
+    assert responses[0]["command"] == "play_sound"
+    assert "no such sound" in responses[0]["error"]
+    assert "status" not in responses[0]
+
+
+def test_play_sound_playback_failure_errors(sim_backend: Any) -> None:
+    """A playback failure is an error reply naming the command."""
+    sim_backend.play_sound = Mock(side_effect=RuntimeError("no playbin"))
+    responses = _dispatch(sim_backend, PlaySoundCmd(file="wake_up.wav"))
+    assert responses == [{"error": "no playbin", "command": "play_sound"}]
 
 
 def test_clear_incoming_audio_delegates(sim_backend: Any) -> None:
@@ -327,6 +344,13 @@ def test_set_gravity_compensation_value_error(sim_backend: Any) -> None:
     ]
 
 
+def test_set_motor_mode_value_error(sim_backend: Any) -> None:
+    """A refused mode (e.g. gravity comp without Placo) is an error response."""
+    sim_backend.set_motor_control_mode = Mock(side_effect=ValueError("no grav comp"))
+    responses = _dispatch(sim_backend, SetMotorModeCmd(mode="gravity_compensation"))
+    assert responses == [{"error": "no grav comp", "command": "set_motor_mode"}]
+
+
 def test_set_automatic_body_yaw(sim_backend: Any) -> None:
     """SetAutomaticBodyYawCmd forwards the flag to set_automatic_body_yaw."""
     sim_backend.set_automatic_body_yaw = Mock()
@@ -359,11 +383,19 @@ def test_get_state(sim_backend: Any) -> None:
     assert state["is_move_running"] is False
 
 
-def test_get_version(sim_backend: Any) -> None:
-    """GetVersionCmd returns the installed reachy_mini version string."""
+@pytest.mark.parametrize("active", [True, False])
+def test_get_version(
+    sim_backend: Any, monkeypatch: pytest.MonkeyPatch, active: bool
+) -> None:
+    """GetVersionCmd returns the version, and client_hello only while telemetry runs."""
+    from reachy_mini.daemon import telemetry as tm
+
+    monkeypatch.setattr(tm.Telemetry, "active", property(lambda self: active))
     responses = _dispatch(sim_backend, GetVersionCmd())
     assert len(responses) == 1
     assert isinstance(responses[0]["version"], str)
+    # The JS SDK only sends client_hello (and checks the Hub) when advertised.
+    assert responses[0]["client_hello"] is active
 
 
 def test_get_hardware_id(sim_backend: Any, monkeypatch: pytest.MonkeyPatch) -> None:

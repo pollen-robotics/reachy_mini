@@ -390,11 +390,12 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._pipeline_record.set_state(Gst.State.NULL)
 
     def start_recording(self) -> None:
-        """No-op — recording starts automatically with ``open()``."""
-        pass
+        """Drop audio queued while stopped; the WebRTC stream never pauses."""
+        while self._appsink_audio.try_pull_sample(0) is not None:
+            pass
 
     def stop_recording(self) -> None:
-        """No-op — managed by ``close()``."""
+        """No-op: capture keeps running, ``start_recording()`` drops the backlog."""
         pass
 
     def _setup_audio_send_chain(self) -> None:

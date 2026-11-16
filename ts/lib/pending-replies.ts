@@ -21,7 +21,7 @@
  * path, because there is only one.
  */
 
-import type { FaceTarget, ImuData } from './types.js';
+import type { FaceTarget, ImuData, TelemetryStatus } from './types.js';
 
 /**
  * Fail-open ceiling for a single reply-slot request/response.
@@ -51,6 +51,9 @@ export interface ReplySlotValues {
     first_wake_up: boolean | null;
     tracked_face: FaceTarget | null;
     robot_name: string | null;
+    telemetry: TelemetryStatus | null;
+    // Own slot so a read can't supersede a write still in flight.
+    set_telemetry: TelemetryStatus | null;
     delete_hf_token: boolean | null;
     apply_audio_config: boolean | null;
     read_audio_parameter: number[] | null;

@@ -36,12 +36,14 @@ export interface SafelyReturnOptions {
  * Smooth, distance-scaled return to a target pose. Routes through the
  * existing SDK primitives:
  *
- *   1. `reachy.setMotorMode("enabled")` — safe by construction since
+ *   1. `reachy.stopHeadTracking()` — at weight 1 daemon-side face
+ *      tracking overrides every app head target, this goto included.
+ *   2. `reachy.setMotorMode("enabled")` — safe by construction since
  *      daemon PR #1138 (the daemon pins all targets to the present
  *      pose before flipping torque on).
- *   2. Read `reachy.robotState` for the current pose snapshot.
- *   3. Compute `scaledDuration(current, target, preset)`.
- *   4. Call `reachy.gotoTarget({ ...target, duration })`.
+ *   3. Read `reachy.robotState` for the current pose snapshot.
+ *   4. Compute `scaledDuration(current, target, preset)`.
+ *   5. Call `reachy.gotoTarget({ ...target, duration })`.
  *
  * Returns **synchronously after dispatching** the goto — does NOT
  * await completion. Callers who want to await the move should
@@ -71,6 +73,12 @@ export function safelyReturnToPose(
 ): ScaledDurationResult {
     const target = options.target ?? INIT_POSE;
     const preset = options.preset ?? DEFAULT_SCALED_DURATION_PRESET;
+
+    try {
+        reachy.stopHeadTracking();
+    } catch {
+        // Data channel closed; nothing is tracking then.
+    }
 
     try {
         reachy.setMotorMode("enabled");
