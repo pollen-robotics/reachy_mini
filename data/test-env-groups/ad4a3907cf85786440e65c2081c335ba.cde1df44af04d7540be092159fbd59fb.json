@@ -1,1 +1,1 @@
-{"id":"ad4a3907cf85786440e65c2081c335ba.cde1df44af04d7540be092159fbd59fb","fullName":"tests.unit_tests.test_ws_client#test_localhost_is_pinned_to_ipv4","name":"test_localhost_is_pinned_to_ipv4[localhost]","status":"passed","testResultsByEnv":{"default":"74abac46b6dc30ca8e20061b3fd72b94"}}
+{"id":"ad4a3907cf85786440e65c2081c335ba.cde1df44af04d7540be092159fbd59fb","fullName":"tests.unit_tests.test_ws_client#test_localhost_is_pinned_to_ipv4","name":"test_localhost_is_pinned_to_ipv4[localhost]","status":"passed","testResultsByEnv":{"default":"3bf201865dbb729969a63cf58cb22f9b"}}
