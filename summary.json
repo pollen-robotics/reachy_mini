@@ -1,33 +1,39 @@
 {
   "stats": {
-    "total": 1328,
-    "passed": 1310,
+    "total": 1336,
+    "passed": 1319,
     "skipped": 17,
-    "new": 1,
-    "failed": 1
+    "new": 8
   },
-  "status": "failed",
+  "status": "passed",
   "newTests": [
-    "2ff61fa49309abb193f042272a1f858f"
+    "e3ac373e54e25042559f9066a47587e3",
+    "a0ee3e132d11bd87775ca4b814e0d90a",
+    "2a1fd52858e063a2e9997624101ccb6b",
+    "aa630e4f33cf7dfe1c764bcb792b3c03",
+    "bc6ebd6d3eb5c62eea5fa07cadde8eca",
+    "104c2031039ae02fc774a2b5b4e67603",
+    "0e73fe335b80a0b4d2be52e09158da67",
+    "86c0036d370beb2305cae4b1fb032db7"
   ],
   "flakyTests": [],
   "retryTests": [],
   "checks": [],
   "name": "Reachy Mini Tests",
-  "duration": 84395,
-  "createdAt": 1794838569156,
+  "duration": 83961,
+  "createdAt": 1794840127054,
   "plugin": "Awesome",
   "meta": {
-    "reportId": "f9a1043c-7f67-4415-af6c-cc245cf8bad2",
+    "reportId": "7038782f-3b6c-4443-b4e8-df41f346fab3",
     "singleFile": false,
     "withTestResultsLinks": true
   },
   "pluginId": "awesome",
   "pullRequestHref": "",
-  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/43883277044",
-  "commitSha": "bd393547ddfcb6e0ebd70c415eabc39f8fc1b95e",
-  "commitHref": "https://github.com/pollen-robotics/reachy_mini/commit/bd393547ddfcb6e0ebd70c415eabc39f8fc1b95e",
-  "ciRunHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/43883277044",
+  "jobHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/43887805504",
+  "commitSha": "81bca518a4f033bb56489f23a974a644a7ffbec3",
+  "commitHref": "https://github.com/pollen-robotics/reachy_mini/commit/81bca518a4f033bb56489f23a974a644a7ffbec3",
+  "ciRunHref": "https://github.com/pollen-robotics/reachy_mini/actions/runs/43887805504",
   "ciRunName": "Allure Report",
   "href": "awesome/",
   "coverage": 64
