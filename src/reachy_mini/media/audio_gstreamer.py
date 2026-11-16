@@ -69,6 +69,7 @@ from reachy_mini.media.audio_base import (
 )
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
+from reachy_mini.media.gstreamer_utils import SoundPlaybin
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
@@ -130,7 +131,7 @@ class GStreamerAudio(AudioBase):
         self._bus = self._pipeline.get_bus()
         self._bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline)
 
-        self._playbin: Optional[Gst.Element] = None
+        self._sound = SoundPlaybin(self.logger, on_end=self._on_sound_end)
         self._init_pipeline_playback(self._pipeline)
 
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
@@ -501,8 +502,7 @@ class GStreamerAudio(AudioBase):
             self._head_wobbler.stop()
         self._appsrc_pts = -1
         self._pipeline.set_state(Gst.State.NULL)
-        if self._playbin is not None:
-            self._teardown_playbin(self._playbin)
+        self._sound.stop()
 
     def clear_player(self) -> None:
         """Drop all queued playback audio immediately (barge-in)."""
@@ -555,9 +555,6 @@ class GStreamerAudio(AudioBase):
         else:
             file_path = sound_file
 
-        if self._playbin is not None:
-            self._teardown_playbin(self._playbin)
-
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
             self.logger.error("Failed to create playbin element")
@@ -580,47 +577,11 @@ class GStreamerAudio(AudioBase):
             self._head_wobbler.reset()
             self._head_wobbler.start()
 
-        self._playbin = playbin
+        self._sound.play(playbin)
 
-        # Tear the playbin down once playback finishes.  Without this it
-        # idles in PLAYING with the file loaded indefinitely: its pipeline
-        # threads are never released, and the idle pipeline can spontaneously
-        # replay the loaded file with no log trace.
-        bus = playbin.get_bus()
-        bus.add_signal_watch()
-        bus.connect("message", self._on_playbin_message, playbin)
-
-        playbin.set_state(Gst.State.PLAYING)
-
-    def _on_playbin_message(
-        self, _bus: Gst.Bus, msg: Gst.Message, playbin: Gst.Element
-    ) -> None:
-        """Tear down *playbin* once it reaches EOS or fails with an error.
-
-        Args:
-            _bus: The playbin's bus (provided by the signal, unused).
-            msg: The bus message being dispatched.
-            playbin: The playbin this watch was installed for.
-
-        """
-        if msg.type not in (Gst.MessageType.EOS, Gst.MessageType.ERROR):
-            return
-        if msg.type == Gst.MessageType.ERROR:
-            err, dbg = msg.parse_error()
-            self.logger.error(f"play_sound playbin error: {err} ({dbg})")
-        self._teardown_playbin(playbin)
-
-    def _teardown_playbin(self, playbin: Gst.Element) -> None:
-        """Stop *playbin*, drop its bus watch, and release its threads.
-
-        Args:
-            playbin: The playbin to tear down.
-
-        """
-        playbin.get_bus().remove_signal_watch()
-        playbin.set_state(Gst.State.NULL)
-        if self._playbin is playbin:
-            self._playbin = None
+    def _on_sound_end(self) -> None:
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
 
     def upload_sound(self, sound_file: str) -> str:
         """No-op for the local backend — the file is already accessible.

@@ -1,6 +1,8 @@
 """Shared GStreamer helpers used by camera and audio backends."""
 
 import logging
+import threading
+from collections.abc import Callable
 from typing import Optional
 
 try:
@@ -15,7 +17,78 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 gi.require_version("GstPbutils", "1.0")
 
-from gi.repository import Gst, GstApp, GstPbutils  # noqa: E402
+from gi.repository import GLib, Gst, GstApp, GstPbutils  # noqa: E402
+
+
+class SoundPlaybin:
+    """The single ``play_sound`` playbin, freed on EOS, error or replacement.
+
+    An idle playbin left in PLAYING keeps the audio device open forever.
+    Thread-safe: ``play``/``stop`` run on caller threads, the bus watch on
+    the GLib main loop thread.
+    """
+
+    def __init__(
+        self, logger: logging.Logger, on_end: Optional[Callable[[], None]] = None
+    ) -> None:
+        """Create an empty slot.
+
+        Args:
+            logger: Logger for playbin errors.
+            on_end: Called on the GLib thread when a sound ends on its own.
+
+        """
+        self._logger = logger
+        self._on_end = on_end
+        self._lock = threading.Lock()
+        self._playbin: Optional[Gst.Element] = None
+
+    @property
+    def current(self) -> Optional[Gst.Element]:
+        """The playbin currently playing, if any."""
+        return self._playbin
+
+    def play(self, playbin: Gst.Element) -> None:
+        """Free the previous playbin, then start *playbin*."""
+        # add_watch, not a signal watch: returning False frees the closure.
+        # A connected handler holding the playbin would leak it.
+        playbin.get_bus().add_watch(GLib.PRIORITY_DEFAULT, self._on_message, playbin)
+        with self._lock:
+            old, self._playbin = self._playbin, playbin
+        if old is not None:
+            self._free(old)
+        playbin.set_state(Gst.State.PLAYING)
+
+    def stop(self) -> None:
+        """Stop and free the current playbin. No-op if none."""
+        with self._lock:
+            old, self._playbin = self._playbin, None
+        if old is not None:
+            self._free(old)
+
+    @staticmethod
+    def _free(playbin: Gst.Element) -> None:
+        # Returns False if the watch already ended, harmless.
+        playbin.get_bus().remove_watch()
+        playbin.set_state(Gst.State.NULL)
+
+    def _on_message(
+        self, _bus: Gst.Bus, msg: Gst.Message, playbin: Gst.Element
+    ) -> bool:
+        if msg.type == Gst.MessageType.ERROR:
+            err, dbg = msg.parse_error()
+            self._logger.error(f"play_sound playbin error: {err} ({dbg})")
+        elif msg.type != Gst.MessageType.EOS:
+            return True
+        with self._lock:
+            mine = self._playbin is playbin
+            if mine:
+                self._playbin = None
+        if mine:  # else play/stop already freed it
+            playbin.set_state(Gst.State.NULL)
+            if self._on_end is not None:
+                self._on_end()
+        return False
 
 
 def handle_default_bus_message(
