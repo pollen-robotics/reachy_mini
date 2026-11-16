@@ -1,0 +1,2 @@
+INFO     logs_job_34db7ede-2c3c-42fa-9283-4e0dc4551ef0:test_bg_job_register.py:93 working
+INFO     logs_job_34db7ede-2c3c-42fa-9283-4e0dc4551ef0:bg_job_register.py:102 Job 'test' completed successfully
