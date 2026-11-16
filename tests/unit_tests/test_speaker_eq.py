@@ -1,7 +1,6 @@
 """Unit tests for the runtime speaker-EQ gains resolution and element builder."""
 
 import logging
-import types
 
 import gi
 import numpy as np
@@ -11,8 +10,10 @@ gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
 from reachy_mini.daemon import startup_app_config  # noqa: E402
-from reachy_mini.media.audio_base import make_speaker_eq  # noqa: E402
-from reachy_mini.media.audio_gstreamer import GStreamerAudio  # noqa: E402
+from reachy_mini.media.audio_base import (  # noqa: E402
+    make_audiosink_tee_bin,
+    make_speaker_eq,
+)
 from reachy_mini.media.audio_utils import (  # noqa: E402
     DEFAULT_SPEAKER_EQ_GAINS,
     resolve_speaker_eq_gains,
@@ -195,14 +196,11 @@ def _build_tee_bin(monkeypatch: pytest.MonkeyPatch) -> Gst.Bin:
     monkeypatch.setattr(
         "reachy_mini.media.audio_base.has_reachymini_asoundrc", lambda: True
     )
-    inst = object.__new__(GStreamerAudio)
-    inst.logger = _LOG
-    # Satisfy the wobbler callback and __del__/cleanup on this half-built instance.
-    inst._head_wobbler = None
-    inst._doa = types.SimpleNamespace(close=lambda: None)
-    inst._loop = types.SimpleNamespace(quit=lambda: None)
-    inst._bus = types.SimpleNamespace(remove_watch=lambda: None)
-    return GStreamerAudio._build_audiosink_tee_bin(inst)
+    return make_audiosink_tee_bin(
+        _LOG,
+        Gst.ElementFactory.make("fakesink"),
+        Gst.ElementFactory.make("appsink"),
+    )
 
 
 def test_playback_path_includes_eq(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -215,3 +213,17 @@ def test_playback_path_skips_eq_when_zero(monkeypatch: pytest.MonkeyPatch) -> No
     """The real speaker branch has no EQ when all gains are zero."""
     monkeypatch.setattr(startup_app_config, "get_speaker_eq_gains", lambda: [0.0] * 10)
     assert _find_element(_build_tee_bin(monkeypatch), "equalizer-10bands") is None
+
+
+def test_undecodable_config_keeps_the_speaker_working(
+    tmp_path: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A config the daemon cannot decode must not cost the robot its audio."""
+    from pathlib import Path
+
+    cfg = Path(str(tmp_path)) / "daemon_config.json"
+    cfg.write_bytes(b'{"speaker_eq_gains": [1,2,3,4,5,6,7,8,9,10], "x": "\xff"}')
+    monkeypatch.setattr(startup_app_config, "_config_path", lambda: cfg)
+
+    assert resolve_speaker_eq_gains() == DEFAULT_SPEAKER_EQ_GAINS
+    assert _find_element(_build_tee_bin(monkeypatch), "audioresample") is not None
