@@ -378,28 +378,29 @@ class AppManager:
                 pass
 
         # Return to zero after an app stops, unless the app left it asleep.
-        if self.daemon is not None and self.daemon.backend is not None:
-            backend = self.daemon.backend
-            # Stop the app's move first: the asleep branch below would leave it
-            # running and holding the move guard (#1401).
-            await backend.stop_running_move()
-            _, _, dist_to_sleep = distance_between_poses(
-                backend.get_current_head_pose(), backend.SLEEP_HEAD_POSE
-            )
-            if dist_to_sleep <= SLEEP_POSE_MAGIC_DISTANCE:
-                # pose check only; ensure limp (idempotent)
-                backend.set_motor_control_mode(MotorControlMode.Disabled)
-                self.logger.getChild("runner").info(
-                    "Robot is asleep; leaving it limp in the sleep pose."
-                )
-            else:
+        try:
+            if self.daemon is not None and self.daemon.backend is not None:
+                backend = self.daemon.backend
                 try:
-                    self.logger.getChild("runner").info(
-                        "Returning robot to zero position"
+                    # Stop the app's move first: the asleep branch below would leave it
+                    # running and holding the move guard (#1401).
+                    await backend.stop_running_move()
+                    _, _, dist_to_sleep = distance_between_poses(
+                        backend.get_current_head_pose(), backend.SLEEP_HEAD_POSE
                     )
-                    # Not a bare goto: the app may have left gravity
-                    # compensation, limp motors or head tracking behind.
-                    await backend.reset_to_init()
+                    if dist_to_sleep <= SLEEP_POSE_MAGIC_DISTANCE:
+                        # pose check only; ensure limp (idempotent)
+                        backend.set_motor_control_mode(MotorControlMode.Disabled)
+                        self.logger.getChild("runner").info(
+                            "Robot is asleep; leaving it limp in the sleep pose."
+                        )
+                    else:
+                        self.logger.getChild("runner").info(
+                            "Returning robot to zero position"
+                        )
+                        # Not a bare goto: the app may have left gravity
+                        # compensation, limp motors or head tracking behind.
+                        await backend.reset_to_init()
                 except Exception as e:
                     self.logger.getChild("runner").warning(
                         f"Could not return to zero position: {e}"
@@ -408,8 +409,8 @@ class AppManager:
                     # back to it so the robot isn't left in whatever state the
                     # app (or the failed lift) left behind.
                     backend.request_idle_reset()
-
-        self.current_app = None
+        finally:
+            self.current_app = None
 
     async def restart_current_app(self, keep_remote: bool = False) -> AppStatus:
         """Restart the current app.
