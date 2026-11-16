@@ -15,7 +15,6 @@ from typing import Dict, List, Literal, Optional, Union, cast
 
 import numpy as np
 import numpy.typing as npt
-from asgiref.sync import async_to_sync
 
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import (
@@ -1172,4 +1171,18 @@ class ReachyMini:
             else:
                 await asyncio.sleep(0.001)
 
-    play_move = async_to_sync(async_play_move)
+    def play_move(
+        self,
+        move: Move,
+        play_frequency: float = 100.0,
+        initial_goto_duration: float = 0.0,
+        sound: bool = True,
+    ) -> None:
+        """Play a Move and block until it ends. See ``async_play_move``.
+
+        Runs in the caller's thread, so Ctrl+C stops the move. From async code,
+        await ``async_play_move`` instead.
+        """
+        asyncio.run(
+            self.async_play_move(move, play_frequency, initial_goto_duration, sound)
+        )
