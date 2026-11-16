@@ -19,6 +19,8 @@ _EQ_KEY = "speaker_eq_gains"
 _TURN_KEY = "turn_enabled"
 _FIRST_WAKE_UP_KEY = "first_wake_up_completed"
 _TELEMETRY_KEY = "telemetry_enabled"
+_WEBRTC_LATENCY_KEY = "webrtc_latency_ms"
+_WEBRTC_LATENCY_MAX_MS = 10_000
 # equalizer-10bands accepts per-band gains in [-24, +12] dB.
 _EQ_GAIN_MIN, _EQ_GAIN_MAX = -24.0, 12.0
 
@@ -119,6 +121,31 @@ def get_turn_enabled() -> bool | None:
     robot that is only ever reached from its own network.
     """
     return _get_bool(_TURN_KEY)
+
+
+def get_webrtc_latency_ms() -> int | None:
+    """Return the WebRTC receive jitter-buffer latency (ms), or None if unset/invalid.
+
+    Read by the SDK's WebRTC client, so it is the config file of the machine
+    receiving the stream (laptop, or the robot for on-robot apps).
+    """
+    config = _read()
+    if _WEBRTC_LATENCY_KEY not in config:
+        return None
+    value = config[_WEBRTC_LATENCY_KEY]
+    if (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and 0 <= value <= _WEBRTC_LATENCY_MAX_MS
+    ):
+        return value
+    logger.warning(
+        "Ignoring invalid '%s' in daemon config (need an integer in [0, %d] ms); "
+        "using the built-in default.",
+        _WEBRTC_LATENCY_KEY,
+        _WEBRTC_LATENCY_MAX_MS,
+    )
+    return None
 
 
 def _update(key: str, value: object | None) -> None:

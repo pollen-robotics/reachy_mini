@@ -114,3 +114,25 @@ def test_get_bool_none_and_warns_on_malformed(
     with caplog.at_level("WARNING"):
         assert startup_app_config._get_bool("some_flag") is None
     assert "some_flag" in caplog.text
+
+
+# ─── get_webrtc_latency_ms ───────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "stored,expected",
+    [
+        (None, None),
+        (0, 0),
+        (200, 200),
+        (-1, None),
+        (10_001, None),
+        (1.5, None),
+        (True, None),
+        ("200", None),
+    ],
+)
+def test_get_webrtc_latency_ms(config_path: Path, stored, expected):
+    if stored is not None:
+        startup_app_config._update("webrtc_latency_ms", stored)
+    assert startup_app_config.get_webrtc_latency_ms() == expected
