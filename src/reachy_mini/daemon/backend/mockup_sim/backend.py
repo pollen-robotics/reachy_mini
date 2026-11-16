@@ -110,8 +110,8 @@ class MockupSimBackend(Backend):
                     self.update_target_head_joints_from_ik(
                         self.target_head_pose, self.target_body_yaw
                     )
-                except ValueError:
-                    pass  # IK failed, keep current positions
+                except ValueError as e:
+                    self._log_ik_error(e)  # keep current positions
 
             if (
                 self.joint_positions_publisher is not None
