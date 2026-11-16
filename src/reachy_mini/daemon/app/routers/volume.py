@@ -88,7 +88,7 @@ async def get_volume() -> VolumeResponse:
 
 @router.post("/set")
 async def set_volume(volume_req: VolumeRequest) -> VolumeResponse:
-    """Set the output volume level without starting audio playback."""
+    """Set the output volume level."""
     vc = _get_volume_control()
     return _write_volume(
         vc.set_output_volume,

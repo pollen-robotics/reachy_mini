@@ -2520,7 +2520,7 @@
     "/api/volume/set": {
       "post": {
         "summary": "Set Volume",
-        "description": "Set the output volume level without starting audio playback.",
+        "description": "Set the output volume level.",
         "operationId": "set_volume_api_volume_set_post",
         "requestBody": {
           "content": {
