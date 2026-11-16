@@ -69,6 +69,7 @@ from reachy_mini.media.audio_base import (
 )
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
+from reachy_mini.media.gstreamer_utils import SoundPlaybin
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
@@ -130,7 +131,7 @@ class GStreamerAudio(AudioBase):
         self._bus = self._pipeline.get_bus()
         self._bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline)
 
-        self._playbin: Optional[Gst.Element] = None
+        self._sound = SoundPlaybin(self.logger, on_end=self._on_sound_end)
         self._init_pipeline_playback(self._pipeline)
 
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
@@ -501,9 +502,7 @@ class GStreamerAudio(AudioBase):
             self._head_wobbler.stop()
         self._appsrc_pts = -1
         self._pipeline.set_state(Gst.State.NULL)
-        if self._playbin is not None:
-            self._playbin.set_state(Gst.State.NULL)
-            self._playbin = None
+        self._sound.stop()
 
     def clear_player(self) -> None:
         """Drop all queued playback audio immediately (barge-in)."""
@@ -556,9 +555,6 @@ class GStreamerAudio(AudioBase):
         else:
             file_path = sound_file
 
-        if self._playbin is not None:
-            self._playbin.set_state(Gst.State.NULL)
-
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
             self.logger.error("Failed to create playbin element")
@@ -581,8 +577,11 @@ class GStreamerAudio(AudioBase):
             self._head_wobbler.reset()
             self._head_wobbler.start()
 
-        self._playbin = playbin
-        playbin.set_state(Gst.State.PLAYING)
+        self._sound.play(playbin)
+
+    def _on_sound_end(self) -> None:
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
 
     def upload_sound(self, sound_file: str) -> str:
         """No-op for the local backend — the file is already accessible.

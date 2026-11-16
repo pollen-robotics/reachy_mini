@@ -57,7 +57,10 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
-from reachy_mini.media.gstreamer_utils import handle_default_bus_message
+from reachy_mini.media.gstreamer_utils import (
+    SoundPlaybin,
+    handle_default_bus_message,
+)
 from reachy_mini.media.webrtc_utils import TurnCredentials, split_for_data_channel
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
@@ -397,7 +400,7 @@ class GstMediaServer:
         # writes) so contention is negligible.
         self._peer_states_lock = Lock()
         self._incoming_audio: Dict[str, Dict[str, Any]] = {}
-        self._playbin: Optional[Gst.Element] = None
+        self._sound = SoundPlaybin(self._logger, on_end=self._on_sound_end)
         self._head_wobbler: Optional[HeadWobbler] = None
         self._pipeline_playback: Optional[Gst.Pipeline] = None
         # Software AEC: set in _configure_audio; the probe is created there and
@@ -1690,9 +1693,6 @@ class GstMediaServer:
         else:
             file_path = sound_file
 
-        if self._playbin is not None:
-            self._playbin.set_state(Gst.State.NULL)
-
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
             raise RuntimeError("Failed to create playbin element")
@@ -1714,8 +1714,7 @@ class GstMediaServer:
             self._head_wobbler.reset()
             self._head_wobbler.start()
 
-        self._playbin = playbin
-        playbin.set_state(Gst.State.PLAYING)
+        self._sound.play(playbin)
         return True
 
     def stop_sound(self) -> None:
@@ -1723,9 +1722,11 @@ class GstMediaServer:
 
         If no sound is currently playing this is a no-op.
         """
-        if self._playbin is not None:
-            self._playbin.set_state(Gst.State.NULL)
-            self._playbin = None
+        self._sound.stop()
+
+    def _on_sound_end(self) -> None:
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
 
     def _build_audiosink_element(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio sink GStreamer element.
