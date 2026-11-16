@@ -1,0 +1,12 @@
+ERROR    test_restart:gstreamer_utils.py:118 Error: <MagicMock id='140336229996384'> 
+WARNING  test_restart:media_server.py:1579 Restarting the media pipeline in 1s after an error
+ERROR    test_restart:gstreamer_utils.py:118 Error: <MagicMock id='140336229956496'> 
+WARNING  test_restart:media_server.py:1579 Restarting the media pipeline in 1s after an error
+ERROR    test_restart:gstreamer_utils.py:118 Error: <MagicMock id='140336229998640'> 
+WARNING  test_restart:media_server.py:1579 Restarting the media pipeline in 1s after an error
+ERROR    test_restart:gstreamer_utils.py:118 Error: <MagicMock id='140335941791104'> 
+ERROR    test_restart:media_server.py:1572 Media pipeline failed 3 times within 60s, not restarting it again
+ERROR    test_restart:gstreamer_utils.py:118 Error: <MagicMock id='140336231467920'> 
+ERROR    test_restart:media_server.py:1572 Media pipeline failed 3 times within 60s, not restarting it again
+ERROR    test_restart:gstreamer_utils.py:118 Error: <MagicMock id='140335941787984'> 
+WARNING  test_restart:media_server.py:1579 Restarting the media pipeline in 1s after an error

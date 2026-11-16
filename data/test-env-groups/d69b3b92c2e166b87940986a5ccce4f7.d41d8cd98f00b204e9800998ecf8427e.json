@@ -1,1 +1,1 @@
-{"id":"d69b3b92c2e166b87940986a5ccce4f7.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_daemon_logging_config#test_configure_is_idempotent","name":"test_configure_is_idempotent","status":"passed","testResultsByEnv":{"default":"516912e4ef7f5c2dcdd69ff939a53192"}}
+{"id":"d69b3b92c2e166b87940986a5ccce4f7.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_daemon_logging_config#test_configure_is_idempotent","name":"test_configure_is_idempotent","status":"passed","testResultsByEnv":{"default":"4499cd66614cd82c4ae2202a9289598a"}}
