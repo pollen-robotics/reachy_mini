@@ -26,10 +26,11 @@ with ReachyMini() as mini:
 ## 🚀 Get Started
 * **[Installation](installation.md)**: 5 minutes to set up your computer
 * **[Quickstart Guide](quickstart.md)**: Run your first behavior on Reachy Mini
-* **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
-* **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
+* **[JavaScript SDK & Web Apps](javascript-sdk.md)**: Build browser apps that drive the robot over WebRTC — the easiest way to share your apps.
 * **[Building & Publishing Apps](apps.md)**: Create, test, publish, and debug Reachy Mini apps.
+* **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
 * **[Core Concepts](core-concept.md)**: Architecture, coordinate systems, and safety limits.
+* **[Python SDK](python-sdk.md)**: Full robot control from Python — scripts, control loops, and on-robot code.
 
 ## 📂 Code Examples
 

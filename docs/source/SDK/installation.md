@@ -12,6 +12,42 @@
 
 **Need help?** Feel free to open an [issue](https://github.com/pollen-robotics/reachy_mini/issues) if you encounter any problem.
 
+## Certificate security update (October 2026)
+
+The [Python security notice](https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576)
+requires `certifi>=2026.10.19`, `pip>=26.2.2`, and `uv>=0.13.4` to stop trusting
+compromised eMudhra certificate authorities. pip and uv include their own
+certificate bundles, so updating certifi alone is insufficient.
+
+Update your operating system's certificates first. In **each existing Python
+environment**, bootstrap patched pip using the notice's SHA-256-verified wheel,
+then update certifi:
+
+```bash
+python -m pip --disable-pip-version-check install --no-index --no-deps "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+python -m pip install --upgrade "certifi>=2026.10.19"
+```
+
+Use that environment's Python executable in place of `python`. On Wireless,
+this includes both `/venvs/mini_daemon/bin/python` and
+`/venvs/apps_venv/bin/python`, when present. Restart the daemon and apps after
+updating their environments.
+
+Update uv through the method originally used to install it. For standalone uv,
+rerun the installer in Step 1 below; for pip-installed uv, use the patched pip:
+
+```bash
+python -m pip install --upgrade "uv>=0.13.4"
+uv --version
+```
+
+Reachy Mini Control's bundled environment and Wireless system images need
+separate updates from their maintainers. Rebuild shipped environments with
+patched pip, certifi, uv (if included), and current system certificates; rebuild
+container images without layer caching. Updating this repository's lockfile
+does not repair an already installed environment. A robot image reflash is
+not required if those components are updated in place.
+
 ## First time using the command line? 🖥️
 <details>
 <summary>Click here if you're new to using a terminal/command line</summary>

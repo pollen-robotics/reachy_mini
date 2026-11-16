@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 
 _KEY = "startup_app"
 _EQ_KEY = "speaker_eq_gains"
+_TURN_KEY = "turn_enabled"
+_FIRST_WAKE_UP_KEY = "first_wake_up_completed"
+_TELEMETRY_KEY = "telemetry_enabled"
+_WEBRTC_LATENCY_KEY = "webrtc_latency_ms"
+_WEBRTC_LATENCY_MAX_MS = 10_000
 # equalizer-10bands accepts per-band gains in [-24, +12] dB.
 _EQ_GAIN_MIN, _EQ_GAIN_MAX = -24.0, 12.0
 
@@ -87,15 +92,137 @@ def get_speaker_eq_gains() -> list[float] | None:
     return None
 
 
-def set_startup_app(name: str | None) -> None:
-    """Persist the startup app name; a falsy name clears it."""
+def _get_bool(key: str) -> bool | None:
+    """Return the boolean at `key`, or None when unset or malformed.
+
+    A present-but-malformed value is warned about (so the user knows their
+    hand-edited config was ignored) and treated as unset.
+    """
     config = _read()
-    if name:
-        config[_KEY] = name
+    if key not in config:
+        return None
+    value = config[key]
+    if isinstance(value, bool):
+        return value
+    logger.warning(
+        "Ignoring invalid '%s' in daemon config (need true or false); "
+        "using the built-in default.",
+        key,
+    )
+    return None
+
+
+def get_turn_enabled() -> bool | None:
+    """Return whether the media server should offer TURN relay candidates.
+
+    Returns None if unset or malformed, so the caller keeps its default. A
+    relay lets a remote consumer behind a restrictive NAT reach the robot;
+    turning it off saves a background thread refreshing credentials on a
+    robot that is only ever reached from its own network.
+    """
+    return _get_bool(_TURN_KEY)
+
+
+def get_webrtc_latency_ms() -> int | None:
+    """Return the WebRTC receive jitter-buffer latency (ms), or None if unset/invalid.
+
+    Read by the SDK's WebRTC client, so it is the config file of the machine
+    receiving the stream (laptop, or the robot for on-robot apps).
+    """
+    config = _read()
+    if _WEBRTC_LATENCY_KEY not in config:
+        return None
+    value = config[_WEBRTC_LATENCY_KEY]
+    if (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and 0 <= value <= _WEBRTC_LATENCY_MAX_MS
+    ):
+        return value
+    logger.warning(
+        "Ignoring invalid '%s' in daemon config (need an integer in [0, %d] ms); "
+        "using the built-in default.",
+        _WEBRTC_LATENCY_KEY,
+        _WEBRTC_LATENCY_MAX_MS,
+    )
+    return None
+
+
+def _update(key: str, value: object | None) -> None:
+    """Read-modify-write a single config key; `None` clears it.
+
+    Other keys are preserved. May raise OSError on a write error; callers
+    that must never raise (e.g. the daemon command loop) wrap it themselves.
+    """
+    config = _read()
+    if value is None:
+        config.pop(key, None)
     else:
-        config.pop(_KEY, None)
+        config[key] = value
 
     path = _config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as f:
+    # Write to a sibling then rename: a crash mid-write would otherwise
+    # truncate the file, and the next _update() rebuilds it from the empty
+    # dict _read() returns for unparseable JSON, dropping every other key.
+    tmp = path.with_suffix(".json.tmp")
+    with tmp.open("w") as f:
         json.dump(config, f, indent=2)
+    tmp.replace(path)
+
+
+def get_telemetry_enabled() -> bool | None:
+    """Return whether anonymous telemetry is allowed, or None if unset.
+
+    Privacy-safe: an unparseable file or a non-boolean value counts as False,
+    so a typo made while opting out never turns telemetry on, and None (which
+    lets the caller write the default) only means the key is really absent.
+    """
+    try:
+        config = json.loads(_config_path().read_text())
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        return False
+    if not isinstance(config, dict):
+        return False
+    if _TELEMETRY_KEY not in config:
+        return None
+    value = config[_TELEMETRY_KEY]
+    return value if isinstance(value, bool) else False
+
+
+def set_telemetry_enabled(enabled: bool) -> None:
+    """Persist the telemetry choice. May raise OSError."""
+    _update(_TELEMETRY_KEY, bool(enabled))
+
+
+def set_startup_app(name: str | None) -> None:
+    """Persist the startup app name; a falsy name clears it."""
+    _update(_KEY, name if name else None)
+
+
+def get_first_wake_up_completed() -> bool:
+    """Return True if the first wake-up setup wizard has been completed.
+
+    Robot-wide, persistent flag (not per-session): the mobile / desktop apps
+    run a one-time, post-connection hardware diagnostic wizard, and gate it on
+    this so it only ever shows once, whichever client connects. Defaults to
+    False (wizard pending) when unset or malformed, so a config problem can
+    never trap the daemon command loop.
+    """
+    return _get_bool(_FIRST_WAKE_UP_KEY) is True
+
+
+def set_first_wake_up_completed(is_completed: bool) -> bool:
+    """Persist the first wake-up completion flag. Returns True on success.
+
+    Fail-safe: a write error is logged and reported as False instead of
+    raising, so a storage problem can't break the daemon command loop.
+    """
+    try:
+        _update(_FIRST_WAKE_UP_KEY, bool(is_completed))
+        return True
+    except OSError as e:
+        logger.warning(f"Could not persist first-wake-up flag: {e}")
+        return False

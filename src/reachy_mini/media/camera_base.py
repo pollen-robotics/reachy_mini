@@ -191,7 +191,10 @@ class CameraBase(ABC):
             self._build_jpeg_encoder(width, height)
         self._jpeg_pipeline.set_state(Gst.State.PLAYING)
         self._jpeg_appsrc.push_buffer(Gst.Buffer.new_wrapped(frame.tobytes()))
-        jpeg = get_sample(self._jpeg_appsink, self.logger)
+        # One-shot encode: unlike video-rate pulling, we must wait for the
+        # pipeline to preroll and emit the encoded buffer. The default 20 ms is
+        # too tight on a loaded CI runner and returns None there.
+        jpeg = get_sample(self._jpeg_appsink, self.logger, timeout_ns=Gst.SECOND)
         self._jpeg_pipeline.set_state(Gst.State.PAUSED)
         return jpeg
 
@@ -200,20 +203,25 @@ class CameraBase(ABC):
         pipeline = Gst.Pipeline.new("jpeg_encoder")
         appsrc = Gst.ElementFactory.make("appsrc")
         videoconvert = Gst.ElementFactory.make("videoconvert")
+        capsfilter = Gst.ElementFactory.make("capsfilter")
         jpegenc = Gst.ElementFactory.make("jpegenc")
         appsink = Gst.ElementFactory.make("appsink")
-        if not all([appsrc, videoconvert, jpegenc, appsink]):
+        if not all([appsrc, videoconvert, capsfilter, jpegenc, appsink]):
             raise RuntimeError("Failed to create JPEG encoder elements")
-        for element in (appsrc, videoconvert, jpegenc, appsink):
+        for element in (appsrc, videoconvert, capsfilter, jpegenc, appsink):
             pipeline.add(element)
         appsrc.link(videoconvert)
-        videoconvert.link(jpegenc)
+        videoconvert.link(capsfilter)
+        capsfilter.link(jpegenc)
         jpegenc.link(appsink)
         appsrc.set_property(
             "caps",
             Gst.Caps.from_string(
                 f"video/x-raw,format=BGR,width={width},height={height},framerate=1/1"
             ),
+        )
+        capsfilter.set_property(
+            "caps", Gst.Caps.from_string("video/x-raw,format=I420")
         )
         appsink.set_property("sync", False)
         pipeline.set_state(Gst.State.PAUSED)

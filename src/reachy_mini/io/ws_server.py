@@ -22,6 +22,7 @@ import numpy as np
 from fastapi import WebSocket, WebSocketDisconnect
 
 from reachy_mini.daemon.backend.abstract import Backend
+from reachy_mini.daemon.telemetry import telemetry
 from reachy_mini.io.abstract import AbstractServer
 from reachy_mini.io.protocol import (
     AnyCommand,
@@ -43,6 +44,7 @@ class WSServer(AbstractServer):
         """Initialize the WebSocket server."""
         self.backend = backend
         self._cmd_event = threading.Event()
+        self._client_connected_event = threading.Event()
 
         # Connected client queues (populated when clients connect via handle_client)
         self._clients: set[asyncio.Queue[str]] = set()
@@ -79,13 +81,18 @@ class WSServer(AbstractServer):
         """Return the event that is set when a command is received."""
         return self._cmd_event
 
+    def client_connected_event(self) -> threading.Event:
+        """Return the event that is set when a new client is registered."""
+        return self._client_connected_event
+
     # ------------------------------------------------------------------
     # Broadcasting
     # ------------------------------------------------------------------
 
     def _broadcast(self, msg: str) -> None:
         """Thread-safe broadcast to all connected client queues."""
-        if self._loop is None:
+        # No clients: skip the per-tick call_soon_threadsafe wakeup.
+        if self._loop is None or not self._clients:
             return
 
         def _put(msg: str = msg) -> None:
@@ -124,6 +131,11 @@ class WSServer(AbstractServer):
 
         queue: asyncio.Queue[str] = asyncio.Queue(maxsize=100)
         self._clients.add(queue)
+        session_key = f"sdk:{id(queue)}"
+        telemetry.session_begin(session_key, "python_sdk")
+        # Wake the daemon's status thread so this client gets a status now
+        # instead of on the next 1 Hz tick.
+        self._client_connected_event.set()
 
         send_task = asyncio.create_task(self._send_loop(websocket, queue))
         try:
@@ -135,6 +147,7 @@ class WSServer(AbstractServer):
         finally:
             send_task.cancel()
             self._clients.discard(queue)
+            telemetry.session_end(session_key)
 
     async def _send_loop(self, websocket: WebSocket, queue: asyncio.Queue[str]) -> None:
         """Forward queued messages to the WebSocket client."""

@@ -26,6 +26,9 @@ def main() -> None:
             robot_ip = status.wlan_ip
 
         doa_url = f"http://{robot_ip}:8000/api/state/doa"
+        # One reused connection: a fresh handshake per poll times out over
+        # Wi-Fi contended by the WebRTC audio stream.
+        session = requests.Session()
 
         last_doa = -1
         THRESHOLD = 0.004  # ~2 degrees
@@ -33,7 +36,7 @@ def main() -> None:
         while True:
             # Get DoA from FastAPI endpoint
             try:
-                response = requests.get(doa_url, timeout=1.0)
+                response = session.get(doa_url, timeout=3.0)
                 response.raise_for_status()
                 doa_data = response.json()
 

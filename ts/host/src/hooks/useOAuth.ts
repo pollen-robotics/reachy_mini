@@ -6,19 +6,32 @@
  * "are we signed in?" + names + sign-in / sign-out helpers, and
  * threads the `oauth-pending` flag for the "welcome back"
  * animation across the redirect.
+ *
+ * Boot also carries a SILENT sign-in leg: when `authenticate()` finds
+ * no token and no guard objects (explicit sign-out, previous attempt
+ * this tab, dev token, iframe), the hook redirects once through
+ * `login({ prompt: 'none' })`. Users with a live HF session and a
+ * prior grant come back signed in without ever seeing SignInView;
+ * everyone else bounces straight back to the regular signed-out view.
  */
 import { useEffect, useState, useCallback } from 'react';
 
+import { createLogger } from '@pollen-robotics/reachy-mini-sdk';
 import type { ReachyMiniInstance } from '../lib/sdk-types';
 import {
   clearSignedOutFlag,
+  clearSilentAuthAttempted,
   consumeOAuthPending,
   hasCachedDevToken,
+  hasSilentAuthAttempted,
   isUserSignedOut,
   markOAuthPending,
+  markSilentAuthAttempted,
   markUserSignedOut,
   rehydrateDevToken,
 } from '../lib/settings';
+
+const log = createLogger('host');
 
 export interface OAuthState {
   /** SDK reports an active auth (token + user name resolved). */
@@ -28,6 +41,11 @@ export interface OAuthState {
   /** Boot started from an OAuth redirect (i.e. `oauth-pending`
    *  flag was set). Reset once `isAuthenticated` flips true. */
   isPostOauthReturn: boolean;
+  /** `false` until the boot-time `authenticate()` settles (or we
+   *  know synchronously there's nothing to resolve). The shell
+   *  uses this to keep a neutral splash up instead of flashing
+   *  `SignInView` while the cached token is still resolving. */
+  authResolved: boolean;
   /** Async wrapper around `sdk.login()`. */
   signIn(): Promise<void>;
   /** Sync wrapper around `sdk.logout()` + mark signed-out. */
@@ -54,6 +72,45 @@ function readOAuthPendingOnce(): boolean {
   return cachedOAuthPending;
 }
 
+/**
+ * How long the boot splash may wait for the SDK bundle before giving
+ * up on auth resolution. Every path that resolves `authResolved`
+ * requires an `sdk` instance; if the bundle never loads (blocked CDN,
+ * stale Space asset, broken build) nothing would ever flip it and the
+ * shell would hold its neutral splash forever. Past this grace we
+ * declare "not signed in" so the shell lands on SignInView - with its
+ * local-dev missing-config hint, the one screen that can explain the
+ * situation. A late-arriving SDK still runs `authenticate()` and
+ * upgrades the state; the SignInView flash in that race is the
+ * accepted cost of never spinning forever.
+ */
+export const SDK_LOAD_GRACE_MS = 8_000;
+
+/**
+ * Should the boot leg auto-redirect into a silent sign-in
+ * (`login({ prompt: 'none' })`) after `authenticate()` found no token?
+ *
+ * Every guard is a "never surprise the user" rule:
+ *  - explicit sign-out wins over convenience;
+ *  - one attempt per tab (the sessionStorage flag survives the redirect
+ *    round trip, so a `login_required` return can't loop);
+ *  - dev-token setups never redirect (local dev has no OAuth app);
+ *  - never from inside an iframe: with third-party cookies blocked the
+ *    silent attempt always comes back `login_required`, and the iframe
+ *    would navigate away from its parent's page.
+ */
+function shouldAttemptSilentSignIn(): boolean {
+  if (isUserSignedOut()) return false;
+  if (hasSilentAuthAttempted()) return false;
+  if (hasCachedDevToken()) return false;
+  try {
+    if (window.self !== window.top) return false;
+  } catch {
+    return false; // cross-origin access throw = definitely framed
+  }
+  return true;
+}
+
 export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
   const [isAuthenticated, setAuth] = useState<boolean>(() =>
     Boolean(sdk?.isAuthenticated),
@@ -64,6 +121,26 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
   const [isPostOauthReturn, setPostOauth] = useState<boolean>(() =>
     readOAuthPendingOnce(),
   );
+  // Whether the boot-time auth resolution has settled. Starts true only when
+  // there's nothing async to wait for: the SDK already reports authenticated,
+  // or the user explicitly signed out earlier. Otherwise we must wait for
+  // `authenticate()` before deciding between SignInView and the picker.
+  const [authResolved, setAuthResolved] = useState<boolean>(() =>
+    Boolean(sdk?.isAuthenticated) || isUserSignedOut(),
+  );
+
+  // 1b. Escape hatch: everything below waits on `sdk`, so a bundle
+  //     that never materialises would otherwise pin `authResolved`
+  //     false - and the boot splash up - forever. See
+  //     `SDK_LOAD_GRACE_MS` for the trade-off.
+  useEffect(() => {
+    if (sdk) return;
+    const t = window.setTimeout(
+      () => setAuthResolved(true),
+      SDK_LOAD_GRACE_MS,
+    );
+    return () => window.clearTimeout(t);
+  }, [sdk]);
 
   // 2. Try to authenticate from cached tokens once the SDK is
   //    available. Skip if the user explicitly signed out earlier.
@@ -81,16 +158,44 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
   //    until the next sign-out / page reload.
   useEffect(() => {
     if (!sdk) return;
-    if (isUserSignedOut()) return;
+    if (isUserSignedOut()) {
+      // Nothing to resolve: we already know the user is signed out.
+      setAuthResolved(true);
+      return;
+    }
     let alive = true;
+    // True once we've committed to the silent-auth redirect: the page is
+    // about to unload, so `authResolved` must stay false to keep the
+    // neutral splash up instead of flashing SignInView for a frame.
+    let redirecting = false;
     void (async () => {
       try {
         const ok = await sdk.authenticate();
         if (!alive) return;
+        if (!ok && shouldAttemptSilentSignIn()) {
+          // Silent sign-in leg: a user with a live HF session and a
+          // previous grant comes back with a token and never sees the
+          // sign-in view; anyone else bounces back with `?error=...`,
+          // which `authenticate()` strips on the return leg while the
+          // attempt flag routes them to the regular SignInView.
+          markSilentAuthAttempted();
+          try {
+            await sdk.login({ prompt: 'none' });
+            redirecting = true;
+            return;
+          } catch (err) {
+            // No client ID (dev setups) or blocked redirect: fall
+            // through to the normal signed-out view.
+            log.warn('silent sign-in failed to start', err);
+          }
+        }
         setAuth(ok);
         setUserName(sdk.username);
       } catch (err) {
-        console.warn('[reachy-mini-sdk/host] authenticate() threw', err);
+        log.warn('authenticate() threw', err);
+      } finally {
+        // Settled either way - the shell can now pick a definite view.
+        if (alive && !redirecting) setAuthResolved(true);
       }
     })();
     return () => {
@@ -123,6 +228,8 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
   const signIn = useCallback(async () => {
     if (!sdk) return;
     clearSignedOutFlag();
+    // Explicit click re-arms the one-shot silent attempt for this tab.
+    clearSilentAuthAttempted();
 
     // Local dev path: a `devToken` was passed to `mountHost()`
     // earlier. Re-seed the session storage (wiped by the previous
@@ -147,7 +254,7 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
         setUserName(sdk.username);
         if (ok) setPostOauth(true);
       } catch (err) {
-        console.error('[reachy-mini-sdk/host] dev-token authenticate() threw', err);
+        log.error('dev-token authenticate() threw', err);
         throw err;
       }
       return;
@@ -162,7 +269,7 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
       // login() typically redirects, so a throw here means the
       // redirect was blocked. Clear the pending flag so the
       // next boot doesn't show a confused "welcome back".
-      console.error('[reachy-mini-sdk/host] sdk.login() threw', err);
+      log.error('sdk.login() threw', err);
       consumeOAuthPending();
       throw err;
     }
@@ -173,7 +280,7 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
     try {
       sdk.logout();
     } catch (err) {
-      console.warn('[reachy-mini-sdk/host] sdk.logout() threw', err);
+      log.warn('sdk.logout() threw', err);
     }
     markUserSignedOut();
     setAuth(false);
@@ -185,6 +292,7 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
     isAuthenticated,
     userName,
     isPostOauthReturn,
+    authResolved,
     signIn,
     signOut,
   };

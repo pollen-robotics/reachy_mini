@@ -15,8 +15,6 @@ from typing import Dict, List, Literal, Optional, Union, cast
 
 import numpy as np
 import numpy.typing as npt
-from asgiref.sync import async_to_sync
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import (
@@ -42,7 +40,9 @@ from reachy_mini.io.ws_client import WSClient
 from reachy_mini.media.camera_constants import get_camera_specs_by_name
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
+from reachy_mini.utils.discovery import find_robots
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
+from reachy_mini.utils.rotation import Rotation as R
 from reachy_mini.vision.look_at import (
     default_head_to_camera_transform,
     look_at_image_pose,
@@ -76,16 +76,19 @@ SLEEP_HEAD_POSE = np.array(
 
 ConnectionMode = Literal["auto", "localhost_only", "network"]
 
+DEFAULT_ROBOT_NAME = "reachy_mini"
+
 
 class ReachyMini:
     """Reachy Mini class for controlling a simulated or real Reachy Mini robot.
 
     Args:
-        robot_name: Name of the robot, defaults to "reachy_mini".
+        robot_name: Name of the robot, defaults to "reachy_mini". A non-default
+            name is validated locally or resolved via mDNS.
         host: Hostname or IP of the daemon. Defaults to "reachy-mini.local".
             In ``"auto"`` mode this is only used as a fallback when localhost
-            is unreachable, so the default works out of the box for local
-            development.
+            is unreachable. For a non-default *robot_name* it is also tried as a
+            last resort when mDNS discovery does not locate the robot.
         port: Port of the daemon's FastAPI server. Defaults to 8000.
         connection_mode: Select how to connect to the daemon. Use
             `"localhost_only"` to restrict connections to daemons running on
@@ -99,7 +102,7 @@ class ReachyMini:
 
     def __init__(
         self,
-        robot_name: str = "reachy_mini",
+        robot_name: str = DEFAULT_ROBOT_NAME,
         host: str = "reachy-mini.local",
         port: int = 8000,
         connection_mode: ConnectionMode = "auto",
@@ -114,11 +117,14 @@ class ReachyMini:
         """Initialize the Reachy Mini robot.
 
         Args:
-            robot_name (str): Name of the robot, defaults to "reachy_mini".
+            robot_name: Name of the robot, defaults to "reachy_mini". A
+                non-default name is validated locally or resolved via mDNS.
             host (str): Hostname or IP of the daemon. Defaults to
                 "reachy-mini.local".  In ``"auto"`` mode (the default) the
                 client first tries ``localhost``; *host* is only used as a
-                fallback or when *connection_mode* is ``"network"``.
+                fallback or when *connection_mode* is ``"network"``. For a
+                non-default *robot_name* it is also tried as a last resort when
+                mDNS discovery does not locate the robot.
             port (int): Port of the daemon's FastAPI server. Defaults to 8000.
             connection_mode: `"auto"` (default), `"localhost_only"` or `"network"`.
                 `"auto"` will first try daemons on localhost and fall back to
@@ -460,6 +466,66 @@ class ReachyMini:
     ) -> tuple[WSClient, ConnectionMode]:
         """Create a client according to the requested mode, adding auto fallback."""
         requested_mode = cast(ConnectionMode, requested_mode.lower())
+
+        if self.robot_name != DEFAULT_ROBOT_NAME:
+            if requested_mode != "network":
+                try:
+                    client = self._connect_and_verify_name(
+                        "localhost", self.port, timeout
+                    )
+                except (ConnectionError, TimeoutError) as error:
+                    if requested_mode == "localhost_only":
+                        raise ConnectionError(
+                            f"Could not connect to a local Reachy Mini daemon named "
+                            f"{self.robot_name!r}: {error}"
+                        ) from error
+                    self.logger.info(
+                        "No matching local daemon found (%s). Discovering %r via mDNS.",
+                        error,
+                        self.robot_name,
+                    )
+                else:
+                    self.logger.info("Connection mode selected: localhost_only")
+                    return client, "localhost_only"
+
+            matches = [
+                robot
+                for robot in find_robots(timeout=timeout)
+                if robot.name == self.robot_name
+            ]
+            if len(matches) > 1:
+                self.logger.warning(
+                    "Found %d daemons named %r on the network; using the first.",
+                    len(matches),
+                    self.robot_name,
+                )
+
+            candidates = [
+                (host, robot.port or self.port)
+                for robot in matches
+                for host in [*robot.addresses, robot.host]
+                if host
+            ]
+            # mDNS can be blocked, cross-subnet, or over a VPN. Always try the
+            # user-supplied host as a last resort; the name check makes it safe.
+            candidates.append((self.host, self.port))
+
+            last_error: Exception | None = None
+            for host, port in candidates:
+                try:
+                    client = self._connect_and_verify_name(host, port, timeout)
+                except (ConnectionError, TimeoutError) as error:
+                    last_error = error
+                    continue
+
+                self.logger.info("Connection mode selected: network")
+                return client, "network"
+
+            raise ConnectionError(
+                f"Could not connect to a Reachy Mini daemon named "
+                f"{self.robot_name!r} via mDNS or host {self.host!r}: {last_error}"
+            )
+
         if requested_mode == "auto":
             try:
                 client = self._connect_single(
@@ -516,6 +582,31 @@ class ReachyMini:
         """Connect once with the requested host/port and guard cleanup."""
         client = WSClient(host, port)
         client.wait_for_connection(timeout=timeout)
+        return client
+
+    def _connect_and_verify_name(
+        self, host: str, port: int, timeout: float
+    ) -> WSClient:
+        """Connect to host:port and verify the daemon advertises the expected name.
+
+        Raises ``ConnectionError``/``TimeoutError`` on connection failure, and
+        ``ConnectionError`` on a name mismatch. Never leaks a client.
+        """
+        client = self._connect_single(host=host, port=port, timeout=timeout)
+        try:
+            status = client.get_status(timeout=timeout)
+        except (ConnectionError, TimeoutError):
+            client.disconnect()
+            raise
+        if status.robot_name != self.robot_name:
+            client.disconnect()
+            raise ConnectionError(
+                f"Daemon at {host!r} is named {status.robot_name!r}, "
+                f"expected {self.robot_name!r}."
+            )
+        # get_status() consumed the status; keep it for the media setup, which
+        # would otherwise wait for the daemon's next 1 Hz publish.
+        client.status_received.set()
         return client
 
     def set_target(
@@ -601,6 +692,7 @@ class ReachyMini:
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
+            MoveBusyError: If another move (from the dashboard, another client, or the daemon itself) is already running.
 
         """
         if head is None and antennas is None and body_yaw is None:
@@ -1079,4 +1171,18 @@ class ReachyMini:
             else:
                 await asyncio.sleep(0.001)
 
-    play_move = async_to_sync(async_play_move)
+    def play_move(
+        self,
+        move: Move,
+        play_frequency: float = 100.0,
+        initial_goto_duration: float = 0.0,
+        sound: bool = True,
+    ) -> None:
+        """Play a Move and block until it ends. See ``async_play_move``.
+
+        Runs in the caller's thread, so Ctrl+C stops the move. From async code,
+        await ``async_play_move`` instead.
+        """
+        asyncio.run(
+            self.async_play_move(move, play_frequency, initial_goto_duration, sound)
+        )

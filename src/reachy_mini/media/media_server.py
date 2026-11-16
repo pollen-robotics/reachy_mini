@@ -22,12 +22,15 @@ Example usage::
     >>> # The server is now streaming and ready to accept client connections
 """
 
+import ctypes
+import ctypes.util
 import logging
+import math
 import os
 import platform
 import time
 from dataclasses import dataclass, field
-from threading import Lock, Thread
+from threading import Lock, RLock, Thread
 from typing import Any, Callable, Dict, Optional
 
 import gi
@@ -55,13 +58,14 @@ from reachy_mini.media.camera_constants import (
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
 from reachy_mini.media.gstreamer_utils import handle_default_bus_message
+from reachy_mini.media.webrtc_utils import TurnCredentials, split_for_data_channel
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
-from gi.repository import GLib, Gst, GstApp  # noqa: E402, F401
+from gi.repository import GLib, GObject, Gst, GstApp  # noqa: E402, F401
 
 # Hard cap on how long a freshly-added consumer is allowed to spend
 # before its `webrtcbin.connection-state` reaches "connected". In a
@@ -89,6 +93,20 @@ SESSION_FAILED_REASON_PC_FAILED = "peer_connection_failed"
 
 # Cap the local IPC feed below the capture rate; it also paces every client, face tracker included.
 IPC_FPS = 10
+
+# Reopening the Windows mic after Windows invalidated it (see
+# `_on_mic_failure`). Retries back off up to the cap while failures keep
+# coming, and start again from the base delay after a quiet spell.
+MIC_REOPEN_DELAY_S = 1.0
+MIC_REOPEN_MAX_DELAY_S = 30.0
+MIC_REOPEN_RESET_S = 60.0
+
+# Restarting the WebRTC pipeline after an error (see
+# `_schedule_pipeline_restart`): at most PIPELINE_RESTART_LIMIT restarts in
+# any PIPELINE_RESTART_WINDOW_S, so a permanently broken device can't loop.
+PIPELINE_RESTART_DELAY_S = 1
+PIPELINE_RESTART_LIMIT = 3
+PIPELINE_RESTART_WINDOW_S = 60.0
 
 
 @dataclass
@@ -126,6 +144,77 @@ class _PeerWebRTCState:
         }
 
 
+# webrtcsink names each consumer's webrtcbin after its signalling session
+# (the relay's local session id), unlike the consumer peer id it reports,
+# which all relayed sessions share (the relay's own local peer id).
+_WEBRTCBIN_NAME_PREFIX = "webrtcbin-"
+
+
+def _session_id_of(webrtcbin: Gst.Element) -> Optional[str]:
+    """Return the signalling session id a consumer's webrtcbin belongs to."""
+    name = webrtcbin.get_name() or ""
+    if name.startswith(_WEBRTCBIN_NAME_PREFIX) and len(name) > len(
+        _WEBRTCBIN_NAME_PREFIX
+    ):
+        return name[len(_WEBRTCBIN_NAME_PREFIX) :]
+    return None
+
+
+def _is_wasapi2src(obj: Optional[GObject.Object]) -> bool:
+    """Whether a bus message source is the Windows mic (``wasapi2src``)."""
+    if not isinstance(obj, Gst.Element):
+        return False
+    factory = obj.get_factory()
+    return factory is not None and factory.get_name() == "wasapi2src"
+
+
+_gobject_ref: Optional[Callable[[Any], int]] = None
+_gobject_ref_unavailable = False
+
+
+def _resolve_gobject_ref() -> Optional[Callable[[Any], int]]:
+    """Return a C-level ``g_object_ref`` for PyGObject objects, if reachable."""
+    global _gobject_ref, _gobject_ref_unavailable
+    if _gobject_ref is not None or _gobject_ref_unavailable:
+        return _gobject_ref
+    try:
+        lib = ctypes.CDLL(
+            ctypes.util.find_library("gobject-2.0") or "libgobject-2.0.so.0"
+        )
+        lib.g_object_ref.argtypes = [ctypes.c_void_p]
+        lib.g_object_ref.restype = ctypes.c_void_p
+        get_pointer = ctypes.pythonapi.PyCapsule_GetPointer
+        get_pointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
+        get_pointer.restype = ctypes.c_void_p
+
+        def _ref(obj: Any) -> int:
+            return int(lib.g_object_ref(get_pointer(obj.__gpointer__, None)))
+
+        _gobject_ref = _ref
+    except Exception:
+        _gobject_ref_unavailable = True
+    return _gobject_ref
+
+
+def _keep_ice_agent_alive(ice: GObject.Object) -> None:
+    """Re-balance the reference ``webrtcbin``'s ``ice-agent`` getter hands out.
+
+    webrtcbin keeps its ICE agent as a floating reference (seen on
+    GStreamer 1.24, 1.26 - the robot - and 1.28): PyGObject sinks it when
+    wrapping, owns the only reference, and finalizes the agent as soon as
+    the Python wrapper is collected - under a live webrtcbin (re-reads
+    return None, then GStreamer-CRITICAL on dispose). Detected by a
+    refcount of 1 while we hold the wrapper; then take one C-level
+    reference, released by webrtcbin's own unref on dispose. Callers must
+    check `_resolve_gobject_ref()` BEFORE reading the property.
+    """
+    if ice.__grefcount__ > 1:
+        return  # webrtcbin holds its own reference: nothing to fix
+    ref = _resolve_gobject_ref()
+    assert ref is not None  # checked by the caller before reading ice-agent
+    ref(ice)
+
+
 class GstMediaServer:
     """Daemon-side GStreamer media server.
 
@@ -154,6 +243,13 @@ class GstMediaServer:
     # end-to-end latency is the metric we watch closest.
     RX_JITTER_LATENCY_MS = 300
 
+    # Pose push cadence (ms) over the unreliable/unordered `pose` data
+    # channel. ~30 Hz gives the 3D mirror fresh targets to interpolate
+    # without flooding the SCTP send queue; because the channel drops
+    # (max-retransmits=0) rather than retransmits, a lost frame is simply
+    # superseded by the next one 33 ms later instead of stalling the stream.
+    POSE_PUSH_INTERVAL_MS = 33
+
     # Send-side Opus loss resilience for the robot mic -> phone leg (the
     # audio that feeds the realtime backend / STT). webrtcsink builds the
     # opusenc with defaults (inband-fec off, packet-loss-percentage 0), so
@@ -170,6 +266,7 @@ class GstMediaServer:
         self,
         log_level: str = "INFO",
         sim_mode: SimulationMode = SimulationMode.NONE,
+        enable_turn: Optional[bool] = None,
     ) -> None:
         """Initialize the GStreamer WebRTC pipeline.
 
@@ -177,6 +274,11 @@ class GstMediaServer:
             log_level: Logging level for WebRTC daemon operations.
             sim_mode: Simulation mode. MUJOCO receives video via UDP,
                 MOCKUP uses autovideosrc, NONE detects a physical camera.
+            enable_turn: offer TURN relay candidates to consumers, so a
+                remote one behind a restrictive NAT can still reach us.
+                Costs one background thread refreshing credentials. None
+                (the default) reads ``turn_enabled`` from the daemon
+                config file, falling back to True when it is unset.
 
         Raises:
             RuntimeError: If no camera is detected (unless in simulation mode)
@@ -218,8 +320,50 @@ class GstMediaServer:
 
         self._cam_path = cam_path
 
-        self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
+        # peer_id -> channel to SEND on, registered at on-open: an orphan
+        # session of the same peer (the relay's sessions share one peer id)
+        # never opens, so it can no longer displace the live session's.
+        self._data_channels: dict[str, Gst.Element] = {}
+        # peer_id -> last channel created, holding the Python reference from
+        # creation until that channel's on-close, as the original registry
+        # did (dropping channel references early is what segfaulted earlier
+        # attempts). Never read for sending.
+        self._created_data_channels: dict[str, Gst.Element] = {}
+        # Open state is keyed by SESSION, not peer: every relayed session
+        # shares the relay's one consumer peer id, so a peer-keyed flag was
+        # cleared for the live session when an orphan or a superseded one
+        # was removed. Plain strings only, never read from the channel.
+        self._data_channel_session: dict[str, str] = {}  # peer_id -> session key
+        self._open_data_channels: set[str] = set()  # session keys past on-open
         self._on_data_message: Optional[Callable[[str, str], None]] = None
+        # Second, unreliable/unordered data channel per peer used to *push*
+        # the robot pose at a steady rate (see `_setup_pose_channel` /
+        # `_push_pose`). Kept separate from `_data_channels` so a stale pose
+        # frame is never head-of-line-blocking a reliable control message.
+        self._pose_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
+        # peer_id -> the webrtcbin its pose channel was opened on, so a
+        # reconnect's old session can't drop the new session's pose stream.
+        self._pose_channel_bins: dict[str, Gst.Element] = {}
+        # Each peer's `webrtcbin`, kept so the pose channel can be opened
+        # lazily on `subscribe_pose` rather than eagerly for every peer.
+        self._peer_webrtcbins: dict[str, Gst.Element] = {}  # peer_id -> bin
+        # Peers that have opted into the pose stream via `subscribe_pose`. The
+        # push timer only exists while this set is non-empty, so an idle
+        # session (no 3D mirror on screen) costs nothing - not even a wakeup.
+        self._pose_subscribers: set[str] = set()
+        # peer_id -> the webrtcbin live when it subscribed: a reconnect's old
+        # session must not drop a subscription the new one already made.
+        self._pose_subscribed_on: dict[str, Optional[Gst.Element]] = {}
+        # Callback returning the JSON pose frame to push (set by the backend
+        # via `set_pose_provider`), and the GLib source id of the push timer.
+        self._pose_provider: Optional[Callable[[], Optional[str]]] = None
+        self._pose_push_source_id: Optional[int] = None
+        # The three fields above are read/written from two threads: the GLib
+        # main loop (`_push_pose` disarming itself) and the backend's asyncio
+        # thread (`set_pose_subscription` re-arming on subscribe). Without a
+        # lock, a subscribe interleaved with a disarm could observe a stale
+        # source id, skip the re-arm, and leave the stream permanently dead.
+        self._pose_lock = Lock()
         # Optional callback fired on the GStreamer thread when a peer
         # leaves; used by the backend to free per-peer resources such
         # as the journalctl subprocess for a `subscribe_logs` stream.
@@ -230,6 +374,17 @@ class GstMediaServer:
         # central signaling relay so the JS client gets a typed
         # `endSession` instead of a spinner. Signature:
         # `(peer_id, reason, diagnostic_dict) -> None`.
+        # Per-session liveness of the peer-to-peer link, keyed by the
+        # signalling session id (see `_session_id_of`): monotonic time of
+        # the client's last sign of life - an RTCP packet (sent by any
+        # client receiving media, even one that never writes on the data
+        # channel) or a data-channel message. Sessions whose client sent
+        # an RTCP BYE are in `_session_bye`. Read by the relay through
+        # `session_idle_seconds`.
+        self._session_activity: Dict[str, float] = {}
+        self._session_bye: set[str] = set()
+        self._session_rtcp_seen: set[str] = set()
+        self._session_activity_lock = Lock()
         self._on_session_failed: Optional[
             Callable[[str, str, Dict[str, Any]], None]
         ] = None
@@ -249,8 +404,40 @@ class GstMediaServer:
         # reused across per-peer playback pipelines (see _on_consumer_pad_added).
         self._aec_enabled = False
         self._webrtcechoprobe: Optional[Gst.Element] = None
+        # Pending reopen of the Windows mic, see `_on_mic_failure`.
+        self._mic_reopen_source_id: Optional[int] = None
+        self._mic_reopen_delay_s = MIC_REOPEN_DELAY_S
+        self._mic_last_failure = 0.0
+        # Whether `start()` has run without a matching `stop()`. Only a
+        # running pipeline is restarted after an error.
+        self._pipeline_running = False
+        # Serializes `start()` / `stop()`: the daemon calls them from its own
+        # threads, `_restart_pipeline` from the GLib main loop.
+        self._pipeline_lock = RLock()
+        self._pipeline_restart_source_id: Optional[int] = None
+        self._pipeline_restart_times: list[float] = []
+
+        if enable_turn is None:
+            # Deferred like the speaker-EQ lookup in audio_utils, so this
+            # module doesn't pull in the daemon package at import time.
+            from reachy_mini.daemon.startup_app_config import get_turn_enabled
+
+            configured = get_turn_enabled()
+            enable_turn = True if configured is None else configured
+        # Refreshed off-thread so `_consumer_added` can read credentials
+        # without doing I/O on the thread that builds the SDP offer.
+        # None when relay candidates are disabled.
+        self._turn: TurnCredentials | None = None
+        if enable_turn:
+            try:
+                self._turn = TurnCredentials()
+            except ValueError as error:
+                self._logger.warning("TURN disabled: %s", error)
+        if self._turn is not None:
+            self._turn.start()
 
         self._build_pipeline()
+        self._pipeline_needs_rebuild = False
 
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
@@ -268,10 +455,29 @@ class GstMediaServer:
         self._logger.debug("Pipeline built")
 
     def close(self) -> None:
-        """Release GStreamer resources (MainLoop, bus watch)."""
+        """Release GStreamer resources (MainLoop, bus watch).
+
+        Reached from `__del__`, so it has to tolerate a half-built instance:
+        `__init__` raises before any of these attributes exist when the camera
+        resolution can't be determined, and a bare attribute access here would
+        bury that real error under an unraisable `AttributeError`.
+        """
         self._logger.debug("Cleaning up GstMediaServer")
-        self._loop.quit()
-        self._bus_sender.remove_watch()
+        turn = getattr(self, "_turn", None)
+        if turn is not None:
+            turn.stop()
+        # A non-None source id implies a completed `__init__`, hence a lock.
+        if getattr(self, "_pose_push_source_id", None) is not None:
+            with self._pose_lock:
+                if self._pose_push_source_id is not None:
+                    GLib.source_remove(self._pose_push_source_id)
+                    self._pose_push_source_id = None
+        loop = getattr(self, "_loop", None)
+        if loop is not None:
+            loop.quit()
+        bus_sender = getattr(self, "_bus_sender", None)
+        if bus_sender is not None:
+            bus_sender.remove_watch()
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
@@ -344,15 +550,27 @@ class GstMediaServer:
         peer_id: str,
         webrtcbin: Gst.Element,
     ) -> None:
-        self._logger.info(f"consumer added with peer id: {peer_id}")
+        session_id = _session_id_of(webrtcbin)
+        self._logger.info(
+            f"consumer added with peer id: {peer_id} (session {session_id})"
+        )
 
         # Gst.debug_bin_to_dot_file(
         #     self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
         # )
 
+        # Add TURN relay servers to this consumer's webrtcbin BEFORE the
+        # offer is generated, so our offer advertises a relay candidate.
+        # Without it we only offer host/srflx and a NAT-restricted remote
+        # consumer (e.g. a cloud backend) can't reach us.
+        self._apply_turn_servers(webrtcbin)
+        self._disable_upnp(webrtcbin)
+
         GLib.timeout_add_seconds(5, self._dump_latency)
 
-        self._setup_data_channel(peer_id, webrtcbin)
+        self._setup_data_channel(peer_id, webrtcbin, session_id)
+        if session_id is not None:
+            self._track_session_liveness(session_id, webrtcbin)
 
         # Deepen this consumer's receive jitter buffer before media flows
         # so transient Wi-Fi jitter on the phone->robot voice leg doesn't
@@ -371,7 +589,66 @@ class GstMediaServer:
         # this peer's webrtcbin so we can detect a stuck negotiation
         # and report it (instead of letting the JS client spin
         # forever). See `ICE_NEGOTIATION_DEADLINE_S`.
-        self._install_negotiation_watchdog(peer_id, webrtcbin)
+        # Keyed by session: relayed sessions all share one consumer peer id.
+        self._install_negotiation_watchdog(session_id or peer_id, webrtcbin)
+
+    def _disable_upnp(self, webrtcbin: Gst.Element) -> None:
+        """Stop libnice from asking the home router for port mappings.
+
+        libnice's NiceAgent has UPnP-IGD on by default, so every
+        consumer made the robot SSDP-discover the router and send it
+        AddPortMapping / DeletePortMapping SOAP calls. We never need a
+        mapped port (LAN host candidates, STUN and TURN cover every
+        path), and some home routers handle it badly: on an SFR box the
+        calls started timing out ("Error deleting port mapping: Could
+        not connect to 192.168.1.1") shortly before the box hung and
+        rebooted, dropping the robot and the phone off Wi-Fi. Must run
+        before candidate gathering, i.e. in ``consumer-added``.
+
+        Merely reading ``ice-agent`` from Python frees the agent unless
+        its reference is re-balanced (see `_keep_ice_agent_alive`), so
+        without a usable ``g_object_ref`` UPnP is left on instead.
+        """
+        if _resolve_gobject_ref() is None:
+            self._logger.warning(
+                "Leaving UPnP on: no g_object_ref to read the ICE agent safely"
+            )
+            return
+        try:
+            ice = webrtcbin.get_property("ice-agent")
+        except Exception as e:
+            self._logger.warning(f"Could not reach the ICE agent to disable UPnP: {e}")
+            return
+        if ice is None:
+            return
+        _keep_ice_agent_alive(ice)
+        try:
+            ice.get_property("agent").set_property("upnp", False)
+        except Exception as e:  # older GStreamer: no NiceAgent behind it
+            self._logger.warning(f"Could not disable UPnP on the ICE agent: {e}")
+
+    def _apply_turn_servers(self, webrtcbin: Gst.Element) -> None:
+        """Add the currently held TURN relay servers to this webrtcbin.
+
+        Must run before the SDP offer is generated so the offer carries a
+        ``relay`` candidate. Reads cached credentials only and never does
+        I/O: this runs on the thread that builds the offer, so blocking
+        here would delay the connection for every consumer, including LAN
+        ones that will never use a relay. Credentials are never logged.
+        """
+        if self._turn is None:
+            return
+        uris = self._turn.turn_uris()
+        if not uris:
+            # Normal right after boot, or when the proxy is unreachable.
+            self._logger.info("No TURN servers held; offering host/srflx only")
+            return
+        for uri in uris:
+            try:
+                webrtcbin.emit("add-turn-server", uri)
+            except Exception as e:  # noqa: BLE001 - never break negotiation
+                self._logger.warning("add-turn-server failed: %r", e)
+        self._logger.debug("Configured %d TURN server(s) on webrtcbin", len(uris))
 
     # GstWebRTCRTPTransceiverDirection enum values
     _WEBRTC_DIRECTION_SENDRECV = 4
@@ -406,12 +683,34 @@ class GstMediaServer:
         peer_id: str,
         webrtcbin: Gst.Element,
     ) -> None:
-        self._logger.info(f"consumer removed: {peer_id}")
-        self._cleanup_incoming_audio(peer_id)
-        # Cancel any outstanding watchdog for this peer; the consumer
+        session_id = _session_id_of(webrtcbin)
+        self._logger.info(f"consumer removed: {peer_id} (session {session_id})")
+        if session_id is not None:
+            self._forget_session_liveness(session_id)
+        # A reconnect's new session may already own this peer id: an old
+        # session going away only tears down what it owned itself.
+        stale = self._peer_webrtcbins.get(peer_id) not in (None, webrtcbin)
+        self._cleanup_incoming_audio(peer_id, webrtcbin if stale else None)
+        if not stale:
+            self._drop_pose_peer(peer_id)
+        else:
+            if self._pose_channel_bins.get(peer_id) is webrtcbin:
+                self._pose_channels.pop(peer_id, None)
+                self._pose_channel_bins.pop(peer_id, None)
+            # The new session may have subscribed before its channel opened.
+            with self._pose_lock:
+                old_subscription = self._pose_subscribed_on.get(peer_id) is webrtcbin
+            if old_subscription:
+                self._drop_pose_subscription(peer_id)
+        if not stale:
+            self._peer_webrtcbins.pop(peer_id, None)
+        # `on-close` may never fire for a peer that vanished. Only this
+        # session's flag: another session of the same peer may be live.
+        self._open_data_channels.discard(session_id or peer_id)
+        # Cancel any outstanding watchdog for this session; the consumer
         # is gone so there's nothing left to police.
-        self._teardown_negotiation_watchdog(peer_id)
-        if self._on_peer_disconnect is not None:
+        self._teardown_negotiation_watchdog(session_id or peer_id)
+        if self._on_peer_disconnect is not None and not stale:
             try:
                 self._on_peer_disconnect(peer_id)
             except Exception as e:
@@ -452,6 +751,9 @@ class GstMediaServer:
         if media != "audio":
             return
 
+        # A reconnect's new session replaces the old one's playback: stop it
+        # first, or its pipeline and pad probe keep running, orphaned.
+        self._cleanup_incoming_audio(peer_id)
         self._logger.info(f"Setting up incoming audio playback for peer {peer_id}")
 
         # Build playback pipeline element-by-element
@@ -577,6 +879,7 @@ class GstMediaServer:
             "playback_pipeline": self._pipeline_playback,
             "probe_id": probe_id,
             "pad": pad,
+            "webrtcbin": webrtcbin,  # identity only: which session owns it
         }
         self._logger.info(f"Audio playback pipeline started for peer {peer_id}")
 
@@ -593,11 +896,20 @@ class GstMediaServer:
             return False
         return True
 
-    def _cleanup_incoming_audio(self, peer_id: str) -> None:
-        """Remove the incoming-audio pad probe and playback pipeline for a peer."""
-        info = self._incoming_audio.pop(peer_id, None)
-        if info is None:
+    def _cleanup_incoming_audio(
+        self, peer_id: str, webrtcbin: Optional[Gst.Element] = None
+    ) -> None:
+        """Remove the incoming-audio pad probe and playback pipeline for a peer.
+
+        With *webrtcbin*, only if that session owns it: a reconnect's new
+        session may already play its audio under the same peer id.
+        """
+        info = self._incoming_audio.get(peer_id)
+        if info is None or (
+            webrtcbin is not None and info.get("webrtcbin") is not webrtcbin
+        ):
             return
+        del self._incoming_audio[peer_id]
 
         pad = info.get("pad")
         probe_id = info.get("probe_id")
@@ -749,11 +1061,23 @@ class GstMediaServer:
         pipeline.add(queue_webrtc)
         tee.link(queue_webrtc)
 
-        if is_rpi:
-            # RPi: use hardware H264 encoder (webrtcsink doesn't have v4l2h264enc)
+        if is_rpi and not self._webrtcsink_handles_rpi_encoder():
+            # Old OS image: webrtcsink can't drive v4l2h264enc, encode explicitly
             self._build_rpi_encoder_branch(queue_webrtc, pipeline, webrtcsink)
         else:
-            # All other platforms: feed raw video, let webrtcsink handle encoding
+            if is_rpi:
+                # Force H264 so webrtcsink picks v4l2h264enc, not software vp8/vp9
+                webrtcsink.set_property(
+                    "video-caps", Gst.Caps.from_string("video/x-h264")
+                )
+                self._logger.info("webrtcsink drives v4l2h264enc itself")
+                if Gst.ElementFactory.find("rtpgccbwe") is None:
+                    # webrtcsink needs this element (gstrsrtp plugin) to adapt
+                    # the encoder bitrate to network conditions
+                    self._logger.warning(
+                        "rtpgccbwe not found: webrtcsink congestion control disabled"
+                    )
+            # Feed raw video, let webrtcsink handle encoding
             queue_webrtc.link(webrtcsink)
 
     def _build_sim_source(self) -> list[Gst.Element]:
@@ -1003,6 +1327,18 @@ class GstMediaServer:
             videoconvert_ipc.link(capsfilter_ipc)
             capsfilter_ipc.link(ipc_sink)
 
+    @staticmethod
+    def _webrtcsink_handles_rpi_encoder() -> bool:
+        """Check whether webrtcsink can drive the RPi hardware encoder itself.
+
+        Recent OS images (reachy-mini-os#65) ship a patched v4l2h264enc that
+        exposes a runtime-changeable `bitrate` property, which webrtcsink's
+        congestion control drives. Old images lack it, so we must build the
+        encoder branch explicitly.
+        """
+        enc = Gst.ElementFactory.make("v4l2h264enc")
+        return enc is not None and enc.find_property("bitrate") is not None
+
     def _build_rpi_encoder_branch(
         self,
         queue_webrtc: Gst.Element,
@@ -1011,7 +1347,8 @@ class GstMediaServer:
     ) -> None:
         """Build the RPi hardware H264 encoder branch.
 
-        webrtcsink does not have v4l2h264enc, so we encode explicitly on RPi.
+        Fallback for old OS images whose webrtcsink can't drive v4l2h264enc:
+        encode explicitly and feed H264 to webrtcsink.
         """
         v4l2h264enc = Gst.ElementFactory.make("v4l2h264enc")
         extra_controls_structure = Gst.Structure.new_empty("extra-controls")
@@ -1171,6 +1508,11 @@ class GstMediaServer:
             if platform.system() == "Windows":
                 audiosrc = Gst.ElementFactory.make("wasapi2src")
                 audiosrc.set_property("device", id_audio_card)
+                # When Windows invalidates the endpoint, post a warning and
+                # feed silence instead of an error that stops the whole
+                # pipeline, video included. `_on_mic_failure` reopens it.
+                if audiosrc.find_property("continue-on-error") is not None:
+                    audiosrc.set_property("continue-on-error", True)
                 self._logger.info(f"Using WASAPI device {id_audio_card} for capture.")
             elif platform.system() == "Darwin":
                 audiosrc = Gst.ElementFactory.make("osxaudiosrc")
@@ -1194,24 +1536,133 @@ class GstMediaServer:
     def _on_bus_message(
         self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
     ) -> bool:
-        return handle_default_bus_message(self._logger, msg, pipeline)
+        if msg.type == Gst.MessageType.WARNING and _is_wasapi2src(msg.src):
+            err, _ = msg.parse_warning()
+            # Device failures only; e.g. an overrun ("Can't record audio fast
+            # enough", a CORE warning) is no reason to reopen the mic.
+            if err.domain == GLib.quark_to_string(Gst.ResourceError.quark()):
+                self._on_mic_failure(msg.src, err.message)
+                return True
+        keep_watch = handle_default_bus_message(self._logger, msg, pipeline)
+        if msg.type == Gst.MessageType.ERROR and pipeline is self._pipeline_sender:
+            self._schedule_pipeline_restart()
+        return keep_watch
+
+    def _schedule_pipeline_restart(self) -> None:
+        """Rebuild the pipeline after an error instead of leaving it dead.
+
+        An error stops the whole pipeline: WebRTC clients still connect but
+        get no media until something restarts it. Restart it like
+        `stop()` / `start()` do, so clients reconnect, at most
+        ``PIPELINE_RESTART_LIMIT`` times per ``PIPELINE_RESTART_WINDOW_S``.
+        """
+        if not self._pipeline_running or self._pipeline_restart_source_id is not None:
+            return
+
+        now = time.monotonic()
+        self._pipeline_restart_times = [
+            t
+            for t in self._pipeline_restart_times
+            if now - t < PIPELINE_RESTART_WINDOW_S
+        ]
+        if len(self._pipeline_restart_times) >= PIPELINE_RESTART_LIMIT:
+            self._logger.error(
+                f"Media pipeline failed {PIPELINE_RESTART_LIMIT} times within "
+                f"{PIPELINE_RESTART_WINDOW_S:g}s, not restarting it again"
+            )
+            return
+
+        self._pipeline_restart_times.append(now)
+        self._logger.warning(
+            f"Restarting the media pipeline in {PIPELINE_RESTART_DELAY_S}s after an error"
+        )
+        self._pipeline_restart_source_id = GLib.timeout_add_seconds(
+            PIPELINE_RESTART_DELAY_S, self._restart_pipeline
+        )
+
+    def _restart_pipeline(self) -> bool:
+        # Don't block the main loop behind a `stop()` / `start()` running on
+        # another thread: that call decides the pipeline state, and a
+        # `stop()` already cancels this restart.
+        if not self._pipeline_lock.acquire(blocking=False):
+            return False
+        try:
+            self._pipeline_restart_source_id = None
+            # Re-checked under the lock: the media may have been released
+            # since the restart was scheduled.
+            if self._pipeline_running:
+                self.stop()
+                self.start()
+        except Exception:
+            self._logger.exception("Media pipeline restart failed, media stays stopped")
+        finally:
+            self._pipeline_lock.release()
+        return False
+
+    def _on_mic_failure(self, audiosrc: Gst.Element, reason: str) -> None:
+        """Schedule a reopen of the Windows mic after a device failure.
+
+        With ``continue-on-error``, ``wasapi2src`` feeds silence once Windows
+        invalidates its endpoint, and setting ``device`` again makes it reopen
+        the device. A reopen attempted while the device is still in flux fails
+        and posts another warning, which lands here again: retries back off up
+        to ``MIC_REOPEN_MAX_DELAY_S`` and start over after a quiet spell.
+        """
+        now = time.monotonic()
+        if now - self._mic_last_failure > MIC_REOPEN_RESET_S:
+            self._mic_reopen_delay_s = MIC_REOPEN_DELAY_S
+        self._mic_last_failure = now
+        if self._mic_reopen_source_id is not None:
+            return
+
+        delay_s = self._mic_reopen_delay_s
+        self._mic_reopen_delay_s = min(delay_s * 2, MIC_REOPEN_MAX_DELAY_S)
+        self._logger.warning(f"Microphone lost ({reason}), reopening in {delay_s:g}s")
+        self._mic_reopen_source_id = GLib.timeout_add(
+            int(delay_s * 1000), self._reopen_mic, audiosrc
+        )
+
+    def _reopen_mic(self, audiosrc: Gst.Element) -> bool:
+        self._mic_reopen_source_id = None
+        # Skip a source left over from a pipeline rebuilt in the meantime.
+        if audiosrc.get_parent() is self._pipeline_sender:
+            audiosrc.set_property("device", audiosrc.get_property("device"))
+        return False
 
     def start(self) -> None:
-        """Rebuild the pipeline from scratch and start it.
+        """Start the pipeline, rebuilding it from scratch after a stop().
 
-        Rebuilding ensures a clean state after stop() released all hardware.
+        The first start reuses the pipeline built in __init__.
         """
-        self._logger.debug("Starting WebRTC (rebuilding pipeline)")
-        self._build_pipeline()
-        self._pipeline_sender.set_state(Gst.State.PLAYING)
+        with self._pipeline_lock:
+            if self._pipeline_needs_rebuild:
+                self._logger.debug("Starting WebRTC (rebuilding pipeline)")
+                self._bus_sender.remove_watch()
+                self._build_pipeline()
+                self._pipeline_needs_rebuild = False
+            else:
+                self._logger.debug("Starting WebRTC")
+            self._pipeline_sender.set_state(Gst.State.PLAYING)
+            self._pipeline_running = True
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def stop(self) -> None:
         """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
-        self._pipeline_sender.set_state(Gst.State.NULL)
+        with self._pipeline_lock:
+            self._pipeline_running = False
+            for source_id in (
+                self._mic_reopen_source_id,
+                self._pipeline_restart_source_id,
+            ):
+                if source_id is not None:
+                    GLib.source_remove(source_id)
+            self._mic_reopen_source_id = None
+            self._pipeline_restart_source_id = None
+            self._pipeline_sender.set_state(Gst.State.NULL)
+            self._pipeline_needs_rebuild = True
 
-    def play_sound(self, sound_file: str) -> None:
+    def play_sound(self, sound_file: str) -> bool:
         """Play a sound file on the robot's speaker.
 
         Uses GStreamer's playbin element with a platform-aware audio sink.
@@ -1221,15 +1672,21 @@ class GstMediaServer:
             sound_file: Path to the sound file to play. If the file is not
                 found at the given path, it is looked up in the assets directory.
 
+        Returns:
+            False if the file was not found, True once playback has started.
+
+        Raises:
+            RuntimeError: If the playbin element cannot be created.
+
         """
-        if not os.path.exists(sound_file):
+        if not os.path.isfile(sound_file):
             file_path = f"{ASSETS_ROOT_PATH}/{sound_file}"
-            if not os.path.exists(file_path):
+            if not os.path.isfile(file_path):
                 self._logger.error(
                     f"Sound file {sound_file} not found in assets directory "
                     "or given path."
                 )
-                return
+                return False
         else:
             file_path = sound_file
 
@@ -1238,8 +1695,7 @@ class GstMediaServer:
 
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
-            self._logger.error("Failed to create playbin element")
-            return
+            raise RuntimeError("Failed to create playbin element")
 
         # Build file URI
         if os.name == "nt":
@@ -1260,6 +1716,7 @@ class GstMediaServer:
 
         self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
+        return True
 
     def stop_sound(self) -> None:
         """Stop the currently playing sound file.
@@ -1709,17 +2166,30 @@ class GstMediaServer:
             peer_id: If specified, send only to this peer. Otherwise broadcast to all.
 
         """
+        # A message over the channel's limit would be dropped silently;
+        # large ones go out as ordered chunks the client reassembles.
+        frames = split_for_data_channel(message)
         if peer_id:
-            if peer_id in self._data_channels:
-                self._data_channels[peer_id].emit("send-string", message)
-            else:
+            channel = self._data_channels.get(peer_id)
+            if channel is None:
                 self._logger.warning(f"No data channel for peer {peer_id}")
+                return
+            channels = [(peer_id, channel)]
         else:
             # Broadcast to all connected peers
-            for channel in self._data_channels.values():
-                channel.emit("send-string", message)
+            channels = list(self._data_channels.items())
+        for pid, channel in channels:
+            # Before on-open a send is a GStreamer assertion, not a send.
+            # Tracked from the signals: reading `ready-state` here segfaulted
+            # on channels of a session being torn down.
+            if self._data_channel_session.get(pid, pid) not in self._open_data_channels:
+                continue
+            for frame in frames:
+                channel.emit("send-string", frame)
 
-    def _setup_data_channel(self, peer_id: str, webrtcbin: Gst.Element) -> None:
+    def _setup_data_channel(
+        self, peer_id: str, webrtcbin: Gst.Element, session_id: Optional[str] = None
+    ) -> None:
         self._logger.debug(f"Setting up data channel for peer {peer_id}")
 
         # Create data channel options
@@ -1729,23 +2199,217 @@ class GstMediaServer:
         channel = webrtcbin.emit("create-data-channel", "data", options)
         if channel:
             self._logger.debug(f"Data channel created for peer {peer_id}")
-            self._data_channels[peer_id] = channel
+            self._created_data_channels[peer_id] = channel
+            key = session_id or peer_id
 
             # Connect to data channel signals
-            channel.connect("on-open", self._on_data_channel_open, peer_id)
-            channel.connect("on-close", self._on_data_channel_close, peer_id)
+            channel.connect("on-open", self._on_data_channel_open, peer_id, key)
+            channel.connect("on-close", self._on_data_channel_close, peer_id, key)
             channel.connect("on-message-string", self._on_data_channel_message, peer_id)
+            if session_id is not None:
+                channel.connect(
+                    "on-message-string", self._on_session_dc_message, session_id
+                )
             channel.connect("on-error", self._on_data_channel_error, peer_id)
         else:
             self._logger.error(f"Failed to create data channel for peer {peer_id}")
 
-    def _on_data_channel_open(self, channel: Gst.Element, peer_id: str) -> None:
-        self._logger.info(f"Data channel opened for peer {peer_id}")
+        # The pose channel is deliberately NOT created here. Opening a second
+        # channel for every peer breaks any client that predates label-based
+        # routing: such a client keeps the *last* channel it is handed as its
+        # command channel, so its commands would end up on the pose channel,
+        # which carries no message handler. We keep the webrtcbin instead and
+        # open the channel on demand from `set_pose_subscription`; a client
+        # that never asks for pose therefore never sees a second channel.
+        self._peer_webrtcbins[peer_id] = webrtcbin
 
-    def _on_data_channel_close(self, channel: Gst.Element, peer_id: str) -> None:
+    def set_pose_provider(
+        self, provider: Optional[Callable[[], Optional[str]]]
+    ) -> None:
+        """Register the callback that yields the JSON pose frame to push.
+
+        The backend passes ``build_state_json`` here. The provider is polled
+        on the GLib main loop at :attr:`POSE_PUSH_INTERVAL_MS`; returning
+        ``None`` skips a tick (e.g. before the first kinematics update).
+
+        Wiring a provider re-arms the timer if peers are already subscribed,
+        for the (unusual) case where the provider lands after the backend has
+        started accepting `subscribe_pose`.
+        """
+        with self._pose_lock:
+            self._pose_provider = provider
+            if provider is not None and self._pose_subscribers:
+                self._arm_pose_push_locked()
+
+    def set_pose_subscription(self, peer_id: str, enabled: bool) -> None:
+        """Add/remove a peer from the pushed pose stream (see `_push_pose`).
+
+        Driven by the backend's `subscribe_pose`/`unsubscribe_pose` handling,
+        so this runs on the backend's asyncio thread rather than the GLib main
+        loop. Idempotent. Subscribing opens the peer's pose channel if it has
+        none yet and arms the push timer; the timer disarms itself once the
+        last subscriber leaves. The channel is kept open for the rest of the
+        session: unsubscribing only stops the frames.
+        """
+        with self._pose_lock:
+            if enabled:
+                self._pose_subscribers.add(peer_id)
+                self._pose_subscribed_on[peer_id] = self._peer_webrtcbins.get(peer_id)
+                if self._pose_provider is not None:
+                    self._arm_pose_push_locked()
+            else:
+                self._pose_subscribers.discard(peer_id)
+                self._pose_subscribed_on.pop(peer_id, None)
+        if enabled:
+            # Touching the peer's webrtcbin has to happen on the GLib main
+            # loop, not on the caller's asyncio thread.
+            GLib.idle_add(self._open_pose_channel_if_needed, peer_id)
+            self._logger.info(f"Pose stream subscribed by peer {peer_id}")
+        else:
+            self._logger.info(f"Pose stream unsubscribed by peer {peer_id}")
+
+    def _open_pose_channel_if_needed(self, peer_id: str) -> bool:
+        """Create the peer's pose channel on first subscribe.
+
+        Runs on the GLib main loop (scheduled by `set_pose_subscription`),
+        which also serialises the check-then-create against a second
+        subscribe. Returns ``False`` so the idle source fires once.
+
+        A peer we can't open a channel for is dropped from the subscribers:
+        leaving it there would keep the timer armed, building a state frame
+        30 times a second and sending it nowhere until the peer disconnects.
+        """
+        webrtcbin = self._peer_webrtcbins.get(peer_id)
+        if webrtcbin is None:
+            self._logger.warning(
+                f"No webrtcbin for peer {peer_id}, cannot open pose channel"
+            )
+            self._drop_pose_subscription(peer_id)
+            return False
+        # A channel left by a reconnect's old session is replaced, not reused.
+        if self._pose_channel_bins.get(peer_id) is webrtcbin:
+            return False
+        if not self._setup_pose_channel(peer_id, webrtcbin):
+            self._drop_pose_subscription(peer_id)
+        return False
+
+    def _setup_pose_channel(self, peer_id: str, webrtcbin: Gst.Element) -> bool:
+        # Opened mid-session, after the SDP exchange: extra data channels are
+        # negotiated in-band via DCEP, so this needs no renegotiation and the
+        # client just sees another `ondatachannel`.
+        #
+        # Unreliable + unordered: pose is a "latest value wins" stream, so we
+        # never want a lost frame to be retransmitted (it'd already be stale)
+        # nor to head-of-line-block the frames behind it.
+        options = Gst.Structure.from_string("options,ordered=false,max-retransmits=0")[
+            0
+        ]
+        channel = webrtcbin.emit("create-data-channel", "pose", options)
+        if not channel:
+            self._logger.error(f"Failed to create pose channel for peer {peer_id}")
+            return False
+        self._logger.debug(f"Pose channel created for peer {peer_id}")
+        self._pose_channels[peer_id] = channel
+        self._pose_channel_bins[peer_id] = webrtcbin
+        channel.connect("on-open", self._on_pose_channel_open, peer_id)
+        channel.connect("on-close", self._on_pose_channel_close, peer_id)
+        channel.connect("on-error", self._on_data_channel_error, peer_id)
+        return True
+
+    def _arm_pose_push_locked(self) -> None:
+        """Arm the periodic pose-push timer (idempotent).
+
+        Caller must hold :attr:`_pose_lock`, since the source id is written
+        both here and by `_push_pose` when it disarms itself.
+        """
+        if self._pose_push_source_id is not None:
+            return
+        self._pose_push_source_id = GLib.timeout_add(
+            self.POSE_PUSH_INTERVAL_MS, self._push_pose
+        )
+
+    def _push_pose(self) -> bool:
+        """Broadcast the latest pose frame to every open pose channel.
+
+        Runs on the GLib main loop. Returns ``False`` - dropping the timer -
+        as soon as there is nothing to push, so an idle session costs no
+        periodic wakeup at all; `set_pose_subscription` re-arms it when a
+        peer subscribes again.
+        """
+        with self._pose_lock:
+            provider = self._pose_provider
+            if not self._pose_subscribers or provider is None:
+                self._pose_push_source_id = None
+                return False
+            subscribers = list(self._pose_subscribers)
+        # Building and sending the frame happens outside the lock: the
+        # provider walks the robot state and `send-string` hits SCTP, neither
+        # of which should block a peer subscribing on the other thread.
+        message = provider()
+        if message is None:
+            return True
+        for peer_id in subscribers:
+            channel = self._pose_channels.get(peer_id)
+            if channel is None:
+                continue
+            try:
+                channel.emit("send-string", message)
+            except Exception as e:
+                self._logger.debug(f"Pose push to {peer_id} failed: {e}")
+        return True
+
+    def _on_pose_channel_open(self, channel: Gst.Element, peer_id: str) -> None:
+        self._logger.info(f"Pose channel opened for peer {peer_id}")
+
+    def _on_pose_channel_close(self, channel: Gst.Element, peer_id: str) -> None:
+        self._logger.info(f"Pose channel closed for peer {peer_id}")
+        # Only the current channel: a replaced one belongs to an old session.
+        if self._pose_channels.get(peer_id) is channel:
+            self._drop_pose_peer(peer_id)
+
+    def _drop_pose_peer(self, peer_id: str) -> None:
+        """Forget a peer's pose channel and subscription.
+
+        Called both on pose-channel close and on consumer removal: a peer can
+        vanish (ICE failure, killed tab) without `on-close` ever firing, and a
+        lingering subscriber would keep the push timer armed forever. The
+        peer's webrtcbin outlives this (see `_consumer_removed`) so a peer
+        whose pose channel closed can still re-subscribe.
+        """
+        self._pose_channels.pop(peer_id, None)
+        self._pose_channel_bins.pop(peer_id, None)
+        self._drop_pose_subscription(peer_id)
+
+    def _drop_pose_subscription(self, peer_id: str) -> None:
+        """Forget a peer's pose subscription."""
+        with self._pose_lock:
+            self._pose_subscribers.discard(peer_id)
+            self._pose_subscribed_on.pop(peer_id, None)
+
+    def _on_data_channel_open(
+        self, channel: Gst.Element, peer_id: str, key: Optional[str] = None
+    ) -> None:
+        self._logger.info(f"Data channel opened for peer {peer_id}")
+        key = key or peer_id
+        self._data_channels[peer_id] = channel
+        self._data_channel_session[peer_id] = key
+        self._open_data_channels.add(key)
+
+    def _on_data_channel_close(
+        self, channel: Gst.Element, peer_id: str, key: Optional[str] = None
+    ) -> None:
         self._logger.info(f"Data channel closed for peer {peer_id}")
-        if peer_id in self._data_channels:
-            del self._data_channels[peer_id]
+        key = key or peer_id
+        self._open_data_channels.discard(key)
+        # Unregister only if the registered channel is this session's: an
+        # orphan's channel closing must not unregister the live session's.
+        if self._data_channel_session.get(peer_id, peer_id) == key:
+            self._data_channels.pop(peer_id, None)
+            self._data_channel_session.pop(peer_id, None)
+        # Release the creation-time reference at the same point the original
+        # code did, but only this channel's: never a newer session's.
+        if self._created_data_channels.get(peer_id) is channel:
+            del self._created_data_channels[peer_id]
 
     def _on_data_channel_message(
         self, channel: Gst.Element, message: str, peer_id: str
@@ -1753,6 +2417,73 @@ class GstMediaServer:
         self._logger.debug(f"Data channel message from peer {peer_id}: {message}")
         if self._on_data_message:
             self._on_data_message(peer_id, message)
+
+    def session_idle_seconds(self, session_id: str) -> Optional[float]:
+        """Seconds since this session's client last showed a sign of life.
+
+        ``None`` when the session isn't tracked (unknown id, or a
+        webrtcbin we couldn't key): callers must not judge it. ``inf``
+        once the client sent an RTCP BYE (it hung up).
+        """
+        with self._session_activity_lock:
+            if session_id in self._session_bye:
+                return math.inf
+            last = self._session_activity.get(session_id)
+        if last is None:
+            return None
+        return time.monotonic() - last
+
+    def _track_session_liveness(self, session_id: str, webrtcbin: Gst.Element) -> None:
+        """Record the client's RTCP (and BYE) for `session_idle_seconds`."""
+        with self._session_activity_lock:
+            # Baseline at creation: a client that never says anything goes
+            # idle from here (the relay also waits for a settle window).
+            self._session_activity[session_id] = time.monotonic()
+            self._session_bye.discard(session_id)
+        rtpbin = webrtcbin.get_by_name("rtpbin")
+        if rtpbin is None:
+            self._logger.warning(
+                f"No rtpbin in {webrtcbin.get_name()}: RTCP liveness off"
+            )
+            return
+        rtpbin.connect("on-ssrc-active", self._on_session_rtcp, session_id)
+        rtpbin.connect("on-bye-ssrc", self._on_session_bye, session_id)
+
+    def _mark_session_alive(self, session_id: str) -> None:
+        with self._session_activity_lock:
+            if session_id in self._session_activity:
+                self._session_activity[session_id] = time.monotonic()
+
+    def _on_session_rtcp(
+        self, _rtpbin: Gst.Element, _session: int, ssrc: int, session_id: str
+    ) -> None:
+        with self._session_activity_lock:
+            first = session_id not in self._session_rtcp_seen
+            if first and session_id in self._session_activity:
+                self._session_rtcp_seen.add(session_id)
+        if first:
+            self._logger.info(
+                f"session {session_id}: client RTCP flowing (ssrc {ssrc})"
+            )
+        self._mark_session_alive(session_id)
+
+    def _on_session_bye(
+        self, _rtpbin: Gst.Element, _session: int, _ssrc: int, session_id: str
+    ) -> None:
+        with self._session_activity_lock:
+            if session_id in self._session_activity:
+                self._session_bye.add(session_id)
+
+    def _on_session_dc_message(
+        self, _channel: Gst.Element, _message: str, session_id: str
+    ) -> None:
+        self._mark_session_alive(session_id)
+
+    def _forget_session_liveness(self, session_id: str) -> None:
+        with self._session_activity_lock:
+            self._session_activity.pop(session_id, None)
+            self._session_bye.discard(session_id)
+            self._session_rtcp_seen.discard(session_id)
 
     def _on_data_channel_error(
         self, channel: Gst.Element, error: str, peer_id: str

@@ -1,5 +1,6 @@
 """Unit tests for the shared appsrc gap-aware buffer push helper."""
 
+import time
 from types import SimpleNamespace
 from typing import cast
 
@@ -101,3 +102,55 @@ def test_push_without_appsrc_returns_none() -> None:
     ret = AudioBase._push_appsrc_buffer(fake, np.zeros(100, dtype=np.float32))
 
     assert ret is None
+
+
+def test_clear_player_flushes_past_the_mixer() -> None:
+    """clear_player() flushes up to the sink, which keeps a segment and plays on."""
+    from reachy_mini.media.audio_gstreamer import GStreamerAudio
+
+    caps = "audio/x-raw,format=F32LE,channels=2,rate=16000,layout=interleaved"
+    pipeline = Gst.parse_launch(
+        f"appsrc name=src is-live=true format=time caps={caps} ! queue ! audiomixer name=mix"
+        f" audiotestsrc is-live=true wave=silence ! {caps} ! queue ! mix."
+        " mix. ! queue ! fakesink name=sink sync=true"
+    )
+    seen: list[str] = []
+
+    def probe(pad: Gst.Pad, info: Gst.PadProbeInfo) -> Gst.PadProbeReturn:
+        if info.type & Gst.PadProbeType.BUFFER:
+            seen.append("buffer")
+        elif info.get_event().type == Gst.EventType.FLUSH_STOP:
+            seen.append("flush")
+        return Gst.PadProbeReturn.OK
+
+    sink_pad = pipeline.get_by_name("sink").get_static_pad("sink")
+    sink_pad.add_probe(Gst.PadProbeType.BUFFER | Gst.PadProbeType.EVENT_FLUSH, probe)
+    fake = SimpleNamespace(
+        _appsrc=pipeline.get_by_name("src"),
+        _mixer=pipeline.get_by_name("mix"),
+        _pipeline=pipeline,
+        _head_wobbler=None,
+        _appsrc_pts=-1,
+        logger=SimpleNamespace(info=lambda *a: None, warning=lambda *a: None),
+    )
+
+    def buffer_after_last_flush() -> bool:
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            if seen and seen[-1] == "buffer":
+                return True
+            time.sleep(0.01)
+        return False
+
+    pipeline.set_state(Gst.State.PLAYING)
+    try:
+        assert buffer_after_last_flush()
+
+        GStreamerAudio.clear_player(fake)  # type: ignore[arg-type]
+
+        assert "flush" in seen
+        assert sink_pad.get_sticky_event(Gst.EventType.SEGMENT, 0) is not None
+        # The mixer's output task survived the flush.
+        assert buffer_after_last_flush()
+    finally:
+        pipeline.set_state(Gst.State.NULL)

@@ -1,5 +1,7 @@
 # Python SDK Reference
 
+> **Heads up:** The Python and **[JavaScript](javascript-sdk.md)** SDKs both give you full control of the robot — they simply target different audiences. If you want to build apps that are easy to share (zero-install, open a link in a browser), the JavaScript/Web path is usually the better fit. The Python SDK shines for scripting, control loops, and code running directly on the robot.
+
 > **💡 Reminder:** The SDK now auto-detects whether it should connect over USB/localhost or over the network, so `ReachyMini()` works out of the box. You can still force a mode with `ReachyMini(connection_mode="localhost_only" | "network")` if needed.
 
 ## Movement
@@ -128,7 +130,7 @@ Choose the appropriate media backend based on your Reachy Mini version and requi
 
 > **💡 Tip:** For most setups, the backend is automatically selected based on whether you're running locally or remotely. No need to specify the `media_backend` value!
 
-> **💡 Tip:** The WebRTC backend requires GStreamer to be installed on the client machine. See [GStreamer Installation](gstreamer-installation.md). For now only Linux is fully supported as a remote client. Other platforms (Windows, macOS) will be supported in [future releases](https://github.com/pollen-robotics/reachy_mini/issues/572).
+> **💡 Tip:** The WebRTC backend requires GStreamer to be installed on the client machine. See [GStreamer Installation](gstreamer-installation.md). It ships as Python wheels on macOS and Windows, so it works out of the box there; Linux requires a manual installation.
 
 ## Recording Moves
 You can record a motion by moving the robot (compliant mode) or sending commands, and save it for later replay.

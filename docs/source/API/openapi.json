@@ -239,6 +239,46 @@
         }
       }
     },
+    "/api/apps/start-app/{app_name}/no-evict": {
+      "post": {
+        "summary": "Start App No Evict",
+        "description": "Start an app only when the managed robot slot can be acquired atomically.",
+        "operationId": "start_app_no_evict_api_apps_start_app__app_name__no_evict_post",
+        "parameters": [
+          {
+            "name": "app_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/apps/restart-current-app": {
       "post": {
         "summary": "Restart App",
@@ -714,6 +754,62 @@
         }
       }
     },
+    "/api/daemon/robot-name": {
+      "get": {
+        "summary": "Get Robot Display Name",
+        "description": "Return the robot's current display name.\n\nReports the effective/advertised name: the persisted override when a\nclient has renamed the robot, otherwise the ``--robot-name`` default the\ndaemon is running with. A client can pre-fill a rename field from this\nwithout having to fall back to the daemon status for the default.",
+        "operationId": "get_robot_display_name_api_daemon_robot_name_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RobotNameResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Set Robot Display Name",
+        "description": "Persist a new robot display name and apply it live (no restart).\n\nPersists the name to disk, then refreshes the advertised copies so the\nrename takes effect immediately: the daemon status + central relay (via\n``Daemon.apply_robot_name``) and the LAN mDNS record. This is the REST\nentry point used by the BLE setup service; the WebRTC ``set_robot_name``\ncommand goes through the same live-apply path on the backend.",
+        "operationId": "set_robot_display_name_api_daemon_robot_name_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RobotNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RobotNameResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/daemon/hardware-id": {
       "get": {
         "summary": "Get Robot Hardware Id",
@@ -870,7 +966,7 @@
     "/api/hf-auth/refresh-relay": {
       "post": {
         "summary": "Refresh Relay",
-        "description": "Force the central signaling relay to reconnect \u2014 see ``notify_force_reconnect``.\n\nResponse shapes:\n  - ``{\"status\": \"requested\", \"token_available\": bool}`` \u2014 a\n    reconnect was kicked off.\n  - ``{\"status\": \"skipped\", \"token_available\": bool,\n        \"reason\": \"relay_not_running\" | \"relay_unavailable\"}`` \u2014 no\n    reconnect happened. The mobile app's auto-heal loop must NOT\n    wait for a state change in this case (it would hang forever).\n    ``relay_unavailable`` covers the import failure (Lite-only\n    build that ships no relay module); ``relay_not_running`` covers\n    the module-present-but-no-instance case (daemon started\n    without a token / pre-init / shutdown).",
+        "description": "Force the central signaling relay to reconnect \u2014 see ``notify_force_reconnect``.\n\nResponse shapes:\n  - ``{\"status\": \"requested\", \"token_available\": bool}`` \u2014 a\n    reconnect was kicked off.\n  - ``{\"status\": \"skipped\", \"token_available\": bool,\n        \"reason\": \"relay_not_running\"}`` \u2014 no reconnect happened\n    because no relay instance exists (daemon started without a token,\n    pre-init, or shutdown). The mobile app's auto-heal loop must NOT\n    wait for a state change in this case (it would hang forever).",
         "operationId": "refresh_relay_api_hf_auth_refresh_relay_post",
         "responses": {
           "200": {
@@ -891,7 +987,7 @@
     "/api/hf-auth/central-robot-status": {
       "get": {
         "summary": "Get Central Robot Status",
-        "description": "Proxy to the central signaling server's /api/robot-status endpoint.\n\nUses the stored HF token server-side so the desktop frontend never\nsees the raw token. The frontend polls this to know whether any of\nthe user's robots is currently held by a remote JS app, and if so\nwhich one (so it can show \"In use by Hand Tracker\" in the UI).\n\nResponse shape:\n    { \"available\": bool, \"robots\": [...], \"reason\": str? }\n\n`available` is false when:\n  - no HF token stored (user not logged in)\n  - central server is unreachable / returned an error\nCallers should treat `available: false` as \"unknown, don't block\".",
+        "description": "Proxy to the central signaling server's /api/robot-status endpoint.\n\nUses the stored HF token server-side so the desktop frontend never\nsees the raw token. The frontend polls this to know whether any of\nthe user's robots is currently held by a remote JS app, and if so\nwhich one (so it can show \"In use by Hand Tracker\" in the UI).\n\nResponse shape:\n    { \"available\": bool, \"robots\": [...], \"reason\": str? }\n\n`available` is false when:\n  - no HF token stored (user not logged in)\n  - central URL configuration is invalid\n  - central server is unreachable / returned an error\nCallers should treat `available: false` as \"unknown, don't block\".",
         "operationId": "get_central_robot_status_api_hf_auth_central_robot_status_get",
         "responses": {
           "200": {
@@ -1059,6 +1155,113 @@
                     "type": "string"
                   },
                   "title": "Response Cancel Oauth Session Api Hf Auth Oauth Session  Session Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/device/start": {
+      "post": {
+        "summary": "Start Device Oauth",
+        "description": "Start a device-code OAuth login.\n\nReturns a `user_code` and `verification_uri(_complete)` to show the user, plus\na `session_id` to poll via `/oauth/device/status/{session_id}`.",
+        "operationId": "start_device_oauth_api_hf_auth_oauth_device_start_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Start Device Oauth Api Hf Auth Oauth Device Start Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/device/status/{session_id}": {
+      "get": {
+        "summary": "Get Device Oauth Status",
+        "description": "Poll for device-code login completion.\n\nOn the first poll that reports success, bring the central relay up (a\ntoken-less boot has no relay instance yet), mirroring the OAuth callback.",
+        "operationId": "get_device_oauth_status_api_hf_auth_oauth_device_status__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Device Oauth Status Api Hf Auth Oauth Device Status  Session Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/device/session/{session_id}": {
+      "delete": {
+        "summary": "Cancel Device Oauth Session",
+        "description": "Cancel a pending device-code login session.",
+        "operationId": "cancel_device_oauth_session_api_hf_auth_oauth_device_session__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Cancel Device Oauth Session Api Hf Auth Oauth Device Session  Session Id  Delete"
                 }
               }
             }
@@ -1324,7 +1527,7 @@
     "/api/media/play_sound": {
       "post": {
         "summary": "Play Sound",
-        "description": "Play a sound file on the robot's speaker.\n\nThe *file* field can be:\n- An absolute path on the daemon's filesystem.\n- A filename relative to the built-in assets directory.\n- A filename previously uploaded to the sounds temp directory.",
+        "description": "Play a sound file on the robot's speaker.\n\nThe *file* field can be:\n- An absolute path on the daemon's filesystem.\n- A filename relative to the built-in assets directory.\n- A filename previously uploaded to the sounds temp directory.\n\nAnswers 404 when the file is none of these.",
         "operationId": "play_sound_api_media_play_sound_post",
         "requestBody": {
           "content": {
@@ -2120,7 +2323,7 @@
     "/api/state/doa": {
       "get": {
         "summary": "Get Doa",
-        "description": "Get the Direction of Arrival from the microphone array.\n\nReturns the angle in radians (0=left, \u03c0/2=front, \u03c0=right) and speech detection status.\nReturns None if the audio device is not available.",
+        "description": "Get the Direction of Arrival from the microphone array.\n\nReturns the angle in radians (0=left, \u03c0/2=front, \u03c0=right) and speech detection status.\nReturns None if the audio device is not available or no reading has\nlanded yet (the first one lands within ~100 ms of the first request).",
         "operationId": "get_doa_api_state_doa_get",
         "responses": {
           "200": {
@@ -2130,13 +2333,40 @@
                 "schema": {
                   "anyOf": [
                     {
-                      "$ref": "#/components/schemas/DoAInfo"
+                      "$ref": "#/components/schemas/DoaSnapshot"
                     },
                     {
                       "type": "null"
                     }
                   ],
                   "title": "Response Get Doa Api State Doa Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/state/imu": {
+      "get": {
+        "summary": "Get Imu",
+        "description": "Get the latest IMU reading (accelerometer, gyroscope, quaternion, temperature).\n\nAccelerations are in m/s\u00b2, angular rates in rad/s, the quaternion is\nw-first and the temperature in \u00b0C.\nReturns None on versions without an IMU (Lite, simulation) or when the\ncached reading has gone stale.",
+        "operationId": "get_imu_api_state_imu_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ImuData"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Imu Api State Imu Get"
                 }
               }
             }
@@ -2261,6 +2491,16 @@
             }
           },
           {
+            "name": "with_imu",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "With Imu"
+            }
+          },
+          {
             "name": "use_pose_matrix",
             "in": "query",
             "required": false,
@@ -2278,6 +2518,62 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FullState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/telemetry": {
+      "get": {
+        "summary": "Get Telemetry",
+        "description": "Get the telemetry choice. Nothing is sent while ``disabled_by_env``.",
+        "operationId": "get_telemetry_api_telemetry_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set Telemetry",
+        "description": "Enable or disable telemetry. Disabling also forgets the robot id.",
+        "operationId": "set_telemetry_api_telemetry_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelemetrySettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryStatus"
                 }
               }
             }
@@ -2662,7 +2958,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -2868,7 +3164,7 @@
         "title": "DaemonStatus",
         "description": "Status of the Reachy Mini daemon."
       },
-      "DoAInfo": {
+      "DoaSnapshot": {
         "properties": {
           "angle": {
             "type": "number",
@@ -2884,8 +3180,8 @@
           "angle",
           "speech_detected"
         ],
-        "title": "DoAInfo",
-        "description": "Direction of Arrival info from the microphone array."
+        "title": "DoaSnapshot",
+        "description": "Sound Direction of Arrival reading (ReSpeaker mic array).\n\n``angle`` is in radians: 0 = left, \u03c0/2 = front, \u03c0 = right."
       },
       "EnableTrackingRequest": {
         "properties": {
@@ -3065,6 +3361,20 @@
             ],
             "title": "Head Pose"
           },
+          "target_head_pose": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/XYZRPYPose"
+              },
+              {
+                "$ref": "#/components/schemas/Matrix4x4Pose"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Head Pose"
+          },
           "head_joints": {
             "anyOf": [
               {
@@ -3079,6 +3389,20 @@
             ],
             "title": "Head Joints"
           },
+          "target_head_joints": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Head Joints"
+          },
           "body_yaw": {
             "anyOf": [
               {
@@ -3089,6 +3413,17 @@
               }
             ],
             "title": "Body Yaw"
+          },
+          "target_body_yaw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Body Yaw"
           },
           "antennas_position": {
             "anyOf": [
@@ -3103,6 +3438,20 @@
               }
             ],
             "title": "Antennas Position"
+          },
+          "target_antennas_position": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Antennas Position"
           },
           "timestamp": {
             "anyOf": [
@@ -3133,7 +3482,17 @@
           "doa": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DoAInfo"
+                "$ref": "#/components/schemas/DoaSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "imu": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImuData"
               },
               {
                 "type": "null"
@@ -3248,6 +3607,44 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "ImuData": {
+        "properties": {
+          "accelerometer": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Accelerometer"
+          },
+          "gyroscope": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Gyroscope"
+          },
+          "quaternion": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Quaternion"
+          },
+          "temperature": {
+            "type": "number",
+            "title": "Temperature"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accelerometer",
+          "gyroscope",
+          "quaternion",
+          "temperature"
+        ],
+        "title": "ImuData",
+        "description": "IMU sensor reading (BMI088, wireless version only).\n\nThe payload half of :class:`ImuDataMsg`, reused wherever the reading\nis carried without the legacy WS discriminator (state snapshots,\nREST replies)."
       },
       "InterpolationTechnique": {
         "type": "string",
@@ -3621,6 +4018,40 @@
         "title": "RobotBackendStatus",
         "description": "Status of the Robot Backend."
       },
+      "RobotNameRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "RobotNameRequest",
+        "description": "Body for setting the robot display name."
+      },
+      "RobotNameResponse": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "title": "RobotNameResponse",
+        "description": "The robot's current display name (``null`` only if none is resolvable)."
+      },
       "SourceKind": {
         "type": "string",
         "enum": [
@@ -3649,6 +4080,39 @@
         "type": "object",
         "title": "StartupApp",
         "description": "The app configured to auto-start on the robot's first wake-up."
+      },
+      "TelemetrySettings": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "TelemetrySettings",
+        "description": "User's telemetry choice."
+      },
+      "TelemetryStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "disabled_by_env": {
+            "type": "boolean",
+            "title": "Disabled By Env"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "disabled_by_env"
+        ],
+        "title": "TelemetryStatus",
+        "description": "User's choice plus whether an environment variable overrides it."
       },
       "TestSoundResponse": {
         "properties": {

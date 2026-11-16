@@ -60,29 +60,29 @@ def create_from_conversation_app(
     console.print("Creating simplified static files...")
     _create_static_files(target_path, app_name, display_name)
 
-    console.print(f"Creating profile folder: profiles/{profile_name}/")
-    _create_profile(console, target_path, app_name, profile_name)
+    console.print(f"Creating locked profile: profiles/{profile_name}/profile.md")
+    _create_profile(console, target_path, profile_name)
 
     console.print("Updating .gitignore...")
     _update_gitignore(target_path, app_name)
 
     console.print("Cleaning up unnecessary files...")
-    _cleanup(target_path, app_name, profile_name)
+    _cleanup(target_path, profile_name)
 
     console.print("Initializing fresh git repository...")
     _init_git(target_path)
 
     console.print(f"\n✅ Created '{app_name}' in {target_path}/", style="bold green")
     console.print(f"   - Profile locked to: {profile_name}", style="dim")
-    console.print(f"   - Profile folder created: profiles/{profile_name}/", style="dim")
+    console.print(
+        f"   - Profile document: profiles/{profile_name}/profile.md", style="dim"
+    )
 
     console.print("\nFiles to customize:", style="bold yellow")
     console.print(
-        f"  profiles/{profile_name}/instructions.txt  - System prompt for the assistant"
+        f"  profiles/{profile_name}/profile.md  - Assistant prompt and enabled tools"
     )
-    console.print(
-        f"  profiles/{profile_name}/tools.txt         - Available tools (or 'all')"
-    )
+    console.print(f"  src/{app_name}/tools/              - Custom tool implementations")
 
     console.print("\nNext steps:", style="bold")
     console.print(f"  cd {target_path}")
@@ -90,8 +90,8 @@ def create_from_conversation_app(
     console.print("  reachy-mini-app-assistant check .")
     console.print("")
     console.print("To test your app locally:", style="bold")
-    console.print(f"  python src/{app_name}/main.py --gradio")
-    console.print("  # Then open: http://127.0.0.1:7861/")
+    console.print(f"  python src/{app_name}/main.py --ui")
+    console.print("  # Then open: http://127.0.0.1:7860/")
 
     return target_path
 
@@ -145,7 +145,7 @@ def _clone_repo(console: Console, target_path: Path) -> None:
                 "--depth",
                 "1",
                 "-b",
-                "develop",
+                "main",
                 CONVERSATION_APP_REPO,
                 str(tmp_clone),
             ],
@@ -158,13 +158,8 @@ def _clone_repo(console: Console, target_path: Path) -> None:
             )
             exit(1)
 
-        # Remove .git folder
-        git_dir = tmp_clone / ".git"
-        if git_dir.exists():
-            shutil.rmtree(git_dir)
-
         # Copy to target
-        shutil.copytree(tmp_clone, target_path)
+        shutil.copytree(tmp_clone, target_path, ignore=shutil.ignore_patterns(".git"))
 
 
 def _to_pascal_case(name: str) -> str:
@@ -196,7 +191,7 @@ def _rename_package(console: Console, app_path: Path, app_name: str) -> None:
         if not py_dir.exists():
             continue
         for py_file in py_dir.rglob("*.py"):
-            content = py_file.read_text()
+            content = py_file.read_text(encoding="utf-8")
             # Replace imports like "from reachy_mini_conversation_app" and "import reachy_mini_conversation_app"
             new_content = re.sub(
                 rf"\b{CONVERSATION_APP_PACKAGE}\b",
@@ -208,7 +203,7 @@ def _rename_package(console: Console, app_path: Path, app_name: str) -> None:
                 "ReachyMiniConversationApp", new_class_name
             )
             if new_content != content:
-                py_file.write_text(new_content)
+                py_file.write_text(new_content, encoding="utf-8")
 
 
 def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
@@ -226,7 +221,7 @@ def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
         )
         exit(1)
 
-    with open(pyproject_path, "r") as f:
+    with open(pyproject_path, "r", encoding="utf-8") as f:
         data = toml.load(f)
 
     # Update project name
@@ -257,7 +252,7 @@ def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
                 for folder in isort_config["known-local-folder"]
             ]
 
-    with open(pyproject_path, "w") as f:
+    with open(pyproject_path, "w", encoding="utf-8") as f:
         toml.dump(data, f)
 
 
@@ -278,7 +273,7 @@ def _update_config(
         )
         exit(1)
 
-    content = config_path.read_text()
+    content = config_path.read_text(encoding="utf-8")
 
     # Replace the LOCKED_PROFILE line
     old_line = "LOCKED_PROFILE: str | None = None"
@@ -300,7 +295,7 @@ def _update_config(
         exit(1)
 
     content = content.replace(old_line, new_line)
-    config_path.write_text(content)
+    config_path.write_text(content, encoding="utf-8")
 
 
 def _update_readme(
@@ -323,7 +318,8 @@ def _update_readme(
     readme_path.write_text(
         template.render(
             app_name=app_name, display_name=display_name, profile_name=profile_name
-        )
+        ),
+        encoding="utf-8",
     )
 
 
@@ -335,11 +331,15 @@ def _create_landing_page(app_path: Path, app_name: str, display_name: str) -> No
 
     # Render and write index.html
     index_template = env.get_template("index.html.j2")
-    (app_path / "index.html").write_text(index_template.render(context))
+    (app_path / "index.html").write_text(
+        index_template.render(context), encoding="utf-8"
+    )
 
     # Render and write style.css
     style_template = env.get_template("style.css.j2")
-    (app_path / "style.css").write_text(style_template.render(context))
+    (app_path / "style.css").write_text(
+        style_template.render(context), encoding="utf-8"
+    )
 
 
 def _create_static_files(app_path: Path, app_name: str, display_name: str) -> None:
@@ -353,36 +353,29 @@ def _create_static_files(app_path: Path, app_name: str, display_name: str) -> No
 
     # Render and write simplified static files
     (static_dir / "index.html").write_text(
-        env.get_template("index.html.j2").render(context)
+        env.get_template("index.html.j2").render(context), encoding="utf-8"
     )
-    (static_dir / "main.js").write_text(env.get_template("main.js.j2").render(context))
+    (static_dir / "main.js").write_text(
+        env.get_template("main.js.j2").render(context), encoding="utf-8"
+    )
     (static_dir / "style.css").write_text(
-        env.get_template("style.css.j2").render(context)
+        env.get_template("style.css.j2").render(context), encoding="utf-8"
     )
 
 
-def _create_profile(
-    console: Console, app_path: Path, app_name: str, profile_name: str
-) -> None:
-    """Create profile folder with template files."""
-    new_profile_dir = app_path / "src" / app_name / "profiles" / profile_name
+def _create_profile(console: Console, app_path: Path, profile_name: str) -> None:
+    """Create the locked profile document."""
+    new_profile_dir = app_path / "profiles" / profile_name
     new_profile_dir.mkdir(parents=True, exist_ok=True)
 
-    # Render all .j2 templates from profile template directory
     template_dir = CONVERSATION_TEMPLATE_DIR / "profile"
     env = Environment(loader=FileSystemLoader(template_dir))
-    context = {"profile_name": profile_name, "app_name": app_name}
+    profile_path = new_profile_dir / "profile.md"
+    profile_path.write_text(
+        env.get_template("profile.md.j2").render(), encoding="utf-8"
+    )
 
-    for src_file in template_dir.iterdir():
-        if src_file.is_file() and src_file.suffix == ".j2":
-            # Remove .j2 extension for output filename
-            output_name = src_file.stem
-            template = env.get_template(src_file.name)
-            (new_profile_dir / output_name).write_text(template.render(context))
-
-    console.print("   Created profile with template files:", style="dim")
-    for f in sorted(new_profile_dir.iterdir()):
-        console.print(f"     - {f.name}", style="dim")
+    console.print(f"   Created {profile_path.relative_to(app_path)}", style="dim")
 
 
 def _update_gitignore(app_path: Path, app_name: str) -> None:
@@ -391,16 +384,16 @@ def _update_gitignore(app_path: Path, app_name: str) -> None:
     if not gitignore_path.exists():
         return
 
-    content = gitignore_path.read_text()
+    content = gitignore_path.read_text(encoding="utf-8")
     new_content = content.replace(
         f"src/{CONVERSATION_APP_PACKAGE}/",
         f"src/{app_name}/",
     )
     if new_content != content:
-        gitignore_path.write_text(new_content)
+        gitignore_path.write_text(new_content, encoding="utf-8")
 
 
-def _cleanup(app_path: Path, app_name: str, profile_name: str) -> None:
+def _cleanup(app_path: Path, profile_name: str) -> None:
     """Remove files not needed in the forked app."""
     for dir_name in _CLEANUP_DIRS:
         dir_path = app_path / dir_name
@@ -412,8 +405,7 @@ def _cleanup(app_path: Path, app_name: str, profile_name: str) -> None:
         if file_path.exists():
             file_path.unlink()
 
-    # Remove all profile folders except the new locked profile
-    profiles_dir = app_path / "src" / app_name / "profiles"
+    profiles_dir = app_path / "profiles"
     if profiles_dir.exists():
         for profile_dir in profiles_dir.iterdir():
             if profile_dir.is_dir() and profile_dir.name != profile_name:

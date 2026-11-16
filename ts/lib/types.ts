@@ -45,16 +45,71 @@ export interface FaceTarget {
     ts?: number | null;
 }
 
+/**
+ * Sound Direction of Arrival from the robot's ReSpeaker microphone array.
+ * Streamed inside `RobotState` (wire shape), so it rides the same ~30 Hz
+ * pose push / `get_state` replies as the pose - no extra round-trip.
+ */
+export interface DoA {
+    /**
+     * Angle in radians (ReSpeaker convention): `0` = left, `π/2` =
+     * front/back, `π` = right.
+     */
+    angle: number;
+    /** Whether the array currently detects speech coming from that angle. */
+    speech_detected: boolean;
+}
+
+/**
+ * One IMU reading from the robot's BMI088 (wireless version only).
+ * Wire shape of the daemon's `ImuDataMsg`, minus the `type` envelope.
+ */
+export interface ImuData {
+    /** [x, y, z] linear acceleration, m/s². */
+    accelerometer: number[];
+    /** [x, y, z] angular velocity, rad/s. */
+    gyroscope: number[];
+    /** [w, x, y, z] orientation estimate. */
+    quaternion: number[];
+    /** Sensor die temperature, °C. */
+    temperature: number;
+}
+
+/** The robot's anonymous telemetry choice (wire shape of `get_telemetry`). */
+export interface TelemetryStatus {
+    enabled: boolean;
+    /** An environment variable on the robot forces telemetry off, whatever `enabled` says. */
+    disabled_by_env: boolean;
+}
+
 export interface RobotState {
     /** Flat row-major 4×4 head pose (16 numbers). */
     head?: number[];
     /** [rightRad, leftRad]. */
     antennas?: number[];
+    /**
+     * Per-motor head joint values (7 numbers, body yaw at [0]), streamed by
+     * the daemon alongside `head` so clients can check the physical pose
+     * motor by motor (e.g. the first wake-up wizard's sleep-position check).
+     * The antennas need no twin field: `antennas` already is the two motor
+     * values. Absent on daemons that predate the field.
+     */
+    head_joint_positions?: number[];
     /** Radians. */
     body_yaw?: number;
     motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';
     is_move_running?: boolean;
     face_target?: FaceTarget;
+    /**
+     * Sound Direction of Arrival, or absent when the robot has no mic array
+     * (or no reading yet). Refreshed by the daemon at ~10 Hz.
+     */
+    doa?: DoA;
+    /**
+     * Latest IMU reading, or absent on robots without one (Lite, simulator)
+     * and while the daemon's cached reading is stale.
+     */
+    imu?: ImuData;
 }
 
 /** SDK constructor options. */
@@ -71,6 +126,11 @@ export interface ReachyMiniOptions {
     clientId?: string;
     appName?: string;
     /**
+     * Identifies this client to the robot's anonymous telemetry, as
+     * `<type>/<version> (<os>)`. Defaults to `web/<sdk version>`.
+     */
+    client?: string;
+    /**
      * Hint to the receiver's WebRTC jitter buffer (ms). 0 = "render
      * ASAP", appropriate for teleop. Spec range [0, 4000]. Browsers
      * that don't implement `RTCRtpReceiver.jitterBufferTarget` fall
@@ -84,6 +144,41 @@ export interface ReachyMiniOptions {
      * per page load; the host iframe relies on this to skip the picker.
      */
     autoStartFromUrl?: boolean;
+    /**
+     * Automatic session re-dial (default `true`). When an ESTABLISHED
+     * session's transport dies for good (ICE `failed` past its grace
+     * window, stuck `disconnected`, or expired while the tab was
+     * backgrounded), the SDK tears the dead RTCPeerConnection down and
+     * re-dials the same robot through the signaling server — up to 5
+     * attempts with backoff (~22 s window). The app sees
+     * `sessionReconnecting` per attempt, then either `sessionReconnected`
+     * followed by a fresh `streaming` event, or a terminal
+     * `sessionStopped` with reason `reconnect_failed`. Failures during
+     * the INITIAL `startSession()` handshake still reject the promise —
+     * the caller owns that retry. Set to `false` to restore the previous
+     * fatal-`error` behaviour.
+     */
+    autoReconnect?: boolean;
+}
+
+/** Options accepted by `login()`. */
+export interface LoginOptions {
+    /**
+     * OIDC prompt behaviour for the OAuth redirect.
+     *
+     * `'none'` performs a SILENT authorization: a user who is logged in
+     * to Hugging Face and has already authorized the app comes straight
+     * back with a code (no screen, no interaction); everyone else comes
+     * back immediately with `?error=login_required` /
+     * `consent_required` instead of landing on the HF login page. The
+     * error return is consumed and stripped by `authenticate()`, which
+     * then simply reports "not signed in". Supported by the HF
+     * authorize endpoint although absent from its discovery metadata
+     * (verified empirically).
+     *
+     * Omit for the regular interactive flow.
+     */
+    prompt?: 'none';
 }
 
 /** Options accepted by `autoConnect()`. */
@@ -139,6 +234,38 @@ export interface MotionAwaitOptions {
 export interface SubscribeLogsOptions {
     onLine: (entry: { timestamp: string; line: string }) => void;
     onError?: (error: string) => void;
+}
+
+/** `request()` options. */
+export interface RequestOptions {
+    /**
+     * Milliseconds to wait for a matching reply before fail-opening to
+     * `null`. Defaults to the SDK's shared command round-trip timeout (4 s).
+     */
+    timeoutMs?: number;
+    /**
+     * Override the reply matcher. Default: the first robot message whose
+     * `command` field equals the sent command's `type` (the daemon's
+     * reply convention).
+     */
+    match?: (msg: Record<string, unknown>) => boolean;
+}
+
+/** One progress event from an in-flight `startDaemonUpdate()`. */
+export interface UpdateProgressEvent {
+    status: 'in_progress' | 'done' | 'failed';
+    /** A log line of the underlying update job (when `in_progress`). */
+    line?: string;
+    /** Set when `status === 'failed'`. */
+    error?: string;
+}
+
+/** `startDaemonUpdate()` argument. */
+export interface StartDaemonUpdateOptions {
+    /** Install the latest pre-release instead of the latest stable. */
+    preRelease?: boolean;
+    /** Receives one event per log line of the update job. */
+    onProgress?: (event: UpdateProgressEvent) => void;
 }
 
 // ─── XVF3800 audio-board config (Wireless only) ──────────────────────────────
@@ -225,6 +352,8 @@ export interface SessionRejectedEventDetail {
 }
 export type StateEventDetail = RobotState;
 export interface VideoTrackEventDetail { track: MediaStreamTrack; stream: MediaStream; }
+/** The robot's microphone track. */
+export interface AudioTrackEventDetail { track: MediaStreamTrack; stream: MediaStream; }
 export interface MicSupportedEventDetail { supported: boolean; }
 export interface ErrorEventDetail {
     source: 'signaling' | 'webrtc' | 'robot';
@@ -249,7 +378,19 @@ export interface NetworkChangeEventDetail {
     rtt?: number;
     saveData?: boolean;
 }
-
+/**
+ * One auto-reconnect attempt is starting (fires once per attempt,
+ * BEFORE its backoff wait). Show a "Reconnecting…" UI on the first one
+ * and keep it until `sessionReconnected` or a `sessionStopped` with
+ * reason `reconnect_failed`. Motion/RPC calls made while reconnecting
+ * fail exactly as they would on a stopped session.
+ */
+export interface SessionReconnectingEventDetail {
+    attempt: number;
+    maxAttempts: number;
+    /** Human-readable description of what killed the transport. */
+    cause: string;
+}
 /** Map of event names to their detail shapes. */
 export interface ReachyMiniEventMap {
     connected: CustomEvent<ConnectedEventDetail>;
@@ -260,12 +401,38 @@ export interface ReachyMiniEventMap {
     sessionRejected: CustomEvent<SessionRejectedEventDetail>;
     state: CustomEvent<StateEventDetail>;
     videoTrack: CustomEvent<VideoTrackEventDetail>;
+    audioTrack: CustomEvent<AudioTrackEventDetail>;
     micSupported: CustomEvent<MicSupportedEventDetail>;
     error: CustomEvent<ErrorEventDetail>;
     iceStateChange: CustomEvent<IceStateChangeEventDetail>;
     networkOnline: CustomEvent<Record<string, never>>;
     networkOffline: CustomEvent<Record<string, never>>;
     networkChange: CustomEvent<NetworkChangeEventDetail>;
+    sessionReconnecting: CustomEvent<SessionReconnectingEventDetail>;
+    /**
+     * Auto-reconnect succeeded; the detail is the 1-based attempt that
+     * got through. A fresh `streaming` event fires alongside (same
+     * robot, new sessionId); video re-attaches automatically through
+     * the `videoTrack` listener installed by `attachVideo()`. App-level
+     * state that lives daemon-side per session (motor mode override, a
+     * replaced audio sender track, …) must be re-asserted by the app.
+     */
+    sessionReconnected: CustomEvent<{ attempt: number }>;
+    /**
+     * The signaling channel (central SSE) dropped while a session is
+     * streaming. The session is NOT affected: once up, its media and data
+     * channel are peer-to-peer. The SDK reconnects signaling in the
+     * background (`signalingRestored`); `state` stays `streaming`.
+     */
+    signalingLost: CustomEvent<{ reason: string }>;
+    /** Background signaling reconnect succeeded while streaming. */
+    signalingRestored: CustomEvent<{ peerId: string }>;
+    /**
+     * Central ended the session on its side (typically after this
+     * client's signaling timed out) while the peer link was still live,
+     * so the session was kept. Informational; the robot decides.
+     */
+    signalingSessionEnded: CustomEvent<{ reason: string | null }>;
 }
 
 /** Public surface of a ReachyMini SDK instance. */
@@ -286,18 +453,36 @@ export interface ReachyMiniInstance extends EventTarget {
     readonly preselectedRobotId: string | null;
     /** `true` iff `preselectedRobotId !== null`. UX branching helper. */
     readonly isEmbedded: boolean;
+    /**
+     * Live RTCPeerConnection, or `null` between sessions. Read-only escape
+     * hatch for stats sampling (`getStats()`); mutating it is unsupported.
+     * Auto-reconnect re-dials REPLACE this object, so re-read it on every
+     * use — never capture it across ticks.
+     */
+    readonly peerConnection: RTCPeerConnection | null;
+    /** The robot's microphone track, or `null` until the session's audio arrives. */
+    readonly robotAudioTrack: MediaStreamTrack | null;
+    /**
+     * Build version of this SDK (npm package `version`), injected from
+     * package.json at build time. The JS SDK's OWN version — distinct from
+     * `getVersion()`, which asks the DAEMON its version over the data
+     * channel. `0.0.0-managed-by-ci` means an unreleased/branch build.
+     */
+    readonly sdkVersion: string;
 
     /** Underlying RTCPeerConnection. Apps can read it to inspect
-     *  audio / video transceivers. */
+     *  audio / video transceivers.
+     *  @deprecated Use `peerConnection`. Kept for compatibility with
+     *  app bundles that predate the getter. */
     _pc: RTCPeerConnection | null;
     /** Silent placeholder MediaStream the SDK feeds the WebRTC audio
-     *  sender so robot-speaker output can negotiate sendrecv. Apps inject
-     *  their own audio (TTS, files, the user's mic for teleop) by calling
-     *  `replaceTrack()` on the audio sender from `_pc.getSenders()`. */
+     *  sender so robot-speaker output can negotiate sendrecv. Apps send
+     *  their own audio (TTS, files, the user's mic for teleop) with
+     *  `setOutgoingAudioTrack(track)`. */
     _micStream: MediaStream | null;
 
     authenticate(): Promise<boolean>;
-    login(): Promise<void>;
+    login(options?: LoginOptions): Promise<void>;
     logout(): void;
 
     connect(token?: string): Promise<void>;
@@ -311,6 +496,20 @@ export interface ReachyMiniInstance extends EventTarget {
 
     startSession(robotId: string): Promise<void>;
     stopSession(): Promise<void>;
+    /**
+     * Enable/disable the automatic session re-dial at runtime (see the
+     * `autoReconnect` constructor option). Disabling aborts any re-dial
+     * already in flight. Meant for flows that EXPECT the transport to
+     * die, e.g. a daemon self-update reboot.
+     *
+     * Sharp edge: aborting an in-flight re-dial leaves the session torn
+     * down (the loop closed the transport on entry) WITHOUT emitting
+     * `sessionStopped` or `error` — the caller owns the terminal event.
+     * The daemon-update flow relies on exactly that (its own
+     * `sessionStopped` arrives from the reboot); any other caller must
+     * surface the end of the session itself.
+     */
+    setAutoReconnect(enabled: boolean): void;
 
     attachVideo(el: HTMLVideoElement): () => void;
 
@@ -341,8 +540,62 @@ export interface ReachyMiniInstance extends EventTarget {
     }): boolean;
     /** Send an arbitrary JSON message on the data channel. */
     sendRaw(data: unknown): boolean;
+    /**
+     * Generic command round-trip for daemon commands the SDK has no typed
+     * wrapper for: send `command` and await the matching reply, `null` on
+     * the fail-open timeout (daemon predates the command). Lets an app use
+     * a newer daemon feature without waiting for an SDK release.
+     */
+    request(
+        command: { type: string } & Record<string, unknown>,
+        options?: RequestOptions,
+    ): Promise<Record<string, unknown> | null>;
     /** Play a sound file on the robot's speakers (basename). */
     playSound(file: string): boolean;
+    /**
+     * Play a named recorded move (motion + its bundled sound) from a HF
+     * dataset, daemon-side. Fire-and-forget: returns `true` once the command
+     * is sent on the data channel (not when playback finishes), `false` if the
+     * channel isn't open. `dataset` defaults to the daemon's emotions library
+     * (`pollen-robotics/reachy-mini-emotions-library`), already pre-downloaded
+     * on the robot; pass it to source a move from another repo.
+     * `initialGotoDuration` (seconds) eases into the move's first frame
+     * instead of snapping. The daemon self-guards against a concurrent move,
+     * so a rapid double call is a no-op.
+     */
+    playRecordedMove(
+        moveName: string,
+        opts?: { dataset?: string; initialGotoDuration?: number },
+    ): boolean;
+    /**
+     * Stop whatever move is currently playing on the daemon (recorded move,
+     * uploaded move, goto), silencing its bundled sound too. Fire-and-forget
+     * and idempotent: a stop with no move running is acked as a no-op, not
+     * an error. Returns `false` if the data channel is not open.
+     */
+    stopMove(): boolean;
+    /**
+     * Ask the daemon to pre-download a recorded-move dataset into its local
+     * HF cache, so a later `playRecordedMove` from that dataset starts
+     * instantly instead of blocking on the download. Send it right after
+     * connecting for any non-official dataset you plan to play (the daemon
+     * only preloads the official pollen-robotics libraries by itself).
+     * Fire-and-forget and idempotent: cache-first daemon-side, so repeats
+     * are cheap; on failure `playRecordedMove` still downloads on demand.
+     */
+    preloadDataset(dataset: string): boolean;
+    /**
+     * Like `preloadDataset()`, but resolves once the daemon acks the preload,
+     * i.e. when the dataset is actually in the local HF cache. `true` on
+     * success, `false` on a daemon-reported download failure, `null` on the
+     * fail-open timeout (slow download, or a daemon that predates the
+     * command). Rejects when the channel isn't open or the session tears
+     * down mid-flight.
+     */
+    preloadDatasetAndWait(
+        dataset: string,
+        options?: { timeoutMs?: number },
+    ): Promise<boolean | null>;
     /** Drop incoming audio queued for the robot speaker (barge-in). */
     clearIncomingAudio(): boolean;
     /** Enable daemon-side visual head tracking. */
@@ -354,11 +607,45 @@ export interface ReachyMiniInstance extends EventTarget {
 
     setAudioMuted(muted: boolean): void;
     setMicMuted(muted: boolean): void;
+    /**
+     * Stream an audio track to the robot's speaker (`null` = silence).
+     * Survives auto-reconnects; resolves `false` when no session is live yet.
+     */
+    setOutgoingAudioTrack(track: MediaStreamTrack | null): Promise<boolean>;
 
     getVolume(): Promise<number | null>;
     setVolume(volume: number): Promise<number | null>;
     getMicrophoneVolume(): Promise<number | null>;
     setMicrophoneVolume(volume: number): Promise<number | null>;
+
+    /**
+     * Query the persisted robot display name. `null` when none is set, the
+     * channel isn't open, or the daemon predates the `get_robot_name` command.
+     */
+    getRobotName(): Promise<string | null>;
+
+    /**
+     * Query whether the first wake-up setup wizard has been completed
+     * (robot-wide, persisted). `null` when the channel isn't open or the
+     * daemon predates the command (callers should fail-open).
+     */
+    getFirstWakeUp(): Promise<boolean | null>;
+    /** Persist the first wake-up wizard completion flag on the robot. */
+    setFirstWakeUp(isCompleted: boolean): Promise<boolean | null>;
+    /**
+     * Set and persist the robot display name. Applied live by the daemon
+     * (status + central relay + mDNS), so it takes effect right away without a
+     * restart. Resolves with the stored name, or `null` on error.
+     */
+    setRobotName(name: string): Promise<string | null>;
+
+    /**
+     * Read the robot's anonymous telemetry choice. `null` when the channel
+     * isn't open or the daemon predates the `get_telemetry` command.
+     */
+    getTelemetry(): Promise<TelemetryStatus | null>;
+    /** Enable or disable telemetry. Disabling also forgets the robot id. */
+    setTelemetry(enabled: boolean): Promise<TelemetryStatus | null>;
 
     /**
      * Apply a batch of XVF3800 audio-board parameters on the robot.
@@ -383,10 +670,38 @@ export interface ReachyMiniInstance extends EventTarget {
     getVersion(): Promise<string | null>;
     /** Hardware ID (USB serial), or `null` on developer machines. */
     getHardwareId(): Promise<string | null>;
+    /**
+     * One-shot IMU reading (accelerometer, gyroscope, quaternion,
+     * temperature). Resolves `null` when the robot has no IMU (Lite
+     * version, simulation) or the daemon predates the `get_imu` command.
+     */
+    getImu(): Promise<ImuData | null>;
     /** Force a `state` event right now (background poll runs at 500 ms). */
     requestState(): boolean;
+    /**
+     * Ask the daemon to *push* the robot state (~30 Hz, delivered as `state`
+     * events) over the dedicated unreliable/unordered `pose` channel instead
+     * of polling `requestState` - immune to the Wi-Fi round-trip lag of the
+     * reliable control channel. Refcounted: pair every `subscribePose()` with
+     * exactly one `unsubscribePose()`; multiple consumers share one daemon-side
+     * subscription. No-op against a daemon that predates the pose channel (the
+     * SDK's ~2 Hz self-poll keeps `state` updated there).
+     */
+    subscribePose(): boolean;
+    /** Release one pose-stream consumer; sends `unsubscribe_pose` on the last. */
+    unsubscribePose(): boolean;
     /** Subscribe to daemon `journalctl` logs over the data channel. */
     subscribeLogs(options: SubscribeLogsOptions): () => void;
+    /**
+     * Ask the daemon to update itself from PyPI (Wireless only) and
+     * restart. Fire-and-ack: returns `false` only when the data channel
+     * isn't open. A *successful* update restarts the daemon before a
+     * `done` event can arrive, so treat the session teardown followed by
+     * a successful reconnect as the success signal; `onProgress` fires
+     * with `status: 'failed'` when the daemon declines the job or the
+     * install errors before the restart.
+     */
+    startDaemonUpdate(options?: StartDaemonUpdateOptions): boolean;
 
     /**
      * Motor torque mode: `enabled` (position control), `disabled`
@@ -412,11 +727,22 @@ export interface ReachyMiniInstance extends EventTarget {
      * completion. Does NOT touch motor mode; caller manages it.
      */
     gotoSleep(options?: MotionAwaitOptions): Promise<void>;
-    /** Read the awake state from the cached `motor_mode`. */
+    /**
+     * Read the awake state from the cached `motor_mode`. Gravity
+     * compensation counts as awake: the robot is standing, even though
+     * it won't follow position targets in that mode.
+     */
     isAwake(): boolean;
     /**
-     * Idempotent wakeUp: noop when already awake. Resolves with
-     * the post-call awake state. Does NOT await the trajectory.
+     * Idempotent bring-up to a state where the robot follows position
+     * targets. Plays the wake trajectory when asleep and awaits it, so
+     * callers can start commanding poses on resolution without fighting
+     * the emote; switches back to position control (no emote) when the
+     * robot is up but in gravity compensation; noop when already there.
+     *
+     * `timeoutMs` bounds only the initial `motor_mode` read; the wake
+     * trajectory gets its own internal budget. Never rejects - a robot
+     * that won't confirm the wake still lets the app boot.
      */
     ensureAwake(timeoutMs?: number): Promise<boolean>;
 
@@ -432,9 +758,14 @@ export interface ReachyMiniInstance extends EventTarget {
     cancelAudio(uploadId?: string | null): boolean;
 }
 
-export type ReachyMiniConstructor = new (
+export type ReachyMiniConstructor = (new (
     options?: ReachyMiniOptions,
-) => ReachyMiniInstance;
+) => ReachyMiniInstance) & {
+    /** Build version of the SDK (npm package `version`), reachable without
+     *  an instance via `ReachyMini.version`. Mirror of the instance
+     *  `sdkVersion`. */
+    readonly version: string;
+};
 
 /**
  * Internal "session reject" error shape. Surfaced by `startSession()`

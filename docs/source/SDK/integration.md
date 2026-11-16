@@ -12,9 +12,11 @@ Want a zero-install, cross-platform app that runs in the browser? Check out the 
 ## HTTP & WebSocket API
 Building a dashboard or a non-Python controller? The Daemon exposes full control via REST.
 
-* **Docs:** `http://localhost:8000/docs`
+The daemon host is `localhost:8000` on Lite (daemon on your machine) and `reachy-mini.local:8000` (or the robot's IP) on Wireless — substitute it for `<HOST>` below.
+
+* **Docs:** `http://<HOST>/docs`
 * **Get State:** `GET /api/state/full`
-* **WebSocket:** `ws://localhost:8000/api/state/ws/full`
+* **WebSocket:** `ws://<HOST>/api/state/ws/full`
 
 ## AI Experimentation Tips
 

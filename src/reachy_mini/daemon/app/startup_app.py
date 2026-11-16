@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from reachy_mini.apps import SourceKind
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.robot_app_lock import RobotAppLockState
 from reachy_mini.io.protocol import MotorControlMode
 
@@ -178,11 +179,6 @@ async def start_startup_app_if_idle(
         return False
 
 
-async def play_awake_startup_cue(backend: Any) -> None:
-    """Play the wake sound without running the full wake-up pose."""
-    backend.play_sound("wake_up.wav")
-
-
 async def wake_or_start_startup_app_if_idle(
     app_manager: AppManager,
     daemon: "Daemon",
@@ -197,18 +193,24 @@ async def wake_or_start_startup_app_if_idle(
         return False
 
     try:
-        if backend.get_motor_control_mode() == MotorControlMode.Disabled:
+        # Decide before touching the motors: enabling them pins the targets
+        # to the measured pose, which for a robot resting at init could flip
+        # the awake predicate and turn the wake below into a silent no-op.
+        if backend.is_awake_at_init_pose():
+            # Already up: just ack the touch with the wake sound.
+            backend.play_sound("wake_up.wav")
+        else:
             logger.info(f"Waking up from antenna touch before starting app: {name}")
             backend.set_motor_control_mode(MotorControlMode.Enabled)
-            await backend.wake_up()
+            # force: the predicate above already ruled a wake is due, and the
+            # set_motor_control_mode may have satisfied wake_up's own check.
+            await backend.wake_up(force=True)
             # wake_up() may fire the daemon-level startup-app callback, which
             # schedules the same app start as a task. Yield once so that task
             # can acquire the app slot before this antenna path checks it.
             await asyncio.sleep(0)
             if not _startup_app_slot_is_free(app_manager, daemon):
                 return True
-        else:
-            await play_awake_startup_cue(backend)
 
         return await start_startup_app_if_idle(app_manager, daemon, name)
     except Exception as e:
@@ -315,3 +317,41 @@ async def rearm_startup_app_watcher(
     return asyncio.create_task(
         watch_antennas_for_startup_app(app_manager, daemon, name)
     )
+
+
+async def apply_startup_app(
+    app_manager: AppManager, daemon: "Daemon", name: str | None
+) -> None:
+    """Persist the startup app (``None`` clears it) and re-arm its watcher live.
+
+    Raises ``ValueError`` when ``name`` is not installed; nothing is persisted then.
+    Calls are serialized, so the last one wins for both the config and the watcher.
+    """
+    async with daemon.startup_app_lock:
+        if name:
+            installed = await app_manager.list_available_apps(SourceKind.INSTALLED)
+            if not any(a.name == name for a in installed):
+                raise ValueError(f"App '{name}' is not installed")
+        startup_app_config.set_startup_app(name)
+        daemon.startup_app_watcher_task = await rearm_startup_app_watcher(
+            app_manager, daemon, name, daemon.startup_app_watcher_task
+        )
+
+
+async def arm_startup_app_at_boot(
+    app_manager: AppManager, daemon: "Daemon", name: str
+) -> None:
+    """Arm the watcher for ``name``, the startup app read before ``daemon.start()``.
+
+    The relay is live during start() (a wake-up takes seconds), so a client may
+    have changed the startup app meanwhile: its choice wins, boot arms nothing.
+    """
+    async with daemon.startup_app_lock:
+        if (
+            daemon.startup_app_watcher_task is None
+            and startup_app_config.get_startup_app() == name
+        ):
+            daemon.startup_app_watcher_task = asyncio.create_task(
+                watch_antennas_for_startup_app(app_manager, daemon, name)
+            )
+            logger.info(f"Startup app antenna watcher started for app: {name}")

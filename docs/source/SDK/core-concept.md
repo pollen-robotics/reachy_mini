@@ -9,7 +9,7 @@ Reachy Mini uses a **Client-Server** architecture:
 1.  **The Daemon (Server):** 
     * Runs on the computer connected to the robot (or the simulation).
     * Handles hardware I/O (USB/Serial), safety checks, and sensor reading.
-    * Exposes a REST API (`localhost:8000`) and WebSocket.
+    * Exposes a REST API and WebSocket at `http://<host>:8000` — the host is `localhost` on Lite (daemon on your machine) and `reachy-mini.local` (or the robot's IP) on Wireless.
     
 2.  **The SDK (Client):**
     * Your Python code (`reachy_mini` package).
@@ -46,7 +46,7 @@ Reachy Mini has physical and software limits to prevent self-collision and damag
 You can change how the motors behave:
 * **`mini.enable_motors()`**: Stiff. Holds position.
 * **`mini.disable_motors()`**: Limp. No power.
-* **`mini.enable_gravity_compensation()`**: "Soft" mode. You can move the head by hand, and it will stay where you leave it. (Only works with the Placo kinematics backend.)
+* **`mini.enable_gravity_compensation()`**: "Soft" mode. You can move the head by hand, and it will stay where you leave it. (Only works with the Placo kinematics backend: install `reachy-mini[placo_kinematics]` and start the daemon with `--kinematics-engine Placo`. Stock Wireless robots ship without it.)
 
 
 ## Next Steps

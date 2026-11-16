@@ -18,7 +18,7 @@ If you want to run the SDK directly on your wireless Reachy Mini instead of remo
 Open a terminal and run:
 
 ```bash
-ssh pollen@reachy-mini
+ssh pollen@reachy-mini.local
 ```
 
 When prompted, use these **default credentials**:
@@ -77,7 +77,7 @@ The **Daemon** is a background service that handles the low-level communication 
       >
       > If you get a segmentation fault from `libgstpython`, see the [simulation troubleshooting](../platforms/simulation/get_started.md#-troubleshooting) section.
 
-✅ **Verification:** Open [http://localhost:8000/docs](http://localhost:8000/docs) in your browser. If you see the Reachy SDK API documentation, you are ready!
+✅ **Verification:** Open the daemon's API docs in your browser — [http://localhost:8000/docs](http://localhost:8000/docs) on Lite/Simulation (daemon on your machine), or [http://reachy-mini.local:8000/docs](http://reachy-mini.local:8000/docs) on Wireless (daemon on the robot). If you see the Reachy SDK API documentation, you are ready!
 
 ## 3. Your First Script
 

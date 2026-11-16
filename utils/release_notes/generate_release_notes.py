@@ -154,19 +154,32 @@ def run_opencode_skill(
         return False
 
 
-def main(since_tag: str, bump_type: str = "patch", max_iterations: int = 3) -> int:
+def main(since_tag: str, bump_type: str = "patch", max_iterations: int = 3, seed: str | None = None) -> int:
     """Run the full release notes generation pipeline.
 
     Args:
         since_tag: Git tag to compare against (e.g., "v1.3.7")
         bump_type: Version bump type ("major", "minor", or "patch")
         max_iterations: Maximum validation/fix iterations
+        seed: Existing notes to start from instead of generating a new draft. Used on
+            later RCs so manual edits survive: the validation loop only appends the PRs
+            that are missing and drops stale ones. No model call at all if nothing changed.
 
     Returns:
         Exit code (0 for success, non-zero for failure)
 
     """
     t_total_start = time.monotonic()
+
+    # Read the seed before the output dir is wiped below (it may live inside it).
+    seed_text = None
+    if seed:
+        seed_path = Path(seed)
+        if not seed_path.exists() or seed_path.stat().st_size == 0:
+            print(f"Warning: seed {seed_path} missing or empty — generating from scratch", file=sys.stderr)
+        else:
+            seed_text = seed_path.read_text()
+            print(f"Seeding from {seed_path} ({len(seed_text):,} bytes)")
 
     # 0. Validate the configured model before doing any expensive work.
     #    OpenCode exits 0 on unknown models, so a typo here would otherwise
@@ -206,25 +219,32 @@ def main(since_tag: str, bump_type: str = "patch", max_iterations: int = 3) -> i
 
     print(f"Fetched {len(pr_numbers)} PRs")
 
-    # 4. Generate initial draft with OpenCode
-    print("\nGenerating release notes with OpenCode...")
+    # 4. Get an initial draft: reuse the seed if given, otherwise generate one.
     t_agent_start = time.monotonic()
     agent_calls = 0
-    if not run_opencode_skill("reachy-mini-release-notes", version):
-        print("Failed to generate initial release notes", file=sys.stderr)
-        return 1
-    agent_calls += 1
-
-    # OpenCode can exit 0 without writing the expected file (e.g. auth/quota
-    # issues). Fail fast instead of falling through to a 0-byte output.
     initial_output = OUTPUT_DIR / f"RELEASE_NOTES_{version}.md"
-    if not initial_output.exists() or initial_output.stat().st_size == 0:
-        print(
-            f"Error: OpenCode did not produce {initial_output} (or file is empty). "
-            f"Check OpenCode logs above for the real error.",
-            file=sys.stderr,
-        )
-        return 1
+
+    if seed_text is not None:
+        # Later RC: start from the current (possibly hand-edited) notes and let the
+        # validation loop reconcile them against the manifest.
+        initial_output.write_text(seed_text)
+        print(f"Using seeded notes as the draft ({initial_output})")
+    else:
+        print("\nGenerating release notes with OpenCode...")
+        if not run_opencode_skill("reachy-mini-release-notes", version):
+            print("Failed to generate initial release notes", file=sys.stderr)
+            return 1
+        agent_calls += 1
+
+        # OpenCode can exit 0 without writing the expected file (e.g. auth/quota
+        # issues). Fail fast instead of falling through to a 0-byte output.
+        if not initial_output.exists() or initial_output.stat().st_size == 0:
+            print(
+                f"Error: OpenCode did not produce {initial_output} (or file is empty). "
+                f"Check OpenCode logs above for the real error.",
+                file=sys.stderr,
+            )
+            return 1
 
     # 5. Validation loop
     validation_iterations = 0
@@ -351,9 +371,17 @@ Examples:
         default=3,
         help="Maximum validation/fix iterations (default: 3)",
     )
+    parser.add_argument(
+        "--seed",
+        help=(
+            "Start from these existing notes instead of generating a new draft. "
+            "The validation loop then only adds missing PRs and drops stale ones, so "
+            "manual edits survive. Used for RCs after the first."
+        ),
+    )
     args = parser.parse_args()
 
-    sys.exit(main(args.since, args.bump_type, args.max_iterations))
+    sys.exit(main(args.since, args.bump_type, args.max_iterations, args.seed))
 
 
 if __name__ == "__main__":

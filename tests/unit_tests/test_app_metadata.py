@@ -1,7 +1,3 @@
-import json
-from dataclasses import dataclass
-from datetime import datetime
-
 from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.sources.hf_space import (
     _build_app_info,
@@ -10,30 +6,7 @@ from reachy_mini.apps.sources.hf_space import (
     _get_card_data,
     _get_string,
     _normalize_space_data,
-    _to_plain_json,
 )
-
-
-@dataclass
-class _FakeSibling:
-    rfilename: str
-
-
-def test_to_plain_json_normalizes_hf_objects() -> None:
-    # Mirrors a SpaceInfo.__dict__: nested SDK objects + datetimes that the raw
-    # HfApi path would otherwise leave non-serializable in AppInfo.extra.
-    raw = {
-        "id": "owner/app",
-        "siblings": [_FakeSibling("app/__main__.py")],
-        "created_at": datetime(2024, 1, 2, 3, 4, 5),
-    }
-
-    plain = _to_plain_json(raw)
-
-    # Result must be pure JSON (no exception) and match the HTTP API shape.
-    json.dumps(plain)  # must not raise
-    assert plain["siblings"][0]["rfilename"] == "app/__main__.py"
-    assert plain["created_at"] == "2024-01-02T03:04:05"
 
 
 def test_coerce_space_data_stringifies_keys() -> None:
@@ -142,3 +115,15 @@ def test_build_app_info_defaults_empty_description() -> None:
 
     assert app is not None
     assert app.description == ""
+
+
+def test_normalize_space_data_drops_siblings() -> None:
+    # The per-space file list is never read from the catalog; it only bloats
+    # the response (about 90% of the payload on a full listing).
+    assert _normalize_space_data(
+        {"id": "owner/app", "siblings": [{"rfilename": "app/__main__.py"}]}
+    ) == {"id": "owner/app"}
+    # HfApi gives siblings=None when the field was not requested.
+    assert _normalize_space_data({"id": "owner/app", "siblings": None}) == {
+        "id": "owner/app"
+    }
