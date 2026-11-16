@@ -1,147 +1,81 @@
-"""Unit tests for ``play_sound()`` playbin teardown on EOS/error.
+"""SoundPlaybin frees play_sound's playbin on EOS, stop and replacement."""
 
-Covers both ``play_sound`` implementations: ``GStreamerAudio``
-(``media/audio_gstreamer.py``, SDK/media-manager path) and
-``GstMediaServer`` (``media/media_server.py``, the daemon-side path used
-for wake-up/sleep and ``/api/media/play_sound``).
-"""
-
+import gc
 import logging
-from types import SimpleNamespace
-from typing import cast
+import time
+import wave
+from collections.abc import Callable
+from pathlib import Path
 
 import gi
-import pytest
 
 gi.require_version("Gst", "1.0")
-from gi.repository import Gst  # noqa: E402
+from gi.repository import GLib, Gst  # noqa: E402
 
-from reachy_mini.media.audio_gstreamer import GStreamerAudio  # noqa: E402
-from reachy_mini.media.media_server import GstMediaServer  # noqa: E402
+from reachy_mini.media.gstreamer_utils import SoundPlaybin  # noqa: E402
 
 Gst.init([])
 
-# (class under test, name of its logger attribute)
-IMPLEMENTATIONS = [
-    pytest.param(GStreamerAudio, "logger", id="GStreamerAudio"),
-    pytest.param(GstMediaServer, "_logger", id="GstMediaServer"),
-]
+
+def _wav(tmp_path: Path, seconds: float = 0.1) -> str:
+    path = tmp_path / "silence.wav"
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes(b"\0\0" * int(16000 * seconds))
+    return path.as_uri()
 
 
-class _FakeBus:
-    """Stand-in for ``Gst.Bus`` recording signal-watch removal."""
-
-    def __init__(self) -> None:
-        self.watch_removed = False
-
-    def remove_signal_watch(self) -> None:
-        self.watch_removed = True
-
-
-class _FakePlaybin:
-    """Stand-in for a playbin ``Gst.Element`` recording state changes."""
-
-    def __init__(self) -> None:
-        self.bus = _FakeBus()
-        self.state: Gst.State | None = None
-
-    def get_bus(self) -> _FakeBus:
-        return self.bus
-
-    def set_state(self, state: Gst.State) -> None:
-        self.state = state
+def _playbin(uri: str, freed: list[str], name: str) -> Gst.Element:
+    pb = Gst.ElementFactory.make("playbin", None)
+    pb.set_property("uri", uri)
+    sink = Gst.ElementFactory.make("fakesink", None)
+    sink.set_property("sync", True)  # real-time, so a long file is still playing
+    pb.set_property("audio-sink", sink)
+    pb.weak_ref(lambda: freed.append(name))
+    return pb
 
 
-def _fake_self(playbin: _FakePlaybin | None, logger_attr: str) -> SimpleNamespace:
-    """Return a stand-in carrying just the attrs the helpers touch."""
-    return SimpleNamespace(
-        _playbin=playbin,
-        **{logger_attr: logging.getLogger("test_playbin_teardown")},
-        _teardown_playbin=lambda pb: None,
-    )
+def _spin_until(cond: Callable[[], bool], timeout: float = 5.0) -> None:
+    ctx = GLib.MainContext.default()
+    deadline = time.monotonic() + timeout
+    while not cond() and time.monotonic() < deadline:
+        ctx.iteration(False)
+        time.sleep(0.005)
 
 
-@pytest.mark.parametrize("cls,logger_attr", IMPLEMENTATIONS)
-def test_teardown_stops_playbin_and_drops_watch(cls, logger_attr) -> None:
-    """Teardown NULLs the playbin, removes its bus watch, clears the ref."""
-    playbin = _FakePlaybin()
-    fake = _fake_self(playbin, logger_attr)
-
-    cls._teardown_playbin(fake, cast(Gst.Element, playbin))
-
-    assert playbin.state == Gst.State.NULL
-    assert playbin.bus.watch_removed
-    assert fake._playbin is None
+def _assert_freed(freed: list[str], name: str) -> None:
+    _spin_until(lambda: gc.collect() >= 0 and name in freed)
+    assert name in freed, f"playbin {name} leaked"
 
 
-@pytest.mark.parametrize("cls,logger_attr", IMPLEMENTATIONS)
-def test_teardown_of_stale_playbin_keeps_current_ref(cls, logger_attr) -> None:
-    """Tearing down a superseded playbin leaves the newer one in place."""
-    stale, current = _FakePlaybin(), _FakePlaybin()
-    fake = _fake_self(current, logger_attr)
+def test_eos_frees_playbin(tmp_path: Path) -> None:
+    """A sound that ends on its own frees its playbin and calls on_end."""
+    ended: list[int] = []
+    freed: list[str] = []
+    slot = SoundPlaybin(logging.getLogger(__name__), on_end=lambda: ended.append(1))
 
-    cls._teardown_playbin(fake, cast(Gst.Element, stale))
+    slot.play(_playbin(_wav(tmp_path), freed, "a"))
+    _spin_until(lambda: bool(ended))
 
-    assert stale.state == Gst.State.NULL
-    assert stale.bus.watch_removed
-    assert fake._playbin is cast(Gst.Element, current)
-
-
-@pytest.mark.parametrize("cls,logger_attr", IMPLEMENTATIONS)
-def test_eos_message_triggers_teardown(cls, logger_attr) -> None:
-    """An EOS bus message tears down the playbin that produced it."""
-    playbin = _FakePlaybin()
-    fake = _fake_self(playbin, logger_attr)
-    torn_down = []
-    fake._teardown_playbin = torn_down.append
-    msg = SimpleNamespace(type=Gst.MessageType.EOS)
-
-    cls._on_playbin_message(
-        fake,
-        cast(Gst.Bus, playbin.bus),
-        cast(Gst.Message, msg),
-        cast(Gst.Element, playbin),
-    )
-
-    assert torn_down == [playbin]
+    assert ended == [1]
+    assert slot.current is None
+    _assert_freed(freed, "a")
 
 
-@pytest.mark.parametrize("cls,logger_attr", IMPLEMENTATIONS)
-def test_error_message_triggers_teardown(cls, logger_attr) -> None:
-    """An ERROR bus message is logged and tears down the playbin."""
-    playbin = _FakePlaybin()
-    fake = _fake_self(playbin, logger_attr)
-    torn_down = []
-    fake._teardown_playbin = torn_down.append
-    gerror = SimpleNamespace(message="boom")
-    msg = SimpleNamespace(
-        type=Gst.MessageType.ERROR, parse_error=lambda: (gerror, "debug info")
-    )
+def test_stop_and_replace_free_playbins(tmp_path: Path) -> None:
+    """A replaced or stopped sound frees its playbin without on_end."""
+    ended: list[int] = []
+    freed: list[str] = []
+    uri = _wav(tmp_path, seconds=5)
+    slot = SoundPlaybin(logging.getLogger(__name__), on_end=lambda: ended.append(1))
 
-    cls._on_playbin_message(
-        fake,
-        cast(Gst.Bus, playbin.bus),
-        cast(Gst.Message, msg),
-        cast(Gst.Element, playbin),
-    )
+    slot.play(_playbin(uri, freed, "a"))
+    slot.play(_playbin(uri, freed, "b"))
+    _assert_freed(freed, "a")
+    slot.stop()
+    _assert_freed(freed, "b")
 
-    assert torn_down == [playbin]
-
-
-@pytest.mark.parametrize("cls,logger_attr", IMPLEMENTATIONS)
-def test_other_messages_are_ignored(cls, logger_attr) -> None:
-    """Non-EOS/ERROR messages (e.g. STATE_CHANGED) do not tear down."""
-    playbin = _FakePlaybin()
-    fake = _fake_self(playbin, logger_attr)
-    torn_down = []
-    fake._teardown_playbin = torn_down.append
-    msg = SimpleNamespace(type=Gst.MessageType.STATE_CHANGED)
-
-    cls._on_playbin_message(
-        fake,
-        cast(Gst.Bus, playbin.bus),
-        cast(Gst.Message, msg),
-        cast(Gst.Element, playbin),
-    )
-
-    assert torn_down == []
+    assert slot.current is None
+    assert ended == []  # on_end is only for sounds that end on their own
