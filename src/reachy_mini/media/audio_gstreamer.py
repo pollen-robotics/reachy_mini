@@ -383,13 +383,7 @@ class GStreamerAudio(AudioBase):
         # Pin silence caps to the appsrc format so audiomixer sees matching
         # inputs (it can't aggregate F32LE@N and S16@44100 together).
         silence_caps = Gst.ElementFactory.make("capsfilter")
-        silence_caps.set_property(
-            "caps",
-            Gst.Caps.from_string(
-                f"audio/x-raw,format=F32LE,channels={self.CHANNELS},"
-                f"rate={self.SAMPLE_RATE},layout=interleaved"
-            ),
-        )
+        silence_caps.set_property("caps", caps)
         silence_queue = Gst.ElementFactory.make("queue")
 
         tee = Gst.ElementFactory.make("tee")
@@ -430,19 +424,9 @@ class GStreamerAudio(AudioBase):
         silence_caps.link(silence_queue)
         silence_queue.link(mixer)
 
-        # Pin the mixer output to its input format too. Left free, it follows the
-        # output device (e.g. S16LE/48 kHz on a laptop speaker) and the mixer
-        # converts every input buffer itself, which intermittently segfaults in
-        # GStreamer's per-pad converter. The audioconvert/audioresample elements
-        # downstream handle the device format instead.
+        # Pin output to the input format: mixer-side conversion segfaults on GStreamer 1.28 (#1525).
         mixer_caps = Gst.ElementFactory.make("capsfilter")
-        mixer_caps.set_property(
-            "caps",
-            Gst.Caps.from_string(
-                f"audio/x-raw,format=F32LE,channels={self.CHANNELS},"
-                f"rate={self.SAMPLE_RATE},layout=interleaved"
-            ),
-        )
+        mixer_caps.set_property("caps", caps)
         pipeline.add(mixer_caps)
         mixer.link(mixer_caps)
 
