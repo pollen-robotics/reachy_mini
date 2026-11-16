@@ -35,7 +35,7 @@ class JobHandler:
 
     uuid: str
     info: JobInfo
-    new_log_evt: dict[str, asyncio.Event]
+    new_log_evt: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Event]]
 
 
 register: dict[str, JobHandler] = {}
@@ -68,16 +68,6 @@ def run_command(
 
     start_evt = threading.Event()
 
-    # The job runs in its own thread/event loop, but the WS waiters in
-    # ``new_log_evt`` live in the main daemon loop. ``asyncio.Event.set()`` is
-    # not thread-safe and won't wake that loop, so the terminal DONE/FAILED
-    # notification can be lost, leaving ``ws_poll_info`` parked forever. Hop
-    # back onto the main loop via ``call_soon_threadsafe`` to wake the waiters.
-    try:
-        main_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
-    except RuntimeError:
-        main_loop = None
-
     def notify(line: str | None) -> None:
         if on_event is None:
             return
@@ -93,11 +83,10 @@ def run_command(
             def emit(self, record: logging.LogRecord) -> None:
                 line = self.format(record)
                 jh.info.logs.append(line)
-                for ws in jh.new_log_evt.values():
-                    if main_loop is not None:
-                        main_loop.call_soon_threadsafe(ws.set)
-                    else:
-                        ws.set()
+                # Waiters live on another loop: Event.set() from this thread
+                # would not wake it. list(): waiters unregister concurrently.
+                for loop, evt in list(jh.new_log_evt.values()):
+                    loop.call_soon_threadsafe(evt.set)
                 notify(line)
 
         logger = logging.getLogger(f"logs_job_{job_uuid}")
@@ -165,12 +154,14 @@ async def ws_poll_info(websocket: WebSocket, job_uuid: str) -> None:
     ws_uuid = str(uuid.uuid4())
     last_log_len = 0
 
+    evt = asyncio.Event()
+    evt.set()  # flush logs already emitted, incl. a job that ended before we joined
     try:
-        job.new_log_evt[ws_uuid] = asyncio.Event()
+        job.new_log_evt[ws_uuid] = (asyncio.get_running_loop(), evt)
 
         while True:
-            await job.new_log_evt[ws_uuid].wait()
-            job.new_log_evt[ws_uuid].clear()
+            await evt.wait()
+            evt.clear()
 
             new_logs = job.info.logs[last_log_len:]
 

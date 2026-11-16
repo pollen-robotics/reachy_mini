@@ -22,7 +22,10 @@ class _FakeWebSocket:
 
 
 @pytest.mark.asyncio
-async def test_ws_poll_info_receives_terminal_status_from_worker_thread():
+@pytest.mark.parametrize("from_threadpool", [False, True])
+async def test_ws_poll_info_receives_terminal_status_from_worker_thread(
+    from_threadpool: bool,
+):
     """A job finishing in its worker thread must wake the WS waiter in the main loop.
 
     ``run_command`` runs the job in a separate thread with its own event loop, but
@@ -30,6 +33,8 @@ async def test_ws_poll_info_receives_terminal_status_from_worker_thread():
     not thread-safe, so without hopping back onto the daemon loop the terminal DONE
     notification is lost and ``ws_poll_info`` hangs forever (the desktop app's
     "finalizing" step never completes and the connection eventually drops).
+    ``from_threadpool`` mimics sync routes (``/update/start``), which call
+    ``run_command`` from FastAPI's threadpool, with no running loop.
     """
     proceed = threading.Event()
 
@@ -37,7 +42,10 @@ async def test_ws_poll_info_receives_terminal_status_from_worker_thread():
         logger.info("working")
         await asyncio.to_thread(proceed.wait)
 
-    job_id = bg_job_register.run_command("test", job)
+    if from_threadpool:
+        job_id = await asyncio.to_thread(bg_job_register.run_command, "test", job)
+    else:
+        job_id = bg_job_register.run_command("test", job)
 
     ws = _FakeWebSocket()
     task = asyncio.create_task(bg_job_register.ws_poll_info(ws, job_id))
@@ -50,3 +58,23 @@ async def test_ws_poll_info_receives_terminal_status_from_worker_thread():
     terminal = json.loads(ws.texts[-1])
     assert terminal["status"] == JobStatus.DONE.value
     assert any("completed successfully" in t for t in ws.texts)
+
+
+@pytest.mark.asyncio
+async def test_ws_poll_info_joining_after_job_ended():
+    """A WS that connects after the job ended still gets the logs and terminal status."""
+
+    async def job(logger):
+        raise RuntimeError("boom")
+
+    job_id = bg_job_register.run_command("test", job)
+    while bg_job_register.get_info(job_id).status != JobStatus.FAILED:
+        await asyncio.sleep(0.01)
+    await asyncio.sleep(0.05)  # status flips just before the final log line
+
+    ws = _FakeWebSocket()
+    await asyncio.wait_for(bg_job_register.ws_poll_info(ws, job_id), timeout=5)
+
+    terminal = json.loads(ws.texts[-1])
+    assert terminal["status"] == JobStatus.FAILED.value
+    assert any("boom" in t for t in ws.texts)
