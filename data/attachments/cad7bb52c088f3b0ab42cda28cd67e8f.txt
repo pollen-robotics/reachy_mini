@@ -1,0 +1,2 @@
+INFO     logs_job_34b0e1a6-8cb3-4815-8d99-0e5815735f82:test_jsonrpc_relay.py:395 installing conv
+INFO     logs_job_34b0e1a6-8cb3-4815-8d99-0e5815735f82:bg_job_register.py:102 Job 'install' completed successfully

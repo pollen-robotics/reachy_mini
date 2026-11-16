@@ -1,0 +1,2 @@
+INFO     logs_job_53a2620a-b88e-48f3-907f-c90c13e08e98:test_bg_job_register.py:93 working
+INFO     logs_job_53a2620a-b88e-48f3-907f-c90c13e08e98:bg_job_register.py:102 Job 'test' completed successfully

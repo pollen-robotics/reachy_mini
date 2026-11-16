@@ -1,0 +1,2 @@
+INFO     logs_job_25ed691b-7519-4edc-952a-c0d8239a82e6:test_bg_job_register.py:42 working
+INFO     logs_job_25ed691b-7519-4edc-952a-c0d8239a82e6:bg_job_register.py:102 Job 'test' completed successfully
