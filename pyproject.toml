@@ -54,7 +54,7 @@ dependencies = [
     "reachy-mini-rust-kinematics>=1.0.3",
     "reachy_mini_motor_controller>=1.5.5",
 
-    "gstreamer-bundle==1.28.3; sys_platform != 'linux'",
+    "gstreamer-bundle==1.28.9; sys_platform != 'linux'",
     # OS-specific: use PyGObject for Linux
     "PyGObject>=3.42.2,<=3.46.0; sys_platform == 'linux'",
 ]
