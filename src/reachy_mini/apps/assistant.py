@@ -6,11 +6,11 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from pathlib import Path
 from typing import Any, Dict
 
 import questionary
-import toml
 import yaml
 from huggingface_hub import CommitOperationAdd, HfApi, get_repo_discussions, whoami
 from jinja2 import Environment, FileSystemLoader
@@ -294,8 +294,8 @@ def check(console: Console, app_path: str) -> None:
         sys.exit(1)
 
     # Extract app name
-    with open(pyproject_file, "r", encoding="utf-8") as f:
-        pyproject_content = toml.load(f)
+    with open(pyproject_file, "rb") as pyproject_fp:
+        pyproject_content = tomllib.load(pyproject_fp)
         project = pyproject_content.get("project", {})
         app_name = project.get("name", None)
         if app_name is None:

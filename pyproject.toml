@@ -45,7 +45,6 @@ dependencies = [
     "rustypot>=1.4.2",
     # Starlette 1.3.1 fixes the last advisory affecting the previous 0.x range.
     "starlette>=1.3.1,<2.0.0",
-    "toml",
     "uvicorn[standard]",
     "websockets>=12,<16",
     "zeroconf>=0.149.7,<1",
@@ -115,7 +114,6 @@ dev = [
     "pre-commit",
     "mypy==1.18.2",
     "types-requests",
-    "types-toml",
     "types-PyYAML",
 ]
 

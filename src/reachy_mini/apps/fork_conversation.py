@@ -4,10 +4,10 @@ import re
 import shutil
 import subprocess
 import tempfile
+import tomllib
 from pathlib import Path
 
 import questionary
-import toml
 from jinja2 import Environment, FileSystemLoader
 from rich.console import Console
 
@@ -221,39 +221,34 @@ def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
         )
         exit(1)
 
-    with open(pyproject_path, "r", encoding="utf-8") as f:
-        data = toml.load(f)
-
-    # Update project name
-    data["project"]["name"] = app_name
-
-    # Update scripts:
+    # Rename in the text, like _rename_package does for the .py files: the
+    # package name (name, scripts, entry point, package-data, isort), its
+    # script form and the main class. Keeps the file's comments and layout.
     script_name = app_name.replace("_", "-")
     class_name = _to_pascal_case(app_name)
-    data["project"]["scripts"] = {script_name: f"{app_name}.main:main"}
+    content = pyproject_path.read_text(encoding="utf-8")
+    content = re.sub(rf"\b{CONVERSATION_APP_PACKAGE}\b", app_name, content)
+    content = content.replace(CONVERSATION_APP_PACKAGE.replace("_", "-"), script_name)
+    content = content.replace("ReachyMiniConversationApp", class_name)
 
-    # Update entry points
-    data["project"]["entry-points"] = {
-        "reachy_mini_apps": {app_name: f"{app_name}.main:{class_name}"}
-    }
+    project = tomllib.loads(content).get("project", {})
+    entry_point = project.get("entry-points", {}).get("reachy_mini_apps", {})
+    if (
+        project.get("name") != app_name
+        or project.get("scripts", {}).get(script_name) != f"{app_name}.main:main"
+        or entry_point.get(app_name) != f"{app_name}.main:{class_name}"
+    ):
+        console.print(
+            "❌ Could not rename the app in pyproject.toml",
+            style="bold red",
+        )
+        console.print(
+            "The conversation app structure may have changed. Please report this issue.",
+            style="dim",
+        )
+        exit(1)
 
-    # Update package-data key from reachy_mini_conversation_app to app_name
-    if "tool" in data and "setuptools" in data["tool"]:
-        package_data = data["tool"]["setuptools"].get("package-data", {})
-        if CONVERSATION_APP_PACKAGE in package_data:
-            package_data[app_name] = package_data.pop(CONVERSATION_APP_PACKAGE)
-
-    # Update isort known-local-folder
-    if "tool" in data and "ruff" in data["tool"]:
-        isort_config = data["tool"]["ruff"].get("lint", {}).get("isort", {})
-        if "known-local-folder" in isort_config:
-            isort_config["known-local-folder"] = [
-                app_name if folder == CONVERSATION_APP_PACKAGE else folder
-                for folder in isort_config["known-local-folder"]
-            ]
-
-    with open(pyproject_path, "w", encoding="utf-8") as f:
-        toml.dump(data, f)
+    pyproject_path.write_text(content, encoding="utf-8")
 
 
 def _update_config(
