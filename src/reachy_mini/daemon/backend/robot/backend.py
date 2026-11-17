@@ -27,6 +27,16 @@ from reachy_mini.utils.hardware_config.parser import parse_yaml_config
 
 from ..abstract import Backend
 
+# Cap on the average voltage the motors see, in volts (None: no cap). The XL330
+# is rated for 6.0 V at most and Reachy Mini feeds it about 7.5 V.
+MOTOR_MAX_VOLTAGE: float | None = 6.0
+# Supply voltage assumed for a servo whose own reading is not available.
+NOMINAL_SUPPLY_VOLTAGE = 7.6
+# https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#control-table-of-ram-area
+GOAL_PWM_ADDR = 100  # 2 bytes; outside PWM mode, the ceiling on the duty cycle
+GOAL_PWM_MAX = 885  # 100 % duty
+PRESENT_INPUT_VOLTAGE_ADDR = 144  # 2 bytes, unit 0.1 V
+
 
 class RobotBackend(Backend):
     """Real robot backend for Reachy Mini."""
@@ -165,6 +175,7 @@ class RobotBackend(Backend):
         self.stats_record_t0 = time.time()
 
         self.last_hardware_error_check_time = time.time()
+        self._cap_motor_voltage()  # in place before the first move
 
         next_call_event = Event()
 
@@ -329,7 +340,38 @@ class RobotBackend(Backend):
                         self.logger.error(
                             f"Motor '{motor_name}' hardware errors: {errors}"
                         )
+                self._cap_motor_voltage()
                 self.last_hardware_error_check_time = time.time()
+
+    def _cap_motor_voltage(self) -> None:
+        """Keep the average motor voltage at or below MOTOR_MAX_VOLTAGE.
+
+        A servo chops its supply into its motor: at duty cycle d the motor sees
+        d x supply on average. Goal PWM is the servo's own ceiling on d, so
+        Goal PWM = 885 x cap / supply holds the motor at the cap (699, or 79 %,
+        for 6 V on a 7.6 V supply). The register is RAM and goes back to 100 %
+        when a servo reboots or changes operating mode, hence the periodic rewrite.
+        """
+        if MOTOR_MAX_VOLTAGE is None or self.c is None:
+            return
+        for name, id in self.c.get_motor_name_id().items():
+            supply = NOMINAL_SUPPLY_VOLTAGE
+            try:
+                resp = self.c.async_read_raw_bytes(id, PRESENT_INPUT_VOLTAGE_ADDR, 2)
+                reading = struct.unpack("<H", bytes(resp))[0] / 10.0  # volts
+                if reading > 0:
+                    supply = reading
+            except RuntimeError:
+                pass  # no reading: cap for the nominal supply
+            goal_pwm = round(GOAL_PWM_MAX * min(1.0, MOTOR_MAX_VOLTAGE / supply))
+            try:
+                self.c.async_write_raw_bytes(
+                    id, GOAL_PWM_ADDR, list(struct.pack("<H", goal_pwm))
+                )
+            except RuntimeError as e:
+                self.logger.warning(
+                    f"Failed to cap the voltage of motor '{name}' (id={id}): {e}"
+                )
 
     def close(self) -> None:
         """Close the motor controller connection and release resources."""
