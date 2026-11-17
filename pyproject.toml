@@ -130,6 +130,7 @@ exclude-newer = "7 days"
 
 [tool.uv.exclude-newer-package]
 "pollen_BMI088_imu_library"  = false
+"reachy_mini_motor_controller" = false
 # Security fix inside the 7-day window: admit 2026.10.19, not later releases.
 # Remove both certifi and pip exceptions after 2026-10-27.
 "certifi" = "2026-10-21T00:00:00Z"
