@@ -1,0 +1,1 @@
+WARNING  reachy_mini.nfc.reader:reader.py:226 winnie_nfc is installed but failed to import: libusb not found

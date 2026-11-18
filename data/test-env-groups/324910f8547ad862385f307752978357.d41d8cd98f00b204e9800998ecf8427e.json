@@ -1,0 +1,1 @@
+{"id":"324910f8547ad862385f307752978357.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_nfc#test_snapshot_is_a_copy_and_cannot_be_mutated_from_outside","name":"test_snapshot_is_a_copy_and_cannot_be_mutated_from_outside","status":"passed","testResultsByEnv":{"default":"6214c7925def467de20bb7e60bd3c03a"}}

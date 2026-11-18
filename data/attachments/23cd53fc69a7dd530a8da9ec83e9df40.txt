@@ -1,0 +1,1 @@
+WARNING  reachy_mini.nfc.reader:reader.py:354 Could not decode the NFC tag: KeyError('value')

@@ -1,0 +1,2 @@
+WARNING  reachy_mini.nfc.reader:reader.py:722 NFC link lost during an operation: OSError('link dropped')
+WARNING  reachy_mini.nfc.reader:reader.py:778 NFC reader link lost: the link failed during an operation

@@ -1,0 +1,1 @@
+WARNING  reachy_mini.nfc.reader:reader.py:778 NFC reader link lost: link dropped

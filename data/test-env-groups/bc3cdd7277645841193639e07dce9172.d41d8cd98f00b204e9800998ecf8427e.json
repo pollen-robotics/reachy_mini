@@ -1,1 +1,1 @@
-{"id":"bc3cdd7277645841193639e07dce9172.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_backend_process_command#test_get_hardware_id","name":"test_get_hardware_id","status":"passed","testResultsByEnv":{"default":"79870d003dde7787cdf20c2fbe10c4aa"}}
+{"id":"bc3cdd7277645841193639e07dce9172.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_backend_process_command#test_get_hardware_id","name":"test_get_hardware_id","status":"passed","testResultsByEnv":{"default":"3a958f8da152641b7d175d2d25d2ce5a"}}

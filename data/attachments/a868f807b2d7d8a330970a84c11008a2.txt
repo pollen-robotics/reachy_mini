@@ -1,4 +1,0 @@
-INFO     reachy_mini.daemon.daemon:daemon.py:72 Daemon version: 1.14.0
-INFO     reachy_mini.daemon.daemon:daemon.py:133 Media disabled (--no-media). No camera, audio, or media server.
-INFO     reachy_mini.daemon.daemon:daemon.py:282 JSON-RPC app relay wired to the DataChannel
-ERROR    reachy_mini.daemon.daemon:daemon.py:267 JSON-RPC relay loop is closed, refusing {"jsonrpc": "2.0", "id": "1", "method": "apps.status", "params": {}}

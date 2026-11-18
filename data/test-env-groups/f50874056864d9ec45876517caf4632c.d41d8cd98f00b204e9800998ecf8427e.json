@@ -1,0 +1,1 @@
+{"id":"f50874056864d9ec45876517caf4632c.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_nfc#test_a_malformed_frame_at_detection_is_a_miss_not_a_tag","name":"test_a_malformed_frame_at_detection_is_a_miss_not_a_tag","status":"passed","testResultsByEnv":{"default":"cb2a812587ca8c1ca580ac26ddf2c396"}}
