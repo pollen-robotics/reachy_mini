@@ -72,12 +72,18 @@ def get_hardware_id() -> str | None:
 #
 # Same constraint as above: the canonical store is `reachy_mini.utils.robot_name`,
 # which this file can't import. The service runs as the daemon's user (`User=`
-# in the systemd unit), so it reads the same file. It deliberately does not ask
+# in the systemd unit) and the same XDG_CONFIG_HOME (neither unit sets it), so
+# it reads the same file. It deliberately does not ask
 # the daemon: `GET /api/daemon/robot-name` falls back to the `--robot-name`
 # default ("reachy_mini"), which would rename the advert of every robot that
 # was never renamed, and the daemon is not up yet when this service starts.
 DEFAULT_DEVICE_NAME = "ReachyMini"
-ROBOT_NAME_PATH = Path.home() / ".config" / "reachy_mini" / "robot_name.json"
+# Same dir as platformdirs.user_config_dir on Linux, without the import.
+ROBOT_NAME_PATH = (
+    Path(os.environ.get("XDG_CONFIG_HOME", "").strip() or Path.home() / ".config")
+    / "reachy_mini"
+    / "robot_name.json"
+)
 # The advert is nearly full with the 128-bit service UUID, so BlueZ carries the
 # name in the scan response: 31 bytes minus the 2-byte AD header. BlueZ cuts a
 # longer name byte-wise, possibly in the middle of a UTF-8 character.
