@@ -4,7 +4,6 @@ import argparse
 from importlib.resources import files
 from typing import Optional
 
-import questionary
 from rich.console import Console
 
 import reachy_mini
@@ -49,6 +48,8 @@ def reflash_motors_if_needed(
     config = parse_yaml_config(config_file_path)
     motors = list(config.motors.keys())
     if serialport is None:
+        import questionary  # interactive only; 350 ms import on the CM4
+
         console.print(
             "Which version of Reachy Mini are you using?",
         )
