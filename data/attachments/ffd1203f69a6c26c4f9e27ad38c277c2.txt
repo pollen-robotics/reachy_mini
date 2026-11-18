@@ -1,1 +1,0 @@
-ERROR    logs_job_7ea0010f-7498-4e14-be39-bb181316cc27:bg_job_register.py:107 Job 'test' failed with error: boom

@@ -1,0 +1,2 @@
+INFO     logs_job_55deae30-f015-4a01-97ac-fe167afc2aa0:test_bg_job_register.py:93 working
+INFO     logs_job_55deae30-f015-4a01-97ac-fe167afc2aa0:bg_job_register.py:102 Job 'test' completed successfully
