@@ -1,12 +1,15 @@
 """App management for Reachy Mini."""
 
 import asyncio
+import contextlib
+import json
 import logging
 import os
 import signal
 import time
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
 import psutil
@@ -61,6 +64,21 @@ def _get_catalog_app_key(app: AppInfo) -> str:
     return value if isinstance(value, str) else ""
 
 
+def _running_app_file() -> Path:
+    """Record of the app this daemon spawned, used to find it if the daemon dies."""
+    return local_common_venv._get_venv_parent_dir() / "apps_venv" / ".running_app.json"
+
+
+def _same_process(pid: int, create_time: float) -> psutil.Process | None:
+    """Return the process if ``pid`` is still the one started at ``create_time``."""
+    try:
+        proc = psutil.Process(pid)
+        # create_time is rounded (Linux: clock ticks); 1 s is far below pid reuse time.
+        return proc if abs(proc.create_time() - create_time) < 1.0 else None
+    except psutil.Error:
+        return None
+
+
 class AppManager:
     """Manager for Reachy Mini apps."""
 
@@ -77,6 +95,54 @@ class AppManager:
         self.desktop_app_daemon = desktop_app_daemon
         self.running_on_wireless = wireless_version
         self.daemon = daemon
+        self._kill_orphaned_app()
+
+    def _kill_orphaned_app(self) -> None:
+        """Kill an app left running by a daemon that died without stopping it.
+
+        Portable stand-in for PR_SET_PDEATHSIG (Linux only): the orphan is
+        harmless until a new daemon starts, then both would drive the robot.
+        """
+        path = _running_app_file()
+        try:
+            record = json.loads(path.read_text())
+            if _same_process(record["daemon_pid"], record["daemon_create_time"]):
+                return  # Its daemon is alive (e.g. a second daemon on this host).
+            path.unlink()
+            app = _same_process(record["pid"], record["create_time"])
+        except (OSError, ValueError, KeyError, TypeError):
+            return
+        if app is None:
+            return
+
+        self.logger.warning(
+            f"Killing app left running by a dead daemon (PID {app.pid})"
+        )
+        # Straight kill: Python apps only clean up on SIGINT, and that cleanup
+        # would talk to the dead daemon.
+        try:
+            procs = [app, *app.children(recursive=True)]
+        except psutil.Error:
+            procs = [app]
+        for proc in procs:
+            try:
+                proc.kill()
+            except psutil.Error:
+                pass
+
+    def _record_running_app(self, pid: int) -> None:
+        """Persist the app's identity so the next daemon can kill it if we die."""
+        try:
+            me = psutil.Process()
+            record = {
+                "pid": pid,
+                "create_time": psutil.Process(pid).create_time(),
+                "daemon_pid": me.pid,
+                "daemon_create_time": me.create_time(),
+            }
+            _running_app_file().write_text(json.dumps(record))
+        except (OSError, psutil.Error) as e:
+            self.logger.warning(f"Could not record running app: {e}")
 
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
@@ -230,6 +296,8 @@ class AppManager:
                 self.daemon.robot_app_lock.release_local(app_name)
             raise
 
+        self._record_running_app(process.pid)
+
         # Create status and monitor task
         status = AppStatus(
             info=AppInfo(name=app_name, source_kind=SourceKind.INSTALLED),
@@ -299,6 +367,8 @@ class AppManager:
                             f"Last stderr output:\n{error_msg}"
                         )
             finally:
+                with contextlib.suppress(OSError):
+                    _running_app_file().unlink(missing_ok=True)
                 # Always release the robot lock when the subprocess exits, no
                 # matter how: clean exit, crash, SIGKILL, OOM, or cancellation
                 # of this monitor task. Idempotent — stop_current_app's own
