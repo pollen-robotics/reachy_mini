@@ -111,6 +111,11 @@ PIPELINE_RESTART_DELAY_S = 1
 PIPELINE_RESTART_LIMIT = 3
 PIPELINE_RESTART_WINDOW_S = 60.0
 
+# How long `start()` waits for an asynchronous PLAYING to settle. A busy
+# camera fails synchronously with libcamerasrc, but only once the state change
+# completes with mfvideosrc (Windows), which takes well under a second.
+PIPELINE_START_TIMEOUT_S = 5
+
 
 @dataclass
 class _PeerWebRTCState:
@@ -264,6 +269,9 @@ class GstMediaServer:
     # Name of the appsrc feeding the incoming-audio playback pipeline; used
     # both when building the pipeline and when flushing it (clear_incoming_audio).
     INCOMING_AUDIO_SRC_NAME = "audio_in"
+
+    # Fired once the restart budget is spent (see set_gave_up_handler).
+    _on_gave_up: Optional[Callable[[], None]] = None
 
     def __init__(
         self,
@@ -1573,6 +1581,11 @@ class GstMediaServer:
                 f"Media pipeline failed {PIPELINE_RESTART_LIMIT} times within "
                 f"{PIPELINE_RESTART_WINDOW_S:g}s, not restarting it again"
             )
+            # Release the hardware and report it stopped (`is_running`), so
+            # the daemon's acquire_media() can start it again later.
+            self.stop()
+            if self._on_gave_up is not None:
+                self._on_gave_up()
             return
 
         self._pipeline_restart_times.append(now)
@@ -1595,7 +1608,10 @@ class GstMediaServer:
             # since the restart was scheduled.
             if self._pipeline_running:
                 self.stop()
-                self.start()
+                if not self.start():
+                    # Not running, so its bus ERROR won't retry: retry here.
+                    self._pipeline_running = True
+                    self._schedule_pipeline_restart()
         except Exception:
             self._logger.exception("Media pipeline restart failed, media stays stopped")
         finally:
@@ -1632,10 +1648,20 @@ class GstMediaServer:
             audiosrc.set_property("device", audiosrc.get_property("device"))
         return False
 
-    def start(self) -> None:
+    @property
+    def is_running(self) -> bool:
+        """Whether the pipeline is started (False after a failed start or stop())."""
+        return self._pipeline_running
+
+    def start(self) -> bool:
         """Start the pipeline, rebuilding it from scratch after a stop().
 
         The first start reuses the pipeline built in __init__.
+
+        Returns:
+            False when the pipeline refused to start (e.g. the camera is still
+            held by another process); it is then left stopped.
+
         """
         with self._pipeline_lock:
             if self._pipeline_needs_rebuild:
@@ -1645,9 +1671,21 @@ class GstMediaServer:
                 self._pipeline_needs_rebuild = False
             else:
                 self._logger.debug("Starting WebRTC")
-            self._pipeline_sender.set_state(Gst.State.PLAYING)
+            ret = self._pipeline_sender.set_state(Gst.State.PLAYING)
+            if ret == Gst.StateChangeReturn.ASYNC:
+                # mfvideosrc only reports a camera held by another process
+                # once the state change completes.
+                ret = self._pipeline_sender.get_state(
+                    PIPELINE_START_TIMEOUT_S * Gst.SECOND
+                )[0]
+            if ret == Gst.StateChangeReturn.FAILURE:
+                self._logger.error("Media pipeline failed to start")
+                self._pipeline_sender.set_state(Gst.State.NULL)
+                self._pipeline_needs_rebuild = True
+                return False
             self._pipeline_running = True
         GLib.timeout_add_seconds(5, self._dump_latency)
+        return True
 
     def stop(self) -> None:
         """Stop the pipeline and release all hardware (camera, audio)."""
@@ -1906,6 +1944,13 @@ class GstMediaServer:
         loop before touching shared state.
         """
         self._on_peer_disconnect = handler
+
+    def set_gave_up_handler(self, handler: Callable[[], None]) -> None:
+        """Set a callback fired when the pipeline is stopped after too many failures.
+
+        Runs on the GLib thread: hop to your own thread or loop for I/O.
+        """
+        self._on_gave_up = handler
 
     def set_session_failed_handler(
         self,

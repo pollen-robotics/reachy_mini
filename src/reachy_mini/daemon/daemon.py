@@ -125,6 +125,7 @@ class Daemon:
             try:
                 self._media_server = GstMediaServer(log_level, sim_mode=sim_mode)
                 self._status.camera_specs_name = self._media_server.camera_specs.name
+                self._media_server.set_gave_up_handler(self._on_media_gave_up)
             except Exception as e:
                 self.logger.error(f"Failed to initialize media server: {e}")
                 self._media_server = None
@@ -146,6 +147,11 @@ class Daemon:
         """Whether media hardware has been released for direct access."""
         return self._media_released
 
+    @property
+    def media_available(self) -> bool:
+        """Whether the media pipeline is up: not released, nor stopped on a failure."""
+        return self._media_server is not None and not self._media_down()
+
     async def release_media(self) -> None:
         """Release camera and audio hardware so clients can access them directly.
 
@@ -163,17 +169,48 @@ class Daemon:
         self._status.media_released = True
         self.logger.info("Media hardware released.")
 
+    def _on_media_gave_up(self) -> None:
+        """Stop the relay: it would loop on the stopped pipeline's signalling server.
+
+        Called on the GLib thread; the relay stops on a thread of its own.
+        """
+        Thread(
+            target=lambda: asyncio.run(self._stop_central_signaling_relay()),
+            daemon=True,
+            name="media-gave-up-relay-stop",
+        ).start()
+
+    def _media_down(self) -> bool:
+        """Whether media is released, or its pipeline is not running.
+
+        The pipeline stops by itself when it fails to start (e.g. the camera is
+        held by another process) or keeps failing after errors.
+        """
+        return self._media_released or (
+            self._media_server is not None and not self._media_server.is_running
+        )
+
     async def acquire_media(self) -> None:
         """Re-acquire camera and audio hardware after a release.
 
-        Restarts the GstMediaServer pipeline and central signalling relay.
-        Idempotent: no-op if not currently released or no media server.
+        Restarts the GstMediaServer pipeline and central signalling relay, also
+        when the pipeline is down without a release (see `_media_down`).
+        Idempotent: no-op if media is up or there is no media server.
+
+        Raises:
+            RuntimeError: the pipeline did not start; media stays down.
+
         """
-        if not self._media_released or self._media_server is None:
+        if self._media_server is None or not self._media_down():
             return
 
         self.logger.info("Re-acquiring media hardware...")
-        self._media_server.start()
+        # Off the event loop: start() may wait up to PIPELINE_START_TIMEOUT_S.
+        if not await asyncio.to_thread(self._media_server.start):
+            # Its local signalling server is down too: don't leave the relay
+            # looping on it.
+            await self._stop_central_signaling_relay()
+            raise RuntimeError("Media pipeline failed to start")
         await self._start_central_signaling_relay()
         self._media_released = False
         self._status.media_released = False
@@ -197,7 +234,7 @@ class Daemon:
         Elsewhere the local signalling server is down and the relay would loop
         on connection errors; start()/acquire_media() start it themselves.
         """
-        if self._status.state != DaemonState.RUNNING or self._media_released:
+        if self._status.state != DaemonState.RUNNING or self._media_down():
             self.logger.info("Daemon not running, relay starts with it")
             return
         await self._start_central_signaling_relay()
@@ -490,6 +527,8 @@ class Daemon:
                     self.backend.setup_media_server(self._media_server)
                     self.backend.set_restart_daemon_callback(self._spawn_webrtc_restart)
                     self.backend.set_start_update_callback(self._spawn_webrtc_update)
+                # A failed start leaves it stopped: /api/media/acquire, or the
+                # next daemon start, retries it.
                 self._media_server.start()
 
             # Reset the robot to a clean idle state whenever the managed app
@@ -514,7 +553,9 @@ class Daemon:
                 self._setup_jsonrpc_relay(self.backend, self.app_manager)
 
                 # Start central signaling relay for remote WebRTC access
-                await self._start_central_signaling_relay()
+                # (acquire_media starts it when media is down).
+                if not self._media_down():
+                    await self._start_central_signaling_relay()
 
             # Wire the wake-up hook before any wake can fire (on-start below, or
             # later via button/REST on the wireless unit, which boots asleep).
