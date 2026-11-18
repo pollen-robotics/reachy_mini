@@ -30,6 +30,7 @@ from typing import Any, Awaitable, Callable, Optional, TypeVar, Union, cast
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
+from reachy_mini.daemon.app.middleware import is_trusted_origin
 from reachy_mini.io.jsonrpc import (
     JsonRpcError,
     RpcNotification,
@@ -105,6 +106,13 @@ class JsonRpcServer:
             await self._serve(websocket)
 
     async def _serve(self, websocket: WebSocket) -> None:
+        # Browsers apply no CORS to WebSockets, so any web page a LAN user opens
+        # could drive the app. Clients sending no Origin (SDK, relay) pass.
+        origin = websocket.headers.get("origin")
+        if origin is not None and not is_trusted_origin(origin):
+            logger.warning("[/rpc] rejected cross-origin connection from %s", origin)
+            await websocket.close(code=1008)
+            return
         await websocket.accept()
         self._loop = asyncio.get_running_loop()
         self._clients.add(websocket)

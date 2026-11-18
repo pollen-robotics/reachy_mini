@@ -95,3 +95,37 @@ async def test_broadcast_reaches_all_clients() -> None:
     for ws in (a, b):
         assert ws.sent[0]["method"] == "conversation.turn"
         assert ws.sent[0]["params"] == {"state": "speaking"}
+
+
+@pytest.mark.parametrize(
+    ("headers", "accepted"),
+    [
+        ({}, True),
+        ({"origin": "http://reachy-mini.local:7860"}, True),
+        ({"origin": "http://192.168.1.42:7860"}, True),
+        ({"origin": "tauri://localhost"}, True),
+        ({"origin": "https://evil.example"}, False),
+        ({"origin": "http://8.8.8.8"}, False),
+    ],
+)
+def test_rpc_websocket_origin_guard(headers: dict[str, str], accepted: bool) -> None:
+    """Browser origins off the local network are refused at the /rpc handshake."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+
+    server = JsonRpcServer()
+    server.register("ping", lambda _params: "pong")
+    app = FastAPI()
+    server.mount(app)
+    client = TestClient(app)
+
+    if accepted:
+        with client.websocket_connect("/rpc", headers=headers) as ws:
+            ws.send_text('{"jsonrpc":"2.0","id":"1","method":"ping"}')
+            assert ws.receive_json()["result"] == "pong"
+    else:
+        with pytest.raises(WebSocketDisconnect) as exc:
+            with client.websocket_connect("/rpc", headers=headers):
+                pass
+        assert exc.value.code == 1008
