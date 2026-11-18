@@ -1,1 +1,1 @@
-{"id":"b055f7e9bb035fbcbb82cff6a4e83410.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_nfc#test_dump_goes_through_the_reader_thread","name":"test_dump_goes_through_the_reader_thread","status":"passed","testResultsByEnv":{"default":"6c6d210e312b6dc0cadb218bb37ff79f"}}
+{"id":"b055f7e9bb035fbcbb82cff6a4e83410.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_nfc#test_dump_goes_through_the_reader_thread","name":"test_dump_goes_through_the_reader_thread","status":"passed","testResultsByEnv":{"default":"4e7bad114b48c42b2dbecc9029a7f08d"}}
