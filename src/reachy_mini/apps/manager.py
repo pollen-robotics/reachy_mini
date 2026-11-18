@@ -12,6 +12,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
+import platformdirs
 import psutil
 from pydantic import BaseModel
 
@@ -64,9 +65,18 @@ def _get_catalog_app_key(app: AppInfo) -> str:
     return value if isinstance(value, str) else ""
 
 
+def _running_apps_dir() -> Path:
+    """Return the directory of app records: one file per daemon of this user.
+
+    Host-wide rather than per venv, so any next daemon (plain, desktop or
+    wireless, whatever its venv) finds an app a dead daemon left behind.
+    """
+    return Path(platformdirs.user_config_dir("reachy_mini")) / "running_apps"
+
+
 def _running_app_file() -> Path:
-    """Record of the app this daemon spawned, used to find it if the daemon dies."""
-    return local_common_venv._get_venv_parent_dir() / "apps_venv" / ".running_app.json"
+    """Record of the app this daemon spawned."""
+    return _running_apps_dir() / f"{os.getpid()}.json"
 
 
 def _same_process(pid: int, create_time: float) -> psutil.Process | None:
@@ -95,26 +105,35 @@ class AppManager:
         self.desktop_app_daemon = desktop_app_daemon
         self.running_on_wireless = wireless_version
         self.daemon = daemon
-        self._kill_orphaned_app()
+        self._kill_orphaned_apps()
 
-    def _kill_orphaned_app(self) -> None:
-        """Kill an app left running by a daemon that died without stopping it.
+    def _kill_orphaned_apps(self) -> None:
+        """Kill apps left running by daemons that died without stopping them.
 
-        Portable stand-in for PR_SET_PDEATHSIG (Linux only): the orphan is
-        harmless until a new daemon starts, then both would drive the robot.
+        Portable stand-in for PR_SET_PDEATHSIG (Linux only): the orphan would
+        otherwise keep running next to the new daemon.
         """
-        path = _running_app_file()
         try:
-            record = json.loads(path.read_text())
-            if _same_process(record["daemon_pid"], record["daemon_create_time"]):
-                return  # Its daemon is alive (e.g. a second daemon on this host).
-            path.unlink()
-            app = _same_process(record["pid"], record["create_time"])
-        except (OSError, ValueError, KeyError, TypeError):
+            paths = list(_running_apps_dir().glob("*.json"))
+        except OSError:
             return
-        if app is None:
-            return
+        for path in paths:
+            try:
+                record = json.loads(path.read_text())
+                if _same_process(record["daemon_pid"], record["daemon_create_time"]):
+                    continue  # Its daemon is alive (e.g. a second daemon on this host).
+                app = _same_process(record["pid"], record["create_time"])
+            except OSError:
+                continue
+            except (ValueError, KeyError, TypeError):
+                app = None  # Unreadable record (writes are atomic): drop it.
+            with contextlib.suppress(OSError):
+                path.unlink()
+            if app is not None:
+                self._kill_orphan(app)
 
+    def _kill_orphan(self, app: psutil.Process) -> None:
+        """Kill an orphaned app and its children, and wait for them to exit."""
         self.logger.warning(
             f"Killing app left running by a dead daemon (PID {app.pid})"
         )
@@ -125,10 +144,9 @@ class AppManager:
         except psutil.Error:
             procs = [app]
         for proc in procs:
-            try:
+            with contextlib.suppress(psutil.Error):
                 proc.kill()
-            except psutil.Error:
-                pass
+        psutil.wait_procs(procs, timeout=3)
 
     def _record_running_app(self, pid: int) -> None:
         """Persist the app's identity so the next daemon can kill it if we die."""
@@ -140,7 +158,11 @@ class AppManager:
                 "daemon_pid": me.pid,
                 "daemon_create_time": me.create_time(),
             }
-            _running_app_file().write_text(json.dumps(record))
+            path = _running_app_file()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(record))
+            os.replace(tmp, path)  # Atomic: never seen half-written.
         except (OSError, psutil.Error) as e:
             self.logger.warning(f"Could not record running app: {e}")
 

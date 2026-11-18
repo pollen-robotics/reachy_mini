@@ -213,9 +213,7 @@ async def test_start_app_scrubs_leaking_env_vars(
         return _FakeProcess()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
-    monkeypatch.setattr(
-        manager, "_running_app_file", lambda: tmp_path / ".running_app.json"
-    )
+    monkeypatch.setattr(manager, "_running_apps_dir", lambda: tmp_path)
     monkeypatch.setattr(
         local_common_venv, "get_app_module", lambda *a, **k: "some_app.main"
     )
@@ -227,7 +225,7 @@ async def test_start_app_scrubs_leaking_env_vars(
     await app_mngr.start_app("some_app")
     try:
         # Read before the monitor task runs: it deletes the record on exit.
-        record = json.loads((tmp_path / ".running_app.json").read_text())
+        record = json.loads((tmp_path / f"{os.getpid()}.json").read_text())
         assert record["pid"] == os.getpid()
         assert captured_env, "subprocess was never launched"
         for key in leaking:
