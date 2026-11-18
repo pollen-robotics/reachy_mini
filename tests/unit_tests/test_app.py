@@ -228,3 +228,28 @@ async def test_start_app_scrubs_leaking_env_vars(
         assert "PATH" in captured_env
     finally:
         await app_mngr.stop_current_app()
+
+
+def test_settings_app_rejects_cross_site_requests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The app web server blocks DNS rebinding and cross-site writes like the daemon."""
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(ReachyMiniApp, "_check_daemon_on_localhost", staticmethod(lambda *a, **k: True))
+
+    class WebApp(ReachyMiniApp):
+        custom_app_url = "http://0.0.0.0:7860/"
+
+        def run(self, reachy_mini, stop_event) -> None:  # type: ignore[no-untyped-def]
+            pass
+
+    app = WebApp()
+    assert app.settings_app is not None
+    app.settings_app.post("/play_sound")(lambda: {"ok": True})
+    client = TestClient(app.settings_app, base_url="http://reachy-mini.local:7860")
+
+    assert client.post("/play_sound", headers={"origin": "http://reachy-mini.local:7860"}).status_code == 200
+    assert client.post("/play_sound").status_code == 200
+    assert client.post("/play_sound", headers={"origin": "https://evil.example"}).status_code == 403
+    assert client.post("/play_sound", headers={"host": "evil.example"}).status_code == 400
