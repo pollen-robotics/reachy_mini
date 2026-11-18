@@ -86,19 +86,19 @@ def test_set_speech_offsets_sets_ik_required(sim_backend) -> None:
 
 
 def test_update_target_head_joints_from_ik(sim_backend) -> None:
-    """IK on identity pose yields joints and records the last target pose."""
+    """IK on identity pose yields joints."""
     sim_backend.update_target_head_joints_from_ik(pose=np.eye(4))
     assert sim_backend.target_head_joint_positions is not None
-    assert np.array_equal(sim_backend._last_target_head_pose, np.eye(4))
 
 
 def test_update_target_head_joints_from_ik_with_speech_offsets(sim_backend) -> None:
     """Non-zero speech offsets are composed into the pose before IK."""
+    sim_backend.update_target_head_joints_from_ik(pose=np.eye(4))
+    plain = np.array(sim_backend.target_head_joint_positions)
     sim_backend._speech_offsets = (0.005, 0.0, 0.0, 0.0, 0.0, 0.1)
     sim_backend.update_target_head_joints_from_ik(pose=np.eye(4))
-    assert sim_backend.target_head_joint_positions is not None
-    # Composed pose differs from the raw identity input.
-    assert not np.array_equal(sim_backend._last_target_head_pose, np.eye(4))
+    # Composed pose yields different joints than the raw identity input.
+    assert not np.allclose(sim_backend.target_head_joint_positions, plain)
 
 
 def test_update_target_head_joints_from_ik_unreachable_raises(sim_backend) -> None:

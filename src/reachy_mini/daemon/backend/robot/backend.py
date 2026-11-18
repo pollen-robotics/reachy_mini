@@ -115,8 +115,6 @@ class RobotBackend(Backend):
 
         self._current_head_operation_mode = -1  # Default to torque control mode
         self._current_antennas_operation_mode = -1  # Default to torque control mode
-        self.target_antenna_joint_current = None  # Placeholder for antenna joint torque
-        self.target_head_joint_current = None  # Placeholder for head joint torque
 
         if hardware_error_check_frequency <= 0:
             raise ValueError(
@@ -225,12 +223,6 @@ class RobotBackend(Backend):
                     self.c.set_antennas_positions(
                         self.target_antenna_joint_positions.tolist()
                     )
-            # Antenna torque control is not supported with feetech motors
-            # else:
-            #     if self.target_antenna_joint_current is not None:
-            #         self.c.set_antennas_goal_current(
-            #            np.round(self.target_antenna_joint_current, 0).astype(int).tolist()
-            #         )
 
         if (
             self.joint_positions_publisher is not None

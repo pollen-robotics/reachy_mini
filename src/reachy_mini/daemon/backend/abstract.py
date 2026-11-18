@@ -260,30 +260,12 @@ class Backend:
         self.is_recording = False  # Flag to indicate if recording is active
         self.recorded_data: list[dict[str, Any]] = []  # List to store recorded data
 
-        # variables to store the last computed head joint positions and pose
-        self._last_target_body_yaw: float | None = (
-            None  # Last body yaw used in IK computations
-        )
-        self._last_target_head_pose: Annotated[NDArray[np.float64], (4, 4)] | None = (
-            None  # Last head pose used in IK computations
-        )
         self.target_head_joint_current: Annotated[NDArray[np.float64], (7,)] | None = (
             None  # Placeholder for head joint torque
         )
         self.ik_required = False  # Flag to indicate if IK computation is required
 
         self.is_shutting_down = False
-
-        # Tolerance for kinematics computations
-        # For Forward kinematics (around 0.25deg)
-        # - FK is calculated at each timestep and is susceptible to noise
-        self._fk_kin_tolerance = 1e-3  # rads
-        # For Inverse kinematics (around 0.5mm and 0.1 degrees)
-        # - IK is calculated only when the head pose is set by the user
-        self._ik_kin_tolerance = {
-            "rad": 2e-3,  # rads
-            "m": 0.5e-3,  # m
-        }
 
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
@@ -662,10 +644,6 @@ class Backend:
         joints = self.head_kinematics.ik(pose, body_yaw=body_yaw)
         if joints is None or np.any(np.isnan(joints)):
             raise ValueError("WARNING: Collision detected or head pose not achievable!")
-
-        # update the target head pose and body yaw
-        self._last_target_head_pose = pose
-        self._last_target_body_yaw = body_yaw
 
         self.target_head_joint_positions = joints
 
