@@ -1,4 +1,6 @@
 import asyncio
+import json
+import os
 import threading
 from pathlib import Path
 from threading import Event
@@ -6,7 +8,7 @@ import pytest
 import uvicorn
 
 from reachy_mini import ReachyMiniApp
-from reachy_mini.apps import AppInfo, SourceKind
+from reachy_mini.apps import AppInfo, SourceKind, manager
 from reachy_mini.apps.manager import AppManager, AppState
 from reachy_mini.apps.sources import local_common_venv
 from reachy_mini.daemon.app.main import Args, create_app
@@ -172,6 +174,7 @@ async def test_faulty_app() -> None:
 @pytest.mark.asyncio
 async def test_start_app_scrubs_leaking_env_vars(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """The app subprocess must not inherit env vars pointing at the daemon's venv.
 
@@ -194,6 +197,7 @@ async def test_start_app_scrubs_leaking_env_vars(
 
     class _FakeProcess:
         returncode = 0
+        pid = os.getpid()
 
         def __init__(self) -> None:
             self.stdout = asyncio.StreamReader()
@@ -209,6 +213,7 @@ async def test_start_app_scrubs_leaking_env_vars(
         return _FakeProcess()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(manager, "_running_apps_dir", lambda: tmp_path)
     monkeypatch.setattr(
         local_common_venv, "get_app_module", lambda *a, **k: "some_app.main"
     )
@@ -219,6 +224,9 @@ async def test_start_app_scrubs_leaking_env_vars(
     app_mngr = AppManager()
     await app_mngr.start_app("some_app")
     try:
+        # Read before the monitor task runs: it deletes the record on exit.
+        record = json.loads((tmp_path / f"{os.getpid()}.json").read_text())
+        assert record["pid"] == os.getpid()
         assert captured_env, "subprocess was never launched"
         for key in leaking:
             assert key not in captured_env, (

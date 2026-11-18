@@ -1,14 +1,18 @@
 """App management for Reachy Mini."""
 
 import asyncio
+import contextlib
+import json
 import logging
 import os
 import signal
 import time
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
+import platformdirs
 import psutil
 from pydantic import BaseModel
 
@@ -61,6 +65,30 @@ def _get_catalog_app_key(app: AppInfo) -> str:
     return value if isinstance(value, str) else ""
 
 
+def _running_apps_dir() -> Path:
+    """Return the directory of app records: one file per daemon of this user.
+
+    Host-wide rather than per venv, so any next daemon (plain, desktop or
+    wireless, whatever its venv) finds an app a dead daemon left behind.
+    """
+    return Path(platformdirs.user_config_dir("reachy_mini")) / "running_apps"
+
+
+def _running_app_file() -> Path:
+    """Record of the app this daemon spawned."""
+    return _running_apps_dir() / f"{os.getpid()}.json"
+
+
+def _same_process(pid: int, create_time: float) -> psutil.Process | None:
+    """Return the process if ``pid`` is still the one started at ``create_time``."""
+    try:
+        proc = psutil.Process(pid)
+        # create_time is rounded (Linux: clock ticks); 1 s is far below pid reuse time.
+        return proc if abs(proc.create_time() - create_time) < 1.0 else None
+    except psutil.Error:
+        return None
+
+
 class AppManager:
     """Manager for Reachy Mini apps."""
 
@@ -77,6 +105,66 @@ class AppManager:
         self.desktop_app_daemon = desktop_app_daemon
         self.running_on_wireless = wireless_version
         self.daemon = daemon
+        self._kill_orphaned_apps()
+
+    def _kill_orphaned_apps(self) -> None:
+        """Kill apps left running by daemons that died without stopping them.
+
+        Portable stand-in for PR_SET_PDEATHSIG (Linux only): the orphan would
+        otherwise keep running next to the new daemon.
+        """
+        try:
+            paths = list(_running_apps_dir().glob("*.json"))
+        except OSError:
+            return
+        for path in paths:
+            try:
+                record = json.loads(path.read_text())
+                if _same_process(record["daemon_pid"], record["daemon_create_time"]):
+                    continue  # Its daemon is alive (e.g. a second daemon on this host).
+                app = _same_process(record["pid"], record["create_time"])
+            except OSError:
+                continue
+            except (ValueError, KeyError, TypeError):
+                app = None  # Unreadable record (writes are atomic): drop it.
+            with contextlib.suppress(OSError):
+                path.unlink()
+            if app is not None:
+                self._kill_orphan(app)
+
+    def _kill_orphan(self, app: psutil.Process) -> None:
+        """Kill an orphaned app and its children, and wait for them to exit."""
+        self.logger.warning(
+            f"Killing app left running by a dead daemon (PID {app.pid})"
+        )
+        # Straight kill: Python apps only clean up on SIGINT, and that cleanup
+        # would talk to the dead daemon.
+        try:
+            procs = [app, *app.children(recursive=True)]
+        except psutil.Error:
+            procs = [app]
+        for proc in procs:
+            with contextlib.suppress(psutil.Error):
+                proc.kill()
+        psutil.wait_procs(procs, timeout=3)
+
+    def _record_running_app(self, pid: int) -> None:
+        """Persist the app's identity so the next daemon can kill it if we die."""
+        try:
+            me = psutil.Process()
+            record = {
+                "pid": pid,
+                "create_time": psutil.Process(pid).create_time(),
+                "daemon_pid": me.pid,
+                "daemon_create_time": me.create_time(),
+            }
+            path = _running_app_file()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(record))
+            os.replace(tmp, path)  # Atomic: never seen half-written.
+        except (OSError, psutil.Error) as e:
+            self.logger.warning(f"Could not record running app: {e}")
 
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
@@ -230,6 +318,8 @@ class AppManager:
                 self.daemon.robot_app_lock.release_local(app_name)
             raise
 
+        self._record_running_app(process.pid)
+
         # Create status and monitor task
         status = AppStatus(
             info=AppInfo(name=app_name, source_kind=SourceKind.INSTALLED),
@@ -299,6 +389,8 @@ class AppManager:
                             f"Last stderr output:\n{error_msg}"
                         )
             finally:
+                with contextlib.suppress(OSError):
+                    _running_app_file().unlink(missing_ok=True)
                 # Always release the robot lock when the subprocess exits, no
                 # matter how: clean exit, crash, SIGKILL, OOM, or cancellation
                 # of this monitor task. Idempotent — stop_current_app's own
