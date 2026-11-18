@@ -771,20 +771,6 @@ def test_a_connected_reader_reports_no_error_code(driver_installed):
         reader.stop()
 
 
-def test_a_job_dequeued_after_a_stop_never_reaches_the_tag():
-    # A job dequeued after stop() is answered without touching the tag.
-    from reachy_mini.nfc.reader import _WriteJob
-
-    session = FakeSession()
-    reader = make_reader(session)
-    reader._should_stop.set()
-    job = _WriteJob(lambda s: s.write("x", None), timeout=5)
-    reader._serve_job(session, job)
-    assert session.write_calls == []
-    assert job.outcome is not None
-    assert job.outcome.error == "NOT_CONNECTED"
-
-
 class BlockingSession(FakeSession):
     """A session whose erase (or poll) holds the chip until released."""
 
@@ -866,41 +852,24 @@ def test_a_stop_during_a_long_job_still_ends_the_thread(driver_installed):
     assert not reader.is_connected()
 
 
-def test_a_timed_out_write_never_reaches_the_tag(driver_installed):
-    # A write that timed out while queued never runs.
+def test_a_write_during_a_stuck_poll_answers_busy(driver_installed, monkeypatch):
+    monkeypatch.setattr("reachy_mini.nfc.reader.SESSION_LOCK_TIMEOUT", 0.05)
     session = BlockingSession()
     reader = make_reader(session)
     started(reader)
     try:
         session.block_polls = True
         assert session.polling.wait(2)  # the thread is inside a blocked poll
-        result = reader.write(NfcWriteRequest(text="x"), timeout=0.01)
-        assert result.error == "TIMEOUT"
-        session.block_polls = False
-        polls = session.polls
-        session.release.set()
-        # Polling resumes only once the withdrawn job has been dequeued.
-        assert wait_until(lambda: session.polls >= polls + 2)
+        assert reader.write(NfcWriteRequest(text="x")).error == "BUSY"
         assert session.write_calls == []
     finally:
         session.release.set()
         reader.stop()
 
 
-def test_a_write_whose_attempt_is_running_waits_for_its_outcome(
-    driver_installed, monkeypatch
-):
-    # An attempt running when the first wait ends: its real outcome is returned.
-    from reachy_mini.nfc.reader import _Job
-
-    first_wait_over = threading.Event()
-    cancel = _Job.cancel
-
-    def spy_cancel(job):
-        first_wait_over.set()  # cancel() is only called once a wait timed out
-        return cancel(job)
-
-    monkeypatch.setattr(_Job, "cancel", spy_cancel)
+def test_a_slow_write_returns_its_real_outcome(driver_installed):
+    # The caller runs the operation itself: however long it takes, it knows how
+    # it ended.
     session = BlockingSession(block_erase=True)
     reader = make_reader(session)
     started(reader)
@@ -911,7 +880,7 @@ def test_a_write_whose_attempt_is_running_waits_for_its_outcome(
     try:
         eraser.start()
         assert session.erasing.wait(2)
-        assert first_wait_over.wait(5)
+        time.sleep(0.05)  # past the operation's own timeout
         session.release.set()
         eraser.join(timeout=5)
         assert results[0].success
@@ -920,37 +889,16 @@ def test_a_write_whose_attempt_is_running_waits_for_its_outcome(
         reader.stop()
 
 
-def test_a_write_still_on_the_tag_when_the_caller_gives_up_is_uncertain(
-    driver_installed,
-):
-    # An attempt still running after both waits: UNCERTAIN.
-    session = BlockingSession(block_erase=True)
-    reader = make_reader(session)
-    started(reader)
-    results = []
-    eraser = threading.Thread(
-        target=lambda: results.append(reader.erase(NfcEraseRequest(), timeout=0.01))
-    )
-    try:
-        eraser.start()
-        assert session.erasing.wait(2)
-        eraser.join(timeout=5)  # both waits run out while the erase blocks
-        assert results[0].error == "UNCERTAIN"
-    finally:
-        session.release.set()
-        reader.stop()
+def test_a_link_failure_during_a_write_is_reported_and_reconnects(driver_installed):
+    sessions = []
 
-
-def test_a_job_queued_when_the_link_drops_is_answered_at_once(driver_installed):
-    # A job queued when the link drops is answered LINK_LOST at once and never runs.
-    session = BlockingSession()
-    opened = []
+    class DroppingSession(FakeSession):
+        def write(self, text, uri):
+            raise OSError("link dropped")
 
     def factory(port):
-        opened.append(port)
-        if len(opened) > 1:
-            raise OSError("no board")
-        return session
+        sessions.append(FakeSession() if sessions else DroppingSession())
+        return sessions[-1]
 
     reader = NfcReader(
         port="/dev/ttyACM0",
@@ -959,39 +907,20 @@ def test_a_job_queued_when_the_link_drops_is_answered_at_once(driver_installed):
         session_factory=factory,
     )
     started(reader)
-    results = []
-    writer = threading.Thread(
-        target=lambda: results.append(
-            reader.write(NfcWriteRequest(text="x"), timeout=30)
-        )
-    )
     try:
-        session.block_polls = True
-        assert session.polling.wait(2)  # the thread is inside a blocked poll
-        writer.start()
-        assert wait_until(lambda: reader._jobs.qsize() == 1)  # the write is queued
-        session.fail_on_poll = 1
-        session.release.set()
-        writer.join(timeout=5)
-        assert not writer.is_alive()
-        assert results[0].error == "LINK_LOST"
-        assert session.write_calls == []
+        assert reader.write(NfcWriteRequest(text="x")).error == "LINK_LOST"
+        assert wait_until(lambda: len(sessions) == 2 and reader.is_connected())
+        assert sessions[0].closed, "the dead session must be released"
+        assert reader.write(NfcWriteRequest(text="x")).success
     finally:
-        session.release.set()
         reader.stop()
 
 
-def test_a_job_queued_after_the_thread_exited_is_answered_at_once(
-    driver_installed, monkeypatch
-):
-    # stop() completes between the connection check and the queueing: the job
-    # is answered NOT_CONNECTED at once instead of waiting for its timeout.
+def test_a_write_after_a_stop_is_answered_at_once(driver_installed):
     session = FakeSession()
     reader = make_reader(session)
     started(reader)
     reader.stop()
-    assert not _reader_threads()
-    monkeypatch.setattr(reader, "is_connected", lambda: True)  # checked before stop
     begun = time.monotonic()
     result = reader.write(NfcWriteRequest(text="x"), timeout=30)
     assert result.error == "NOT_CONNECTED"
@@ -999,8 +928,8 @@ def test_a_job_queued_after_the_thread_exited_is_answered_at_once(
     assert session.write_calls == []
 
 
-def test_a_job_queued_behind_a_long_one_answers_busy(driver_installed, monkeypatch):
-    monkeypatch.setattr("reachy_mini.nfc.reader.JOB_LOCK_TIMEOUT", 0.05)
+def test_an_operation_behind_a_long_one_answers_busy(driver_installed, monkeypatch):
+    monkeypatch.setattr("reachy_mini.nfc.reader.SESSION_LOCK_TIMEOUT", 0.05)
     session = BlockingSession(block_erase=True)
     reader = make_reader(session)
     started(reader)

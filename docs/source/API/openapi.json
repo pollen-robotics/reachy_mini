@@ -4448,7 +4448,7 @@
           "success"
         ],
         "title": "NfcWriteResult",
-        "description": "Result of a write attempt.\n\n``error`` is a stable code rather than a sentence: ``NO_TAG``,\n``TOO_LONG``, ``LOCKED``, ``UNKNOWN_TAG``, ``WRITE_REFUSED``,\n``WRITE_ERROR``, ``COLLISION``, ``NOT_CONNECTED``, ``LINK_LOST``,\n``TIMEOUT``, ``UNCERTAIN``, ``BUSY``, ``DRIVER_MISSING``.\n\n``WRITE_REFUSED``: the tag refused a page (locked or password-protected\npage on a tag otherwise declared writable). When the refusal comes after\nthe first page, the tag now reads as blank: its previous content is lost.\nThe same applies to ``NO_TAG`` when the tag is removed during the write.\n``TIMEOUT``: no tag came in time, nothing was written. ``UNCERTAIN``: the\ncaller stopped waiting while the operation was running on the tag."
+        "description": "Result of a write attempt.\n\n``error`` is a stable code rather than a sentence: ``NO_TAG``,\n``TOO_LONG``, ``LOCKED``, ``UNKNOWN_TAG``, ``WRITE_REFUSED``,\n``WRITE_ERROR``, ``COLLISION``, ``NOT_CONNECTED``, ``LINK_LOST``,\n``BUSY``, ``DRIVER_MISSING``.\n\n``WRITE_REFUSED``: the tag refused a page (locked or password-protected\npage on a tag otherwise declared writable). When the refusal comes after\nthe first page, the tag now reads as blank: its previous content is lost.\nThe same applies to ``NO_TAG`` when the tag is removed during the write.\n``BUSY``: another operation holds the reader, nothing was written."
       },
       "PlaySoundRequest": {
         "properties": {
