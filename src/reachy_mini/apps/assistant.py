@@ -2,15 +2,16 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from pathlib import Path
 from typing import Any, Dict
 
 import questionary
-import toml
 import yaml
 from huggingface_hub import CommitOperationAdd, HfApi, get_repo_discussions, whoami
 from jinja2 import Environment, FileSystemLoader
@@ -30,6 +31,13 @@ def validate_app_name(text: str) -> bool | str:
         return "App name cannot contain slashes or backslashes ('/' or '\\')."
     if "*" in text or "?" in text or "." in text:
         return "App name cannot contain wildcard characters ('*', '?', or '.')."
+    # The name becomes the Python package and the PyPI project name, and is
+    # written unquoted as a TOML key: keep it to an ASCII identifier.
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", text):
+        return (
+            "App name can only contain ASCII letters, digits and underscores, "
+            "and cannot start with a digit."
+        )
     return True
 
 
@@ -144,6 +152,11 @@ def create(console: Console, app_name: str, app_path: Path) -> Path:
     app_name = app_name.replace(
         "-", "_"
     )  # Force underscores in app name (belt and suspenders)
+    # Names given on the command line skip the interactive prompt's check.
+    name_error = validate_app_name(app_name)
+    if name_error is not True:
+        console.print(f"[ERROR] {name_error}", style="bold red")
+        exit(1)
 
     TEMPLATE_DIR = Path(__file__).parent / "templates"
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
@@ -294,8 +307,8 @@ def check(console: Console, app_path: str) -> None:
         sys.exit(1)
 
     # Extract app name
-    with open(pyproject_file, "r", encoding="utf-8") as f:
-        pyproject_content = toml.load(f)
+    with open(pyproject_file, "rb") as pyproject_fp:
+        pyproject_content = tomllib.load(pyproject_fp)
         project = pyproject_content.get("project", {})
         app_name = project.get("name", None)
         if app_name is None:

@@ -4,10 +4,10 @@ import re
 import shutil
 import subprocess
 import tempfile
+import tomllib
 from pathlib import Path
 
 import questionary
-import toml
 from jinja2 import Environment, FileSystemLoader
 from rich.console import Console
 
@@ -37,7 +37,42 @@ def create_from_conversation_app(
         console.print(f"❌ Folder {target_path} already exists.", style="bold red")
         exit()
 
-    # Clone and customize
+    try:
+        _fork(console, target_path, app_name, profile_name)
+    except BaseException:
+        # A failed or interrupted (Ctrl+C) step would leave a half-made fork
+        # that blocks the next try.
+        shutil.rmtree(target_path, ignore_errors=True)
+        raise
+
+    console.print(f"\n✅ Created '{app_name}' in {target_path}/", style="bold green")
+    console.print(f"   - Profile locked to: {profile_name}", style="dim")
+    console.print(
+        f"   - Profile document: profiles/{profile_name}/profile.md", style="dim"
+    )
+
+    console.print("\nFiles to customize:", style="bold yellow")
+    console.print(
+        f"  profiles/{profile_name}/profile.md  - Assistant prompt and enabled tools"
+    )
+    console.print(f"  src/{app_name}/tools/              - Custom tool implementations")
+
+    console.print("\nNext steps:", style="bold")
+    console.print(f"  cd {target_path}")
+    console.print("  pip install -e .")
+    console.print("  reachy-mini-app-assistant check .")
+    console.print("")
+    console.print("To test your app locally:", style="bold")
+    console.print(f"  python src/{app_name}/main.py --ui")
+    console.print("  # Then open: http://127.0.0.1:7860/")
+
+    return target_path
+
+
+def _fork(
+    console: Console, target_path: Path, app_name: str, profile_name: str
+) -> None:
+    """Clone the conversation app into target_path and customize it."""
     console.print(f"\nCloning conversation app from {CONVERSATION_APP_REPO}...")
     _clone_repo(console, target_path)
 
@@ -72,29 +107,6 @@ def create_from_conversation_app(
     console.print("Initializing fresh git repository...")
     _init_git(target_path)
 
-    console.print(f"\n✅ Created '{app_name}' in {target_path}/", style="bold green")
-    console.print(f"   - Profile locked to: {profile_name}", style="dim")
-    console.print(
-        f"   - Profile document: profiles/{profile_name}/profile.md", style="dim"
-    )
-
-    console.print("\nFiles to customize:", style="bold yellow")
-    console.print(
-        f"  profiles/{profile_name}/profile.md  - Assistant prompt and enabled tools"
-    )
-    console.print(f"  src/{app_name}/tools/              - Custom tool implementations")
-
-    console.print("\nNext steps:", style="bold")
-    console.print(f"  cd {target_path}")
-    console.print("  pip install -e .")
-    console.print("  reachy-mini-app-assistant check .")
-    console.print("")
-    console.print("To test your app locally:", style="bold")
-    console.print(f"  python src/{app_name}/main.py --ui")
-    console.print("  # Then open: http://127.0.0.1:7860/")
-
-    return target_path
-
 
 def _fork_cli(
     console: Console, app_name: str | None, app_path: Path | None
@@ -110,6 +122,11 @@ def _fork_cli(
 
     # Force underscores
     app_name = app_name.replace("-", "_")
+    # Names given on the command line skip the interactive prompt's check.
+    name_error = validate_app_name(app_name)
+    if name_error is not True:
+        console.print(f"❌ {name_error}", style="bold red")
+        exit(1)
 
     if app_path is None:
         console.print("\n$ Where do you want to create it?")
@@ -221,39 +238,71 @@ def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
         )
         exit(1)
 
-    with open(pyproject_path, "r", encoding="utf-8") as f:
-        data = toml.load(f)
-
-    # Update project name
-    data["project"]["name"] = app_name
-
-    # Update scripts:
+    # Rename in the text rather than re-serialising, so the file's comments and
+    # layout survive. Only whole names are renamed: a quoted string that is
+    # exactly the name (project name, isort entry), a key at the start of a
+    # line (script, entry point, package-data), and the module and class of a
+    # "package.module:object" reference. URLs, descriptions or dependencies
+    # that merely contain the name are left alone.
     script_name = app_name.replace("_", "-")
     class_name = _to_pascal_case(app_name)
-    data["project"]["scripts"] = {script_name: f"{app_name}.main:main"}
+    content = pyproject_path.read_text(encoding="utf-8")
+    for old, new in (
+        (CONVERSATION_APP_PACKAGE, app_name),
+        (CONVERSATION_APP_PACKAGE.replace("_", "-"), script_name),
+    ):
+        content = re.sub(
+            rf"""(["']){old}\1""",
+            lambda m: f"{m[1]}{new}{m[1]}",
+            content,
+        )
+        content = re.sub(
+            rf"^([ \t]*){old}([ \t]*=)",
+            lambda m: f"{m[1]}{new}{m[2]}",
+            content,
+            flags=re.MULTILINE,
+        )
+    content = re.sub(
+        rf"""(["']){CONVERSATION_APP_PACKAGE}((?:\.\w+)*:)""",
+        lambda m: f"{m[1]}{app_name}{m[2]}",
+        content,
+    )
+    content = re.sub(
+        r""":ReachyMiniConversationApp(["'])""",
+        lambda m: f":{class_name}{m[1]}",
+        content,
+    )
 
-    # Update entry points
-    data["project"]["entry-points"] = {
-        "reachy_mini_apps": {app_name: f"{app_name}.main:{class_name}"}
+    project = tomllib.loads(content).get("project", {})
+    found = {
+        "name": project.get("name"),
+        f"scripts.{script_name}": project.get("scripts", {}).get(script_name),
+        f"entry-points.reachy_mini_apps.{app_name}": project.get("entry-points", {})
+        .get("reachy_mini_apps", {})
+        .get(app_name),
     }
+    expected = {
+        "name": app_name,
+        f"scripts.{script_name}": f"{app_name}.main:main",
+        f"entry-points.reachy_mini_apps.{app_name}": f"{app_name}.main:{class_name}",
+    }
+    if found != expected:
+        console.print(
+            "❌ Could not rename the app in pyproject.toml",
+            style="bold red",
+        )
+        for key, value in expected.items():
+            if found[key] != value:
+                console.print(
+                    f"   {key}: expected {value!r}, got {found[key]!r}", style="dim"
+                )
+        console.print(
+            "The conversation app structure may have changed. Please report this issue.",
+            style="dim",
+        )
+        exit(1)
 
-    # Update package-data key from reachy_mini_conversation_app to app_name
-    if "tool" in data and "setuptools" in data["tool"]:
-        package_data = data["tool"]["setuptools"].get("package-data", {})
-        if CONVERSATION_APP_PACKAGE in package_data:
-            package_data[app_name] = package_data.pop(CONVERSATION_APP_PACKAGE)
-
-    # Update isort known-local-folder
-    if "tool" in data and "ruff" in data["tool"]:
-        isort_config = data["tool"]["ruff"].get("lint", {}).get("isort", {})
-        if "known-local-folder" in isort_config:
-            isort_config["known-local-folder"] = [
-                app_name if folder == CONVERSATION_APP_PACKAGE else folder
-                for folder in isort_config["known-local-folder"]
-            ]
-
-    with open(pyproject_path, "w", encoding="utf-8") as f:
-        toml.dump(data, f)
+    pyproject_path.write_text(content, encoding="utf-8")
 
 
 def _update_config(
