@@ -1,2 +1,0 @@
-ERROR    test_restart:gstreamer_utils.py:118 Error: <MagicMock id='139829044541296'> 
-WARNING  test_restart:media_server.py:1579 Restarting the media pipeline in 1s after an error

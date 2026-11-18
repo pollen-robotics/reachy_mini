@@ -1,1 +1,1 @@
-{"id":"214a3cb4da6745045f1a7ce708e1c9a5.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_device_detection.TestParser#test_windows_device_count","name":"test_windows_device_count","status":"passed","testResultsByEnv":{"default":"56bdc8925463117a36a2b66b1807b4d9"}}
+{"id":"214a3cb4da6745045f1a7ce708e1c9a5.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_device_detection.TestParser#test_windows_device_count","name":"test_windows_device_count","status":"passed","testResultsByEnv":{"default":"1e1b461997d72f4d5d7ab9fde5579ef8"}}
