@@ -499,7 +499,6 @@ def remove_connection(name: str) -> None:
 
 WIFI_INIT_MAX_RETRIES = 5
 WIFI_INIT_RETRY_DELAY = 3  # seconds
-WIFI_INIT_TIMEOUT = 30  # seconds
 
 
 def ensure_wifi_on_startup() -> None:
@@ -515,14 +514,20 @@ def ensure_wifi_on_startup() -> None:
             scan_available_wifi()
 
             # If no WiFi connection is active, set up the default hotspot
-            if get_current_wifi_mode() == WifiMode.DISCONNECTED:
+            # The API is already up: a /wifi call holding the lock owns WiFi, skip.
+            if get_current_wifi_mode() == WifiMode.DISCONNECTED and (
+                busy_lock.acquire(blocking=False)
+            ):
                 logger.info("No WiFi connection active. Setting up hotspot...")
-                setup_wifi_connection(
-                    name="Hotspot",
-                    ssid=HOTSPOT_SSID,
-                    password=HOTSPOT_PASSWORD,
-                    is_hotspot=True,
-                )
+                try:
+                    setup_wifi_connection(
+                        name="Hotspot",
+                        ssid=HOTSPOT_SSID,
+                        password=HOTSPOT_PASSWORD,
+                        is_hotspot=True,
+                    )
+                finally:
+                    busy_lock.release()
             return
         except Exception as e:
             logger.warning(
@@ -537,11 +542,5 @@ def ensure_wifi_on_startup() -> None:
     )
 
 
-_wifi_init_thread = Thread(target=ensure_wifi_on_startup, daemon=True)
-_wifi_init_thread.start()
-_wifi_init_thread.join(timeout=WIFI_INIT_TIMEOUT)
-if _wifi_init_thread.is_alive():
-    logger.error(
-        f"WiFi initialization timed out after {WIFI_INIT_TIMEOUT}s. "
-        "Daemon will start without WiFi configured."
-    )
+# Not joined: the scan takes seconds and would hold back the whole daemon startup.
+Thread(target=ensure_wifi_on_startup, daemon=True).start()
