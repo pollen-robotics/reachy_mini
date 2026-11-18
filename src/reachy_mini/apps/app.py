@@ -57,7 +57,11 @@ class ReachyMiniApp(ABC):
             from fastapi.responses import FileResponse
             from fastapi.staticfiles import StaticFiles
 
+            from reachy_mini.daemon.app.middleware import LocalNetworkGuardMiddleware
+
             self.settings_app = FastAPI()
+            # Same DNS-rebinding/CSRF guard as the daemon: this server is on the LAN too.
+            self.settings_app.add_middleware(LocalNetworkGuardMiddleware)
 
             # Prevent browser from caching static files across different apps
             # that reuse the same port.
