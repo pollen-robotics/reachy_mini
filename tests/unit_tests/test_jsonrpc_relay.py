@@ -890,3 +890,160 @@ async def test_relay_jobs_invalidate_the_rest_update_cache() -> None:
     job_id = (await _call(relay, "apps.update", {"name": "conv"}))["result"]["job_id"]
     assert apps_router._update_cache is None
     await _wait_job_done(job_id)
+
+
+# -------------------------------------------------------------- nfc.* local
+
+
+class FakeNfcReader:
+    """Stands in for ``NfcReader``: no serial port, canned answers."""
+
+    def __init__(self, enabled: bool = True) -> None:
+        from reachy_mini.nfc import NfcStatus, NfcTag
+
+        self.enabled = enabled
+        self.status = NfcStatus(
+            connected=True, enabled=enabled, chip_detected=True, driver_available=True
+        )
+        self.tag = NfcTag(present=True, uid="04A1B2C3", content="badge42")
+        self.writes: list[Any] = []
+        self.erases: list[Any] = []
+
+    def get_status(self) -> Any:
+        return self.status.model_copy(update={"enabled": self.enabled})
+
+    def get_tag(self) -> Any:
+        return self.tag
+
+    def is_enabled(self) -> bool:
+        return self.enabled
+
+    def start(self) -> None:
+        self.enabled = True
+
+    def stop(self) -> None:
+        self.enabled = False
+
+    def write(self, request: Any) -> Any:
+        from reachy_mini.nfc import NfcWriteResult
+
+        self.writes.append(request)
+        return NfcWriteResult(success=True)
+
+    def erase(self, request: Any) -> Any:
+        from reachy_mini.nfc import NfcWriteResult
+
+        self.erases.append(request)
+        return NfcWriteResult(success=False, error="NO_TAG")
+
+    def dump(self) -> Any:
+        from reachy_mini.nfc import NfcDump
+
+        return NfcDump(present=True, uid="04A1B2C3", size=4, hex="deadbeef")
+
+
+@pytest.mark.asyncio
+async def test_nfc_status_and_tag() -> None:
+    relay = JsonRpcRelay(
+        FakeAppManager(), broadcast=lambda _: None, nfc_reader=FakeNfcReader()
+    )  # type: ignore[arg-type]
+    status = await _call(relay, "nfc.status")
+    assert status["result"]["connected"] is True
+    tag = await _call(relay, "nfc.tag")
+    assert tag["result"]["uid"] == "04A1B2C3"
+
+
+@pytest.mark.asyncio
+async def test_nfc_without_reader_answers_like_rest() -> None:
+    relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None)
+    status = await _call(relay, "nfc.status")
+    assert status["result"]["enabled"] is False
+    assert status["result"]["connected"] is False
+    tag = await _call(relay, "nfc.tag")
+    assert tag["result"]["present"] is False
+    write = await _call(relay, "nfc.write", {"text": "hi"})
+    assert write["error"]["data"]["reason"] == "nfc_disabled"
+
+
+@pytest.mark.asyncio
+async def test_nfc_write_and_erase() -> None:
+    reader = FakeNfcReader()
+    relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None, nfc_reader=reader)  # type: ignore[arg-type]
+    write = await _call(relay, "nfc.write", {"uri": "https://huggingface.co"})
+    assert write["result"]["success"] is True
+    assert reader.writes[0].uri == "https://huggingface.co"
+    erase = await _call(relay, "nfc.erase", {"full": True})
+    assert erase["result"]["error"] == "NO_TAG"
+    assert reader.erases[0].full is True
+
+
+@pytest.mark.asyncio
+async def test_nfc_write_rejects_bad_params() -> None:
+    relay = JsonRpcRelay(
+        FakeAppManager(), broadcast=lambda _: None, nfc_reader=FakeNfcReader()
+    )  # type: ignore[arg-type]
+    reply = await _call(relay, "nfc.write", {"text": "a", "uri": "b"})
+    assert reply["error"]["data"]["reason"] == "invalid_params"
+
+
+@pytest.mark.asyncio
+async def test_nfc_set_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    saved: list[bool] = []
+
+    def save(enabled: bool) -> bool:
+        saved.append(enabled)
+        return True
+
+    monkeypatch.setattr("reachy_mini.daemon.startup_app_config.set_nfc_enabled", save)
+    reader = FakeNfcReader()
+    relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None, nfc_reader=reader)  # type: ignore[arg-type]
+    reply = await _call(relay, "nfc.set_enabled", {"enabled": False})
+    assert saved == [False]
+    assert reply["result"]["enabled"] is False
+    assert reply["result"]["setting_saved"] is True
+    # Off, tag operations are refused.
+    write = await _call(relay, "nfc.write", {"text": "hi"})
+    assert write["error"]["data"]["reason"] == "nfc_disabled"
+
+
+@pytest.mark.asyncio
+async def test_nfc_set_enabled_reports_a_switch_that_was_not_saved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The choice cannot be saved: the reader still switches off.
+    monkeypatch.setattr(
+        "reachy_mini.daemon.startup_app_config.set_nfc_enabled", lambda _: False
+    )
+    reader = FakeNfcReader()
+    relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None, nfc_reader=reader)  # type: ignore[arg-type]
+    reply = await _call(relay, "nfc.set_enabled", {"enabled": False})
+    assert reply["result"]["enabled"] is False
+    assert reply["result"]["setting_saved"] is False
+    assert not reader.enabled
+
+
+@pytest.mark.asyncio
+async def test_nfc_status_does_not_carry_setting_saved() -> None:
+    # Only a switch reply says whether the choice was saved.
+    relay = JsonRpcRelay(
+        FakeAppManager(), broadcast=lambda _: None, nfc_reader=FakeNfcReader()
+    )  # type: ignore[arg-type]
+    status = await _call(relay, "nfc.status")
+    assert status["result"]["setting_saved"] is None
+
+
+@pytest.mark.asyncio
+async def test_nfc_dump_is_not_served_over_rpc() -> None:
+    # dump is REST-only.
+    reader = FakeNfcReader()
+    reader.dumps = 0
+
+    def dump() -> Any:
+        reader.dumps += 1
+        raise AssertionError("nfc.dump must not reach the reader")
+
+    reader.dump = dump  # type: ignore[method-assign]
+    relay = JsonRpcRelay(FakeAppManager(), broadcast=lambda _: None, nfc_reader=reader)  # type: ignore[arg-type]
+    reply = await _call(relay, "nfc.dump")
+    assert reply["error"]["data"]["reason"] == "method_not_found"
+    assert reader.dumps == 0

@@ -1,12 +1,12 @@
 """Scan a serial bus to find which motor IDs respond at common baudrates."""
 
 import argparse
-import os
 import time
 from typing import List
 
-import serial.tools.list_ports
 from rustypot import Xl330PyController
+
+from reachy_mini.daemon.utils import find_serial_port
 
 SERIAL_TIMEOUT = 0.01
 COMMANDS_BITS_LENGTH = {
@@ -23,26 +23,6 @@ XL_BAUDRATE_CONV_TABLE = {
     3000000: 5,
     4000000: 6,
 }
-
-
-def find_serial_port(
-    wireless_version: bool = False,
-    vid: str = "1a86",
-    pid: str = "55d3",
-    pi_uart: str = "/dev/ttyAMA3",
-) -> list[str]:
-    """Replicate from the daemon.utils.find_serial_port function."""
-    # If it's a wireless version, we should use the Raspberry Pi UART
-    if wireless_version:
-        return [pi_uart] if os.path.exists(pi_uart) else []
-
-    # If it's a lite version, we should find it using the VID and PID
-    ports = serial.tools.list_ports.comports()
-
-    vid = vid.upper()
-    pid = pid.upper()
-
-    return [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
 
 
 def scan(port: str, baudrate: int) -> List[int]:

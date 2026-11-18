@@ -11,6 +11,7 @@ certifi = "2026-10-21T00:00:00Z"
 pip = "2026-10-21T00:00:00Z"
 pollen-bmi088-imu-library = false
 reachy-mini-motor-controller = false
+winnie-nfc = false
 
 [[package]]
 name = "absl-py"
@@ -3278,6 +3279,7 @@ dependencies = [
     { name = "starlette" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "websockets" },
+    { name = "winnie-nfc" },
     { name = "zeroconf" },
 ]
 
@@ -3405,6 +3407,7 @@ requires-dist = [
     { name = "tornado", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = ">=6.6" },
     { name = "uvicorn", extras = ["standard"] },
     { name = "websockets", specifier = ">=12,<16" },
+    { name = "winnie-nfc", specifier = ">=1.1.0" },
     { name = "zeroconf", specifier = ">=0.149.7,<1" },
 ]
 provides-extras = ["examples", "mujoco", "placo-kinematics", "rerun", "wireless-version", "opencv", "central-consumer", "all"]
@@ -4224,6 +4227,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/86/eb/20b6cdf273913d0ad05a6a14aed4b9a85591c18a987a3d47f20fa13dcc47/websockets-15.0.1-cp313-cp313-win32.whl", hash = "sha256:ba9e56e8ceeeedb2e080147ba85ffcd5cd0711b89576b83784d8605a7df455fa", size = 176393, upload-time = "2025-03-05T20:02:53.814Z" },
     { url = "https://files.pythonhosted.org/packages/1b/6c/c65773d6cab416a64d191d6ee8a8b1c68a09970ea6909d16965d26bfed1e/websockets-15.0.1-cp313-cp313-win_amd64.whl", hash = "sha256:e09473f095a819042ecb2ab9465aee615bd9c2028e4ef7d933600a8401c79561", size = 176837, upload-time = "2025-03-05T20:02:55.237Z" },
     { url = "https://files.pythonhosted.org/packages/fa/a8/5b41e0da817d64113292ab1f8247140aac61cbf6cfd085d6a0fa77f4984f/websockets-15.0.1-py3-none-any.whl", hash = "sha256:f7a866fbc1e97b5c617ee4116daaa09b722101d4a3c170c787450ba409f9736f", size = 169743, upload-time = "2025-03-05T20:03:39.41Z" },
+]
+
+[[package]]
+name = "winnie-nfc"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyserial" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/16/0f/cf48f42ac25dc94382bc43b4018776c6c4bf5439e858d61aee69b7aa1e4a/winnie_nfc-1.1.0.tar.gz", hash = "sha256:49a270f1dfe84bba5efdaeb2e444ee6653daf433ceee186aa5fa6070f152a3f1", size = 53926, upload-time = "2026-11-18T14:17:57.117Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d6/a3/2ae79a7746ba50ccb407c6dd6bb8171f46ec6cdbcb8b268a6e7111fc967d/winnie_nfc-1.1.0-py3-none-any.whl", hash = "sha256:9dfb1c4d2e0052265beb2d44f2722bfbeac3216aa9a7e505d525d4ce67d4c50e", size = 42202, upload-time = "2026-11-18T14:17:55.846Z" },
 ]
 
 [[package]]
