@@ -39,12 +39,6 @@ class _NoopThread:
     def start(self):
         pass
 
-    def join(self, timeout=None):
-        pass
-
-    def is_alive(self):
-        return False
-
 
 def _import_wifi_config():
     real_thread = threading.Thread
@@ -119,6 +113,34 @@ def test_wrong_password_fails_fast(device, sleeps):
     assert connect.call_count == 1
     # No inter-attempt retry delay should have fired.
     assert wifi.WIFI_CONNECT_RETRY_DELAY not in sleeps
+
+
+@pytest.fixture
+def boot(monkeypatch):
+    """Boot init with no active WiFi; returns the hotspot setup mock."""
+    monkeypatch.setattr(wifi, "scan_available_wifi", MagicMock())
+    monkeypatch.setattr(wifi, "get_wifi_connections", MagicMock(return_value=[]))
+    setup = MagicMock(name="setup_wifi_connection")
+    monkeypatch.setattr(wifi, "setup_wifi_connection", setup)
+    return setup
+
+
+def test_boot_hotspot_runs_under_lock(boot):
+    """The boot hotspot holds busy_lock so /wifi calls see it as busy."""
+    locked = []
+    boot.side_effect = lambda **kw: locked.append(wifi.busy_lock.locked())
+    wifi.ensure_wifi_on_startup()
+    assert locked == [True]
+    assert not wifi.busy_lock.locked()
+
+
+def test_boot_hotspot_skipped_when_wifi_busy(boot, monkeypatch):
+    """A /wifi call that took the lock after the mode check wins: no hotspot."""
+    mode = MagicMock(return_value=wifi.WifiMode.DISCONNECTED)
+    monkeypatch.setattr(wifi, "get_current_wifi_mode", mode)
+    with wifi.busy_lock:
+        wifi.ensure_wifi_on_startup()
+    boot.assert_not_called()
 
 
 def test_rescan_failure_is_non_fatal(device, sleeps):
