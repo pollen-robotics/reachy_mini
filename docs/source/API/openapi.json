@@ -1481,7 +1481,7 @@
     "/api/media/acquire": {
       "post": {
         "summary": "Acquire Media",
-        "description": "Re-acquire camera and audio hardware.",
+        "description": "Re-acquire camera and audio hardware.\n\nAlso restarts a pipeline that stopped on its own (e.g. it could not open\nthe camera). Answers 500 when the pipeline does not start.",
         "operationId": "acquire_media_api_media_acquire_post",
         "responses": {
           "200": {
@@ -2787,7 +2787,7 @@
     "/api/volume/set": {
       "post": {
         "summary": "Set Volume",
-        "description": "Set the output volume level and play a test sound.",
+        "description": "Set the output volume level.",
         "operationId": "set_volume_api_volume_set_post",
         "requestBody": {
           "content": {

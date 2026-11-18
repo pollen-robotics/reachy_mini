@@ -74,6 +74,22 @@ async def test_failed_stop_reset_falls_back_to_the_idle_reset() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stop_pose_failure_clears_app() -> None:
+    """A motor bus error while leaving the robot asleep must free the app slot."""
+    mngr, reset_to_init = _manager_with_head_pose(Backend.SLEEP_HEAD_POSE.copy())
+    mngr.daemon.backend.set_motor_control_mode.side_effect = RuntimeError(
+        "motor bus error"
+    )
+
+    await mngr.stop_current_app()
+
+    mngr.daemon.backend.stop_running_move.assert_awaited_once_with()
+    reset_to_init.assert_not_awaited()
+    mngr.daemon.backend.request_idle_reset.assert_called_once_with()
+    assert mngr.current_app is None
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("requested", [True, False])
 async def test_only_unrequested_exits_trigger_the_idle_reset(
     requested: bool, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

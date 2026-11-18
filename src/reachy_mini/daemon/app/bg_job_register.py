@@ -35,7 +35,7 @@ class JobHandler:
 
     uuid: str
     info: JobInfo
-    new_log_evt: dict[str, asyncio.Event]
+    new_log_evt: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Event]]
 
 
 register: dict[str, JobHandler] = {}
@@ -83,8 +83,10 @@ def run_command(
             def emit(self, record: logging.LogRecord) -> None:
                 line = self.format(record)
                 jh.info.logs.append(line)
-                for ws in jh.new_log_evt.values():
-                    ws.set()
+                # Waiters live on another loop: Event.set() from this thread
+                # would not wake it. list(): waiters unregister concurrently.
+                for loop, evt in list(jh.new_log_evt.values()):
+                    loop.call_soon_threadsafe(evt.set)
                 notify(line)
 
         logger = logging.getLogger(f"logs_job_{job_uuid}")
@@ -152,28 +154,32 @@ async def ws_poll_info(websocket: WebSocket, job_uuid: str) -> None:
     ws_uuid = str(uuid.uuid4())
     last_log_len = 0
 
+    evt = asyncio.Event()
+    evt.set()  # flush logs already emitted, incl. a job that ended before we joined
     try:
-        job.new_log_evt[ws_uuid] = asyncio.Event()
+        job.new_log_evt[ws_uuid] = (asyncio.get_running_loop(), evt)
 
         while True:
-            await job.new_log_evt[ws_uuid].wait()
-            job.new_log_evt[ws_uuid].clear()
+            await evt.wait()
+            evt.clear()
 
             new_logs = job.info.logs[last_log_len:]
+            # Read once: the job thread may flip it while we send.
+            status = job.info.status
 
             if new_logs:
                 for log_entry in new_logs:
                     await websocket.send_text(log_entry)
-                last_log_len = len(job.info.logs)
+                last_log_len += len(new_logs)
 
                 await websocket.send_text(
                     JobInfo(
                         command=job.info.command,
-                        status=job.info.status,
+                        status=status,
                         logs=new_logs,
                     ).model_dump_json()
                 )
-                if job.info.status in (JobStatus.DONE, JobStatus.FAILED):
+                if status in (JobStatus.DONE, JobStatus.FAILED):
                     break
     except WebSocketDisconnect:
         pass

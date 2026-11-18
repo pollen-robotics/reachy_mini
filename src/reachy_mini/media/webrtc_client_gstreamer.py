@@ -64,6 +64,9 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 from gi.repository import GLib, GObject, Gst, GstApp  # noqa: E402, F401
 
+# Override with `webrtc_latency_ms` in daemon_config.json (e.g. lossy Wi-Fi).
+DEFAULT_WEBRTCBIN_LATENCY_MS = 10
+
 
 class GstWebRTCClient(CameraBase, AudioBase):
     """WebRTC client that provides both camera frames and audio.
@@ -97,6 +100,13 @@ class GstWebRTCClient(CameraBase, AudioBase):
         """
         CameraBase.__init__(self, log_level=log_level)
         AudioBase.__init__(self, log_level=log_level)
+
+        from reachy_mini.daemon.startup_app_config import get_webrtc_latency_ms
+
+        latency = get_webrtc_latency_ms()
+        self._webrtcbin_latency_ms = (
+            DEFAULT_WEBRTCBIN_LATENCY_MS if latency is None else latency
+        )
 
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
@@ -252,7 +262,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
             assert webrtcbin is not None, (
                 "Could not find webrtcbin element in webrtcsrc"
             )
-            webrtcbin.set_property("latency", 10)
+            self.logger.debug(f"webrtcbin latency: {self._webrtcbin_latency_ms} ms")
+            webrtcbin.set_property("latency", self._webrtcbin_latency_ms)
 
     def _webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
         self._configure_webrtcbin(webrtcsrc)
@@ -352,11 +363,12 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._pipeline_record.set_state(Gst.State.NULL)
 
     def start_recording(self) -> None:
-        """No-op — recording starts automatically with ``open()``."""
-        pass
+        """Drop audio queued while stopped; the WebRTC stream never pauses."""
+        while self._appsink_audio.try_pull_sample(0) is not None:
+            pass
 
     def stop_recording(self) -> None:
-        """No-op — managed by ``close()``."""
+        """No-op: capture keeps running, ``start_recording()`` drops the backlog."""
         pass
 
     def _setup_audio_send_chain(self) -> None:

@@ -12,7 +12,6 @@ from importlib.resources import files
 from threading import Thread
 from typing import Annotated, Any
 
-import log_throttling
 import mujoco
 import mujoco.viewer
 import numpy as np
@@ -250,9 +249,7 @@ class MujocoBackend(Backend):
                             self.target_head_pose, self.target_body_yaw
                         )
                     except ValueError as e:
-                        log_throttling.by_time(self.logger, interval=0.5).warning(
-                            f"IK error: {e}"
-                        )
+                        self._log_ik_error(e)
 
                 if self.target_head_joint_positions is not None:
                     self.data.ctrl[:7] = self.target_head_joint_positions

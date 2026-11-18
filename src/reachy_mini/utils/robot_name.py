@@ -17,9 +17,14 @@ import json
 import logging
 from pathlib import Path
 
+import platformdirs
+
 logger = logging.getLogger(__name__)
 
-_STATE_PATH = Path.home() / ".config" / "reachy_mini" / "robot_name.json"
+_STATE_PATH = Path(platformdirs.user_config_dir("reachy_mini")) / "robot_name.json"
+# Where it lived before; differs from _STATE_PATH on macOS/Windows or with
+# XDG_CONFIG_HOME set. Read-only fallback, the next rename writes _STATE_PATH.
+_LEGACY_PATH = Path.home() / ".config" / "reachy_mini" / "robot_name.json"
 
 # Keep names short enough for mDNS / UI labels and free of surrounding
 # whitespace. Empty names are rejected (treated as "no override"). This is the
@@ -33,17 +38,19 @@ def get_robot_name() -> str | None:
     Defaults to None (no override) on a missing file or any read / parse
     error, so the caller falls back to the CLI default.
     """
-    try:
-        data = json.loads(_STATE_PATH.read_text())
-        name = data.get("name")
-        if isinstance(name, str) and name.strip():
-            return name.strip()
-        return None
-    except FileNotFoundError:
-        return None
-    except Exception as e:  # noqa: BLE001 - never crash the command loop
-        logger.warning("Could not read robot name: %s", e)
-        return None
+    for path in (_STATE_PATH, _LEGACY_PATH):
+        try:
+            data = json.loads(path.read_text())
+            name = data.get("name")
+            if isinstance(name, str) and name.strip():
+                return name.strip()
+            return None
+        except FileNotFoundError:
+            continue
+        except Exception as e:  # noqa: BLE001 - never crash the command loop
+            logger.warning("Could not read robot name: %s", e)
+            return None
+    return None
 
 
 def set_robot_name(name: str) -> str | None:

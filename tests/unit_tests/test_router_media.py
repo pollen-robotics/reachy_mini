@@ -2,7 +2,7 @@
 
 import threading
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -45,6 +45,19 @@ def test_play_sound_playback_failure_returns_500(router_app):
 
     assert r.status_code == 500
     assert r.json()["detail"] == "Failed to create playbin element"
+
+
+def test_acquire_failure_returns_500(router_app):
+    """A pipeline that does not come back is a 500, not ok."""
+    daemon = SimpleNamespace(
+        acquire_media=AsyncMock(side_effect=RuntimeError("Media pipeline failed"))
+    )
+    client = router_app(media.router, daemon=daemon)
+
+    r = client.post("/media/acquire")
+
+    assert r.status_code == 500
+    assert r.json()["detail"] == "Media pipeline failed"
 
 
 # "" resolves to the assets directory itself.

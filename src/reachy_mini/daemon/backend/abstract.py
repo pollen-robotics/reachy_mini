@@ -288,6 +288,9 @@ class Backend:
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
 
+        # Monotonic time of the last IK error logged by the control loop.
+        self._last_ik_error_log = float("-inf")
+
         # Reference to the media server for play_sound delegation.
         # Set via setup_media_server().
         self._media_server: Optional[Any] = None
@@ -606,6 +609,13 @@ class Backend:
     def get_imu_data(self) -> ImuDataMsg | None:
         """Latest IMU reading; None on backends without an IMU."""
         return None
+
+    def _log_ik_error(self, e: ValueError) -> None:
+        """Log an IK error from the control loop, at most once every 0.5 s."""
+        now = time.monotonic()
+        if now - self._last_ik_error_log >= 0.5:
+            self._last_ik_error_log = now
+            self.logger.warning(f"IK error: {e}")
 
     def update_target_head_joints_from_ik(
         self,

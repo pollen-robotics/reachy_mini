@@ -18,6 +18,7 @@ def state_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Point the module at a throwaway JSON file under a tmp config dir."""
     path = tmp_path / ".config" / "reachy_mini" / "robot_name.json"
     monkeypatch.setattr(robot_name, "_STATE_PATH", path)
+    monkeypatch.setattr(robot_name, "_LEGACY_PATH", tmp_path / "legacy.json")
     return path
 
 
@@ -79,3 +80,12 @@ def test_set_is_failsafe_on_write_error(
 
     monkeypatch.setattr(robot_name.Path, "write_text", boom)
     assert robot_name.set_robot_name("Hal") is None
+
+
+def test_get_falls_back_to_legacy_path(state_path: Path):
+    robot_name._LEGACY_PATH.write_text('{"name": "Old"}')
+    assert robot_name.get_robot_name() == "Old"
+    # A rename writes the new path, which then wins.
+    assert robot_name.set_robot_name("New") == "New"
+    assert state_path.is_file()
+    assert robot_name.get_robot_name() == "New"

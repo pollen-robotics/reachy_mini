@@ -69,6 +69,7 @@ from reachy_mini.media.audio_base import (
 )
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
+from reachy_mini.media.gstreamer_utils import SoundPlaybin
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
@@ -130,7 +131,7 @@ class GStreamerAudio(AudioBase):
         self._bus = self._pipeline.get_bus()
         self._bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline)
 
-        self._playbin: Optional[Gst.Element] = None
+        self._sound = SoundPlaybin(self.logger, on_end=self._on_sound_end)
         self._init_pipeline_playback(self._pipeline)
 
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
@@ -385,13 +386,7 @@ class GStreamerAudio(AudioBase):
         # Pin silence caps to the appsrc format so audiomixer sees matching
         # inputs (it can't aggregate F32LE@N and S16@44100 together).
         silence_caps = Gst.ElementFactory.make("capsfilter")
-        silence_caps.set_property(
-            "caps",
-            Gst.Caps.from_string(
-                f"audio/x-raw,format=F32LE,channels={self.CHANNELS},"
-                f"rate={self.SAMPLE_RATE},layout=interleaved"
-            ),
-        )
+        silence_caps.set_property("caps", caps)
         silence_queue = Gst.ElementFactory.make("queue")
 
         tee = Gst.ElementFactory.make("tee")
@@ -432,6 +427,12 @@ class GStreamerAudio(AudioBase):
         silence_caps.link(silence_queue)
         silence_queue.link(mixer)
 
+        # Pin output to the input format: mixer-side conversion segfaults on GStreamer 1.28 (#1525).
+        mixer_caps = Gst.ElementFactory.make("capsfilter")
+        mixer_caps.set_property("caps", caps)
+        pipeline.add(mixer_caps)
+        mixer.link(mixer_caps)
+
         if self._webrtcechoprobe is not None:
             # webrtcechoprobe requires S16LE at 8/16/32/48 kHz.
             ac_probe = Gst.ElementFactory.make("audioconvert")
@@ -446,13 +447,13 @@ class GStreamerAudio(AudioBase):
             )
             for el in (ac_probe, ar_probe, cf_probe, self._webrtcechoprobe):
                 pipeline.add(el)
-            mixer.link(ac_probe)
+            mixer_caps.link(ac_probe)
             ac_probe.link(ar_probe)
             ar_probe.link(cf_probe)
             cf_probe.link(self._webrtcechoprobe)
             self._webrtcechoprobe.link(tee)
         else:
-            mixer.link(tee)
+            mixer_caps.link(tee)
 
         tee.link(queue_speaker)
         queue_speaker.link(ac_speaker)
@@ -501,9 +502,7 @@ class GStreamerAudio(AudioBase):
             self._head_wobbler.stop()
         self._appsrc_pts = -1
         self._pipeline.set_state(Gst.State.NULL)
-        if self._playbin is not None:
-            self._playbin.set_state(Gst.State.NULL)
-            self._playbin = None
+        self._sound.stop()
 
     def clear_player(self) -> None:
         """Drop all queued playback audio immediately (barge-in)."""
@@ -556,9 +555,6 @@ class GStreamerAudio(AudioBase):
         else:
             file_path = sound_file
 
-        if self._playbin is not None:
-            self._playbin.set_state(Gst.State.NULL)
-
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
             self.logger.error("Failed to create playbin element")
@@ -581,8 +577,11 @@ class GStreamerAudio(AudioBase):
             self._head_wobbler.reset()
             self._head_wobbler.start()
 
-        self._playbin = playbin
-        playbin.set_state(Gst.State.PLAYING)
+        self._sound.play(playbin)
+
+    def _on_sound_end(self) -> None:
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
 
     def upload_sound(self, sound_file: str) -> str:
         """No-op for the local backend — the file is already accessible.

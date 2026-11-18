@@ -434,7 +434,7 @@ For details on how audio streams differ between Wireless and Lite, see [Media Ar
 - **Blog post**: [Make and Publish Your Reachy Mini Apps](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps) — full walkthrough with screenshots
 - **API Reference**: [Apps API](../API/apps) — auto-generated reference for `ReachyMiniApp`, `AppManager`, and related classes
 - **REST API**: [REST API Reference](../API/rest-api) — full HTTP endpoint documentation
-- **Example apps**: Browse [community apps on Hugging Face](https://hf.co/reachy-mini/#/apps) for inspiration
+- **Example apps**: Browse [community apps on Hugging Face](https://pollen-robotics.com/reachy-mini/apps/) for inspiration
 
 | App | Key Patterns | Link |
 |-----|-------------|------|
