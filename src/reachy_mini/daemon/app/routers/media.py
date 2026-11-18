@@ -48,8 +48,14 @@ async def release_media(daemon: Daemon = Depends(get_daemon)) -> dict[str, str]:
 
 @router.post("/acquire")
 async def acquire_media(daemon: Daemon = Depends(get_daemon)) -> dict[str, str]:
-    """Re-acquire camera and audio hardware."""
-    await daemon.acquire_media()
+    """Re-acquire camera and audio hardware.
+
+    Answers 500 when the pipeline does not start; media then stays released.
+    """
+    try:
+        await daemon.acquire_media()
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
     return {"status": "ok"}
 
 

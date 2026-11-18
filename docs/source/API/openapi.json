@@ -1481,7 +1481,7 @@
     "/api/media/acquire": {
       "post": {
         "summary": "Acquire Media",
-        "description": "Re-acquire camera and audio hardware.",
+        "description": "Re-acquire camera and audio hardware.\n\nAnswers 500 when the pipeline does not start; media then stays released.",
         "operationId": "acquire_media_api_media_acquire_post",
         "responses": {
           "200": {

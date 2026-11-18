@@ -1595,7 +1595,10 @@ class GstMediaServer:
             # since the restart was scheduled.
             if self._pipeline_running:
                 self.stop()
-                self.start()
+                if not self.start():
+                    # Not running, so its bus ERROR won't retry: retry here.
+                    self._pipeline_running = True
+                    self._schedule_pipeline_restart()
         except Exception:
             self._logger.exception("Media pipeline restart failed, media stays stopped")
         finally:
@@ -1632,10 +1635,15 @@ class GstMediaServer:
             audiosrc.set_property("device", audiosrc.get_property("device"))
         return False
 
-    def start(self) -> None:
+    def start(self) -> bool:
         """Start the pipeline, rebuilding it from scratch after a stop().
 
         The first start reuses the pipeline built in __init__.
+
+        Returns:
+            False when the pipeline refused to start (e.g. the camera is still
+            held by another process); it is then left stopped.
+
         """
         with self._pipeline_lock:
             if self._pipeline_needs_rebuild:
@@ -1645,9 +1653,17 @@ class GstMediaServer:
                 self._pipeline_needs_rebuild = False
             else:
                 self._logger.debug("Starting WebRTC")
-            self._pipeline_sender.set_state(Gst.State.PLAYING)
+            if (
+                self._pipeline_sender.set_state(Gst.State.PLAYING)
+                == Gst.StateChangeReturn.FAILURE
+            ):
+                self._logger.error("Media pipeline failed to start")
+                self._pipeline_sender.set_state(Gst.State.NULL)
+                self._pipeline_needs_rebuild = True
+                return False
             self._pipeline_running = True
         GLib.timeout_add_seconds(5, self._dump_latency)
+        return True
 
     def stop(self) -> None:
         """Stop the pipeline and release all hardware (camera, audio)."""

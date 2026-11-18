@@ -1,6 +1,6 @@
 """Daemon.start_central_relay_if_running: the login routes' relay hook."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -29,3 +29,18 @@ async def test_relay_started_only_when_daemon_runs(
     await daemon.start_central_relay_if_running()
 
     assert daemon._start_central_signaling_relay.await_count == expected_calls
+
+
+@pytest.mark.asyncio
+async def test_acquire_media_failure_keeps_media_released() -> None:
+    """A pipeline that does not start leaves media released and the relay down."""
+    daemon = Daemon(no_media=True)
+    daemon._media_server = Mock(start=Mock(return_value=False))
+    daemon._start_central_signaling_relay = AsyncMock()  # type: ignore[method-assign]
+    daemon._media_released = True
+
+    with pytest.raises(RuntimeError):
+        await daemon.acquire_media()
+
+    assert daemon.media_released
+    daemon._start_central_signaling_relay.assert_not_awaited()

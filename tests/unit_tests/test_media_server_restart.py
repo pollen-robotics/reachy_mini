@@ -101,7 +101,7 @@ def test_restart_stops_then_starts(
     server = _make_server()
     calls: List[str] = []
     monkeypatch.setattr(server, "stop", lambda: calls.append("stop"))
-    monkeypatch.setattr(server, "start", lambda: calls.append("start"))
+    monkeypatch.setattr(server, "start", lambda: calls.append("start") or True)
 
     _error(server)
     assert server._restart_pipeline() is False
@@ -115,7 +115,7 @@ def test_restarts_are_capped_per_window(
 ) -> None:
     server = _make_server()
     monkeypatch.setattr(server, "stop", lambda: None)
-    monkeypatch.setattr(server, "start", lambda: None)
+    monkeypatch.setattr(server, "start", lambda: True)
 
     for _ in range(PIPELINE_RESTART_LIMIT + 2):
         _error(server)
@@ -210,3 +210,35 @@ def test_failed_restart_is_logged_and_leaves_media_stopped(
     # The lock was released: a later stop() doesn't deadlock.
     assert server._pipeline_lock.acquire(blocking=False)
     server._pipeline_lock.release()
+
+
+def test_restart_retries_a_pipeline_that_refuses_to_play(
+    monkeypatch: pytest.MonkeyPatch, timers: Dict[str, List[Any]], clock: List[float]
+) -> None:
+    """A failed start() leaves media not running, so the restart retries itself."""
+    server = _make_server()
+
+    def stop() -> None:
+        server._pipeline_running = False
+
+    monkeypatch.setattr(server, "stop", stop)
+    monkeypatch.setattr(server, "start", lambda: False)
+    _error(server)
+
+    while server._pipeline_restart_source_id is not None:
+        server._restart_pipeline()
+        clock[0] += 1.0
+
+    assert len(timers["added"]) == PIPELINE_RESTART_LIMIT
+
+
+def test_start_reports_a_pipeline_that_refuses_to_play() -> None:
+    """A FAILURE on PLAYING is reported and the pipeline left stopped."""
+    server = _make_server(running=False)
+    server._pipeline_needs_rebuild = False
+    server._pipeline_sender.set_state.return_value = ms.Gst.StateChangeReturn.FAILURE
+
+    assert server.start() is False
+    assert server._pipeline_running is False
+    assert server._pipeline_needs_rebuild is True
+    server._pipeline_sender.set_state.assert_called_with(ms.Gst.State.NULL)

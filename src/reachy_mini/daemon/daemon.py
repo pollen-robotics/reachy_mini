@@ -168,12 +168,17 @@ class Daemon:
 
         Restarts the GstMediaServer pipeline and central signalling relay.
         Idempotent: no-op if not currently released or no media server.
+
+        Raises:
+            RuntimeError: the pipeline did not start; media stays released.
+
         """
         if not self._media_released or self._media_server is None:
             return
 
         self.logger.info("Re-acquiring media hardware...")
-        self._media_server.start()
+        if not self._media_server.start():
+            raise RuntimeError("Media pipeline failed to start")
         await self._start_central_signaling_relay()
         self._media_released = False
         self._status.media_released = False
@@ -490,7 +495,9 @@ class Daemon:
                     self.backend.setup_media_server(self._media_server)
                     self.backend.set_restart_daemon_callback(self._spawn_webrtc_restart)
                     self.backend.set_start_update_callback(self._spawn_webrtc_update)
-                self._media_server.start()
+                if not self._media_server.start():
+                    # Stay released so /api/media/acquire can retry.
+                    self._media_released = self._status.media_released = True
 
             # Reset the robot to a clean idle state whenever the managed app
             # slot becomes free (remote session end/drop or local app exit), so
@@ -514,7 +521,9 @@ class Daemon:
                 self._setup_jsonrpc_relay(self.backend, self.app_manager)
 
                 # Start central signaling relay for remote WebRTC access
-                await self._start_central_signaling_relay()
+                # (acquire_media starts it when media is released).
+                if not self._media_released:
+                    await self._start_central_signaling_relay()
 
             # Wire the wake-up hook before any wake can fire (on-start below, or
             # later via button/REST on the wireless unit, which boots asleep).
