@@ -9,7 +9,7 @@ from enum import Enum
 import psutil
 import serial.tools.list_ports
 
-from ..nfc.ports import is_nfc_board
+from ..nfc.ports import nfc_board_ports
 
 
 class SimulationMode(Enum):
@@ -170,10 +170,11 @@ def find_serial_port(
     pid = pid.upper()
 
     # The NFC reader board can share these USB ids.
+    nfc_ports = set(nfc_board_ports())
     return [
         p.device
         for p in ports
-        if f"USB VID:PID={vid}:{pid}" in p.hwid and not is_nfc_board(p)
+        if f"USB VID:PID={vid}:{pid}" in p.hwid and p.device not in nfc_ports
     ]
 
 

@@ -14,10 +14,17 @@ from reachy_mini.daemon import utils
 class _FakePort:
     """Minimal stand-in for a serial.tools.list_ports port object."""
 
-    def __init__(self, device: str, hwid: str, product: str | None = None) -> None:
+    def __init__(
+        self,
+        device: str,
+        hwid: str,
+        product: str | None = None,
+        vid: int | None = None,
+    ) -> None:
         self.device = device
         self.hwid = hwid
         self.product = product
+        self.vid = vid
 
 
 class _FakeProc:
@@ -83,6 +90,18 @@ def test_find_serial_port_skips_the_nfc_board(monkeypatch: pytest.MonkeyPatch) -
     assert utils.find_serial_port() == ["/dev/ttyACM1"]
 
 
+def test_find_serial_port_without_the_nfc_driver(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A broken winnie_nfc install leaves the motor port search working."""
+    from reachy_mini.nfc import ports as nfc_ports
+
+    ports = [_FakePort("/dev/ttyACM1", "USB VID:PID=1A86:55D3 SER=2")]
+    monkeypatch.setattr(utils.serial.tools.list_ports, "comports", lambda: ports)
+    monkeypatch.setattr(nfc_ports, "_usb", lambda: None)
+    assert utils.find_serial_port() == ["/dev/ttyACM1"]
+
+
 def test_find_serial_port_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     """Lite version returns empty list when no port matches."""
     ports = [_FakePort("/dev/ttyUSB1", "USB VID:PID=DEAD:BEEF")]
@@ -113,9 +132,7 @@ def test_is_local_camera_available_linux_false(
 def test_daemon_check_no_spawn(monkeypatch: pytest.MonkeyPatch) -> None:
     """Nothing happens when spawn_daemon is False."""
     called = {"popen": False}
-    monkeypatch.setattr(
-        utils.psutil, "process_iter", lambda *a, **k: iter([])
-    )
+    monkeypatch.setattr(utils.psutil, "process_iter", lambda *a, **k: iter([]))
     monkeypatch.setattr(
         utils.subprocess,
         "Popen",
