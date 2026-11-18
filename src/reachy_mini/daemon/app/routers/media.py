@@ -50,7 +50,8 @@ async def release_media(daemon: Daemon = Depends(get_daemon)) -> dict[str, str]:
 async def acquire_media(daemon: Daemon = Depends(get_daemon)) -> dict[str, str]:
     """Re-acquire camera and audio hardware.
 
-    Answers 500 when the pipeline does not start; media then stays released.
+    Also restarts a pipeline that stopped on its own (e.g. it could not open
+    the camera). Answers 500 when the pipeline does not start.
     """
     try:
         await daemon.acquire_media()
@@ -63,7 +64,7 @@ async def acquire_media(daemon: Daemon = Depends(get_daemon)) -> dict[str, str]:
 async def media_status(daemon: Daemon = Depends(get_daemon)) -> dict[str, bool]:
     """Get the current media status."""
     return {
-        "available": not daemon.media_released and daemon._media_server is not None,
+        "available": daemon.media_available,
         "released": daemon.media_released,
         "no_media": daemon.no_media,
     }

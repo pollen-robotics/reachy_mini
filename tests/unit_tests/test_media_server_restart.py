@@ -230,6 +230,26 @@ def test_restart_retries_a_pipeline_that_refuses_to_play(
         clock[0] += 1.0
 
     assert len(timers["added"]) == PIPELINE_RESTART_LIMIT
+    # Given up: left stopped, so the daemon's acquire can start it again.
+    assert server.is_running is False
+
+
+def test_giving_up_stops_the_pipeline(
+    monkeypatch: pytest.MonkeyPatch, timers: Dict[str, List[Any]], clock: List[float]
+) -> None:
+    """Once the budget is spent, a failing pipeline is stopped, not left half-dead."""
+    server = _make_server()
+    server._pipeline_restart_times = [clock[0]] * PIPELINE_RESTART_LIMIT
+    stops: List[None] = []
+    monkeypatch.setattr(server, "stop", lambda: stops.append(None))
+    gave_up = MagicMock()
+    server.set_gave_up_handler(gave_up)
+
+    _error(server)
+
+    assert timers["added"] == []
+    assert len(stops) == 1
+    gave_up.assert_called_once()
 
 
 def test_start_reports_a_pipeline_that_refuses_to_play() -> None:
@@ -242,3 +262,31 @@ def test_start_reports_a_pipeline_that_refuses_to_play() -> None:
     assert server._pipeline_running is False
     assert server._pipeline_needs_rebuild is True
     server._pipeline_sender.set_state.assert_called_with(ms.Gst.State.NULL)
+
+
+def test_start_waits_for_an_async_start_to_fail() -> None:
+    """A busy camera on mfvideosrc only fails once the async change completes."""
+    server = _make_server(running=False)
+    server._pipeline_needs_rebuild = False
+    sender = server._pipeline_sender
+    sender.set_state.return_value = ms.Gst.StateChangeReturn.ASYNC
+    sender.get_state.return_value = (ms.Gst.StateChangeReturn.FAILURE, None, None)
+
+    assert server.start() is False
+    assert server.is_running is False
+    sender.set_state.assert_called_with(ms.Gst.State.NULL)
+
+
+def test_start_succeeds_once_an_async_start_completes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An async start that completes is a successful start."""
+    monkeypatch.setattr(ms.GLib, "timeout_add_seconds", lambda *a: 1)
+    server = _make_server(running=False)
+    server._pipeline_needs_rebuild = False
+    sender = server._pipeline_sender
+    sender.set_state.return_value = ms.Gst.StateChangeReturn.ASYNC
+    sender.get_state.return_value = (ms.Gst.StateChangeReturn.SUCCESS, None, None)
+
+    assert server.start() is True
+    assert server.is_running is True
