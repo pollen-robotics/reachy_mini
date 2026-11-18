@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -30,6 +31,13 @@ def validate_app_name(text: str) -> bool | str:
         return "App name cannot contain slashes or backslashes ('/' or '\\')."
     if "*" in text or "?" in text or "." in text:
         return "App name cannot contain wildcard characters ('*', '?', or '.')."
+    # The name becomes the Python package and the PyPI project name, and is
+    # written unquoted as a TOML key: keep it to an ASCII identifier.
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", text):
+        return (
+            "App name can only contain ASCII letters, digits and underscores, "
+            "and cannot start with a digit."
+        )
     return True
 
 
@@ -144,6 +152,11 @@ def create(console: Console, app_name: str, app_path: Path) -> Path:
     app_name = app_name.replace(
         "-", "_"
     )  # Force underscores in app name (belt and suspenders)
+    # Names given on the command line skip the interactive prompt's check.
+    name_error = validate_app_name(app_name)
+    if name_error is not True:
+        console.print(f"[ERROR] {name_error}", style="bold red")
+        exit(1)
 
     TEMPLATE_DIR = Path(__file__).parent / "templates"
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
