@@ -1,0 +1,3 @@
+INFO     reachy_mini.daemon.backend.abstract:abstract.py:203 Using AnalyticalKinematics kinematics engine
+WARNING  reachy_mini.daemon.backend.abstract:abstract.py:524 Rejecting move request: another move is running.
+INFO     reachy_mini.media.media_server:media_server.py:500 Pipeline latency (live=False, min_latency=0, max_latency=18446744073709551615)
