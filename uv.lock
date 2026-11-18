@@ -3280,6 +3280,7 @@ dependencies = [
     { name = "toml" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "websockets" },
+    { name = "winnie-nfc" },
     { name = "zeroconf" },
 ]
 
@@ -3302,7 +3303,6 @@ all = [
     { name = "semver" },
     { name = "soundfile" },
     { name = "tornado", marker = "sys_platform != 'win32'" },
-    { name = "winnie-nfc" },
 ]
 central-consumer = [
     { name = "aiortc" },
@@ -3317,9 +3317,6 @@ examples = [
 ]
 mujoco = [
     { name = "mujoco" },
-]
-nfc = [
-    { name = "winnie-nfc" },
 ]
 opencv = [
     { name = "cv2-enumerate-cameras" },
@@ -3339,7 +3336,6 @@ wireless-version = [
     { name = "nmcli", marker = "sys_platform == 'linux'" },
     { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux'" },
     { name = "semver" },
-    { name = "winnie-nfc" },
 ]
 
 [package.dev-dependencies]
@@ -3397,7 +3393,6 @@ requires-dist = [
     { name = "reachy-mini", extras = ["central-consumer"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["examples"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["mujoco"], marker = "extra == 'all'" },
-    { name = "reachy-mini", extras = ["nfc"], marker = "extra == 'wireless-version'" },
     { name = "reachy-mini", extras = ["opencv"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["placo-kinematics"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["rerun"], marker = "extra == 'all'" },
@@ -3415,10 +3410,10 @@ requires-dist = [
     { name = "tornado", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = ">=6.6" },
     { name = "uvicorn", extras = ["standard"] },
     { name = "websockets", specifier = ">=12,<16" },
-    { name = "winnie-nfc", marker = "extra == 'nfc'", specifier = ">=1.0.0" },
+    { name = "winnie-nfc", specifier = ">=1.1.0" },
     { name = "zeroconf", specifier = ">=0.149.7,<1" },
 ]
-provides-extras = ["examples", "mujoco", "placo-kinematics", "rerun", "wireless-version", "opencv", "nfc", "central-consumer", "all"]
+provides-extras = ["examples", "mujoco", "placo-kinematics", "rerun", "wireless-version", "opencv", "central-consumer", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -4258,14 +4253,14 @@ wheels = [
 
 [[package]]
 name = "winnie-nfc"
-version = "1.0.0"
+version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pyserial" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b3/9f/9deb8222f9db440dbda41241f67a4dc713303ad018e6ef25e4955d4d478c/winnie_nfc-1.0.0.tar.gz", hash = "sha256:a208a63c368c2b727b69c924695233ba46f308086e2f035455c325f2162fffaa", size = 50697, upload-time = "2026-11-03T11:05:25.355Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/0f/cf48f42ac25dc94382bc43b4018776c6c4bf5439e858d61aee69b7aa1e4a/winnie_nfc-1.1.0.tar.gz", hash = "sha256:49a270f1dfe84bba5efdaeb2e444ee6653daf433ceee186aa5fa6070f152a3f1", size = 53926, upload-time = "2026-11-18T14:17:57.117Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/95/69/ec42481a5021a4fa2802476bcb43f976a67947a3e472387b99af0984ce1e/winnie_nfc-1.0.0-py3-none-any.whl", hash = "sha256:3f97093d9a37a77ae035cbea97deb79780f2d31f419ab31da0f97b9e2c42097e", size = 39345, upload-time = "2026-11-03T11:05:24.002Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/a3/2ae79a7746ba50ccb407c6dd6bb8171f46ec6cdbcb8b268a6e7111fc967d/winnie_nfc-1.1.0-py3-none-any.whl", hash = "sha256:9dfb1c4d2e0052265beb2d44f2722bfbeac3216aa9a7e505d525d4ce67d4c50e", size = 42202, upload-time = "2026-11-18T14:17:55.846Z" },
 ]
 
 [[package]]

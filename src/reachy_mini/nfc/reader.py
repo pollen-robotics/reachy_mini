@@ -8,8 +8,8 @@ The UID is read from any ISO 14443-A tag; the NDEF content only from Type 2
 tags (NTAG213/215/216, Ultralight EV1). A tag whose content cannot be read
 still reports its UID, with ``readable`` false and ``error`` saying why.
 
-``winnie_nfc`` is an optional dependency (``reachy_mini[nfc]``), imported
-lazily.
+``winnie_nfc`` is imported lazily: a broken install leaves the daemon running
+and reports ``DRIVER_MISSING``.
 """
 
 from __future__ import annotations
@@ -72,14 +72,14 @@ RAW_PREVIEW_BYTES = 32
 NfcStatusError = Literal[
     "DISABLED",  # switched off, or the daemon runs with --no-nfc
     "NO_BOARD",  # switched on, no board plugged in: the usual state
-    "DRIVER_MISSING",  # the winnie_nfc package is not installed
+    "DRIVER_MISSING",  # the winnie_nfc driver cannot be imported
     "PORT_CONFLICT",  # --nfc-port names the motor controller's port
     "LINK_ERROR",  # the board is there but the serial link failed
 ]
 
 DISABLED_ERROR = "NFC reader disabled"
 NO_BOARD_ERROR = "no NFC reader board found"
-DRIVER_MISSING_ERROR = "winnie_nfc is not installed (pip install 'reachy_mini[nfc]')"
+DRIVER_MISSING_ERROR = "the winnie_nfc driver cannot be imported (broken install?)"
 
 
 class NfcRecord(BaseModel):
@@ -595,7 +595,9 @@ class NfcReader:
             with self._lock:
                 self._error = DRIVER_MISSING_ERROR
                 self._error_code = "DRIVER_MISSING"
-            logger.info("NFC reader disabled: winnie_nfc is not installed.")
+            logger.warning(
+                "NFC reader disabled: the winnie_nfc driver cannot be imported."
+            )
             return
         self._should_stop.clear()
         self._running = True
