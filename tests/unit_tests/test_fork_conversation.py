@@ -182,7 +182,7 @@ def test_update_pyproject_only_renames_whole_names(tmp_path: Path) -> None:
     ]
 
 
-@pytest.mark.parametrize("name", ["café_bot", "1app", 'my"app', "my+app", "my\app"])
+@pytest.mark.parametrize("name", ["café_bot", "1app", 'my"app', "my+app", r"my\app"])
 def test_validate_app_name_rejects_non_identifiers(name: str) -> None:
     """Names that cannot be a package name or a bare TOML key are refused."""
     assert validate_app_name(name) is not True
@@ -241,3 +241,23 @@ def test_failed_fork_removes_the_partial_folder(
         )
 
     assert not (apps_path / "my_app").exists()
+
+
+def test_interrupted_fork_removes_the_partial_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ctrl+C during the clone still cleans up, and the interrupt goes through."""
+
+    def interrupted_clone(_console: Console, target_path: Path) -> None:
+        target_path.mkdir()
+        (target_path / "pyproject.toml").write_text("")
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(fork_conversation, "_clone_repo", interrupted_clone)
+
+    with pytest.raises(KeyboardInterrupt):
+        fork_conversation.create_from_conversation_app(
+            Console(file=io.StringIO()), "my_app", tmp_path
+        )
+
+    assert not (tmp_path / "my_app").exists()

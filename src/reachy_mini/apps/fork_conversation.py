@@ -39,8 +39,9 @@ def create_from_conversation_app(
 
     try:
         _fork(console, target_path, app_name, profile_name)
-    except SystemExit:
-        # A failed step would leave a half-made fork that blocks the next try.
+    except BaseException:
+        # A failed or interrupted (Ctrl+C) step would leave a half-made fork
+        # that blocks the next try.
         shutil.rmtree(target_path, ignore_errors=True)
         raise
 
