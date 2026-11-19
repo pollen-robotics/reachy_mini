@@ -1,3 +1,0 @@
-INFO     reachy_mini.daemon.backend.abstract:abstract.py:203 Using AnalyticalKinematics kinematics engine
-WARNING  reachy_mini.daemon.backend.abstract:abstract.py:618 IK error: at 100.0
-WARNING  reachy_mini.daemon.backend.abstract:abstract.py:618 IK error: at 100.5

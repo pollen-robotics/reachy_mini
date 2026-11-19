@@ -1,1 +1,1 @@
-{"id":"39b6b661ed3d42fd81e3988e68946cdf.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_nfc#test_snapshot_of_a_readable_tag","name":"test_snapshot_of_a_readable_tag","status":"passed","testResultsByEnv":{"default":"dd27a3918bf53b6a5b60d990afdb2f4c"}}
+{"id":"39b6b661ed3d42fd81e3988e68946cdf.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_nfc#test_snapshot_of_a_readable_tag","name":"test_snapshot_of_a_readable_tag","status":"passed","testResultsByEnv":{"default":"df67f3ca491ac2df2c4259b9530309fd"}}

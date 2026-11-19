@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/reachy_mini/daemon/app/routers/volume_control_linux.py: 45%</title>
+    <title>Coverage for src/reachy_mini/daemon/app/routers/volume_control_linux.py: 49%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_54cfdca1.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src<span class="sep">/</span>reachy_mini<span class="sep">/</span>daemon<span class="sep">/</span>app<span class="sep">/</span>routers<span class="sep">/</span>volume_control_linux.py</b>:
-            <span class="pc_cov">45%</span>
+            <span class="pc_cov">49%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -54,9 +54,9 @@
             </div>
         </aside>
         <h2>
-            <span class="text">214 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">97<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">117<span class="text"> missing</span></button>
+            <span class="text">193 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">95<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">98<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -64,8 +64,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_5f5ce02ad5e36bc1_volume_control_macos_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.17.2">coverage.py v7.17.2</a>,
-            created at 2026-11-18 16:13 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.17.3">coverage.py v7.17.3</a>,
+            created at 2026-11-19 13:24 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -642,66 +642,6 @@
     <p class="mis show_mis"><span class="n"><a id="t560" href="#t560">560</a></span><span class="t">        <span class="key">return</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_set_device_volume</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">input_device</span><span class="op">,</span> <span class="nam">volume</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t561" href="#t561">561</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t562" href="#t562">562</a></span><span class="t">    <span class="com"># ---- Debug / info ----</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t563" href="#t563">563</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t564" href="#t564">564</a></span><span class="t">    <span class="key">def</span> <span class="nam">_get_device_controls</span><span class="op">(</span><span class="nam">self</span><span class="op">,</span> <span class="nam">device_id</span><span class="op">:</span> <span class="nam">int</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">list</span><span class="op">[</span><span class="nam">str</span><span class="op">]</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t565" href="#t565">565</a></span><span class="t">        <span class="str">&quot;&quot;&quot;Get ALSA controls of an audio device given its ID.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t566" href="#t566">566</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t567" href="#t567">567</a></span><span class="t"><span class="str">        Args:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t568" href="#t568">568</a></span><span class="t"><span class="str">            device_id: The ALSA card number.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t569" href="#t569">569</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t570" href="#t570">570</a></span><span class="t"><span class="str">        Returns:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t571" href="#t571">571</a></span><span class="t"><span class="str">            A list of ALSA controls.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t572" href="#t572">572</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t573" href="#t573">573</a></span><span class="t"><span class="str">        &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t574" href="#t574">574</a></span><span class="t">        <span class="nam">controls</span> <span class="op">=</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t575" href="#t575">575</a></span><span class="t">        <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t576" href="#t576">576</a></span><span class="t">            <span class="nam">result</span> <span class="op">=</span> <span class="nam">subprocess</span><span class="op">.</span><span class="nam">run</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t577" href="#t577">577</a></span><span class="t">                <span class="op">[</span><span class="str">&quot;amixer&quot;</span><span class="op">,</span> <span class="str">&quot;-c&quot;</span><span class="op">,</span> <span class="nam">str</span><span class="op">(</span><span class="nam">device_id</span><span class="op">)</span><span class="op">,</span> <span class="str">&quot;scontrols&quot;</span><span class="op">]</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t578" href="#t578">578</a></span><span class="t">                <span class="nam">capture_output</span><span class="op">=</span><span class="key">True</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t579" href="#t579">579</a></span><span class="t">                <span class="nam">text</span><span class="op">=</span><span class="key">True</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t580" href="#t580">580</a></span><span class="t">                <span class="nam">timeout</span><span class="op">=</span><span class="nam">AUDIO_COMMAND_TIMEOUT</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t581" href="#t581">581</a></span><span class="t">                <span class="nam">check</span><span class="op">=</span><span class="key">True</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t582" href="#t582">582</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t583" href="#t583">583</a></span><span class="t">            <span class="key">for</span> <span class="nam">line</span> <span class="key">in</span> <span class="nam">result</span><span class="op">.</span><span class="nam">stdout</span><span class="op">.</span><span class="nam">splitlines</span><span class="op">(</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t584" href="#t584">584</a></span><span class="t">                <span class="key">if</span> <span class="str">&quot;Simple mixer control&quot;</span> <span class="key">in</span> <span class="nam">line</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t585" href="#t585">585</a></span><span class="t">                    <span class="nam">start</span> <span class="op">=</span> <span class="nam">line</span><span class="op">.</span><span class="nam">find</span><span class="op">(</span><span class="str">&quot;&#x27;&quot;</span><span class="op">)</span> <span class="op">+</span> <span class="num">1</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t586" href="#t586">586</a></span><span class="t">                    <span class="nam">end</span> <span class="op">=</span> <span class="nam">line</span><span class="op">.</span><span class="nam">find</span><span class="op">(</span><span class="str">&quot;&#x27;&quot;</span><span class="op">,</span> <span class="nam">start</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t587" href="#t587">587</a></span><span class="t">                    <span class="key">if</span> <span class="nam">start</span> <span class="op">&gt;</span> <span class="num">0</span> <span class="key">and</span> <span class="nam">end</span> <span class="op">&gt;</span> <span class="nam">start</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t588" href="#t588">588</a></span><span class="t">                        <span class="nam">controls</span><span class="op">.</span><span class="nam">append</span><span class="op">(</span><span class="nam">line</span><span class="op">[</span><span class="nam">start</span><span class="op">:</span><span class="nam">end</span><span class="op">]</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t589" href="#t589">589</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t590" href="#t590">590</a></span><span class="t">        <span class="key">except</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t591" href="#t591">591</a></span><span class="t">            <span class="nam">subprocess</span><span class="op">.</span><span class="nam">TimeoutExpired</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t592" href="#t592">592</a></span><span class="t">            <span class="nam">FileNotFoundError</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t593" href="#t593">593</a></span><span class="t">            <span class="nam">subprocess</span><span class="op">.</span><span class="nam">CalledProcessError</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t594" href="#t594">594</a></span><span class="t">        <span class="op">)</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t595" href="#t595">595</a></span><span class="t">            <span class="nam">logger</span><span class="op">.</span><span class="nam">error</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t596" href="#t596">596</a></span><span class="t">                <span class="fst">f&quot;</span><span class="fst">Failed to list controls for device </span><span class="op">{</span><span class="nam">device_id</span><span class="op">}</span><span class="fst"> - amixer failed with error: </span><span class="op">{</span><span class="nam">e</span><span class="op">}</span><span class="fst">&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t597" href="#t597">597</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t598" href="#t598">598</a></span><span class="t">            <span class="key">return</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t599" href="#t599">599</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t600" href="#t600">600</a></span><span class="t">        <span class="key">return</span> <span class="nam">controls</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t601" href="#t601">601</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t602" href="#t602">602</a></span><span class="t">    <span class="key">def</span> <span class="nam">get_information</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">int</span> <span class="op">|</span> <span class="nam">str</span> <span class="op">|</span> <span class="key">None</span> <span class="op">|</span> <span class="nam">list</span><span class="op">[</span><span class="nam">str</span><span class="op">]</span> <span class="op">|</span> <span class="nam">bool</span><span class="op">]</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t603" href="#t603">603</a></span><span class="t">        <span class="str">&quot;&quot;&quot;Get information about the controlled audio devices.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t604" href="#t604">604</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t605" href="#t605">605</a></span><span class="t"><span class="str">        Returns:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t606" href="#t606">606</a></span><span class="t"><span class="str">            A dictionary containing the information about the controlled audio devices.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t607" href="#t607">607</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t608" href="#t608">608</a></span><span class="t"><span class="str">        &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t609" href="#t609">609</a></span><span class="t">        <span class="nam">info</span><span class="op">:</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">int</span> <span class="op">|</span> <span class="nam">str</span> <span class="op">|</span> <span class="key">None</span> <span class="op">|</span> <span class="nam">list</span><span class="op">[</span><span class="nam">str</span><span class="op">]</span> <span class="op">|</span> <span class="nam">bool</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t610" href="#t610">610</a></span><span class="t">            <span class="str">&quot;backend&quot;</span><span class="op">:</span> <span class="str">&quot;pulsectl&quot;</span> <span class="key">if</span> <span class="nam">_PULSECTL_AVAILABLE</span> <span class="key">else</span> <span class="str">&quot;alsa&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t611" href="#t611">611</a></span><span class="t">            <span class="str">&quot;input_device_id&quot;</span><span class="op">:</span> <span class="nam">self</span><span class="op">.</span><span class="nam">input_device</span><span class="op">.</span><span class="nam">id</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t612" href="#t612">612</a></span><span class="t">            <span class="str">&quot;output_device_id&quot;</span><span class="op">:</span> <span class="nam">self</span><span class="op">.</span><span class="nam">output_device</span><span class="op">.</span><span class="nam">id</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t613" href="#t613">613</a></span><span class="t">        <span class="op">}</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t614" href="#t614">614</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">_PULSECTL_AVAILABLE</span> <span class="key">and</span> <span class="nam">isinstance</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">input_device</span><span class="op">.</span><span class="nam">id</span><span class="op">,</span> <span class="nam">int</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t615" href="#t615">615</a></span><span class="t">            <span class="nam">info</span><span class="op">[</span><span class="str">&quot;available_input_controls&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_get_device_controls</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t616" href="#t616">616</a></span><span class="t">                <span class="nam">self</span><span class="op">.</span><span class="nam">input_device</span><span class="op">.</span><span class="nam">id</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t617" href="#t617">617</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t618" href="#t618">618</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">_PULSECTL_AVAILABLE</span> <span class="key">and</span> <span class="nam">isinstance</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">output_device</span><span class="op">.</span><span class="nam">id</span><span class="op">,</span> <span class="nam">int</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t619" href="#t619">619</a></span><span class="t">            <span class="nam">info</span><span class="op">[</span><span class="str">&quot;available_output_controls&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_get_device_controls</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t620" href="#t620">620</a></span><span class="t">                <span class="nam">self</span><span class="op">.</span><span class="nam">output_device</span><span class="op">.</span><span class="nam">id</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t621" href="#t621">621</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t622" href="#t622">622</a></span><span class="t">        <span class="key">return</span> <span class="nam">info</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -710,8 +650,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_5f5ce02ad5e36bc1_volume_control_macos_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.17.2">coverage.py v7.17.2</a>,
-            created at 2026-11-18 16:13 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.17.3">coverage.py v7.17.3</a>,
+            created at 2026-11-19 13:24 +0000
         </p>
     </div>
 </footer>

@@ -1,3 +1,0 @@
-INFO     reachy_mini.reachy_mini:reachy_mini.py:521 Connection mode selected: network
-INFO     reachy_mini.reachy_mini:reachy_mini.py:350 No media backend requested by user.
-INFO     reachy_mini.media.media_manager:media_manager.py:161 No media backend selected.
