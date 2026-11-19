@@ -154,7 +154,6 @@ class MediaManager:
         self.backend = _resolve_backend(backend)
         self.camera: Optional[CameraLike] = None
         self.audio: Optional[AudioLike] = None
-        self._daemon_url = daemon_url
 
         match self.backend:
             case MediaBackend.NO_MEDIA:

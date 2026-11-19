@@ -115,8 +115,6 @@ class RobotBackend(Backend):
 
         self._current_head_operation_mode = -1  # Default to torque control mode
         self._current_antennas_operation_mode = -1  # Default to torque control mode
-        self.target_antenna_joint_current = None  # Placeholder for antenna joint torque
-        self.target_head_joint_current = None  # Placeholder for head joint torque
 
         if hardware_error_check_frequency <= 0:
             raise ValueError(
@@ -217,20 +215,12 @@ class RobotBackend(Backend):
                         .astype(int)
                         .tolist()
                     )
-                    # Body rotation torque control is not supported with feetech motors
-                    # self.c.set_body_rotation_goal_current(int(self.target_head_joint_current[0]))
 
             if self._current_antennas_operation_mode != 0:  # if position control mode
                 if self.target_antenna_joint_positions is not None:
                     self.c.set_antennas_positions(
                         self.target_antenna_joint_positions.tolist()
                     )
-            # Antenna torque control is not supported with feetech motors
-            # else:
-            #     if self.target_antenna_joint_current is not None:
-            #         self.c.set_antennas_goal_current(
-            #            np.round(self.target_antenna_joint_current, 0).astype(int).tolist()
-            #         )
 
         if (
             self.joint_positions_publisher is not None
@@ -391,9 +381,8 @@ class RobotBackend(Backend):
             5: current-based position control.
 
         Important:
-            This method does not work well with the current feetech motors (body rotation), as they do not support torque control.
-            So the method disables the antennas when in torque control mode.
-            The dynamixel motors used for the head do support torque control, so this method works as expected.
+            In torque control mode only the Stewart platform is current-controlled;
+            the body rotation motor is disabled.
 
         Args:
             mode (int): The operation mode for the head motors.
@@ -441,8 +430,7 @@ class RobotBackend(Backend):
             mode (int): The operation mode for the antennas motors (0: torque control, 3: position control, 5: current-based position control).
 
         Important:
-            This method does not work well with the current feetech motors, as they do not support torque control.
-            So the method disables the antennas when in torque control mode.
+            In torque control mode the antennas are disabled, not current-controlled.
 
         Args:
             mode (int): The operation mode for the antennas motors.

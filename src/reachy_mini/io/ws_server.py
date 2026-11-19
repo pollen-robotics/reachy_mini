@@ -77,10 +77,6 @@ class WSServer(AbstractServer):
         self._clients.clear()
         self._loop = None
 
-    def command_received_event(self) -> threading.Event:
-        """Return the event that is set when a command is received."""
-        return self._cmd_event
-
     def client_connected_event(self) -> threading.Event:
         """Return the event that is set when a new client is registered."""
         return self._client_connected_event

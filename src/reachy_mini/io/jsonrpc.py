@@ -163,10 +163,6 @@ class JsonRpcError(Exception):
             data={**self.data, "reason": self.reason},
         )
 
-    def to_error_obj(self) -> dict[str, Any]:
-        """Render the JSON-RPC ``error`` object as a plain dict."""
-        return self.to_error_model().model_dump()
-
 
 def looks_like_jsonrpc(obj: Any) -> bool:
     """Return whether a decoded JSON value is a JSON-RPC frame.

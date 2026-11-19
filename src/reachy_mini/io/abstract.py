@@ -6,7 +6,6 @@ the server, handling commands, and managing client connections.
 """
 
 from abc import ABC, abstractmethod
-from threading import Event
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -27,11 +26,6 @@ class AbstractServer(ABC):
     @abstractmethod
     def stop(self) -> None:
         """Stop the server."""
-        pass
-
-    @abstractmethod
-    def command_received_event(self) -> Event:
-        """Wait for a new command and return it."""
         pass
 
 

@@ -239,7 +239,6 @@ class PlacoKinematics:
 
         # last good q to revert to in case of collision
         self._initial_q = self.robot_ik.state.q.copy()
-        self._last_good_q = self.robot_ik.state.q.copy()
 
         # update the robot state to the initial state
         self._update_state_to_initial(self.robot)  # revert to the initial state

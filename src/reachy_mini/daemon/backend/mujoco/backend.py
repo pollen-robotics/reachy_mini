@@ -30,7 +30,6 @@ from ..abstract import Backend
 from .utils import (
     get_actuator_names,
     get_joint_addr_from_name,
-    get_joint_id_from_name,
 )
 
 CAMERA_REACHY = "eye_camera"
@@ -89,7 +88,6 @@ class MujocoBackend(Backend):
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
         self.decimation = 10  # -> 50hz control loop
         self.rendering_timestep = 0.04  # s, rendering loop # 25Hz
-        self.streaming_timestep = 0.04  # s, streaming loop # 25Hz
 
         self.head_site_id = mujoco.mj_name2id(
             self.model,
@@ -101,9 +99,6 @@ class MujocoBackend(Backend):
 
         self.joint_names = get_actuator_names(self.model)
 
-        self.joint_ids = [
-            get_joint_id_from_name(self.model, n) for n in self.joint_names
-        ]
         self.joint_qpos_addr = [
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
@@ -342,5 +337,3 @@ class MujocoBackend(Backend):
     def set_motor_torque_ids(self, ids: list[str], on: bool) -> None:
         """Set the motor torque state for specific motor names."""
         pass
-
-
