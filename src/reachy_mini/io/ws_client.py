@@ -184,7 +184,10 @@ class WSClient(AbstractClient):
             raise ConnectionError("Lost connection with the server.")
 
         if self._ws is not None:
-            self._ws.send(cmd.model_dump_json())
+            try:
+                self._ws.send(cmd.model_dump_json())
+            except websockets.exceptions.ConnectionClosed as e:
+                raise ConnectionError("Lost connection with the server.") from e
 
     # ------------------------------------------------------------------
     # Receive loop
@@ -294,16 +297,28 @@ class WSClient(AbstractClient):
     # ------------------------------------------------------------------
 
     def send_task_request(self, task_req: AnyTaskRequest) -> UUID:
-        """Send a task request to the server."""
+        """Send a task request to the server.
+
+        Raises:
+            ConnectionError: If the connection with the server is lost.
+
+        """
         if not self._is_alive:
             raise ConnectionError("Lost connection with the server.")
 
         task = TaskRequest(uuid=uuid4(), req=task_req, timestamp=datetime.now())
+        # Registered before sending: the daemon can answer before send() returns.
         with self._tasks_lock:
             self.tasks[task.uuid] = TaskState(event=threading.Event(), error=None)
 
         assert self._ws is not None
-        self._ws.send(task.model_dump_json())
+        try:
+            self._ws.send(task.model_dump_json())
+        except websockets.exceptions.ConnectionClosed as e:
+            # The caller never gets the uuid, so nobody would remove the task.
+            with self._tasks_lock:
+                del self.tasks[task.uuid]
+            raise ConnectionError("Lost connection with the server.") from e
 
         return task.uuid
 

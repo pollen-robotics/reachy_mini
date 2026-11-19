@@ -10,10 +10,17 @@ untouched for any other host.
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
+import websockets.exceptions
 
-from reachy_mini.io.protocol import DaemonState, DaemonStatus
+from reachy_mini.io.protocol import (
+    DaemonState,
+    DaemonStatus,
+    GotoTaskRequest,
+    SetTargetCmd,
+)
 from reachy_mini.io.ws_client import WSClient, _is_loopback_host
 from reachy_mini.reachy_mini import ReachyMini
+from reachy_mini.utils.interpolation import InterpolationTechnique
 
 
 @pytest.mark.parametrize(
@@ -146,4 +153,62 @@ def test_name_check_keeps_status_for_media_setup(mock_connect: MagicMock) -> Non
         assert mini._connect_and_verify_name("localhost", 1234, 1.0) is client
 
     assert client.get_status(timeout=0.1).robot_name == "lite"
+    client.disconnect()
+
+
+# A closed socket raises either child of ConnectionClosed, depending on how
+# the daemon hung up: both must reach the app as ConnectionError.
+CLOSED_SOCKET_ERRORS = [
+    websockets.exceptions.ConnectionClosedError(None, None),
+    websockets.exceptions.ConnectionClosedOK(None, None),
+]
+
+
+def _client_whose_send_fails(
+    mock_connect: MagicMock, error: websockets.exceptions.ConnectionClosed
+) -> WSClient:
+    """Build a client that still believes it is alive, on a socket already closed."""
+    fake_ws = _make_fake_ws()
+    fake_ws.send.side_effect = error
+    mock_connect.return_value = fake_ws
+    client = WSClient(host="localhost", port=1234)
+    client._is_alive = True
+    return client
+
+
+@pytest.mark.parametrize("error", CLOSED_SOCKET_ERRORS)
+@patch("reachy_mini.io.ws_client.ws_sync.connect")
+def test_send_command_on_closed_socket_raises_connection_error(
+    mock_connect: MagicMock, error: websockets.exceptions.ConnectionClosed
+) -> None:
+    """send_command raises the documented ConnectionError, keeping the cause."""
+    client = _client_whose_send_fails(mock_connect, error)
+
+    with pytest.raises(ConnectionError) as exc_info:
+        client.send_command(SetTargetCmd(head=[0.0] * 16))
+
+    assert exc_info.value.__cause__ is error
+    client.disconnect()
+
+
+@pytest.mark.parametrize("error", CLOSED_SOCKET_ERRORS)
+@patch("reachy_mini.io.ws_client.ws_sync.connect")
+def test_send_task_request_on_closed_socket_forgets_the_task(
+    mock_connect: MagicMock, error: websockets.exceptions.ConnectionClosed
+) -> None:
+    """send_task_request raises ConnectionError and leaves no task behind."""
+    client = _client_whose_send_fails(mock_connect, error)
+    request = GotoTaskRequest(
+        head=None,
+        antennas=[0.0, 0.0],
+        duration=1.0,
+        method=InterpolationTechnique.MIN_JERK,
+        body_yaw=None,
+    )
+
+    with pytest.raises(ConnectionError) as exc_info:
+        client.send_task_request(request)
+
+    assert exc_info.value.__cause__ is error
+    assert client.tasks == {}
     client.disconnect()
