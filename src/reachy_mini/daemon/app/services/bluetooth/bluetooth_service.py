@@ -230,7 +230,6 @@ class Advertisement(dbus.service.Object):
         self.ad_type = advertising_type
         self.local_name = local_name
         self.service_uuids = None
-        self.include_tx_power = False
         dbus.service.Object.__init__(self, bus, self.path)
 
     def get_properties(self):

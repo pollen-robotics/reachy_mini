@@ -3,7 +3,7 @@
 import ctypes
 from ctypes import POINTER, Structure, byref, c_float, c_int, c_uint32, c_void_p
 from dataclasses import dataclass
-from struct import pack, unpack
+from struct import unpack
 
 from .volume_control import (
     SOUND_CARD_NAMES,
@@ -24,19 +24,6 @@ def _get_macos_id(macos_four_char_code: str) -> int:
 
     """
     return int(unpack("!I", macos_four_char_code.encode())[0])
-
-
-def _get_macos_four_char_code(macos_id: int) -> str:
-    """Convert an integer ID into a macOS FourCharCode.
-
-    Args:
-        macos_id: An integer ID.
-
-    Returns:
-        The corresponding macOS FourCharCode as a string.
-
-    """
-    return pack("!I", macos_id).decode("ascii")
 
 
 # Device and scope constants

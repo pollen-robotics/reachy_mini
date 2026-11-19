@@ -299,7 +299,6 @@ class GstMediaServer:
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
         self._log_level = log_level
-        self._sim_mode = sim_mode
 
         Gst.init([])
         self._loop = GLib.MainLoop()
@@ -893,19 +892,6 @@ class GstMediaServer:
             "webrtcbin": webrtcbin,  # identity only: which session owns it
         }
         self._logger.info(f"Audio playback pipeline started for peer {peer_id}")
-
-    def _on_playback_bus_message(
-        self, bus: Gst.Bus, msg: Gst.Message, peer_id: str
-    ) -> bool:
-        """Handle messages from a per-peer audio playback pipeline."""
-        if msg.type == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
-            self._logger.error(f"Audio playback error for {peer_id}: {err} {debug}")
-            return False
-        if msg.type == Gst.MessageType.EOS:
-            self._logger.info(f"Audio playback EOS for {peer_id}")
-            return False
-        return True
 
     def _cleanup_incoming_audio(
         self, peer_id: str, webrtcbin: Optional[Gst.Element] = None
