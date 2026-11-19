@@ -40,6 +40,14 @@ from reachy_mini.io.protocol import (
 
 logger = logging.getLogger(__name__)
 
+# Waits between reconnection attempts: the first one, then doubled up to the cap.
+RECONNECT_FIRST_DELAY_S = 0.5
+RECONNECT_MAX_DELAY_S = 5.0
+
+# Given to tasks still waiting when the line dies. Never sent by the daemon.
+CONNECTION_LOST_ERROR = "Lost connection with the server."
+
+
 def _is_loopback_host(host: str) -> bool:
     """Return True if `host` is localhost or a loopback IP address."""
     normalized_host = host.strip().strip("[]").lower()
@@ -106,22 +114,31 @@ class WSClient(AbstractClient):
         self._stop_event = threading.Event()
         self._heartbeat = threading.Event()
 
-        uri = f"ws://{host}:{port}/ws/sdk"
-        # permessage-deflate buys nothing on loopback (no network to save
-        # bandwidth on) and costs CPU at the daemon's 50 Hz state stream rate.
-        compression = None if _is_loopback_host(host) else "deflate"
-        try:
-            self._ws = ws_sync.connect(
-                uri,
-                compression=compression,
-                additional_headers={"X-Reachy-Client": _client_header()},
-            )
-        except (OSError, websockets.exceptions.InvalidHandshake, TimeoutError) as e:
-            raise ConnectionError(f"Failed to connect to {uri}: {e}") from e
+        self._uri = f"ws://{host}:{port}/ws/sdk"
+        self._ws = self._open_socket()
 
         # Start receive loop in background thread
         self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
         self._recv_thread.start()
+
+    def _open_socket(self) -> ws_sync.ClientConnection:
+        """Open a WebSocket to the daemon.
+
+        Raises:
+            ConnectionError: If the daemon cannot be reached.
+
+        """
+        # permessage-deflate buys nothing on loopback (no network to save
+        # bandwidth on) and costs CPU at the daemon's 50 Hz state stream rate.
+        compression = None if _is_loopback_host(self.host) else "deflate"
+        try:
+            return ws_sync.connect(
+                self._uri,
+                compression=compression,
+                additional_headers={"X-Reachy-Client": _client_header()},
+            )
+        except (OSError, websockets.exceptions.InvalidHandshake, TimeoutError) as e:
+            raise ConnectionError(f"Failed to connect to {self._uri}: {e}") from e
 
     def wait_for_connection(self, timeout: float = 5.0) -> None:
         """Wait for the client to receive initial data from the server.
@@ -194,8 +211,24 @@ class WSClient(AbstractClient):
     # ------------------------------------------------------------------
 
     def _recv_loop(self) -> None:
-        """Background thread: read messages from the WebSocket."""
-        assert self._ws is not None
+        """Background thread: read messages, and reconnect when the line drops."""
+        while True:
+            self._read_until_closed()
+            # No answer can arrive on a dead line, whoever closed it.
+            self._fail_pending_tasks()
+            if self._stop_event.is_set():
+                return
+            # False until the daemon's first message on the new socket:
+            # _check_alive sets it back to True when one arrives.
+            self._is_alive = False
+            logger.warning("Lost connection with %s, reconnecting.", self._uri)
+            if not self._reconnect():
+                return
+
+    def _read_until_closed(self) -> None:
+        """Read and dispatch messages until the current socket closes."""
+        if self._ws is None:
+            return
         try:
             for raw in self._ws:
                 if self._stop_event.is_set():
@@ -210,6 +243,39 @@ class WSClient(AbstractClient):
                 self._dispatch(msg)
         except websockets.exceptions.ConnectionClosed:
             pass
+
+    def _fail_pending_tasks(self) -> None:
+        """Wake every task still waiting for an answer, with CONNECTION_LOST_ERROR."""
+        with self._tasks_lock:
+            for task in self.tasks.values():
+                if not task.event.is_set():
+                    task.error = CONNECTION_LOST_ERROR
+                    task.event.set()
+
+    def _reconnect(self) -> bool:
+        """Open a new socket, waiting longer after each failed attempt.
+
+        Returns:
+            True once reconnected, False if disconnect() was called meanwhile.
+
+        """
+        delay = RECONNECT_FIRST_DELAY_S
+        # wait() returns True as soon as disconnect() sets the event.
+        while not self._stop_event.wait(delay):
+            try:
+                ws = self._open_socket()
+            except ConnectionError as e:
+                logger.debug("Reconnection attempt failed: %s", e)
+                delay = min(delay * 2, RECONNECT_MAX_DELAY_S)
+                continue
+            self._ws = ws
+            # disconnect() may have run while we were connecting: close this socket.
+            if self._stop_event.is_set():
+                ws.close()
+                return False
+            logger.info("Reconnected to %s.", self._uri)
+            return True
+        return False
 
     def _dispatch(self, msg: Any) -> None:
         """Route an incoming message to the appropriate handler."""
@@ -336,6 +402,8 @@ class WSClient(AbstractClient):
         if task.error is not None:
             with self._tasks_lock:
                 del self.tasks[task_uid]
+            if task.error == CONNECTION_LOST_ERROR:
+                raise ConnectionError(task.error)
             if task.error == MOVE_BUSY_ERROR:
                 raise MoveBusyError(f"Task failed with error: {task.error}")
             raise Exception(f"Task failed with error: {task.error}")
