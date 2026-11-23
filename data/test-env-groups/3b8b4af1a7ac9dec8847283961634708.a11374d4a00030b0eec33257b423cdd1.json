@@ -1,1 +1,0 @@
-{"id":"3b8b4af1a7ac9dec8847283961634708.a11374d4a00030b0eec33257b423cdd1","fullName":"tests.unit_tests.test_bg_job_register#test_ws_poll_info_receives_terminal_status_from_worker_thread","name":"test_ws_poll_info_receives_terminal_status_from_worker_thread[False]","status":"passed","testResultsByEnv":{"default":"efdb171670b28f5f009870e03d5b3bf5"}}

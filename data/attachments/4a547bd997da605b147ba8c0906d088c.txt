@@ -1,1 +1,0 @@
-INFO     logs_job_7e961c93-2dcc-46eb-8fa9-2d8eff8ff98e:bg_job_register.py:102 Job 'update' completed successfully

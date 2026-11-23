@@ -1,4 +1,0 @@
-INFO     reachy_mini.daemon.daemon:daemon.py:73 Daemon version: 1.14.0
-INFO     reachy_mini.daemon.daemon:daemon.py:136 Media disabled (--no-media). No camera, audio, or media server.
-INFO     reachy_mini.daemon.daemon:daemon.py:210 Re-acquiring media hardware...
-INFO     reachy_mini.daemon.daemon:daemon.py:220 Media hardware re-acquired.

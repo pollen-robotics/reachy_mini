@@ -1,1 +1,0 @@
-{"id":"85a71e8738f47b463a6daa8634e54d93.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_media_server_watchdog#test_new_audio_pad_stops_the_peers_previous_playback","name":"test_new_audio_pad_stops_the_peers_previous_playback","status":"passed","testResultsByEnv":{"default":"b32d30d62b2486de2475b9aec45d40d0"}}

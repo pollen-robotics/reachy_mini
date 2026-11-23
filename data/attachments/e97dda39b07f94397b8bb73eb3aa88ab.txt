@@ -1,1 +1,0 @@
-WARNING  reachy_mini.apps.jsonrpc_server:jsonrpc_server.py:113 [/rpc] rejected cross-origin connection from https://evil.example

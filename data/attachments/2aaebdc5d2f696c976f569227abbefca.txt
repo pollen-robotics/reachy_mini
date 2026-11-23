@@ -1,2 +1,0 @@
-WARNING  reachy_mini.daemon.startup_app_config:startup_app_config.py:61 Ignoring unreadable daemon config /tmp/pytest-of-runner/pytest-0/test_a_switch_that_cannot_be_s0/blocker/daemon_config.json: [Errno 20] Not a directory: '/tmp/pytest-of-runner/pytest-0/test_a_switch_that_cannot_be_s0/blocker/daemon_config.json'
-WARNING  reachy_mini.daemon.startup_app_config:startup_app_config.py:221 Could not persist the NFC reader switch: [Errno 17] File exists: '/tmp/pytest-of-runner/pytest-0/test_a_switch_that_cannot_be_s0/blocker'

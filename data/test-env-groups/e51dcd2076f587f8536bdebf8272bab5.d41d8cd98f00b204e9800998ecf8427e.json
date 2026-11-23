@@ -1,1 +1,0 @@
-{"id":"e51dcd2076f587f8536bdebf8272bab5.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_app_stop_sleep#test_stop_leaves_robot_asleep_when_in_sleep_pose","name":"test_stop_leaves_robot_asleep_when_in_sleep_pose","status":"passed","testResultsByEnv":{"default":"6d6a13c407e0e434d08ecfe53457a1c9"}}

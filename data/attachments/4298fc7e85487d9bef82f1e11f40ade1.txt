@@ -1,2 +1,0 @@
-WARNING  reachy_mini.nfc.reader:reader.py:440 Unexpected NFC write failure: ValueError('bad uri')
-WARNING  reachy_mini.nfc.reader:reader.py:440 Unexpected NFC write failure: UnicodeEncodeError('ascii', 'é', 0, 1, 'x')

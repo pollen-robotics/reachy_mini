@@ -1,1 +1,0 @@
-WARNING  reachy_mini.daemon.startup_app_config:startup_app_config.py:61 Ignoring unreadable daemon config /tmp/pytest-of-runner/pytest-0/test_the_switch_is_remembered_0/daemon_config.json: Expecting value: line 1 column 1 (char 0)
