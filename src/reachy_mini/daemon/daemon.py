@@ -232,12 +232,13 @@ class Daemon:
         self._jsonrpc_loop = loop
 
     async def start_central_relay_if_running(self) -> None:
-        """Start the relay after a login, but only while RUNNING with media acquired.
+        """Start the relay after a login, but only while up (RUNNING or resting) with media acquired.
 
         Elsewhere the local signalling server is down and the relay would loop
         on connection errors; start()/acquire_media() start it themselves.
         """
-        if self._status.state != DaemonState.RUNNING or self._media_down():
+        up = self._status.state == DaemonState.RUNNING or self._resting
+        if not up or self._media_down():
             self.logger.info("Daemon not running, relay starts with it")
             return
         await self._start_central_signaling_relay()
@@ -454,6 +455,16 @@ class Daemon:
             self.logger.warning("Daemon is already running.")
             return self._status.state
 
+        if self._resting:
+            # rest() kept everything up: only wake the robot.
+            self.logger.info("Resuming Reachy Mini daemon...")
+            if wake_up_on_start:
+                self._status.state = DaemonState.STARTING
+                if not await self._wake_up():
+                    return self._status.state
+            self._status.state = DaemonState.RUNNING
+            return self._status.state
+
         self.logger.info(
             f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
         )
@@ -570,20 +581,8 @@ class Daemon:
             if on_wake_up_callback is not None:
                 self.backend.set_on_wake_up_callback(on_wake_up_callback)
 
-            if wake_up_on_start:
-                try:
-                    self.logger.info("Waking up Reachy Mini...")
-                    self.backend.set_motor_control_mode(MotorControlMode.Enabled)
-                    await self.backend.wake_up()
-                except Exception as e:
-                    self.logger.error(f"Error while waking up Reachy Mini: {e}")
-                    self._status.state = DaemonState.ERROR
-                    self._status.error = str(e)
-                    return self._status.state
-                except KeyboardInterrupt:
-                    self.logger.warning("Wake up interrupted by user.")
-                    self._status.state = DaemonState.STOPPING
-                    return self._status.state
+            if wake_up_on_start and not await self._wake_up():
+                return self._status.state
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon started successfully.")
@@ -596,6 +595,57 @@ class Daemon:
             self._status.error = str(e)
             self.logger.error(f"Failed to start daemon: {e}")
 
+        return self._status.state
+
+    async def _wake_up(self) -> bool:
+        """Torque on and wake up; on failure set the state and return False."""
+        assert self.backend is not None
+        try:
+            self.logger.info("Waking up Reachy Mini...")
+            self.backend.set_motor_control_mode(MotorControlMode.Enabled)
+            await self.backend.wake_up()
+            return True
+        except Exception as e:
+            self.logger.error(f"Error while waking up Reachy Mini: {e}")
+            self._status.state = DaemonState.ERROR
+            self._status.error = str(e)
+        except KeyboardInterrupt:
+            self.logger.warning("Wake up interrupted by user.")
+            self._status.state = DaemonState.STOPPING
+        return False
+
+    @property
+    def _resting(self) -> bool:
+        """Stopped by rest(): backend, media and relay still up."""
+        return self._status.state == DaemonState.STOPPED and self.backend is not None
+
+    async def rest(self, goto_sleep: bool = True) -> "DaemonState":
+        """Rest the robot (asleep, or limp where it is) and report STOPPED.
+
+        What ``/api/daemon/stop`` runs. Unlike ``stop()``, the backend, media
+        and central relay stay up, so the robot stays reachable (e.g. from
+        the phone after the desktop app closes); ``start()`` only wakes it.
+        Outside RUNNING (e.g. ERROR) it falls back to a full ``stop()``.
+        """
+        if self._resting:
+            return self._status.state
+        if self._status.state != DaemonState.RUNNING or self.backend is None:
+            return await self.stop(goto_sleep_on_stop=goto_sleep)
+
+        self.logger.info("Resting Reachy Mini...")
+        self._status.state = DaemonState.STOPPING
+        try:
+            if goto_sleep:
+                # Ends limp at the sleep pose, whatever the last app left.
+                await self.backend.reset_to_sleep()
+            else:
+                await self.backend.stop_running_move()
+                self.backend.set_motor_control_mode(MotorControlMode.Disabled)
+            self._status.state = DaemonState.STOPPED
+        except Exception as e:
+            self.logger.error(f"Error while resting Reachy Mini: {e}")
+            self._status.state = DaemonState.ERROR
+            self._status.error = str(e)
         return self._status.state
 
     async def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
@@ -615,7 +665,7 @@ class Daemon:
             ``LOCAL_APP`` state here before restart.
 
         """
-        if self._status.state == DaemonState.STOPPED:
+        if self._status.state == DaemonState.STOPPED and not self._resting:
             self.logger.warning("Daemon is already stopped.")
             return self._status.state
 
@@ -627,7 +677,12 @@ class Daemon:
             return self._status.state
 
         try:
-            if self._status.state in (DaemonState.STOPPING, DaemonState.ERROR):
+            # STOPPED here = resting: already asleep or limp.
+            if self._status.state in (
+                DaemonState.STOPPING,
+                DaemonState.ERROR,
+                DaemonState.STOPPED,
+            ):
                 goto_sleep_on_stop = False
 
             self.logger.info("Stopping Reachy Mini daemon...")

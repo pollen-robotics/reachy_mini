@@ -53,13 +53,17 @@ async def start_daemon(
 async def stop_daemon(
     goto_sleep: bool, daemon: Daemon = Depends(get_daemon)
 ) -> dict[str, str]:
-    """Stop the daemon, optionally putting the robot to sleep."""
+    """Stop the daemon: rest the robot (asleep, or limp where it is).
+
+    Media and the central relay stay up, so the robot stays reachable;
+    start wakes it again.
+    """
     if busy_lock.locked():
         raise HTTPException(status_code=409, detail="Daemon is busy.")
 
     async def stop(logger: logging.Logger) -> None:
         with busy_lock:
-            await daemon.stop(goto_sleep_on_stop=goto_sleep)
+            await daemon.rest(goto_sleep=goto_sleep)
 
     job_id = bg_job_register.run_command("daemon-stop", stop)
     return {"job_id": job_id}

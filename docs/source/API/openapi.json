@@ -671,7 +671,7 @@
     "/api/daemon/stop": {
       "post": {
         "summary": "Stop Daemon",
-        "description": "Stop the daemon, optionally putting the robot to sleep.",
+        "description": "Stop the daemon: rest the robot (asleep, or limp where it is).\n\nMedia and the central relay stay up, so the robot stays reachable;\nstart wakes it again.",
         "operationId": "stop_daemon_api_daemon_stop_post",
         "parameters": [
           {
