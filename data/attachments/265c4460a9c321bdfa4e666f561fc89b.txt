@@ -1,0 +1,1 @@
+WARNING  reachy_mini.nfc.reader:reader.py:620 NFC reader thread did not stop in time.

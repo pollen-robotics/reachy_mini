@@ -1,0 +1,1 @@
+WARNING  reachy_mini.media.central_signaling_relay:central_signaling_relay.py:2087 [Central Relay] Local session L2 started with no pending central session; ending it

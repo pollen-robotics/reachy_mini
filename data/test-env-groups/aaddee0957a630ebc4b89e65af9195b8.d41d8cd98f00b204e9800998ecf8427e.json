@@ -1,0 +1,1 @@
+{"id":"aaddee0957a630ebc4b89e65af9195b8.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_daemon_utils#test_find_serial_port_skips_the_nfc_board","name":"test_find_serial_port_skips_the_nfc_board","status":"passed","testResultsByEnv":{"default":"d2647718df7165013c28af015ad1e554"}}

@@ -1,0 +1,1 @@
+{"id":"e1a440f1846e84bd5dcc303c52ad199c.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_nfc#test_an_undecodable_tag_is_reported_not_taken_for_a_link_loss","name":"test_an_undecodable_tag_is_reported_not_taken_for_a_link_loss","status":"passed","testResultsByEnv":{"default":"ab9e7ec796472e31d0e7b8fdcfd3708d"}}

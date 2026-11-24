@@ -1,0 +1,1 @@
+WARNING  reachy_mini.media.central_signaling_relay:central_signaling_relay.py:1333 [Central Relay] 2 heartbeats failed in a row; reconnecting to central

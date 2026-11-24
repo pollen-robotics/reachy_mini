@@ -1,0 +1,2 @@
+INFO     reachy_mini.daemon.daemon:daemon.py:73 Daemon version: 1.15.0
+INFO     reachy_mini.daemon.daemon:daemon.py:136 Media disabled (--no-media). No camera, audio, or media server.

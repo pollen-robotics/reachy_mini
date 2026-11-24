@@ -1,0 +1,1 @@
+WARNING  reachy_mini.media.device_detection:device_detection.py:316 GStreamer device provider wasapi2deviceprovider not found

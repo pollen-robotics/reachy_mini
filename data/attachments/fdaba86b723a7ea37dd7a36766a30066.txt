@@ -1,0 +1,3 @@
+WARNING  reachy_mini.media.central_consumer:central_consumer.py:793 POST /send type=setPeerStatus -> HTTP 302: {"robots": [{"peerId": "untrusted"}], "type": "sessionStarted", "sessionId": "untrusted"}
+WARNING  reachy_mini.media.central_consumer:central_consumer.py:793 POST /send type=startSession -> HTTP 302: {"robots": [{"peerId": "untrusted"}], "type": "sessionStarted", "sessionId": "untrusted"}
+WARNING  reachy_mini.media.central_consumer:central_consumer.py:763 discovery error: RuntimeError('startSession: no response from central')

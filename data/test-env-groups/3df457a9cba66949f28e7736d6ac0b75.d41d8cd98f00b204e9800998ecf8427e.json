@@ -1,0 +1,1 @@
+{"id":"3df457a9cba66949f28e7736d6ac0b75.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_nfc#test_a_restart_during_a_long_job_never_runs_two_threads","name":"test_a_restart_during_a_long_job_never_runs_two_threads","status":"passed","testResultsByEnv":{"default":"7738499c4d00c6919018db3f65684e26"}}

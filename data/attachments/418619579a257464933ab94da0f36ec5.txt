@@ -1,0 +1,1 @@
+WARNING  reachy_mini.nfc.reader:reader.py:598 NFC reader disabled: the winnie_nfc driver cannot be imported.

@@ -1,0 +1,1 @@
+{"id":"b24de409a5c3aa30eb3b1c472b0cb3fe.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_nfc#test_a_serial_failure_still_reaches_the_reader_thread","name":"test_a_serial_failure_still_reaches_the_reader_thread","status":"passed","testResultsByEnv":{"default":"99ddbbb3f3d411ffb239cd5481595579"}}

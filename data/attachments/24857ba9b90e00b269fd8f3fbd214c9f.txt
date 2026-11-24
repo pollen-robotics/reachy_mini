@@ -1,0 +1,2 @@
+WARNING  _wifi_config_under_test:wifi_config.py:460 wifi_connect attempt 1/3 for 'X': SSID not found yet (No network with SSID 'X' found).
+WARNING  _wifi_config_under_test:wifi_config.py:460 wifi_connect attempt 2/3 for 'X': SSID not found yet (No network with SSID 'X' found).

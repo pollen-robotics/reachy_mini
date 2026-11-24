@@ -1,0 +1,1 @@
+{"id":"6f9e39c15402e263280fd6d8eb944d37.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests.unit_tests.test_nfc#test_a_missing_driver_disables_the_reader_without_failing","name":"test_a_missing_driver_disables_the_reader_without_failing","status":"passed","testResultsByEnv":{"default":"4bc1b6434bd12489549250dfe94dc2b6"}}

@@ -1,0 +1,1 @@
+Reachy Mini daemon is already running (PID: 42). No need to spawn a new one.
