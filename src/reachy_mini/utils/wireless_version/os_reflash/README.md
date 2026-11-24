@@ -8,11 +8,11 @@ It ships with the daemon rather than with the OS image, so a daemon update is
 enough to give a robot in the field the means to update its own OS. The daemon
 exposes it as:
 
-- `GET /api/update/os/available`: the running and the latest ReachyMiniOS
+- `GET /update/os/available`: the running and the latest ReachyMiniOS
   release;
-- `POST /api/update/os/start?version=<tag>&dry_run=<bool>`: reflash with a
+- `POST /update/os/start?version=<tag>&dry_run=<bool>`: reflash with a
   release of pollen-robotics/reachy-mini-os (the latest when no version),
-  followed with `GET /api/update/info?job_id=...`.
+  followed with `GET /update/info?job_id=...`.
 
 Only official releases can be flashed: the daemon resolves the tag to the
 release's `.zip` (and `.zip.sha256` when published), never an arbitrary URL.
@@ -68,7 +68,7 @@ HF tokens and cache, SSH keys kept; apps reinstalled on first boot.
 ## Testing
 
 ```bash
-curl -X POST 'http://reachy-mini.local:8000/api/update/os/start?dry_run=true'
+curl -X POST 'http://reachy-mini.local:8000/update/os/start?dry_run=true'
 # or directly on the robot:
 sudo bash reachy-os-upgrade.sh --dry-run <zip URL>
 ```
