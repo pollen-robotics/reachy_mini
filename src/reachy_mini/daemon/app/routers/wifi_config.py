@@ -434,7 +434,7 @@ WIFI_CONNECT_RETRY_DELAY = 3  # seconds between attempts
 WIFI_CONNECT_SCAN_SETTLE = 2  # seconds to let the rescan populate before connecting
 
 
-def _connect_station_with_rescan(ssid: str, password: str) -> None:
+def _connect_station_with_rescan(ssid: str, password: str | None) -> None:
     """Join an AP as a station, rescanning before each attempt.
 
     Only the transient SSID-not-found race (see the WIFI_CONNECT_* constants
@@ -478,7 +478,7 @@ def setup_wifi_connection(
         if is_hotspot:
             nmcli.device.wifi_hotspot(ssid=ssid, password=password)
         else:
-            _connect_station_with_rescan(ssid=ssid, password=password)
+            _connect_station_with_rescan(ssid=ssid, password=password or None)
         return
 
     logger.info("WiFi configuration already exists.")
