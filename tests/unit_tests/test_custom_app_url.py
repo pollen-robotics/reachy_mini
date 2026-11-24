@@ -70,3 +70,42 @@ def test_missing_everywhere_returns_none(monkeypatch, tmp_path):
         lambda *a, **k: SimpleNamespace(stdout="\n", returncode=0),
     )
     assert lcv._get_custom_app_url_from_file("nope_app") is None
+
+
+def test_ignores_custom_app_url_mentioned_in_class_docstring(monkeypatch, tmp_path):
+    """A documented attribute must not be mistaken for its assignment."""
+    pkg = _write_app(tmp_path, "some_app")
+    (pkg / "main.py").write_text(
+        '''class SomeApp:
+    """An app.
+
+    Attributes:
+        custom_app_url: URL where the app's web interface is served.
+        description: A human-readable description.
+    """
+
+    description = "An example Reachy Mini app"
+    custom_app_url: str | None = "http://0.0.0.0:7861/"
+''',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(lcv, "_get_app_site_packages", lambda *a, **k: tmp_path)
+
+    assert lcv._get_custom_app_url_from_file("some_app") == "http://0.0.0.0:7861/"
+
+
+def test_ignores_comments_and_non_literal_assignments(monkeypatch, tmp_path):
+    """Only a literal module or class attribute is safe to read statically."""
+    pkg = _write_app(tmp_path, "some_app")
+    (pkg / "main.py").write_text(
+        """# custom_app_url = "http://wrong.example/"
+base_url = "http://0.0.0.0:7862/"
+
+class SomeApp:
+    custom_app_url = base_url
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(lcv, "_get_app_site_packages", lambda *a, **k: tmp_path)
+
+    assert lcv._get_custom_app_url_from_file("some_app") is None
