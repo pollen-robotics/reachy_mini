@@ -1,6 +1,7 @@
 """Update router for Reachy Mini Daemon API.
 
-This module provides endpoints to check for updates, start updates, and monitor update status.
+This module provides endpoints to check for updates, start updates, and monitor update status,
+for the reachy_mini package and for the ReachyMiniOS image itself.
 """
 
 import logging
@@ -11,7 +12,12 @@ from fastapi import APIRouter, HTTPException, WebSocket
 
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.bg_job_register import JobInfo
-from reachy_mini.daemon.telemetry import telemetry
+from reachy_mini.daemon.telemetry import os_image_version, telemetry
+from reachy_mini.utils.wireless_version.os_update import (
+    OSReleaseError,
+    get_os_release,
+    reflash_os,
+)
 from reachy_mini.utils.wireless_version.update import update_reachy_mini
 from reachy_mini.utils.wireless_version.update_available import (
     get_install_source,
@@ -127,6 +133,46 @@ def start_update_from_ref(git_ref: str) -> dict[str, str]:
         await _run_update(logger, git_ref=git_ref)
 
     job_uuid = bg_job_register.run_command("update_reachy_mini", update_wrapper)
+    return {"job_id": job_uuid}
+
+
+# --- OS reflash (rewrite the CM4 eMMC with a ReachyMiniOS release) ---
+
+
+@router.get("/os/available")
+def os_available() -> dict[str, str | None]:
+    """Get the running ReachyMiniOS version and the latest released one."""
+    try:
+        latest = get_os_release()["tag"]
+    except (OSReleaseError, requests.RequestException):
+        latest = None
+    return {"current_version": os_image_version(), "latest_version": latest}
+
+
+@router.post("/os/start")
+def start_os_reflash(
+    version: str | None = None, dry_run: bool = False
+) -> dict[str, str]:
+    """Reflash the robot with a ReachyMiniOS release (the latest when no version), then reboot.
+
+    Needs pollen to be allowed to run the upgrade script as root. With
+    ``dry_run`` the robot does everything but the write and reboots unchanged.
+    """
+    if busy_lock.locked():
+        raise HTTPException(status_code=400, detail="Update already in progress")
+
+    try:
+        tag = get_os_release(version)["tag"]
+    except OSReleaseError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except requests.RequestException as e:
+        raise HTTPException(status_code=503, detail=f"GitHub API error: {e}")
+
+    async def reflash_wrapper(logger: logging.Logger) -> None:
+        with busy_lock:
+            await reflash_os(logger, tag=tag, dry_run=dry_run)
+
+    job_uuid = bg_job_register.run_command("reflash_os", reflash_wrapper)
     return {"job_id": job_uuid}
 
 

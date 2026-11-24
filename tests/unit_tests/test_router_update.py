@@ -243,3 +243,49 @@ def test_start_from_ref_busy(monkeypatch, router_app):
 
     assert resp.status_code == 400
     run.assert_not_called()
+
+
+# --- OS reflash ---
+
+
+def test_os_available(monkeypatch, router_app):
+    """os/available reports the running image and the latest release."""
+    monkeypatch.setattr(update, "os_image_version", lambda: "v1.0.0")
+    monkeypatch.setattr(update, "get_os_release", lambda: {"tag": "v1.1.1"})
+    client = router_app(update.router)
+
+    resp = client.get("/update/os/available")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"current_version": "v1.0.0", "latest_version": "v1.1.1"}
+
+
+def test_os_start(monkeypatch, router_app):
+    """os/start resolves the release, then schedules the reflash job."""
+    monkeypatch.setattr(update, "get_os_release", lambda tag: {"tag": tag})
+    run = MagicMock(return_value="job-os")
+    monkeypatch.setattr(bg_job_register, "run_command", run)
+    client = router_app(update.router)
+
+    resp = client.post("/update/os/start", params={"version": "v1.1.1"})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"job_id": "job-os"}
+    assert run.call_args[0][0] == "reflash_os"
+
+
+def test_os_start_unknown_release(monkeypatch, router_app):
+    """os/start returns 404 for a release that does not exist."""
+
+    def _missing(tag):
+        raise update.OSReleaseError("No ReachyMiniOS release v9")
+
+    monkeypatch.setattr(update, "get_os_release", _missing)
+    run = MagicMock()
+    monkeypatch.setattr(bg_job_register, "run_command", run)
+    client = router_app(update.router)
+
+    resp = client.post("/update/os/start", params={"version": "v9"})
+
+    assert resp.status_code == 404
+    run.assert_not_called()

@@ -1,0 +1,14 @@
+[Unit]
+Description=Reinstall the apps a self-reflash recorded
+After=reachy-mini-daemon.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/home/pollen/.config/reachy_mini/restore-apps.json
+
+[Service]
+Type=oneshot
+User=pollen
+ExecStart=/usr/bin/python3 -u /usr/local/lib/reachy-restore-apps.py
+TimeoutStartSec=3600
+
+[Install]
+WantedBy=multi-user.target

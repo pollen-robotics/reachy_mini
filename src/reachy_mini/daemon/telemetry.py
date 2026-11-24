@@ -109,7 +109,8 @@ def user_enabled() -> bool:
     return DEFAULT_ENABLED if value is None else value
 
 
-def _os_image_version() -> str | None:
+def os_image_version() -> str | None:
+    """Return the ReachyMiniOS image version from VERSION.txt, if any."""
     try:
         for line in OS_IMAGE_VERSION_PATH.read_text().splitlines():
             key, _, value = line.partition(":")
@@ -122,7 +123,7 @@ def _os_image_version() -> str | None:
 
 def os_fields(form_factor: str) -> dict[str, str]:
     """Return ``os_type`` and ``os_version``: the OS image on Wireless, the host OS otherwise."""
-    image_version = _os_image_version() if form_factor == "wireless" else None
+    image_version = os_image_version() if form_factor == "wireless" else None
     if image_version:
         return {"os_type": "reachy_mini_os", "os_version": image_version}
 
