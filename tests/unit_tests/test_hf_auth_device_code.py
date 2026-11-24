@@ -348,11 +348,11 @@ def test_authorized_session_gets_bounded_ttl(
 
     session = hf_auth.DeviceCodeSession(
         session_id="s10",
-        expires_at=time.time() + 900,  # original device-code expiry
+        expires_at=time.monotonic() + 900,  # original device-code expiry
     )
     hf_auth._device_code_sessions[session.session_id] = session
 
-    before = time.time()
+    before = time.monotonic()
     asyncio.run(hf_auth._run_device_code_poll(session, dict(_DEVICE_INFO)))
 
     assert session.status == "authorized"
@@ -364,12 +364,12 @@ def test_cleanup_prunes_authorized_after_expiry() -> None:
     live = hf_auth.DeviceCodeSession(
         session_id="live",
         status="authorized",
-        expires_at=time.time() + 300,
+        expires_at=time.monotonic() + 300,
     )
     stale = hf_auth.DeviceCodeSession(
         session_id="stale",
         status="authorized",
-        expires_at=time.time() - 1,
+        expires_at=time.monotonic() - 1,
     )
     hf_auth._device_code_sessions["live"] = live
     hf_auth._device_code_sessions["stale"] = stale
@@ -410,3 +410,15 @@ def test_wireless_first_run_links_the_robot_with_a_refreshable_token(
     assert asyncio.run(scenario()) == {"status": "authorized", "username": ""}
     assert hf_auth.get_hf_token() == "device-token"
     assert hf_auth._read_store().refresh_token == "r1"
+
+
+def test_wall_clock_jump_keeps_a_pending_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fresh robot's first NTP sync jumps the clock by days mid sign-in."""
+    hf_auth._device_code_sessions["jump"] = hf_auth.DeviceCodeSession(session_id="jump")
+
+    real_time = time.time
+    monkeypatch.setattr(hf_auth.time, "time", lambda: real_time() + 2 * 86400)
+
+    assert hf_auth.get_device_code_session_status("jump")["status"] == "pending"

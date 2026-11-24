@@ -122,7 +122,7 @@ def test_expired_session_not_returned(monkeypatch: pytest.MonkeyPatch) -> None:
     """Getters trigger cleanup, so an expired session reads as gone."""
     monkeypatch.setattr(hf_auth, "OAUTH_CLIENT_ID", "cid")
     sid = hf_auth.create_oauth_session(wireless_version=True)["session_id"]
-    hf_auth._oauth_sessions[sid].expires_at = time.time() - 1
+    hf_auth._oauth_sessions[sid].expires_at = time.monotonic() - 1
     assert hf_auth.get_oauth_session(sid) is None
     assert hf_auth.get_oauth_session_status(sid)["status"] == "expired"
 

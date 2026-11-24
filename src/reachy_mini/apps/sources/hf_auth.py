@@ -221,8 +221,9 @@ class OAuthSession:
     username: str | None = None
     error_message: str | None = None
     lifecycle_generation: int = 0
+    # Monotonic: a fresh robot's first NTP sync jumps the wall clock by days.
     expires_at: float = field(
-        default_factory=lambda: time.time() + _OAUTH_SESSION_TTL_S
+        default_factory=lambda: time.monotonic() + _OAUTH_SESSION_TTL_S
     )  # 10 min expiry
 
 
@@ -231,7 +232,7 @@ _oauth_sessions: dict[str, OAuthSession] = {}
 
 
 def _drop_expired(sessions: dict[str, Any]) -> None:
-    now = time.time()
+    now = time.monotonic()
     for session_id in [sid for sid, s in sessions.items() if s.expires_at < now]:
         del sessions[session_id]
 
@@ -456,7 +457,7 @@ class DeviceCodeSession:
     error_message: str | None = None
     lifecycle_generation: int = 0
     relay_started: bool = False  # set once the central relay has been brought up
-    expires_at: float = field(default_factory=lambda: time.time() + 900)
+    expires_at: float = field(default_factory=lambda: time.monotonic() + 900)
     # Keep a strong reference to the polling task so it is not garbage-collected.
     task: asyncio.Task[None] | None = None
     # Set to request cancellation; observed by the polling thread's on_pending hook.
@@ -484,7 +485,7 @@ def _complete_device_login(response: Any, session: DeviceCodeSession) -> bool:
         session.status = "authorized"
         # Bound the authorized session's lifetime so _drop_expired reclaims it after
         # the frontend has read the result (rather than leaking until daemon restart).
-        session.expires_at = time.time() + _AUTHORIZED_SESSION_TTL_S
+        session.expires_at = time.monotonic() + _AUTHORIZED_SESSION_TTL_S
     return True
 
 
@@ -504,7 +505,7 @@ async def start_device_code_login() -> dict[str, Any]:
     session_id = secrets.token_urlsafe(16)
     session = DeviceCodeSession(
         session_id=session_id,
-        expires_at=time.time() + int(device_info.get("expires_in", 900)),
+        expires_at=time.monotonic() + int(device_info.get("expires_in", 900)),
         lifecycle_generation=lifecycle_generation,
     )
     _device_code_sessions[session_id] = session
