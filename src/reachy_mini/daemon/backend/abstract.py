@@ -2877,6 +2877,7 @@ class Backend:
                 {
                     "command": "play_recorded_move",
                     "status": "error",
+                    "move_name": cmd.move_name,
                     "error": str(e),
                 }
             )
