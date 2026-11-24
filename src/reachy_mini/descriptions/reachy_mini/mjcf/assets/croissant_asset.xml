@@ -1,0 +1,7 @@
+<mujocoinclude>
+    <asset>
+        <texture type="2d" name="croissant_texture" file="../assets/textures/croissant_texture.png"/>
+        <material name="croissant_mat" texture="croissant_texture" specular="0.5" shininess="0.5"/>
+        <mesh file="../assets/meshes/croissant/croissant_object.obj" name="croissant"/>
+    </asset>
+</mujocoinclude>

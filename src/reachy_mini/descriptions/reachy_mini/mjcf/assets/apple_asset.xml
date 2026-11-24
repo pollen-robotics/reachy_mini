@@ -1,0 +1,7 @@
+<mujocoinclude>
+    <asset>
+        <texture type="2d" name="apple_texture" file="../assets/textures/apple_texture.png"/>
+        <material name="apple_mat" texture="apple_texture" specular="0.5" shininess="0.5"/>
+        <mesh file="../assets/meshes/apple/apple_object.obj" name="apple"/>
+    </asset>
+</mujocoinclude>
