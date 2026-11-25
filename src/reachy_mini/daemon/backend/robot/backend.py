@@ -142,6 +142,8 @@ class RobotBackend(Backend):
         # loop and served by `get_imu_data`. Only `_read_imu` (see its
         # docstring) may touch the BMI088.
         self._last_imu: tuple[ImuDataMsg, float] | None = None
+        # Temperature drifts slowly: re-read it once a second, not every tick.
+        self._imu_temperature: tuple[float, float] | None = None
 
     # A cached reading older than this is treated as absent: 0.5 s is 25
     # control-loop periods at 50 Hz, so the loop is stalled (e.g. died on a
@@ -540,12 +542,18 @@ class RobotBackend(Backend):
             # Read gyroscope (returns tuple of x, y, z in rad/s)
             gyro_x, gyro_y, gyro_z = self.bmi088.read_gyroscope(deg_per_s=False)
 
-            # Get quaternion orientation (dt = control loop period)
+            # Get quaternion orientation (dt = control loop period).
+            # Reuse the readings above: the filter normalizes accel, gyro is rad/s.
             dt = 1.0 / self.control_loop_frequency  # 0.02 seconds at 50Hz
-            quat = self.bmi088.get_quat(dt)
+            quat = self.bmi088.get_quat(
+                dt, acc=(accel_x, accel_y, accel_z), gyr=(gyro_x, gyro_y, gyro_z)
+            )
 
-            # Read temperature in Celsius
-            temperature = self.bmi088.read_temperature()
+            # Read temperature in Celsius, at most once a second
+            now = time.monotonic()
+            if self._imu_temperature is None or now - self._imu_temperature[1] >= 1.0:
+                self._imu_temperature = (self.bmi088.read_temperature(), now)
+            temperature = self._imu_temperature[0]
 
             # Convert all numpy types to native Python floats for JSON serialization
             return ImuDataMsg(
