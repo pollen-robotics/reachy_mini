@@ -1,8 +1,16 @@
 # Bluetooth reset and restart tools (Wireless)
 
-If you need to reset the robot's Wi-Fi hotspot, restart the daemon, or run other maintenance commands over Bluetooth, use one of the options below. **Prefer the official Reachy Mini Control app** when you are on a laptop or desktop: it bundles a Bluetooth console and avoids juggling a separate browser or phone app.
+If you need to reset the robot's Wi-Fi hotspot, restart the daemon, or run other maintenance commands over Bluetooth, use one of the options below. **The easiest is the Reachy Mini mobile app.** On a laptop or desktop, the Reachy Mini Control app bundles a Bluetooth console too.
 
-## 1. Reachy Mini Control — Bluetooth console (recommended)
+## 1. Reachy Mini mobile app (recommended)
+
+Install the **Reachy Mini** app from the [App Store](https://apps.apple.com/us/app/reachy-mini/id6766823749) or [Google Play](https://play.google.com/store/apps/details?id=com.pollenrobotics.reachymini), then open its **Bluetooth tools** (the wrench icon on the robot list). Stay close to the robot and enter its PIN (see [PIN code](#pin-code) below).
+
+From there you can check the robot's status, read its logs, update its software, change its Wi-Fi network, and run every recovery command: restart the robot software, switch to hotspot mode, forget all Wi-Fi networks, or restore the factory software.
+
+👉 Step by step, with screenshots: **[Bluetooth tools](../mobile_app/bluetooth_tools.md)**.
+
+## 2. Reachy Mini Control: Bluetooth console
 
 Use the **Reachy Mini Control** desktop app ([download](https://pollen-robotics.com/reachy-mini/download/)). Bluetooth must be enabled on your computer.
 
@@ -14,26 +22,26 @@ Use the **Reachy Mini Control** desktop app ([download](https://pollen-robotics.
 
 [![control-app-wifi-wizard-bluetooth-console.png](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/control-app-wifi-wizard-bluetooth-console.png)]()
 
-From the Bluetooth console you can reset the hotspot, check network status, and run the same kind of commands as in the other methods below.
+From the Bluetooth console you can reset the hotspot, check network status, and run the same kind of commands as in the other methods on this page.
 
 > **Note:** In some app versions the entry link may read **First time connecting to your WiFi...** instead of **First time WiFi setup**; it opens the same Wi-Fi setup flow.
 
-## 2. Web Bluetooth dashboard (phone or desktop browser)
+## 3. Web Bluetooth dashboard (phone or desktop browser)
 
 With a smartphone or desktop and a **Bluetooth-capable browser** (Chrome, Opera, or Edge), open the standalone tool: [Bluetooth tool](https://pollen-robotics.github.io/reachy_mini/). You can reset the hotspot, check network status, and more without installing the desktop app.
 
 If your device or browser does not support the Web Bluetooth API, use the desktop app (above) or the nRF Connect method below.
 
-## 3. nRF Connect (advanced)
+## 4. nRF Connect (advanced)
 
 Reachy Mini wireless exposes a Bluetooth GATT interface so you can reset the Wi-Fi hotspot or the daemon from a generic BLE client.
 
-### 3.1 Install nRF Connect
+### 4.1 Install nRF Connect
 
 - **Android**: [Google Play](https://play.google.com/store/apps/details?id=no.nordicsemi.android.mcp&hl=en-US&pli=1)
 - **iOS**: [App Store](https://apps.apple.com/us/app/nrf-connect-for-mobile/id1054362403)
 
-### 3.2 Scan and connect
+### 4.2 Scan and connect
 
 1. Open nRF Connect.
 2. Scan for devices and select **ReachyMini**.
@@ -42,7 +50,7 @@ Reachy Mini wireless exposes a Bluetooth GATT interface so you can reset the Wi-
 
 3. Connect to the device.
 
-### 3.3 Unknown service & WRITE section
+### 4.3 Unknown service & WRITE section
 
 - Open the **Unknown Service**.
 - Use the **WRITE** section to send commands.
@@ -50,7 +58,7 @@ Reachy Mini wireless exposes a Bluetooth GATT interface so you can reset the Wi-
 
 [![bluetooth_2.jpg](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/bluetooth_2.jpg)]()
 
-### 3.4 Sending commands
+### 4.4 Sending commands
 
 Commands are sent as **hexadecimal strings** (or as plain text such as `STATUS` or `CMD_HOTSPOT`). Use [this converter](https://www.rapidtables.com/convert/number/ascii-to-hex.html) if you need ASCII → hex.
 
@@ -79,7 +87,10 @@ Here the PIN is `12345`.
 | PIN_00018              | 50494E5F3030303138                  |
 | CMD_HOTSPOT            | 434D445F484F5453504F54              |
 | CMD_RESTART_DAEMON     | 434D445F524553544152545F4441454D4F4E |
+| CMD_WIFI_RESET         | 434D445F574946495F5245534554         |
 | CMD_SOFTWARE_RESET     | 434D445F534F4654574152455F5245534554 |
+
+**CMD_HOTSPOT** only leaves the current Wi-Fi: the robot rejoins its saved networks at the next boot. **CMD_WIFI_RESET** deletes every saved Wi-Fi network, so the robot falls back to its `reachy-mini-ap` hotspot for good. Use it when the robot keeps joining a network you can't reach it on.
 
 If you use **CMD_SOFTWARE_RESET**, the robot reboots and may take **about 5 minutes** before it is reachable again.
 

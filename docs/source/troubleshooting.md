@@ -14,6 +14,8 @@ To restart your robot, press OFF, wait 5 seconds, then press ON. This simple pro
 
 **How to update the software:**
 
+- **If you are using the mobile app** (Wireless)
+  The app asks you to update when you connect to a robot with older software. If the robot isn't reachable, use **Update software** in the [Bluetooth tools](./platforms/mobile_app/bluetooth_tools.md).
 - **If you are using Reachy Mini Control**
   From the "⚙️" settings tab, "Check for updates". If an update is available, click on "Update now".
 - **If you are using a cloned repository**  
@@ -275,16 +277,29 @@ You do not need to install them.
 ## 🔌 Connection & Reachy Mini Control
 
 <details>
+<summary><strong>Can I use the mobile app with a Reachy Mini Lite?</strong></summary>
+
+Yes, through **Reachy Mini Control** running on the computer the Lite is plugged into. See [Using Reachy Mini Lite: from your phone](./platforms/reachy_mini_lite/usage.md#3-from-your-phone).
+
+If the Lite doesn't show up in the app, check that Reachy Mini Control is still running and connected to the robot, and that both apps are signed in with the same Hugging Face account.
+
+</details>
+
+<details>
 <summary><strong>How do I connect the robot to Wi-Fi?</strong></summary>
 
-See the [Reachy Mini Wireless guide](./platforms/reachy_mini/get_started.md) for detailed instructions on connecting to Wi-Fi.
+The easiest way is the mobile app: tap **Set up a new Reachy**, it connects the robot to Wi-Fi over Bluetooth. See [Mobile app: getting started](./platforms/mobile_app/get_started.md). To move an already set up robot to another network, use **Change Wi-Fi network** in the [Bluetooth tools](./platforms/mobile_app/bluetooth_tools.md).
+
+Without a phone, see the [Reachy Mini Wireless guide](./platforms/reachy_mini/get_started.md).
 
 </details>
 
 <details>
 <summary><strong>How do I reset the Wi-Fi hotspot?</strong></summary>
 
-If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connect or want to change the network), follow the instructions in the [Wi-Fi Reset Guide](./platforms/reachy_mini/reset.md).
+If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connect or want to change the network), the easiest way is the mobile app's [Bluetooth tools](./platforms/mobile_app/bluetooth_tools.md): **Switch to hotspot mode**, or **Forget all Wi-Fi networks** to make the robot drop every saved network.
+
+Without the mobile app, follow the [Wi-Fi Reset Guide](./platforms/reachy_mini/reset.md).
 
 </details>
 
@@ -297,7 +312,7 @@ The PIN is the last 5 digits of the serial number. If hardware was replaced, the
 dfu-util -l
 ```
 
-Use the `serial` field of the `Reachy Mini Audio DFU` lines, e.g. `serial="xxxxxxxx12345"` gives the PIN `12345`. See the [Wi-Fi Reset Guide](./platforms/reachy_mini/reset.md) for how to send it.
+Use the `serial` field of the `Reachy Mini Audio DFU` lines, e.g. `serial="xxxxxxxx12345"` gives the PIN `12345`. Enter it in the mobile app's [Bluetooth tools](./platforms/mobile_app/bluetooth_tools.md), or see the [Wi-Fi Reset Guide](./platforms/reachy_mini/reset.md) for the other Bluetooth tools.
 
 </details>
 
@@ -369,6 +384,8 @@ Many conference and hotel WiFi networks enable **client isolation**, which preve
 **Workaround:** Use a mobile phone hotspot. Connect both the robot and your computer to the hotspot. This provides a simple network where devices can see each other.
 
 Alternatively, use a USB-C-to-Ethernet adapter and an Ethernet cable to connect directly to the robot (Wireless version).
+
+**The robot joined such a network and is now unreachable** (it rejoins it at every boot and the `reachy-mini-ap` hotspot never comes back): use **Forget all Wi-Fi networks** in the mobile app's [Bluetooth tools](./platforms/mobile_app/bluetooth_tools.md), then set it up again on another network.
 
 </details>
 
