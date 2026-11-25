@@ -1,0 +1,1 @@
+WARNING  reachy_mini.io.ws_client:ws_client.py:224 Lost connection with ws://127.0.0.1:1234/ws/sdk, reconnecting.

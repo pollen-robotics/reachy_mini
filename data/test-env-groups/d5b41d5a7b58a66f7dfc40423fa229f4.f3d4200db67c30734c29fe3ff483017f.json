@@ -1,0 +1,1 @@
+{"id":"d5b41d5a7b58a66f7dfc40423fa229f4.f3d4200db67c30734c29fe3ff483017f","fullName":"tests.unit_tests.test_ws_client#test_send_task_request_on_closed_socket_forgets_the_task","name":"test_send_task_request_on_closed_socket_forgets_the_task[error0]","status":"passed","testResultsByEnv":{"default":"9ed7d0d149207bd59f0266fdb12ce505"}}

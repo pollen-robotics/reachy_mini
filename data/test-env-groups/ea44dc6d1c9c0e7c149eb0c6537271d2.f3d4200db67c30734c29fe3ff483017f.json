@@ -1,0 +1,1 @@
+{"id":"ea44dc6d1c9c0e7c149eb0c6537271d2.f3d4200db67c30734c29fe3ff483017f","fullName":"tests.unit_tests.test_ws_client#test_send_command_on_closed_socket_raises_connection_error","name":"test_send_command_on_closed_socket_raises_connection_error[error0]","status":"passed","testResultsByEnv":{"default":"6ec6ccb213c3e57afc567345b48cb365"}}

@@ -1,2 +1,0 @@
-INFO     logs_job_ca28b5dc-2588-497b-bf9c-1f5552039b44:test_bg_job_register.py:93 working
-INFO     logs_job_ca28b5dc-2588-497b-bf9c-1f5552039b44:bg_job_register.py:102 Job 'test' completed successfully
