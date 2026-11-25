@@ -16,8 +16,6 @@ import pytest
 import websockets.exceptions
 from websockets.sync.server import ServerConnection, serve
 
-import reachy_mini.io.ws_client as ws_client
-
 from reachy_mini.io.protocol import (
     DaemonState,
     DaemonStatus,
@@ -182,6 +180,14 @@ CLOSED_SOCKET_ERRORS = [
     websockets.exceptions.ConnectionClosedOK(None, None),
 ]
 
+GOTO_REQUEST = GotoTaskRequest(
+    head=None,
+    antennas=[0.0, 0.0],
+    duration=1.0,
+    method=InterpolationTechnique.MIN_JERK,
+    body_yaw=None,
+)
+
 
 def _client_whose_send_fails(
     mock_connect: MagicMock, error: websockets.exceptions.ConnectionClosed
@@ -217,29 +223,13 @@ def test_send_task_request_on_closed_socket_forgets_the_task(
 ) -> None:
     """send_task_request raises ConnectionError and leaves no task behind."""
     client = _client_whose_send_fails(mock_connect, error)
-    request = GotoTaskRequest(
-        head=None,
-        antennas=[0.0, 0.0],
-        duration=1.0,
-        method=InterpolationTechnique.MIN_JERK,
-        body_yaw=None,
-    )
 
     with pytest.raises(ConnectionError) as exc_info:
-        client.send_task_request(request)
+        client.send_task_request(GOTO_REQUEST)
 
     assert exc_info.value.__cause__ is error
     assert client.tasks == {}
     client.disconnect()
-
-
-GOTO_REQUEST = GotoTaskRequest(
-    head=None,
-    antennas=[0.0, 0.0],
-    duration=1.0,
-    method=InterpolationTechnique.MIN_JERK,
-    body_yaw=None,
-)
 
 
 @patch("reachy_mini.io.ws_client.ws_sync.connect")
