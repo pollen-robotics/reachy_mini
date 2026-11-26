@@ -41,6 +41,16 @@
       title: Getting started
   title: Simulation
 - sections:
+    - local: platforms/mobile_app/get_started
+      title: Getting started
+    - local: platforms/mobile_app/first_wake_up
+      title: First wake-up
+    - local: platforms/mobile_app/using
+      title: Using the app
+    - local: platforms/mobile_app/bluetooth_tools
+      title: Bluetooth tools
+  title: Mobile app
+- sections:
     - local: SDK/readme
       title: SDK Overview
     - local: SDK/installation

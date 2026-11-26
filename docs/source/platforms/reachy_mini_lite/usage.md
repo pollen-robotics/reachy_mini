@@ -38,7 +38,17 @@ Reachy Mini can run "Apps" — autonomous behaviors packaged for the robot (like
 
 > **Note:** When an App is running, it takes control of the robot. You cannot run Python scripts while an App is active.
 
-## 3. Coding Quickstart 🐍
+## 3. From your phone 📲
+
+The [Reachy Mini mobile app](../mobile_app/get_started.md) works with a Lite too. There is no setup to do in the mobile app:
+
+1. On the computer the Lite is plugged into, keep **Reachy Mini Control** open and connected to the robot.
+2. Sign in to Hugging Face in Reachy Mini Control.
+3. Sign in to the mobile app with the **same Hugging Face account**.
+
+The Lite then shows up in the app's robot list. The phone reaches it through Hugging Face (WebRTC), so it doesn't need to be on the same network as the computer. From there you can use the phone apps (JavaScript apps, **Runs on phone**) with your Lite. See [Using the mobile app](../mobile_app/using.md).
+
+## 4. Coding Quickstart 🐍
 
 Ready to write your own logic? Reachy Mini is controlled via a simple Python SDK.
 
