@@ -2386,16 +2386,16 @@ wheels = [
 
 [[package]]
 name = "pollen-bmi088-imu-library"
-version = "1.0.0"
+version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ahrs" },
     { name = "numpy" },
     { name = "smbus3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a1/93/00a9cecb17b9d2b7224247155cca03bbc4b7f50266611114b4bdeea488db/pollen_bmi088_imu_library-1.0.0.tar.gz", hash = "sha256:08e8a93ed3a70f0a08ab447fdaddb4a8780b4f1320c40fbea2d4660938398654", size = 8352, upload-time = "2026-11-02T14:41:18.07Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/73/a1/0e96bb7f98c3a1551d065665b90bae681271c91811bf755bfc0fb75d702c/pollen_bmi088_imu_library-1.1.0.tar.gz", hash = "sha256:e608960f634c71ee861f7023b4f9fcb3e1556b836da8cb2bd6594c079c5d0778", size = 8934, upload-time = "2026-11-25T16:06:04.656Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e3/69/35e5af2a444b8735cd0639f7642a64e51c5d2ca9a87dd65a4f939949203d/pollen_bmi088_imu_library-1.0.0-py3-none-any.whl", hash = "sha256:7193cbac8854d55ca89028b8c5c66a0d4f7d3c1bd02d02e6728d0336f2b14f20", size = 8132, upload-time = "2026-11-02T14:41:16.476Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/68/c402e1c3925cd4e2ae4ed8cb204e66e0378705fd86b6b3d4fd2d3646c1ff/pollen_bmi088_imu_library-1.1.0-py3-none-any.whl", hash = "sha256:928a200dda4b11fe56f74adef2e511de3ca6fb3a42cd4a5889fb5fdc7165c358", size = 8392, upload-time = "2026-11-25T16:06:03.678Z" },
 ]
 
 [[package]]
@@ -3376,7 +3376,7 @@ requires-dist = [
     { name = "pip", specifier = ">=26.2.2" },
     { name = "placo", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = "==0.9.14" },
     { name = "platformdirs" },
-    { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.0.0" },
+    { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.1.0" },
     { name = "psutil" },
     { name = "pulsectl", marker = "sys_platform == 'linux'", specifier = ">=24.1.0" },
     { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20240210" },
