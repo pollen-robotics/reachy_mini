@@ -1,2 +1,0 @@
-INFO     reachy_mini.media.media_server:media_server.py:499 Pipeline latency (live=False, min_latency=0, max_latency=18446744073709551615)
-WARNING  reachy_mini.nfc.reader:reader.py:620 NFC reader thread did not stop in time.

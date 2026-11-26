@@ -1,2 +1,0 @@
-INFO     logs_job_8db9b20b-5c4a-4520-a71b-acbe11ebab57:test_bg_job_register.py:42 working
-INFO     logs_job_8db9b20b-5c4a-4520-a71b-acbe11ebab57:bg_job_register.py:102 Job 'test' completed successfully

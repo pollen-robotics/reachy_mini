@@ -1,0 +1,2 @@
+INFO     logs_job_e450a5b6-7848-4a9b-88ca-d3f493ec01b7:test_bg_job_register.py:42 working
+INFO     logs_job_e450a5b6-7848-4a9b-88ca-d3f493ec01b7:bg_job_register.py:102 Job 'test' completed successfully

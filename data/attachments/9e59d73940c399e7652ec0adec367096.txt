@@ -1,0 +1,2 @@
+INFO     logs_job_c537566c-ba8d-47e6-96fd-91d478beac51:test_bg_job_register.py:42 working
+INFO     logs_job_c537566c-ba8d-47e6-96fd-91d478beac51:bg_job_register.py:102 Job 'test' completed successfully
