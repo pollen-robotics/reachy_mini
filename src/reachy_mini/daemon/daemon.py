@@ -21,9 +21,9 @@ from reachy_mini.daemon.utils import (
     find_serial_port,
     get_ip_address,
 )
+from reachy_mini.daemon.ws_server import WSServer
 from reachy_mini.io.jsonrpc import JsonRpcError, make_error, parse_request
 from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
-from reachy_mini.io.ws_server import WSServer
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
 from .backend.mockup_sim import MockupSimBackend
