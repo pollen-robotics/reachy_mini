@@ -30,10 +30,11 @@ import logging
 import platform
 import time
 from threading import Thread
+
 import gi
 
-from reachy_mini.daemon.utils import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
 from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
+from reachy_mini.utils.daemon import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
 
 gi.require_version("Gst", "1.0")
 from gi.repository import GLib, Gst  # noqa: E402

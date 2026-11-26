@@ -12,9 +12,9 @@ import gi
 import numpy as np
 from numpy.typing import NDArray
 
-from reachy_mini.daemon.utils import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
 from reachy_mini.media.camera_constants import CameraSpecs
 from reachy_mini.media.camera_utils import intrinsics_for_size
+from reachy_mini.utils.daemon import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
 from reachy_mini.vision.face_detector import Face, FaceDetector
 
 gi.require_version("Gst", "1.0")

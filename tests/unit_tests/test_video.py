@@ -6,7 +6,6 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 
-from reachy_mini.daemon.utils import is_local_camera_available
 from reachy_mini.media.camera_base import CameraBase
 from reachy_mini.media.camera_constants import (
     CameraResolution,
@@ -14,6 +13,7 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
+from reachy_mini.utils.daemon import is_local_camera_available
 
 SIGNALING_HOST = "reachy-mini.local"
 

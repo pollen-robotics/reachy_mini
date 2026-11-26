@@ -6,7 +6,7 @@ from typing import List
 
 from rustypot import Xl330PyController
 
-from reachy_mini.daemon.utils import find_serial_port
+from reachy_mini.utils.daemon import find_serial_port
 
 SERIAL_TIMEOUT = 0.01
 COMMANDS_BITS_LENGTH = {

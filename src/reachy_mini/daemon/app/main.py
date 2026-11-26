@@ -54,13 +54,13 @@ from reachy_mini.daemon.app.startup_app import (
 )
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.daemon.telemetry import telemetry as daemon_telemetry
-from reachy_mini.daemon.utils import SimulationMode
 from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
     write_asoundrc_to_home,
 )
 from reachy_mini.motion.recorded_move import preload_default_datasets
 from reachy_mini.nfc import NfcReader
+from reachy_mini.utils.daemon import SimulationMode
 from reachy_mini.utils.discovery import MdnsServiceRegistration
 from reachy_mini.utils.wireless_version.startup_check import (
     run_wireless_startup_checks,

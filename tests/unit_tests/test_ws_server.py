@@ -22,8 +22,8 @@ import pytest
 from fastapi import WebSocket, WebSocketDisconnect
 
 from reachy_mini.daemon.daemon import Daemon
+from reachy_mini.daemon.ws_server import WSServer
 from reachy_mini.io.protocol import DaemonState, DaemonStatus
-from reachy_mini.io.ws_server import WSServer
 
 STATUS = DaemonStatus(
     robot_name="test",

@@ -47,10 +47,6 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.daemon.utils import (
-    CAMERA_PIPE_NAME,
-    CAMERA_SOCKET_PATH,
-)
 from reachy_mini.media.camera_base import CameraBase
 from reachy_mini.media.camera_constants import (
     CameraResolution,
@@ -58,6 +54,10 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.gstreamer_utils import get_sample, handle_default_bus_message
+from reachy_mini.utils.daemon import (
+    CAMERA_PIPE_NAME,
+    CAMERA_SOCKET_PATH,
+)
 
 try:
     import gi
