@@ -7,13 +7,13 @@ from typing import Optional
 from rich.console import Console
 
 import reachy_mini
-from reachy_mini.daemon.utils import find_serial_port
 from reachy_mini.tools.setup_motor import (
     check_configuration,
     light_led_down,
     light_led_up,
     setup_motor,
 )
+from reachy_mini.utils.daemon import find_serial_port
 from reachy_mini.utils.hardware_config.parser import parse_yaml_config
 
 BAUDRATE = 1000000

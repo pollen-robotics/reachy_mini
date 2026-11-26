@@ -1,4 +1,4 @@
-"""Tests for reachy_mini.daemon.utils.
+"""Tests for reachy_mini.utils.daemon.
 
 Pure helpers plus branch coverage for the serial/camera/daemon utilities,
 with all serial, psutil, subprocess, socket and filesystem access mocked.
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from reachy_mini.daemon import utils
+from reachy_mini.utils import daemon as utils
 
 
 class _FakePort:
@@ -241,3 +241,11 @@ def test_get_ip_address_unsupported_platform(
     """Unsupported platform returns None."""
     monkeypatch.setattr("platform.system", lambda: "SunOS")
     assert utils.get_ip_address() is None
+
+
+def test_old_import_path_still_works() -> None:
+    """reachy_mini.daemon.utils re-exports the moved module."""
+    from reachy_mini.daemon import utils as old
+
+    for name in old.__all__:
+        assert getattr(old, name) is getattr(utils, name)

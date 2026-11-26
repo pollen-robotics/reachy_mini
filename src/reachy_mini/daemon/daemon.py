@@ -16,15 +16,15 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from reachy_mini.apps.sources import hf_auth
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
-from reachy_mini.daemon.utils import (
-    SimulationMode,
-    find_serial_port,
-    get_ip_address,
-)
 from reachy_mini.daemon.ws_server import WSServer
 from reachy_mini.io.jsonrpc import JsonRpcError, make_error, parse_request
 from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
+from reachy_mini.utils.daemon import (
+    SimulationMode,
+    find_serial_port,
+    get_ip_address,
+)
 
 from .backend.mockup_sim import MockupSimBackend
 from .backend.mujoco import MujocoBackend

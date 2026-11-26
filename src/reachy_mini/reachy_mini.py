@@ -16,7 +16,6 @@ from typing import Dict, List, Literal, Optional, Union, cast
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import (
     AppendRecordCmd,
     DaemonStatus,
@@ -40,6 +39,7 @@ from reachy_mini.io.ws_client import WSClient
 from reachy_mini.media.camera_constants import get_camera_specs_by_name
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
+from reachy_mini.utils.daemon import daemon_check, is_local_camera_available
 from reachy_mini.utils.discovery import find_robots
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
 from reachy_mini.utils.rotation import Rotation as R

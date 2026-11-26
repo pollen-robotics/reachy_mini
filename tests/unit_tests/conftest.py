@@ -100,15 +100,15 @@ try:
 except ImportError:
     pass
 
-from reachy_mini.daemon.utils import (
-    CAMERA_PIPE_NAME,
-    CAMERA_SOCKET_PATH,
-    is_local_camera_available,
-)
 from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
     ReachyMiniLiteCamSpecs,
+)
+from reachy_mini.utils.daemon import (
+    CAMERA_PIPE_NAME,
+    CAMERA_SOCKET_PATH,
+    is_local_camera_available,
 )
 
 

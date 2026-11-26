@@ -45,7 +45,7 @@ def _usb() -> ModuleType | None:
     """Return the driver's USB module, or None when it cannot be imported.
 
     Port lookup must never take the daemon down: the motor port search goes
-    through here too (see ``daemon.utils.find_serial_port``).
+    through here too (see ``utils.daemon.find_serial_port``).
     """
     try:
         from winnie_nfc import usb

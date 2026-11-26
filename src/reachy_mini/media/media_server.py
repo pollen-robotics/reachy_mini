@@ -36,12 +36,6 @@ from typing import Any, Callable, Dict, Optional
 import gi
 import numpy as np
 
-from reachy_mini.daemon.utils import (
-    CAMERA_PIPE_NAME,
-    CAMERA_SOCKET_PATH,
-    SimulationMode,
-    is_local_camera_available,
-)
 from reachy_mini.media.audio_base import (
     AEC_CHANNELS,
     AEC_PROBE_NAME,
@@ -64,6 +58,12 @@ from reachy_mini.media.gstreamer_utils import (
 from reachy_mini.media.webrtc_utils import TurnCredentials, split_for_data_channel
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
+from reachy_mini.utils.daemon import (
+    CAMERA_PIPE_NAME,
+    CAMERA_SOCKET_PATH,
+    SimulationMode,
+    is_local_camera_available,
+)
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
