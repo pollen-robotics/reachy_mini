@@ -22,6 +22,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
+from reachy_mini import __version__
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.apps.sources.hf_auth import adopt_legacy_login
 from reachy_mini.daemon import startup_app_config
@@ -51,6 +52,7 @@ from reachy_mini.daemon.app.startup_app import (
     arm_startup_app_at_boot,
     ensure_startup_app_installed,
     make_startup_app_launcher,
+    update_conversation_app_after_daemon_update,
 )
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.daemon.telemetry import telemetry as daemon_telemetry
@@ -202,6 +204,12 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             # long download/install doesn't leave it awake and idle. The wireless
             # unit boots asleep (--no-wake-up-on-start), so the app is started by
             # a one-shot hook on the first wake-up rather than here.
+            if args.wireless_version:
+                # Before the startup app: it may be the app being updated.
+                await update_conversation_app_after_daemon_update(
+                    app.state.app_manager, __version__
+                )
+
             on_wake_up_callback = None
             startup_app = startup_app_config.get_startup_app()
             startup_app_ready = False

@@ -22,6 +22,7 @@ _FIRST_WAKE_UP_KEY = "first_wake_up_completed"
 _TELEMETRY_KEY = "telemetry_enabled"
 _NFC_KEY = "nfc_enabled"
 _WEBRTC_LATENCY_KEY = "webrtc_latency_ms"
+_LAST_BOOTED_VERSION_KEY = "last_booted_version"
 _WEBRTC_LATENCY_MAX_MS = 10_000
 # Serialises _update(), called from the event loop and from worker threads.
 _update_lock = threading.Lock()
@@ -205,6 +206,17 @@ def set_telemetry_enabled(enabled: bool) -> None:
 def set_startup_app(name: str | None) -> None:
     """Persist the startup app name; a falsy name clears it."""
     _update(_KEY, name if name else None)
+
+
+def get_last_booted_version() -> str | None:
+    """Return the daemon version that last finished its boot steps, or None."""
+    value = _read().get(_LAST_BOOTED_VERSION_KEY)
+    return value if isinstance(value, str) else None
+
+
+def set_last_booted_version(version: str) -> None:
+    """Persist the daemon version that just booted. May raise OSError."""
+    _update(_LAST_BOOTED_VERSION_KEY, version)
 
 
 def get_nfc_enabled() -> bool:
