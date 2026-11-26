@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING, Any
 
 from reachy_mini.apps import SourceKind
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.apps.sources.app_update_checker import (
+    check_app_update,
+    get_hf_install_info,
+)
 from reachy_mini.daemon import startup_app_config
 from reachy_mini.daemon.robot_app_lock import RobotAppLockState
 from reachy_mini.io.protocol import MotorControlMode
@@ -22,6 +26,8 @@ STARTUP_APP_ANTENNA_IDLE_POLL_INTERVAL_S = 0.1
 STARTUP_APP_ANTENNA_BLOCKED_POLL_INTERVAL_S = 0.5
 # Per-poll target shift above this means a commanded move (not a physical touch).
 STARTUP_APP_ANTENNA_MOTION_EPS_RAD = 0.02
+CONVERSATION_APP_NAME = "reachy_mini_conversation_app"
+POST_UPDATE_CHECK_TIMEOUT_S = 3.0
 
 
 async def ensure_startup_app_installed(app_manager: AppManager, name: str) -> bool:
@@ -48,6 +54,51 @@ async def ensure_startup_app_installed(app_manager: AppManager, name: str) -> bo
     except Exception as e:
         logger.error(f"Failed to install startup app '{name}': {e}")
         return False
+
+
+async def update_conversation_app_after_daemon_update(
+    app_manager: AppManager, version: str
+) -> None:
+    """On the first boot of a new daemon version, update the conversation app.
+
+    A daemon update bumps the SDK in the apps venv but not the apps, so an
+    installed conversation app may lag behind it, startup app or not. Only
+    updates when the Hub has a newer one. Best-effort: on failure the version
+    is not recorded, so the next boot tries again.
+    """
+    if startup_app_config.get_last_booted_version() == version:
+        return
+    updating = False
+    try:
+        installed = await app_manager.list_available_apps(SourceKind.INSTALLED)
+        app = next((a for a in installed if a.name == CONVERSATION_APP_NAME), None)
+        # Not from the Hub (local or git install): nothing to update it from.
+        if app is not None and get_hf_install_info(
+            CONVERSATION_APP_NAME,
+            app_manager.wireless_version,
+            app_manager.desktop_app_daemon,
+        ):
+            # Short cap: an offline robot retries on every boot, before the API.
+            info = await asyncio.wait_for(
+                check_app_update(
+                    app,
+                    wireless_version=app_manager.wireless_version,
+                    desktop_app_daemon=app_manager.desktop_app_daemon,
+                ),
+                POST_UPDATE_CHECK_TIMEOUT_S,
+            )
+            if info is None:
+                raise RuntimeError("could not check for an update")
+            if info.update_available:
+                logger.info(f"Updating {CONVERSATION_APP_NAME} after daemon update")
+                updating = True
+                await app_manager.update_app(CONVERSATION_APP_NAME, logger)
+        startup_app_config.set_last_booted_version(version)
+    except Exception as e:
+        logger.error(f"Post-update check of {CONVERSATION_APP_NAME} failed: {e!r}")
+        if updating:
+            # update_app uninstalls before installing: don't leave it missing.
+            await ensure_startup_app_installed(app_manager, CONVERSATION_APP_NAME)
 
 
 async def start_startup_app(app_manager: AppManager, name: str) -> None:
