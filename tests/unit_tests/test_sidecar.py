@@ -1,4 +1,4 @@
-"""The Rust daemon's sidecar: the app lock it asks, the JSON-RPC it serves."""
+"""The Rust daemon's sidecar: the daemon's app it asks about, the JSON-RPC it serves."""
 
 import json
 import threading
@@ -8,58 +8,74 @@ from typing import Any, Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from reachy_mini.daemon.app.sidecar import RemoteRobotAppLock, create_app
+from reachy_mini.daemon.app.sidecar import DaemonApps, create_app
+
+RUNNING: dict[str, Any] = {
+    "info": {
+        "name": "app_a",
+        "source_kind": "installed",
+        "description": "",
+        "url": None,
+        "extra": {},
+    },
+    "state": "running",
+    "error": None,
+}
 
 
 @pytest.fixture
-def daemon() -> Iterator[tuple[str, list[dict[str, Any]], list[int]]]:
-    """Serve a fake /internal/app-lock, answering each POST with the next status."""
-    seen: list[dict[str, Any]] = []
-    statuses: list[int] = []
+def daemon() -> Iterator[tuple[str, dict[str, Any]]]:
+    """Serve a fake daemon /api/apps: its status, and a stop that clears it."""
+    state: dict[str, Any] = {"status": RUNNING, "stops": 0}
 
     class Handler(BaseHTTPRequestHandler):
-        def do_POST(self) -> None:
-            body = self.rfile.read(int(self.headers["Content-Length"]))
-            seen.append({"path": self.path, **json.loads(body)})
-            self.send_response(statuses.pop(0) if statuses else 200)
-            self.send_header("Content-Length", "2")
+        def _send(self, code: int, body: Any) -> None:
+            data = json.dumps(body).encode()
+            self.send_response(code)
+            self.send_header("Content-Length", str(len(data)))
             self.end_headers()
-            self.wfile.write(b"{}")
+            self.wfile.write(data)
+
+        def do_GET(self) -> None:
+            self._send(200, state["status"])
+
+        def do_POST(self) -> None:
+            state["stops"] += 1
+            if state["status"] is None:
+                return self._send(400, {"detail": "No app is currently running"})
+            state["status"] = None
+            self._send(200, None)
 
         def log_message(self, *args: Any) -> None:
             pass
 
     server = HTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{server.server_port}", seen, statuses
+    yield f"http://127.0.0.1:{server.server_port}", state
     server.shutdown()
 
 
 @pytest.mark.asyncio
-async def test_the_lock_is_the_daemons(
-    daemon: tuple[str, list[dict[str, Any]], list[int]],
+async def test_the_running_app_is_the_daemons(
+    daemon: tuple[str, dict[str, Any]],
 ) -> None:
-    """Each AppManager call is a request to the daemon's lock."""
-    url, seen, statuses = daemon
-    lock = RemoteRobotAppLock(url)
+    """Running app and stop come from the daemon; starting isn't the sidecar's."""
+    url, state = daemon
+    apps = DaemonApps(
+        url, wireless_version=False, desktop_app_daemon=False, daemon=None
+    )
 
-    assert lock.try_acquire_local("a")
-    statuses.append(409)
-    assert not lock.try_acquire_local("b")
-    statuses.append(409)
+    assert apps.is_app_running()
+    assert apps.current_app.status.info.name == "app_a"
+    await apps.stop_current_app()
+    assert not apps.is_app_running()
+    with pytest.raises(RuntimeError, match="No app is currently running"):
+        await apps.stop_current_app()
+    assert state["stops"] == 2
     with pytest.raises(RuntimeError):
-        await lock.acquire_local_evicting_remote("c")
-    lock.acquire_local_keeping_remote("d")
-    lock.release_local("d")
-    assert [(s["path"], s.get("mode")) for s in seen] == [
-        ("/internal/app-lock/acquire", "try"),
-        ("/internal/app-lock/acquire", "try"),
-        ("/internal/app-lock/acquire", "evict"),
-        ("/internal/app-lock/acquire", "keep"),
-        ("/internal/app-lock/release", None),
-    ]
-    # Releasing runs as an app exits: a daemon gone must not raise.
-    RemoteRobotAppLock("http://127.0.0.1:9").release_local("d")
+        await apps.start_app("app_a")
+    # A daemon gone reads as no app, not an error.
+    assert DaemonApps("http://127.0.0.1:9", daemon=None).current_app is None
 
 
 def test_rpc_replies_go_back_to_their_client() -> None:

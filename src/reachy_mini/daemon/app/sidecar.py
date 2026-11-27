@@ -1,11 +1,11 @@
 """The Python half of the Rust daemon (reachy_mini_daemon), on loopback.
 
-The Rust daemon owns the robot, its media and its clients. What it doesn't
-do yet runs here, in a process it spawns: the apps, HF sign-in, telemetry
-settings, update, Wi-Fi and cache routes, which it proxies, and the JSON-RPC
-frames its clients send (``apps.*``, a running app's own methods), which it
-forwards over ``/internal/rpc``. The managed app slot stays the Rust
-daemon's: :class:`RemoteRobotAppLock` asks it over loopback.
+The Rust daemon owns the robot, its media, its clients and the running app.
+What it doesn't do yet runs here, in a process it spawns: installing,
+listing and updating apps, HF sign-in, telemetry settings, update, Wi-Fi and
+cache routes, which it proxies, and the ``apps.*`` JSON-RPC calls it doesn't
+answer itself, which it forwards over ``/internal/rpc``. To change the files
+of an app it may be running, :class:`DaemonApps` asks the daemon.
 
 Run as ``python -m reachy_mini.daemon.app.sidecar``.
 """
@@ -18,69 +18,80 @@ import urllib.error
 import urllib.request
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any, AsyncGenerator, Optional
 
 import uvicorn
 from fastapi import APIRouter, FastAPI, WebSocket, WebSocketDisconnect
 
-from reachy_mini.apps.manager import AppManager
+from reachy_mini.apps.manager import AppManager, AppStatus
 from reachy_mini.daemon.app.routers import apps, hf_auth, telemetry
 from reachy_mini.daemon.jsonrpc_relay import JsonRpcRelay
 
 logger = logging.getLogger(__name__)
 
-_LOCK_TIMEOUT_S = 2.0
+_STATUS_TIMEOUT_S = 2.0
+# The daemon waits up to 20 s for the app, then returns the robot to zero.
+_STOP_TIMEOUT_S = 30.0
 
 
-class RemoteRobotAppLock:
-    """RobotAppLock's local-app side, held by the Rust daemon.
+class DaemonApps(AppManager):
+    """AppManager whose running app is the Rust daemon's.
 
-    Only what :class:`AppManager` calls. The remote side (sessions through
-    central) and the idle reset on release live in the Rust daemon.
+    Installs, removals and updates run here and must not touch a running
+    app's files: the running app and stopping it come from the daemon's
+    ``/api/apps`` routes. Starting apps is the daemon's alone.
     """
 
-    def __init__(self, daemon_url: str) -> None:
-        """Ask the daemon at ``daemon_url`` (its ``/internal/app-lock``)."""
-        self._url = f"{daemon_url.rstrip('/')}/internal/app-lock"
+    def __init__(self, daemon_url: str, **kwargs: Any) -> None:
+        """Ask the daemon at ``daemon_url`` about its app."""
+        self._url = f"{daemon_url.rstrip('/')}/api/apps"
+        super().__init__(**kwargs)
 
-    def _post(self, verb: str, body: dict[str, Any]) -> bool:
-        """POST to the lock; False when the slot is taken (409)."""
+    @property
+    def current_app(self) -> Any:
+        """The daemon's app (only its ``status``), None if none or unreachable."""
+        # shortcut: a blocking loopback GET on each read; fine at install time.
+        try:
+            with urllib.request.urlopen(
+                f"{self._url}/current-app-status", timeout=_STATUS_TIMEOUT_S
+            ) as r:
+                status = json.loads(r.read())
+        except (OSError, ValueError) as e:
+            logger.warning("daemon app status unavailable: %s", e)
+            return None
+        if status is None:
+            return None
+        return SimpleNamespace(status=AppStatus.model_validate(status))
+
+    @current_app.setter
+    def current_app(self, value: Any) -> None:
+        """Ignored: AppManager.__init__ sets it, the daemon owns it."""
+
+    def _stop(self) -> None:
         request = urllib.request.Request(
-            f"{self._url}/{verb}",
-            data=json.dumps(body).encode(),
-            headers={"Content-Type": "application/json"},
-            method="POST",
+            f"{self._url}/stop-current-app", data=b"", method="POST"
         )
         try:
-            with urllib.request.urlopen(request, timeout=_LOCK_TIMEOUT_S):
-                return True
+            with urllib.request.urlopen(request, timeout=_STOP_TIMEOUT_S):
+                pass
         except urllib.error.HTTPError as e:
-            if e.code == 409:
-                return False
-            raise
+            raise RuntimeError(json.loads(e.read()).get("detail", str(e))) from e
 
-    def try_acquire_local(self, app_name: str) -> bool:
-        """Take the slot only if free (no local app, no remote session)."""
-        return self._post("acquire", {"name": app_name, "mode": "try"})
+    async def stop_current_app(self, timeout: float | None = 20.0) -> None:
+        """Have the daemon stop its app; RuntimeError if none runs."""
+        await asyncio.to_thread(self._stop)
 
-    async def acquire_local_evicting_remote(self, app_name: str) -> None:
-        """Take the slot; the daemon has a remote session holding it ended."""
-        if not await asyncio.to_thread(
-            self._post, "acquire", {"name": app_name, "mode": "evict"}
-        ):
-            raise RuntimeError("A local app is already running")
+    async def start_app(self, *args: Any, **kwargs: Any) -> AppStatus:
+        """Apps start in the daemon (its /api/apps/start-app, apps.start)."""
+        raise RuntimeError("Apps are started by the daemon")
 
-    def acquire_local_keeping_remote(self, app_name: str) -> None:
-        """Take the slot for an app the connected remote client drives."""
-        if not self._post("acquire", {"name": app_name, "mode": "keep"}):
-            raise RuntimeError("A local app is already running")
+    async def restart_current_app(self, keep_remote: bool = False) -> AppStatus:
+        """Apps restart in the daemon."""
+        raise RuntimeError("Apps are started by the daemon")
 
-    def release_local(self, app_name: Optional[str] = None) -> None:
-        """Give the slot back. Never raises: it runs as an app exits."""
-        try:
-            self._post("release", {"name": app_name})
-        except Exception as e:  # noqa: BLE001 - the app is gone either way
-            logger.warning("app lock release failed: %s", e)
+    async def close(self) -> None:
+        """Do nothing: the daemon stops its app itself."""
 
 
 @dataclass
@@ -89,7 +100,6 @@ class SidecarDaemon:
 
     wireless_version: bool
     desktop_app_daemon: bool
-    robot_app_lock: RemoteRobotAppLock
     backend: None = None
 
     async def start_central_relay_if_running(self) -> None:
@@ -101,14 +111,13 @@ def create_app(
 ) -> FastAPI:
     """Build the sidecar: its routes and the JSON-RPC endpoint the daemon dials."""
     daemon = SidecarDaemon(
-        wireless_version=wireless_version,
-        desktop_app_daemon=desktop_app_daemon,
-        robot_app_lock=RemoteRobotAppLock(daemon_url),
+        wireless_version=wireless_version, desktop_app_daemon=desktop_app_daemon
     )
-    app_manager = AppManager(
+    app_manager = DaemonApps(
+        daemon_url,
         wireless_version=wireless_version,
         desktop_app_daemon=desktop_app_daemon,
-        daemon=daemon,  # type: ignore[arg-type]
+        daemon=daemon,
     )
 
     @asynccontextmanager
@@ -135,7 +144,7 @@ def create_app(
 
     @app.websocket("/internal/rpc")
     async def rpc(ws: WebSocket) -> None:
-        """JSON-RPC from the daemon's clients.
+        """Answer the ``apps.*`` JSON-RPC the daemon doesn't.
 
         In: ``{"client", "frame"}``, a client's frame. Out: ``{"client",
         "frame"}``, the reply for that client, or ``client: null`` for a
